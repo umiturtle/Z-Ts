@@ -166,7 +166,7 @@ EOF
 fi
 
 if [[ "$WANT_VERIFY" == "1" ]]; then
-  echo "[verify] Building & running fast direct `zig build-exe` GTK3 + WebKit2GTK + Rust FFI smoke test..."
+  echo "[verify] Building & running fast direct 'zig build-exe' GTK3 + WebKit2GTK + Rust FFI smoke test..."
   VDIR="${WORK_DIR}/verify"
   mkdir -p "$VDIR"
   cat << 'EOF' > "${VDIR}/main.zig"

@@ -12,6 +12,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   # ---------------------------------------------------------------------------
   # 1. Linux CI (Docs lint + Formatting + Xvfb GTK3 / WebKit2GTK 4.1)
@@ -46,14 +50,33 @@ jobs:
         run: |
           set -o pipefail
           {
-            echo "#### Linux CI Output"
-            echo '```text'
             chmod +x ./zigw
             python3 scripts/check-docs.py
             ./zigw fmt --check src/ build.zig build.zig.zon
             xvfb-run -a ./zigw build test --summary all
-            echo '```'
-          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          } 2>&1 | tee ci-output.log
+
+      - name: Publish captured output to Check Run API for Arena agents
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('ci-output.log') ? fs.readFileSync('ci-output.log', 'utf8').slice(-60000) : '(no output)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name === '${{ github.job }}' || j.name.startsWith('Linux ('));
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'Linux CI Output', summary: '```text\n' + log + '\n```' },
+              });
+            }
 
   # ---------------------------------------------------------------------------
   # 2. macOS CI (Apple Silicon — AppKit / WKWebView target verification)
@@ -78,12 +101,31 @@ jobs:
         run: |
           set -o pipefail
           {
-            echo "#### macOS CI Output"
-            echo '```text'
             chmod +x ./zigw
             ./zigw build test --summary all
-            echo '```'
-          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          } 2>&1 | tee ci-output.log
+
+      - name: Publish captured output to Check Run API for Arena agents
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('ci-output.log') ? fs.readFileSync('ci-output.log', 'utf8').slice(-60000) : '(no output)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name.startsWith('macOS ('));
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'macOS CI Output', summary: '```text\n' + log + '\n```' },
+              });
+            }
 
   # ---------------------------------------------------------------------------
   # 3. Windows CI (x86_64 — Win32 / WebView2 target verification)
@@ -114,9 +156,28 @@ jobs:
         run: |
           set -o pipefail
           {
-            echo "#### Windows CI Output"
-            echo '```text'
             zig version
             zig build test --summary all
-            echo '```'
-          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          } 2>&1 | tee ci-output.log
+
+      - name: Publish captured output to Check Run API for Arena agents
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('ci-output.log') ? fs.readFileSync('ci-output.log', 'utf8').slice(-60000) : '(no output)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name.startsWith('Windows ('));
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'Windows CI Output', summary: '```text\n' + log + '\n```' },
+              });
+            }
