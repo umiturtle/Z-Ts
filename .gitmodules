@@ -1,0 +1,12 @@
+[submodule "vendor/tauri"]
+	path = vendor/tauri
+	url = https://github.com/tauri-apps/tauri.git
+	shallow = true
+[submodule "vendor/wry"]
+	path = vendor/wry
+	url = https://github.com/tauri-apps/wry.git
+	shallow = true
+[submodule "vendor/tao"]
+	path = vendor/tao
+	url = https://github.com/tauri-apps/tao.git
+	shallow = true

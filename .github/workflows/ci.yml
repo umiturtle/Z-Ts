@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "arena/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Linux CI (Docs lint + Formatting + Xvfb GTK3 / WebKit2GTK 4.1)
+  # ---------------------------------------------------------------------------
+  ci-linux:
+    name: Linux (Ubuntu 24.04 + Xvfb + WebKit2GTK 4.1)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Zig artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig
+            .zig-cache
+          key: linux-zig-0.17.0-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+          restore-keys: |
+            linux-zig-0.17.0-
+
+      - name: Install GTK3, WebKit2GTK 4.1 & Xvfb
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            xvfb
+
+      - name: Lint docs, check formatting & run tests under Xvfb
+        run: |
+          set -o pipefail
+          {
+            chmod +x ./zigw
+            python3 scripts/check-docs.py
+            ./zigw fmt --check src/ build.zig build.zig.zon
+            xvfb-run -a ./zigw build test --summary all
+          } 2>&1 | tee ci-output.log
+
+      - name: Publish captured output to Check Run API for Arena agents
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('ci-output.log') ? fs.readFileSync('ci-output.log', 'utf8').slice(-60000) : '(no output)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name === '${{ github.job }}' || j.name.startsWith('Linux ('));
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'Linux CI Output', summary: '```text\n' + log + '\n```' },
+              });
+            }
+
+  # ---------------------------------------------------------------------------
+  # 2. macOS CI (Apple Silicon — AppKit / WKWebView target verification)
+  # ---------------------------------------------------------------------------
+  ci-macos:
+    name: macOS (arm64 + WKWebView)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Zig artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig
+            .zig-cache
+          key: macos-zig-0.17.0-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+          restore-keys: |
+            macos-zig-0.17.0-
+
+      - name: Build & test on macOS
+        run: |
+          set -o pipefail
+          {
+            chmod +x ./zigw
+            ./zigw build test --summary all
+          } 2>&1 | tee ci-output.log
+
+      - name: Publish captured output to Check Run API for Arena agents
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('ci-output.log') ? fs.readFileSync('ci-output.log', 'utf8').slice(-60000) : '(no output)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name.startsWith('macOS ('));
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'macOS CI Output', summary: '```text\n' + log + '\n```' },
+              });
+            }
+
+  # ---------------------------------------------------------------------------
+  # 3. Windows CI (x86_64 — Win32 / WebView2 target verification)
+  # ---------------------------------------------------------------------------
+  ci-windows:
+    name: Windows (x86_64 + WebView2)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Zig artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.LOCALAPPDATA }}\zig
+            .zig-cache
+          key: windows-zig-0.17.0-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+          restore-keys: |
+            windows-zig-0.17.0-
+
+      - name: Setup Zig 0.17.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+
+      - name: Build & test on Windows
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            zig version
+            zig build test --summary all
+          } 2>&1 | tee ci-output.log
+
+      - name: Publish captured output to Check Run API for Arena agents
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('ci-output.log') ? fs.readFileSync('ci-output.log', 'utf8').slice(-60000) : '(no output)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name.startsWith('Windows ('));
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'Windows CI Output', summary: '```text\n' + log + '\n```' },
+              });
+            }

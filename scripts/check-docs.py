@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Mechanical lint for Z-Ts multi-agent documentation layout & links."""
+
+import glob
+import os
+import re
+import sys
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(REPO_ROOT)
+
+errors: list[str] = []
+
+# 1. Forbid root monolithic memory.md / PROGRESS.md that cause multi-agent merge conflicts
+FORBIDDEN_FILES = ["memory.md", "MEMORY.md", "PROGRESS.md", "TODO.md"]
+for f in FORBIDDEN_FILES:
+    if os.path.exists(f):
+        errors.append(
+            f"Forbidden monolithic file '{f}' exists. "
+            "Use sharded files under 'docs/tasks/<ID>-<slug>.md' instead to prevent parallel merge conflicts."
+        )
+
+# 2. Validate required hub files exist
+REQUIRED_DOCS = [
+    "AGENTS.md",
+    "docs/INDEX.md",
+    "docs/architecture/00-overview.md",
+    "docs/roadmap/milestones.md",
+    "docs/tasks/TEMPLATE.md",
+    "docs/environment/arena-and-caching.md",
+    "docs/environment/github-actions.md",
+]
+for req in REQUIRED_DOCS:
+    if not os.path.isfile(req):
+        errors.append(f"Missing required documentation file: '{req}'")
+
+# 3. Validate metadata header in every task shard under docs/tasks/*.md
+REQUIRED_TASK_KEYS = ["Status", "Branch", "Scope", "Next Step"]
+for path in sorted(glob.glob("docs/tasks/*.md")):
+    if os.path.basename(path) == "TEMPLATE.md":
+        continue
+    content = open(path, encoding="utf-8").read()
+    for key in REQUIRED_TASK_KEYS:
+        if not re.search(rf"^- \*\*{re.escape(key)}\*\*:\s*.+$", content, re.M):
+            errors.append(f"{path}: missing required header field '- **{key}**: ...'")
+
+# 4. Validate relative markdown links in AGENTS.md and docs/**/*.md
+link_pat = re.compile(r"\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)")
+md_files = ["AGENTS.md"] + glob.glob("docs/**/*.md", recursive=True)
+for md in md_files:
+    if not os.path.isfile(md):
+        continue
+    base_dir = os.path.dirname(md)
+    text = open(md, encoding="utf-8").read()
+    # Strip fenced code blocks before checking links
+    stripped = re.sub(r"```.*?```", "", text, flags=re.S)
+    for m in link_pat.finditer(stripped):
+        target = m.group(1).strip()
+        if target.startswith(("http://", "https://", "mailto:")):
+            continue
+        resolved = os.path.normpath(os.path.join(base_dir, target))
+        if not os.path.exists(resolved):
+            errors.append(f"{md}: broken relative link -> '{target}' (resolved: '{resolved}')")
+
+if errors:
+    print("Documentation structure check FAILED:", file=sys.stderr)
+    for err in errors:
+        print(f"  - {err}", file=sys.stderr)
+    sys.exit(1)
+
+print(f"Documentation check OK ({len(md_files)} markdown files verified).")
