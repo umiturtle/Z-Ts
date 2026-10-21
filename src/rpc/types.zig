@@ -548,13 +548,26 @@ pub fn Handle(comptime Tag: @TypeOf(.enum_literal)) type {
         generation: u29,
 
         pub const handle_tag = Tag;
+        pub const zts_handle_tag = Tag;
         pub const zts_rpc_type = .handle;
+
+        pub const invalid: @This() = .{ .index = 0, .generation = 0 };
+
+        pub fn isValid(self: @This()) bool {
+            return self.generation != 0 and self.index != std.math.maxInt(u24);
+        }
 
         pub fn toU53(self: @This()) u53 {
             return @bitCast(self);
         }
 
-        pub fn fromU53(raw: u53) @This() {
+        pub fn fromU53(raw: u53) error{InvalidHandle}!@This() {
+            const h: @This() = @bitCast(raw);
+            if (!h.isValid()) return error.InvalidHandle;
+            return h;
+        }
+
+        pub fn fromU53Unchecked(raw: u53) @This() {
             return @bitCast(raw);
         }
 
@@ -572,16 +585,17 @@ pub fn Handle(comptime Tag: @TypeOf(.enum_literal)) type {
             options: std.json.ParseOptions,
         ) !@This() {
             const raw = try std.json.innerParse(u53, allocator, source, options);
-            return fromU53(raw);
+            return fromU53(raw) catch return error.InvalidNumber;
         }
     };
 }
 
 /// Returns `true` if `T` is a 53-bit generational handle type (either `rpc.types.Handle(Tag)`
-/// or `core.HandlePool(T, Tag).Handle` implementing `toU53`/`fromU53` or `packed struct(u53)`).
+/// or `core.HandlePool(T, Tag).Handle` implementing `toU53`/`fromU53` or `zts_handle_tag`).
 pub fn isHandleType(comptime T: type) bool {
     const info = @typeInfo(T);
     if (info != .@"struct") return false;
+    if (@hasDecl(T, "zts_handle_tag")) return true;
     if (@hasDecl(T, "zts_rpc_type") and @TypeOf(T.zts_rpc_type) == @TypeOf(.handle) and T.zts_rpc_type == .handle) {
         return true;
     }
@@ -598,6 +612,15 @@ pub fn isHandleType(comptime T: type) bool {
 pub fn handleTagName(comptime T: type) []const u8 {
     if (!isHandleType(T)) {
         @compileError("handleTagName requires a Handle type, got '" ++ @typeName(T) ++ "'");
+    }
+    if (@hasDecl(T, "zts_handle_tag")) {
+        const TagType = @TypeOf(T.zts_handle_tag);
+        if (TagType == @TypeOf(.enum_literal) or @typeInfo(TagType) == .@"enum") {
+            return @tagName(T.zts_handle_tag);
+        }
+        if (TagType == []const u8) {
+            return T.zts_handle_tag;
+        }
     }
     if (@hasDecl(T, "handle_tag")) {
         const TagType = @TypeOf(T.handle_tag);
@@ -715,16 +738,22 @@ test "Patch(T) 3-state semantics and apply helpers" {
 test "Handle(Tag) packs index and generation into 53-bit integer" {
     const WindowHandle = Handle(.window);
     try testing.expect(isHandleType(WindowHandle));
+    try testing.expectEqualStrings("window", comptime handleTagName(WindowHandle));
 
     const h = WindowHandle{
-        .index = 0xFFFFFF,
+        .index = 0xFFFFFE,
         .generation = 0x1FFFFFFF,
     };
     const raw = h.toU53();
-    try testing.expectEqual(max_safe_uint, raw);
+    try testing.expectEqual(max_safe_uint - 1, raw);
 
-    const restored = WindowHandle.fromU53(raw);
+    const restored = try WindowHandle.fromU53(raw);
     try testing.expect(h.eql(restored));
-    try testing.expectEqual(@as(u24, 0xFFFFFF), restored.index);
+    try testing.expectEqual(@as(u24, 0xFFFFFE), restored.index);
     try testing.expectEqual(@as(u29, 0x1FFFFFFF), restored.generation);
+
+    // Generation 0 and index 0xFFFFFF (FREE_LIST_END sentinel) are rejected as InvalidHandle
+    try testing.expectError(error.InvalidHandle, WindowHandle.fromU53(0));
+    const sentinel = WindowHandle{ .index = 0xFFFFFF, .generation = 1 };
+    try testing.expectError(error.InvalidHandle, WindowHandle.fromU53(sentinel.toU53()));
 }

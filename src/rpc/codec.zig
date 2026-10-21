@@ -96,6 +96,7 @@ pub const DecodeError = Allocator.Error || error{
     MissingField,
     LengthMismatch,
     InvalidBase64,
+    InvalidHandle,
     MaxDepthExceeded,
 };
 
@@ -1377,7 +1378,14 @@ fn decodeValue(
             }
             if (comptime types.isHandleType(T)) {
                 const raw_u53 = try decodeValue(u53, allocator, cursor, options);
-                return if (@hasDecl(T, "fromU53")) T.fromU53(raw_u53) else @bitCast(raw_u53);
+                if (@hasDecl(T, "fromU53")) {
+                    const Ret = @typeInfo(@TypeOf(T.fromU53)).@"fn".return_type.?;
+                    if (@typeInfo(Ret) == .error_union) {
+                        return T.fromU53(raw_u53) catch return error.InvalidHandle;
+                    }
+                    return T.fromU53(raw_u53);
+                }
+                return @bitCast(raw_u53);
             }
             if (comptime types.isTaggedUnionWrapper(T)) {
                 const inner = try decodeUnionWithConfig(T.InnerUnion, allocator, cursor, T.union_config, options);
