@@ -1,0 +1,15 @@
+# Zig build artifacts
+.zig-cache/
+zig-out/
+
+# Rust build artifacts
+target/
+
+# Node / frontend artifacts
+node_modules/
+dist/
+
+# Editor / OS files
+.DS_Store
+*.swp
+*~
