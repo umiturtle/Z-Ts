@@ -39,27 +39,40 @@ jobs:
         env:
           ZTS_SKIP_CACHE_SYNC: "1"
         run: |
-          chmod +x ./zigw
-          ./zigw build test
-          # Also warm native -lc / compiler_rt artifacts used by Linux GTK/WebKit builds
-          TMP_C="$(mktemp -d)"
-          printf 'const std = @import("std");\npub fn main() void {}\n' > "${TMP_C}/warm_c.zig"
-          ./zigw build-exe "${TMP_C}/warm_c.zig" -lc -femit-bin="${TMP_C}/warm_c"
-          rm -rf "$TMP_C"
+          {
+            echo "#### Cache Warm Output"
+            echo '```text'
+            chmod +x ./zigw
+            ./zigw build test
+            TMP_C="$(mktemp -d)"
+            printf 'const std = @import("std");\npub fn main() void {}\n' > "${TMP_C}/warm_c.zig"
+            ./zigw build-exe "${TMP_C}/warm_c.zig" -lc -femit-bin="${TMP_C}/warm_c"
+            rm -rf "$TMP_C"
+            du -sh "${HOME}/.cache/zig"
+            echo '```'
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Publish pre-warmed cache tarball to orphan branch `ci-cache-linux-x64`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          STAGE="$(mktemp -d)"
-          tar -cf - -C "${HOME}/.cache/zig" . | gzip -1 > "${STAGE}/zig-cache.tar.gz"
-          ls -lh "${STAGE}/zig-cache.tar.gz"
+          {
+            echo "#### Publish Summary"
+            echo '```text'
+            STAGE="$(mktemp -d)"
+            tar -cf - -C "${HOME}/.cache/zig" . | gzip -1 > "${STAGE}/zig-cache.tar.gz"
+            ls -lh "${STAGE}/zig-cache.tar.gz"
 
-          cd "$STAGE"
-          git init -q
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add zig-cache.tar.gz
-          git commit -q -m "chore(cache): pre-warm Zig 0.17.0 cache (${GITHUB_SHA::7})"
-          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-cache-linux-x64
+            cd "$STAGE"
+            git init -q
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add zig-cache.tar.gz
+            git commit -q -m "chore(cache): pre-warm Zig 0.17.0 cache (${GITHUB_SHA::7})"
+            git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-cache-linux-x64
+            echo "Published origin/ci-cache-linux-x64 successfully."
+            echo '```'
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # 2. Linux CI (Docs lint + Formatting + Xvfb GTK3 / WebKit2GTK 4.1 ready)
@@ -90,18 +103,19 @@ jobs:
             libayatana-appindicator3-dev \
             xvfb
 
-      - name: Check documentation structure & multi-agent invariants
-        run: python3 scripts/check-docs.py
-
-      - name: Check Zig formatting
+      - name: Lint docs, check formatting & run tests under Xvfb
         env:
           ZTS_SKIP_CACHE_SYNC: "1"
-        run: ./zigw fmt --check src/ build.zig build.zig.zon
-
-      - name: Build & test under Xvfb virtual display
-        env:
-          ZTS_SKIP_CACHE_SYNC: "1"
-        run: xvfb-run -a ./zigw build test --summary all
+        run: |
+          set -o pipefail
+          {
+            echo "#### Linux CI Output"
+            echo '```text'
+            python3 scripts/check-docs.py
+            ./zigw fmt --check src/ build.zig build.zig.zon
+            xvfb-run -a ./zigw build test --summary all
+            echo '```'
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # 3. macOS CI (Apple Silicon — AppKit / WKWebView target verification)
@@ -125,7 +139,14 @@ jobs:
       - name: Build & test on macOS
         env:
           ZTS_SKIP_CACHE_SYNC: "1"
-        run: ./zigw build test --summary all
+        run: |
+          set -o pipefail
+          {
+            echo "#### macOS CI Output"
+            echo '```text'
+            ./zigw build test --summary all
+            echo '```'
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # 4. Windows CI (x86_64 — Win32 / WebView2 target verification)
@@ -136,18 +157,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Zig artifacts
-        uses: actions/cache@v4
+      - name: Setup Zig 0.17.0
+        uses: mlugg/setup-zig@v2
         with:
-          path: |
-            ${{ env.LOCALAPPDATA }}\zig
-            .zig-cache
-          key: windows-zig-0.17.0-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
-          restore-keys: |
-            windows-zig-0.17.0-
-
-      - name: Install Zig 0.17.0 via PyPI
-        run: pip install ziglang==0.17.0
+          version: 0.17.0
 
       - name: Build & test on Windows
-        run: python -m ziglang build test --summary all
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            echo "#### Windows CI Output"
+            echo '```text'
+            zig version
+            zig build test --summary all
+            echo '```'
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"

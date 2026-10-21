@@ -39,6 +39,10 @@ gh run list --branch "$(git branch --show-current)" --limit 5
 # 3. 完了まで待機し、終了コードで成否を判定
 gh run watch <run_id> --exit-status
 
-# 4. 失敗ジョブがある場合は失敗ステップのログだけを抽出して原因特定
-gh run view <run_id> --log-failed
+# 4. 全ジョブ（Linux / macOS / Windows）の標準出力・エラー出力・ベンチマーク結果を取得
+bash scripts/ci-logs.sh <run_id>
 ```
+
+> **重要（Arena ファイアウォール対策）**:
+> `gh run view <run_id> --log` は `results-receiver.actions.githubusercontent.com` へリダイレクトされるため Arena サンドボックスからは `EOF` でブロックされます。
+> そのため、`.github/workflows/ci.yml` の全ジョブはビルド・テスト・ベンチマーク出力を **`$GITHUB_STEP_SUMMARY` へ自動ミラーリング** しており、`bash scripts/ci-logs.sh` は許可ホストである `api.github.com` の Check Runs API 経由で全出力を確実に取得します。新しく CI ジョブ・ステップを追加する際も、必ず `| tee -a "$GITHUB_STEP_SUMMARY"` パターンを維持してください。

@@ -104,7 +104,10 @@ Arena サンドボックスでは **新しいチャット（ブランチ）ご�
    git push origin <現在のブランチ名>
    gh run list --branch <現在のブランチ名> --limit 5
    gh run watch <run_id> --exit-status
-   gh run view <run_id> --log-failed
+
+   # 全ジョブの Step Summary 出力・コンパイルエラー・ベンチマーク結果を api.github.com 経由で取得
+   # （※ gh run view --log は外部ログホストへのリダイレクトでブロックされるため必ずこちらを使う）
+   bash scripts/ci-logs.sh <run_id>
    ```
 
 ---
