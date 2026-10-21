@@ -9,7 +9,8 @@
 | パス | 役割 | 更新頻度・競合リスク |
 |---|---|---|
 | [`../AGENTS.md`](../AGENTS.md) | 全エージェント必読のエントリーポイント・運用ルール | 低頻度（進捗追記禁止） |
-| [`architecture/00-overview.md`](architecture/00-overview.md) | Z-Ts 全体 6 層アーキテクチャ・上流 `vendor/` 対応マップ・モジュール境界契約 | 中頻度（全体方針変更時） |
+| [`architecture/00-overview.md`](architecture/00-overview.md) | Z-Ts 6 パッケージ直交アーキテクチャ・依存 DAG・モジュール境界契約 | 中頻度（全体方針変更時） |
+| [`architecture/web-zig-boundary.md`](architecture/web-zig-boundary.md) | HTML / CSS / TS ⇔ Zig `0.17.0` 言語仕様ギャップ 10 項目の解決規約 | 境界仕様（全パッケージ必読） |
 | `architecture/<module>.md` | 各サブシステム詳細設計（例: `config.md`, `ipc.md`, `acl.md`, `window-linux.md`） | モジュール単位で完全独立 |
 | [`roadmap/milestones.md`](roadmap/milestones.md) | マイルストーン（M0〜M6）の定義と並列依存グラフ | 低頻度（進捗は `tasks/` で管理） |
 | [`tasks/TEMPLATE.md`](tasks/TEMPLATE.md) | 1タスク＝1ファイルの作業計画＆記憶チェックポイント標準テンプレート | テンプレート |
