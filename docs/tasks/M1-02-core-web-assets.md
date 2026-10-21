@@ -14,7 +14,7 @@
 - [x] 単体テスト（正常系・異常系・境界値・セキュリティ境界・リーク検査 `std.testing.allocator`）の作成とパス
 - [x] `./zigw quick-test`（全 84 テスト）および `python3 scripts/check-docs.py` のパス
 - [x] `./zigw fmt --check src/ build.zig build.zig.zon` のパス
-- [ ] 必要な場合 GitHub Actions（Linux Xvfb / macOS / Windows）でのグリーン確認
+- [x] GitHub Actions 3 OS マトリクスのグリーン確認（run `39695311871`: Linux Xvfb / macOS arm64 / Windows x86_64 すべて success）
 
 ---
 
@@ -31,6 +31,8 @@
 - **完了したこと（最終）**:
   - `src/core/mod.zig`（アルファベット順再公開 + `test { _ = … }`）と `src/root.zig` の `pub const core` を接続。`./zigw quick-test` で 84 テスト全パス（アロケーショリーク 0）。
   - 設計書 [`../architecture/core-web-foundation.md`](../architecture/core-web-foundation.md) を作成（API 保証・解決パイプライン・`Loader` 所有権契約・CSP 注入例・攻撃ベクタ表）。
+- **CI 結果**:
+  - `gh run view 39695311871`: `Linux (Ubuntu 24.04 + Xvfb + WebKit2GTK 4.1)` / `macOS (arm64 + WKWebView)` / `Windows (x86_64 + WebView2)` 全ジョブ success。
 - **作業中・直前の状態**:
   - 実装・検証完了。`M1-01`（`HandlePool` / `OwnedBytes` / `queue` / `geometry` / `host`）は未着手のため、`mod.zig` の先頭にその旨を明記し、追加時に既存行を壊さない構成にしてある。
 
