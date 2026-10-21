@@ -17,3 +17,5 @@
 | `decisions/<NNNN>-<slug>.md` | アーキテクチャ意思決定記録（ADR）（例: [`decisions/0001-zig-017-and-sharded-agent-workflow.md`](decisions/0001-zig-017-and-sharded-agent-workflow.md)） | **新規ファイル追加のみ（競合ゼロ）** |
 | [`environment/arena-and-caching.md`](environment/arena-and-caching.md) | 毎チャットキャッシュ揮発対策・LLVM 同梱検証・高速ビルド規約 | 環境変更時のみ |
 | [`environment/github-actions.md`](environment/github-actions.md) | GitHub Actions 3 OS マトリクス・キャッシュ自動配信・ベンチ/差分テスト運用 | CI 変更時のみ |
+| [`reference/tauri-usage.md`](reference/tauri-usage.md) | Tauri v2 の使い方リファレンス（Rust/JS API・設定・Capabilities） | リファレンス（追記のみ） |
+| [`reference/tauri-internals.md`](reference/tauri-internals.md) | Tauri v2 内部実装の完全解剖（IPC プロトコル・マクロ・10個の内蔵 Plugin・OS 層） | リファレンス（追記のみ） |

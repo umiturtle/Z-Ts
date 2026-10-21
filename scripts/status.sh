@@ -9,6 +9,18 @@ cd "$REPO_ROOT"
 
 CUR_BRANCH="$(git branch --show-current 2>/dev/null || echo 'detached')"
 
+# Auto-heal Arena cold-restore drift: after ~3h idle, container re-clones `.git` at initial base commit
+# while overlaying latest workspace files. If `HEAD` is strictly behind `origin/$CUR_BRANCH`, sync index & HEAD safely.
+git fetch --prune --quiet origin 2>/dev/null || true
+if [[ "$CUR_BRANCH" != "detached" ]] && git rev-parse --verify "origin/${CUR_BRANCH}" >/dev/null 2>&1; then
+  LOCAL_HEAD="$(git rev-parse HEAD)"
+  REMOTE_HEAD="$(git rev-parse "origin/${CUR_BRANCH}")"
+  if [[ "$LOCAL_HEAD" != "$REMOTE_HEAD" ]] && git merge-base --is-ancestor "$LOCAL_HEAD" "$REMOTE_HEAD" 2>/dev/null; then
+    echo "[auto-sync] Container cold-restore detected (${LOCAL_HEAD:0:7} -> ${REMOTE_HEAD:0:7}); syncing git HEAD to origin/${CUR_BRANCH}..."
+    git reset --mixed "origin/${CUR_BRANCH}" >/dev/null
+  fi
+fi
+
 echo "=================================================================="
 echo " Z-Ts Agent Status & Parallel Coordination Radar"
 echo "=================================================================="

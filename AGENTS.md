@@ -118,6 +118,8 @@ Arena サンドボックスでは **新しいチャット（ブランチ）ご�
 ### 4.1 必読ドキュメントリンク
 
 - 📚 **ドキュメント全体索引**: [`docs/INDEX.md`](docs/INDEX.md)
+- 📖 **Tauri v2 使い方リファレンス**: [`docs/reference/tauri-usage.md`](docs/reference/tauri-usage.md)
+- 🔬 **Tauri v2 内部実装完全解剖**: [`docs/reference/tauri-internals.md`](docs/reference/tauri-internals.md)
 - 🏗️ **全体アーキテクチャ & 上流 `vendor/` 対応表**: [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md)
 - 🗺️ **マイルストーン定義**: [`docs/roadmap/milestones.md`](docs/roadmap/milestones.md)
 - 📝 **タスク・記憶チェックポイント雛形**: [`docs/tasks/TEMPLATE.md`](docs/tasks/TEMPLATE.md)
