@@ -1,7 +1,7 @@
 # ADR-0002: Z-Ts 最適実装方針（Rev 3）— 「Rust コピー病」の完全排除と 6 パッケージ直交分離
 
 - **Date**: 2026-10-21
-- **Status**: Proposed（Rev 3 — ライブラリ切り分け明確化 & 残存 Rust 由来問題の徹底除去版）
+- **Status**: Proposed（Rev 4 — コンパイラ制約・OS 非同期競合・JS 数値精度の深層精査反映版）
 
 ---
 
@@ -51,24 +51,47 @@ Rev 2 で関数シグネチャやメモリ寿命を改善した後も、**「Tau
 
 ---
 
-## 3. Rev 3 最終 API イメージ（6 パッケージの疎結合がそのまま表れる Zig コード）
+## 3. 深層精査（第 2 次監査）で追加特定・解消した 6 つの実装爆弾
+
+6 パッケージ構成（Rev 3）を Zig `0.17.0` コンパイラ規則・IEEE 754 仕様・3 OS WebView 内部挙動で最終シミュレーションし、実装途中で詰む原因になる残り 6 個のエッジケースを事前に潰した：
+
+1. **【`comptime` と実行時ポインタの混在エラー】`merge(.{ .state = &state })` の罠**
+   - ローカル変数 `&state` は runtime 値のため、`type` を返す `comptime` 関数に直接渡すと `unable to evaluate comptime expression` になり、かつ `main()` 内に閉じ込められて `build.zig` から `.ts` 型を取り出せない。
+   - **解決**: **トップレベルの型定義 `pub const Rpc = zts.rpc.Schema(.{ .app = AppCommands, ... });`** と、**実行時のインスタンス束縛 `var router = Rpc.bind(.{ .app = &state, ... });`** に 2 段分離する。これにより `zig build tsgen` からも `Rpc.ts_bindings` を直接参照できる。
+2. **【JSON 64-bit 整数のサイレント丸め破壊】JS `MAX_SAFE_INTEGER (2^53 - 1)` 問題**
+   - `i64` / `u64` をそのまま JSON 数値で返すと JS 側の `JSON.parse` で下位ビットが静かに壊れ、逆に JS の `BigInt` は標準 `JSON.stringify` で `TypeError` を投げる。
+   - **解決**: `i8`〜`i53` / `u8`〜`u53`（Zig 標準の任意ビット幅整数）は `number` として扱い、素の `i64`/`u64`/`usize` を RPC 型に使った場合は **`@compileError` で暗黙の精度喪失をコンパイル時に阻止** し、文字列転送＋TS `bigint` 自動変換ラッパー `zts.BigInt(i64)` または `i53` の明示指定を促す。
+3. **【ニワトリと卵の初期化循環 & GTK リンク漏れ】`zts_tauri` ⇔ `zts_webview` 間依存**
+   - `window.Commands` が具体的な `zts_webview` 型に依存したり初期化前の `App` ポインタを要求すると、循環依存が起き、さらにヘッドレス `zts_bridge` 単体ビルド時に GTK シンボルを要求してしまう。
+   - **解決**: OS 非依存の `Host` 操作 VTable 型定義を最下層 `zts_core` に置き、`rpc.Ctx` 経由で渡す。これにより **`zts_tauri` は `zts_webview` を一切 `@import` せず**、GTK 未導入環境でもフルスタックでビルド・動作する。
+4. **【macOS / Windows 特有の非同期応答クラッシュ】`WKURLSchemeTask` & COM STA 競合**
+   - macOS でページリロード（`stopURLSchemeTask`）直後にワーカースレッドから `didFinish` を呼ぶとキャッチ不能な Objective-C 例外で即死し、Windows WebView2 COM オブジェクトを別スレッドから触ると `RPC_E_WRONG_THREAD` で失敗する。
+   - **解決**: **OS の生 Request ポインタはメインスレッドの `HandlePool(PendingRequest)` から外へ一歩も出さない**。ワーカーには世代付き整数 `req_id` と入力バイト列だけを渡し、完了時はメインスレッド起床コールバック内で世代照合してから応答を返す（途中キャンセル済みなら安全に破棄）。
+5. **【`@tauri-apps/api` の隠しワイヤー規約】`"__CHANNEL__:<id>"` 文字列フォーマット**
+   - 本家 `@tauri-apps/api` の `Channel` インスタンスは JSON 上で数値ではなく `"__CHANNEL__:<callback_id>"` 文字列にシリアライズされる。
+   - **解決**: Zig `std.json` 標準の `pub fn jsonParse` カスタムフックを `zts.rpc.Channel(T)` に実装し、`"__CHANNEL__:<id>"` と数値 `<id>` の両方を受け付ける。
+6. **【`@embedDir` 不在問題】Vite ハッシュ付きアセット群の単一バイナリ埋め込み**
+   - Zig にはディレクトリ一括 `@embedDir` 組み込みがないため、手書き `@embedFile` ではビルドごとにファイル名ハッシュが変わる Vite 出力を扱えない。
+   - **解決**: `build.zig` ヘルパー `zts.embedFrontend(b, exe, .{ .dir = "dist" })` を提供し、ビルドステップで `dist/` を走査して静的アセットマップ Zig モジュールを自動生成・注入する。
+
+---
+
+## 4. Rev 4 最終 API イメージ（100% コンパイル成立・循環ゼロ版）
 
 ```zig
 const std = @import("std");
-const zts = @import("zts"); // または個別パッケージ `@import("zts_rpc")` 等を単体利用可能！
+const zts = @import("zts");
 
 pub const AppState = struct {
     mu: std.Io.Mutex = .init,
-    files: zts.core.HandlePool(std.Io.File) = .empty, // u53 世代ハンドル（ABA バグゼロ）
-    count: i64 = 0,
+    files: zts.core.HandlePool(std.Io.File) = .empty,
+    count: i53 = 0, // JS `number` と 1bit の誤差もなく往復できる Zig ネイティブ 53-bit 整数！
 };
 
 pub const AppCommands = struct {
-    /// エラーセット `error{OutOfRange}` がそのまま TS 側で
-    /// `Result<bigint, "OutOfRange" | "Canceled">` として自動型付けされる！
     pub fn increment(ctx: *zts.rpc.Ctx, state: *AppState, args: struct {
-        delta: i64 = 1,
-    }) error{ OutOfRange, Canceled }!i64 {
+        delta: i53 = 1,
+    }) error{ OutOfRange, Canceled }!i53 {
         if (args.delta > 1_000_000) return error.OutOfRange;
         try state.mu.lock(ctx.io);
         defer state.mu.unlock(ctx.io);
@@ -77,31 +100,27 @@ pub const AppCommands = struct {
     }
 };
 
+/// 1. トップレベル comptime スキーマ宣言（`zig build tsgen` からそのまま `.ts` 生成可能！）
+pub const Rpc = zts.rpc.Schema(.{
+    .app = .{ .prefix = "", .State = AppState, .Cmds = AppCommands },
+    .window = zts.tauri.window.spec, // Host VTable 経由で動くため追加 State 不要！
+});
+
 pub fn main(init: std.process.Init) !void {
     var state: AppState = .{};
     defer state.files.deinit(init.gpa);
 
-    var wm: zts.tauri.WindowManager = .empty;
-    defer wm.deinit(init.gpa);
+    // 2. 実行時ポインタを Pinned 束縛して具体型 Handler Fat Pointer を得る
+    var router = Rpc.bind(.{ .app = &state, .window = {} });
 
-    // 1. 使いたい機能だけを comptime 静的結合（未使用プラグインは 0 バイト！）
-    const Router = zts.rpc.merge(.{
-        .{ .prefix = null,     .state = &state, .cmds = AppCommands },
-        .{ .prefix = "window", .state = &wm,    .cmds = zts.tauri.window.Commands },
-    });
-
-    // 2. ビルド時に `Router.ts_bindings` 定数文字列を書き出せば `bindings.gen.ts` 完成！
-    //    `comptime { _ = Router.ts_bindings; }`
-
-    // 3. Pinned 初期化 & ステップ実行（自分のゲームループに混ぜるのも `while (app.step(.poll))` 1行！）
     var app: zts.App = undefined;
     try app.init(init.gpa, init.io, .{
         .app_id = "dev.zts.app",
         .windows = &.{.{ .label = "main", .title = "Z-Ts", .width = 1024, .height = 768 }},
-        .assets = zts.core.Assets.embed(embed_table),
-        .router = Router.erase(), // ここで具体型関数ポインタ 1 本に型消去
+        .assets = zts.core.Assets.fromModule(@import("zts_assets")),
+        .handler = router.handler(),
     });
-    defer app.deinit(); // ループを普通に抜けるため 100% 確実に実行されリークゼロ！
+    defer app.deinit();
 
     while (app.step(.blocking)) {}
 }
@@ -109,7 +128,7 @@ pub fn main(init: std.process.Init) !void {
 
 ---
 
-## 4. 実装着手の並列分割プラン（Phase 1：コンフリクトゼロの 4 並列構成）
+## 5. 実装着手の並列分割プラン（Phase 1：コンフリクトゼロの 4 並列構成）
 
 この切り分けにより、最初の一歩から完全に独立したディレクトリ単位で実装・テストが進められる：
 
