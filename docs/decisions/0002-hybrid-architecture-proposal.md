@@ -1,156 +1,119 @@
-# ADR-0002: Z-Ts 最適実装方針（v2）— 初期案の欠陥監査と Zig 0.17 ネイティブ API 設計
+# ADR-0002: Z-Ts 最適実装方針（Rev 3）— 「Rust コピー病」の完全排除と 6 パッケージ直交分離
 
 - **Date**: 2026-10-21
-- **Status**: Proposed（Rev 2 — 欠陥洗い出し・Zig 0.17 イディオム全面見直し反映版）
+- **Status**: Proposed（Rev 3 — ライブラリ切り分け明確化 & 残存 Rust 由来問題の徹底除去版）
 
 ---
 
-## 1. 初期提案（Rev 1）に対する厳格な欠陥監査（洗い出された 8 つの問題点）
+## 1. Rev 2 にまだ残っていた「Rust（Tauri）丸パクリによる 7 つの構造的問題」
 
-初期案を Zig `0.17.0` の実機標準ライブラリ（`lib/std/process.zig`, `lib/std/Io.zig`）および各 OS WebView の実挙動に照らして再検証した結果、実装前に潰すべき **8 つの重大な欠陥（Rust 引きずりのアンチパターンおよび実行時地雷）** を特定した。
+Rev 2 で関数シグネチャやメモリ寿命を改善した後も、**「Tauri がなぜその設計になっているか（＝Rust の言語制約や歴史的経緯の産物）」を疑わずに無意識にコピーしていた 7 つの重大問題** が残っていた。これらをすべて排除し、Zig 本来の設計へ置き換える。
 
-| # | 初期案の問題点 | 何が起きるか（具体的な破綻シナリオ） | Rev 2 での根本解決策 |
+| # | 無意識にパクっていた Rust/Tauri 設計 | なぜそれが Zig では悪手・バグになるのか | Zig ネイティブの最適解（Rev 3） |
 |---|---|---|---|
-| **1** | **関数の仮引数名に依存した RPC 設計**<br>`fn greet(arena, name: []const u8)` | **【コンパイル不能バグ】** Zig の `@typeInfo(Fn).params` には `type` しかなく仮引数名（`"name"`）は存在しないため、JSON キー名も TS 型名も原理的に取得できない。 | JSON 入力は **明示的な `args: struct { ... }` 引数** に統一する。構造体フィールドなら名前・型・デフォルト値・`?T` が 100% `comptime` 取得でき、`std.json` とも直結する。 |
-| **2** | **4KB スタック Arena の即時解放**<br>`stackFallback(4096)` を関数終了時に破棄 | **【Use-After-Free クラッシュ】** WebKit2GTK の `WebKitURISchemeRequest`（`GInputStream`）や非同期 IPC 応答は、関数リターン後に別イテレーション/別スレッドでバイト列を読むためスタック破壊が起きる。 | メモリ寿命を **① Scratch Arena（スレッドローカル再利用バッファ・コマンド内一時計算用）** と **② Owned Response Buffer（WebView 側の送信完了 callback で解放される出力バッファ）** の 2 層に分離する。 |
-| **3** | **メインスレッドとワーカースレッドの混同** | **【デッドロック / OS 即死】** メインスレッド上で待機を行うと GUI ループが永久停止し、逆にワーカーから GTK/Cocoa/Win32 の生ハンドルを触ると即クラッシュする。 | 通常の IPC ハンドラは `std.Io` のタスク（`Io.Group`）上で動かし、ウィンドウ操作・`eval`・`emit` は **すべてメインループ起床キューへの非同期コマンド投入** に一本化する。 |
-| **4** | **`HttpBridgeTransport` での `ipc://` 不整合と Localhost 攻撃リスク** | 通常のブラウザは `fetch('ipc://...')` を `ERR_UNKNOWN_URL_SCHEME` で拒否する。また無防備な HTTP サーバーは別タブの悪意あるサイトから DNS Rebinding / CSRF 攻撃を受ける。 | `@tauri-apps/api` が `window.__TAURI_INTERNALS__` のみを呼ぶ構造を活用し、ブリッジモード時は相対 URL `/__zts_ipc__/<cmd>` + SSE `/__zts_events__` 用 init script を注入。さらに **`HttpOnly; SameSite=Strict` Cookie + `Tauri-Invoke-Key` + `Origin` 厳格一致** を強制する。 |
-| **5** | **Linux / Windows WebView 固有の地雷の見落とし** | ・WebKit2GTK 4.1 で大容量 POST ボディを同期 `read` するとプロセス間パイプが詰まりデッドロックする。<br>・Windows で `WebView2Loader.dll` に動的依存すると「単一 `.exe` 配布」が崩れる。 | ・Linux は必ず `g_input_stream_read_all_async` で非同期読み出しを行う。<br>・Windows は `EmbeddedBrowserWebView.dll` を Zig から直接 `LoadLibraryExW` で解決する内蔵ローダー（約 80 行）を採用し完全単一 `.exe` を守る。 |
-| **6** | **コア構造体のジェネリクス汚染と C ABI 断絶** + **値返し `Builder.build()`** | ・`App(State)` にすると全下層コードが単相化で肥大化し C ABI も切れない。<br>・`build()` で `App` を値返しすると、OS シグナルに登録した `&app` ポインタがムーブ後にダングリングポインタになる。 | ・`zts.router(&state, Commands)` の入口 1 箇所で **`userdata + fn_ptr` に型消去** し、`zts.App` 本体は 100% 具体型にする。<br>・初期化は **Pinned Pointer 方式（`app.init(...)`）** としアドレス不変性を保証する。 |
-| **7** | **Zig `0.17.0` 標準 `std.process.Init` / `std.Io` との不整合** | 独自スレッドプール等を勝手に隠蔽すると、Zig 0.17 の `Io` エコシステム・キャンセル機構・`std.testing.io` によるリーク検査と噛み合わない。 | `Allocator` と `std.Io` を明示的に受け取る設計に統一し、インフライト IPC タスクを `Io.Group` で一括管理・シャットダウン時安全キャンセルする。 |
-| **8** | **`std.json` と Serde（`@tauri-apps/api`）の表現差異** | フィールド名の `snake_case` vs `camelCase` や Tagged Union の JSON 形式が食い違う。 | 薄い `comptime` 変換層 `zts.json` を 1 つ置き、**JSON シリアライザと TypeScript `.ts` 生成器が完全に同一の型規則テーブルを参照** する単一ソース設計にする。 |
+| **1** | **巨大モノリス `zts.App`（God Object）** | WebView・RPC・ACL・アセット・プラグインが密結合し、「WebView だけ使いたい」「HTTP サーバーで TS 型付き RPC だけ使いたい」需要に応えられない。 | 独立して単体利用できる **6 つの直交 Zig パッケージ**（`zts_core`, `zts_rpc`, `zts_webview`, `zts_bridge`, `zts_tauri`, `zts`）に明確に分離する。 |
+| **2** | **実行時 `Plugin` VTable 配列への動的登録** (`&zts.plugins.defaults`) | リンカから全プラグイン関数が到達可能になり **Dead Code Elimination が死ぬ**（未使用のトレイやダイアログの OS シンボルまで強制リンクされる）。また `tsgen` からプラグインの型が見えなくなる。 | プラグインは単なる **`Commands` 構造体を持つ Zig モジュール** とし、**`zts_rpc.merge(.{ ... })` で `comptime` 静的結合** する。使わない機能は **物理的に 0 バイト** になる。 |
+| **3** | **動的型マップ `ResourceTable` + 単純連番 `u32` ID** | Rust の借用制約回避用の `Box<dyn Resource>` の丸写しであり、① 個別ヒープ確保多発、② 閉じた直後の ID 再利用による **ABA 誤アクセスバグ** が起きる。 | JS `number`（`f64` 整数精度 53 bit）に完全収まる **53-bit 世代番号付き `HandlePool(T)`（`packed struct(u53) { index: u24, gen: u29 }`）** を採用。ABA バグゼロ・連続配列・ダウンキャストゼロ。 |
+| **4** | **メインスレッドを乗っ取って戻らない `run()`（Inversion of Control）** | Rust `winit`/`tao` の `'static` クロージャ制約の悪習。`defer deinit()` によるリーク検査を阻害し、既存のゲームループ（SDL/GLFW）や DAW プラグインへの埋め込みを不可能にする。 | OS イベント処理の基礎を **`step(.blocking)` / `step(.poll)` の 1 ステップ関数** とする。`run()` は単なる `while (app.step(.blocking)) {}` の 3 行糖衣に過ぎず、`defer` が 100% 確実に走る。 |
+| **5** | **エラーを `String` にフォーマット確保して返す悪習** (`Result<T, String>`) | エラーのたびにヒープ確保が発生し、かつフロントエンド側でエラー種別の網羅的な型分岐ができない。 | **Zig の Error Set (`error{ NotFound, Denied }!T`) をそのまま活かす**。`@errorName(err)` により **0 バイト確保** でエラーコードを返し、**`tsgen` が自動で TypeScript の `"NotFound" \| "Denied"` Union 型を生成** する。 |
+| **6** | **Tauri の 1 万行級 JSON ACL / Glob エンジンを全アプリに強制** | 単一ローカルウィンドウの 9 割のアプリにとって設定コストとバイナリサイズが無駄に増え、「なぜ動かないか分からない」最大原因になる。 | コアの認可境界は **1 つの明快な Zig 関数フック `AuthorizeFn`** のみとする。Tauri 互換 `capabilities/*.json` パーサ＆Glob スコープは `zts_tauri.acl` のオプション機能として分離する。 |
+| **7** | **JSON 文字列の毎回コピー確保 & 高頻度イベントでの毎回 `eval(文字列)`** | ・Rust では `'de` 借用がエスケープ文字で失敗するため `String` コピーが多発。<br>・イベントごとに `eval("runCallback(...)")` を呼ぶと JS パーサ負荷が高い。 | ・`std.json` の **`.allocate = .alloc_if_needed`** を活用し、非エスケープ文字列（99%）は入力バッファへのゼロコピースライスにする。<br>・高頻度ストリームは JS 再パース不要の Binary Pull / Stream チャネルを併用可能にする。 |
 
 ---
 
-## 2. 「Zig らしさ（Zen of Zig）」に基づく API 全面再設計
+## 2. 明確化された 6 つの Zig ライブラリ切り分け（`build.zig` 公開モジュール）
 
-### 捨てた「Rust 引きずり」要素 vs 採用した「本物の Zig イディオム」
+外部プロジェクトは統合 `zts` だけでなく、以下の個別モジュールを単独で `addImport` できる：
 
-1. **No Fluent Builder → Plain Config Struct Literal**: メソッドチェーン（`.manage().plugin().build()`）を廃止し、`std.Build` と同じデフォルト値付き構造体リテラル `.{ ... }` で宣言的に構成する。
-2. **No Runtime `TypeId` Map → Explicit Typed Pointer (`*AppState`)**: 実行時型マップ検索（`StateManager`）による隠れた失敗を排除し、アプリケーション状態はただの Zig 構造体ポインタ `*AppState` としてコンパイル時に型検査する。
-3. **No Hidden Allocations / Threads → Explicit `Allocator` & `std.Io`**: すべての確保と I/O 実行主体を呼び出し側が明示的に渡す（テスト時は `std.testing.allocator` と `std.testing.io` で 100% リーク検知）。
-4. **Fat-Pointer Interfaces (`userdata + vtable`)**: `zts.Handler`, `zts.Backend`（Native WebView / HTTP Bridge / Mock Test Backend）, `zts.Plugin` をすべて `std.mem.Allocator` や `std.Io` と同じ Fat Pointer パターンで統一する。これにより **GUI を一切立ち上げない In-Memory Mock Backend でアプリの 100% 単体テストがミリ秒単位で回る**。
+1. **`zts_core` (`src/core/`)** — *Zero-Dep Data Structures & Web Primitives*
+   - 依存: `std` のみ（`link_libc = false`、OS I/O なし）
+   - 提供: `HandlePool(T)`（`u53` 世代ハンドル）、`OwnedBytes`（完了コールバック解放スライス）、スレッドセーフ MPSC キュー、Origin/URL パーサ、Glob マッチャ、MIME 判定、CSP Nonce/SHA-256 注入、埋め込みアセットルックアップ。
+2. **`zts_rpc` (`src/rpc/`)** — *Standalone Comptime RPC & TypeScript Codegen*
+   - 依存: `zts_core` のみ（**GUI / WebView に一切依存しない完全独立パッケージ**）
+   - 提供:
+     - `codec`: `snake_case` ⇔ `camelCase` 変換、`.alloc_if_needed` ゼロコピー JSON デコーダ、単一ソース型スキーマ。
+     - `router` / `merge`: 複数の名前空間付き `Commands` 構造体を `comptime` で単一の静的ディスパッチ関数へ合成。
+     - `tsgen`: Zig の引数 `struct`・戻り値型・**起こりうる全 `ErrorSet`** から TypeScript の完全型付きクライアントコード `.ts` を `comptime` 生成。
+3. **`zts_webview` (`src/webview/` + `include/zts_webview.h`)** — *Minimal Cross-Platform Native WebView Engine*
+   - 依存: OS ネイティブ API のみ（**JSON にも RPC にも Tauri 仕様にも一切依存しない純粋 WebView ライブラリ**）
+   - 提供: C ABI (`zts_webview.h`) としてもそのまま使える約 25 関数の極薄レイヤ。
+     - ステップ実行イベントループ（`poll` / `wait` / 他スレッドからの `wakeup`）
+     - マルチウィンドウ管理 ＋ 既存 OS ウィンドウ（`HWND` / `NSView` / `GtkWidget`）への子 WebView 埋め込み
+     - Custom URI Scheme 非同期ストリーム応答（Linux `g_input_stream_read_all_async`、macOS `WKURLSchemeTask`、Windows 内蔵 80 行 `WebView2` ローダー）
+4. **`zts_bridge` (`src/bridge/`)** — *Dev / Cloud Preview / E2E Browser Transport*
+   - 依存: `std.Io.net`, `zts_core`（OS GUI 依存ゼロ）
+   - 提供: 通常のブラウザ・Arena Live Preview・Playwright から直接アプリを実行・テストできる HTTP + SSE トランスポート（`HttpOnly; SameSite=Strict` + `Tauri-Invoke-Key` + `Origin` 三重検証）。本番ネイティブビルドでは `@import` しない限り **0 バイト**。
+5. **`zts_tauri` (`src/tauri/`)** — *Tauri v2 Wire Compatibility & Modular Commands*
+   - 依存: `zts_core`, `zts_rpc` (+ トランスポート抽象)
+   - 提供: `@tauri-apps/api` v2 を無修正で動かす JS ブートストラップ、`Tauri-Response` / `Channel` プロトコル実装、および **必要なものだけ `zts_rpc.merge` で組み込める独立コマンド群**（`window`, `webview`, `event`, `path`, `app`, `dialog`, `fs`, `clipboard`, `menu`, `tray`）、オプションの `tauri.conf.json` / `capabilities` インポータ。
+6. **`zts` (`src/root.zig`)** — *Ergonomic Umbrella Facade*
+   - 上記パッケージを再公開し、一般的なデスクトップアプリを最小記述で配線する薄い統合レイヤ。
 
 ---
 
-## 3. 見直し後の Zig 0.17 ネイティブ API イメージ
+## 3. Rev 3 最終 API イメージ（6 パッケージの疎結合がそのまま表れる Zig コード）
 
 ```zig
 const std = @import("std");
-const zts = @import("zts");
+const zts = @import("zts"); // または個別パッケージ `@import("zts_rpc")` 等を単体利用可能！
 
-/// 1. 状態はただの Zig 構造体（TypeId マップも Box<dyn Any> も不要）
 pub const AppState = struct {
     mu: std.Io.Mutex = .init,
+    files: zts.core.HandlePool(std.Io.File) = .empty, // u53 世代ハンドル（ABA バグゼロ）
     count: i64 = 0,
 };
 
-/// 2. コマンドは名前空間構造体の `pub fn` 群（マクロ不要・二重登録不要）
-///    引数構造体のフィールド名・デフォルト値・Optional から
-///    「@tauri-apps/api 互換ルーター」と「bindings.gen.ts」が同時生成される。
-pub const Commands = struct {
-    /// ゼロヒープ確保の高速コマンド
-    pub fn increment(ctx: *zts.Ctx, state: *AppState, args: struct {
+pub const AppCommands = struct {
+    /// エラーセット `error{OutOfRange}` がそのまま TS 側で
+    /// `Result<bigint, "OutOfRange" | "Canceled">` として自動型付けされる！
+    pub fn increment(ctx: *zts.rpc.Ctx, state: *AppState, args: struct {
         delta: i64 = 1,
-    }) !i64 {
+    }) error{ OutOfRange, Canceled }!i64 {
+        if (args.delta > 1_000_000) return error.OutOfRange;
         try state.mu.lock(ctx.io);
         defer state.mu.unlock(ctx.io);
         state.count += args.delta;
         return state.count;
     }
-
-    /// 一時アロケーションはスレッドローカル再利用 `ctx.scratch` へ（個別 free 不要）
-    /// 戻り値のシリアライズ結果は自動的に Response Buffer へコピーされ安全に非同期送信される。
-    pub fn greet(ctx: *zts.Ctx, args: struct {
-        user_name: []const u8, // JSON "userName" & TS `userName: string`
-        excited: bool = false, // JSON 省略可 & TS `excited?: boolean`
-    }) !struct { message: []const u8 } {
-        const suffix = if (args.excited) "!!!" else ".";
-        return .{
-            .message = try std.fmt.allocPrint(ctx.scratch, "Hello, {s}{s}", .{ args.user_name, suffix }),
-        };
-    }
-
-    /// ゼロコピー生バイナリ入力 + イベント通知
-    pub fn sha256(ctx: *zts.Ctx, raw: zts.RawBody) ![32]u8 {
-        var digest: [32]u8 = undefined;
-        std.crypto.hash.sha2.Sha256.hash(raw.bytes, &digest, .{});
-        try ctx.emit("hash-done", .{ .byte_len = raw.bytes.len });
-        return digest;
-    }
 };
 
-/// 3. Zig 0.17 標準の `std.process.Init` を受け取り、Pinned `init` で安全に起動
 pub fn main(init: std.process.Init) !void {
     var state: AppState = .{};
+    defer state.files.deinit(init.gpa);
 
-    var app: zts.App = undefined; // C コールバックに渡す &app アドレスを固定
-    try app.init(init.gpa, init.io, .{
-        .app_id = "dev.zts.example",
-        .windows = &.{
-            .{ .label = "main", .title = "Z-Ts App", .width = 1024, .height = 768 },
-        },
-        // 既存 Tauri 資産を使う場合は `.config = comptime zts.Config.fromTauriJson(@embedFile("tauri.conf.json"))` も可
-        .assets = .{ .dir = zts.embedAssets("dist") },
-        .handler = zts.router(&state, Commands), // ← ここで具体型 Handler に型消去！
-        .plugins = &zts.plugins.defaults,
+    var wm: zts.tauri.WindowManager = .empty;
+    defer wm.deinit(init.gpa);
+
+    // 1. 使いたい機能だけを comptime 静的結合（未使用プラグインは 0 バイト！）
+    const Router = zts.rpc.merge(.{
+        .{ .prefix = null,     .state = &state, .cmds = AppCommands },
+        .{ .prefix = "window", .state = &wm,    .cmds = zts.tauri.window.Commands },
     });
-    defer app.deinit(); // Io.Group 内の全実行中タスク完了を待ってから安全に解放
 
-    try app.run();
-}
-```
+    // 2. ビルド時に `Router.ts_bindings` 定数文字列を書き出せば `bindings.gen.ts` 完成！
+    //    `comptime { _ = Router.ts_bindings; }`
 
-### 単体テストでの圧倒的な威力（GUI 不要・ポート不要・0.01 秒で E2E 検証！）
-
-`Backend` が Fat Pointer で分離されており、`App` が `Allocator` と `Io` を受け取るため、**ウィンドウも HTTP サーバーも開かずにアプリの IPC・ACL・シリアライズ・エラー処理を直接テストできる**：
-
-```zig
-test "increment and ACL check without GUI" {
-    var state: AppState = .{};
+    // 3. Pinned 初期化 & ステップ実行（自分のゲームループに混ぜるのも `while (app.step(.poll))` 1行！）
     var app: zts.App = undefined;
-    try app.init(std.testing.allocator, std.testing.io, .{
-        .app_id = "dev.zts.test",
-        .handler = zts.router(&state, Commands),
-        .backend = .headless_mock,
+    try app.init(init.gpa, init.io, .{
+        .app_id = "dev.zts.app",
+        .windows = &.{.{ .label = "main", .title = "Z-Ts", .width = 1024, .height = 768 }},
+        .assets = zts.core.Assets.embed(embed_table),
+        .router = Router.erase(), // ここで具体型関数ポインタ 1 本に型消去
     });
-    defer app.deinit(); // 1バイトでもリークがあれば std.testing.allocator が即検出！
+    defer app.deinit(); // ループを普通に抜けるため 100% 確実に実行されリークゼロ！
 
-    const res = try app.dispatchTestIpc(.{
-        .window_label = "main",
-        .origin = "tauri://localhost",
-        .cmd = "increment",
-        .json = "{\"delta\": 5}",
-    });
-    defer res.deinit();
-    try std.testing.expectEqualStrings("5", res.body);
+    while (app.step(.blocking)) {}
 }
 ```
 
 ---
 
-## 4. 最終アーキテクチャ境界（4 つのクリーンな層）
+## 4. 実装着手の並列分割プラン（Phase 1：コンフリクトゼロの 4 並列構成）
 
-```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│ Layer 3: User App & Comptime Surface (Generics 許可領域 — 極薄)          │
-│   `zts.router(&state, Commands)` / `zts.json` / `zts.tsgen` / `fromJson` │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │ 型消去境界 (`zts.Handler` / `zts.Plugin`)
-                                ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ Layer 2: Concrete Core Engine (100% 具体型・Pure Zig・libc 不要・C ABI可) │
-│   `App` / `Authority (ACL & Scope)` / `EventHub` / `ResourceTable`       │
-│   `ScratchPool & ResponseBuffer` / Built-in Plugins (`window`, `fs`...)  │
-└───────────────────────────────┬──────────────────────────────────────────┘
-                                │ Fat Pointer (`zts.Backend` VTable)
-        ┌───────────────────────┼───────────────────────┐
-        ▼                       ▼                       ▼
-┌───────────────────┐ ┌───────────────────┐ ┌──────────────────────────────┐
-│ Backend A: Mock   │ │ Backend B: Bridge │ │ Backend C: Native WebView    │
-│ In-Memory Direct  │ │ Zig `std.Io.net`  │ │ Thin C ABI Platform Shims    │
-│ (0ms Unit/Fuzz    │ │ HTTP + SSE        │ │  - Linux: GTK3 + WebKit2GTK  │
-│  Testing)         │ │ (Browser/Arena    │ │  - macOS: ObjC WKWebView     │
-│                   │ │  Live Preview/E2E)│ │  - Win32: WebView2 Direct    │
-└───────────────────┘ └───────────────────┘ └──────────────────────────────┘
-```
+この切り分けにより、最初の一歩から完全に独立したディレクトリ単位で実装・テストが進められる：
+
+1. **`M1-01` (`src/core/`)**: `HandlePool(T)` (`u53`), `OwnedBytes`, MPSC Queue, URL/Glob/CSP/MIME ユーティリティ（Pure Zig・テスト 0.01s）
+2. **`M1-02` (`src/rpc/`)**: `codec` (`camelCase` + `.alloc_if_needed`), `router` & `merge` (`comptime`), `ErrorSet` 対応 `tsgen`（Pure Zig・GUI 依存ゼロ）
+3. **`M1-03` (`src/bridge/`)**: `std.Io.net` セキュア HTTP + SSE トランスポート（Live Preview & E2E 基盤）
+4. **`M1-04` (`src/webview/`)**: C ABI 定義 (`zts_webview.h` 相当 VTable) + Mock Backend + Linux `GTK3 + WebKit2GTK 4.1` 非同期ストリーム実装

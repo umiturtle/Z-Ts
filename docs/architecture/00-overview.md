@@ -1,57 +1,75 @@
-# Z-Ts アーキテクチャ全体概要（雛形）
+# Z-Ts アーキテクチャ全体概要（Composable Zig Packages 設計）
 
-> **本書は Tauri v2 を Zig (`0.17.0`) へ移植する `Z-Ts` の全体レイヤー構造とモジュール境界契約の雛形です。**
-> **各モジュールの詳細設計は、並列開発時のコンフリクトを防ぐため `docs/architecture/<module>.md` に個別ファイルとして作成してください。**
+> **本書は `Z-Ts` のパッケージ分割境界・依存 DAG・設計原則を定義するマスター設計書です。**
+> **最大の特徴は、Tauri（Rust）のような「すべてを抱え込む単一の巨大 `App` フレームワーク」ではなく、それぞれが単体でも 100% 価値を持ち独立して `@import` / C ABI リンクできる「6 つの直交 Zig パッケージ」で構成されている点です。**
 
 ---
 
-## 1. レイヤー構造と上流リファレンス（`vendor/`）対応
+## 1. パッケージ依存 DAG（単方向・直交・Pay-for-what-you-use）
 
-依存方向は常に **上位レイヤー → 下位レイヤー（単方向）** とし、下位レイヤーが上位レイヤーを `@import` することを禁止します。
+下位パッケージは上位パッケージの存在を一切知らず（逆方向 `@import` 厳禁）、不要なパッケージはコンパイルもリンクもされません。
 
 ```text
-┌──────────────────────────────────────────────────────────────────────┐
-│ L6: CLI / Bundler / Build Step  (src/cli/, src/bundler/, build.zig)  │
-├──────────────────────────────────────────────────────────────────────┤
-│ L5: Core App / State / Comptime IPC / Plugin (src/app/, src/ipc/)    │
-├──────────────────────────────────────────────────────────────────────┤
-│ L4: Config / ACL / Capabilities / Assets / MIME (src/config/, acl/)  │  <-- Pure Zig (link_libc = false)
-├──────────────────────────────────────────────────────────────────────┤
-│ L3: Runtime Trait / Handle Abstraction  (src/runtime/)               │  <-- Mock Backend で GUI なしテスト可能
-├──────────────────────────────────────────────────────────────────────┤
-│ L2: Native WebView Backends (src/webview/{linux,macos,windows}/)     │  <-- OS C/ObjC/COM ABI 隔離層
-├──────────────────────────────────────────────────────────────────────┤
-│ L1: Native Window & EventLoop (src/window/{linux,macos,windows}/)    │  <-- OS C/ObjC/Win32 ABI 隔離層
-└──────────────────────────────────────────────────────────────────────┘
+                      ┌───────────────────────────────────────────┐
+                      │  ⑥ `zts` (`src/root.zig`)                 │
+                      │  薄い統合ファサード（約150行の再公開層）  │
+                      └──────────┬───────────────────────┬────────┘
+                                 │                       │
+             ┌───────────────────▼──────────┐   ┌────────▼──────────────────┐
+             │ ⑤ `zts_tauri` (`src/tauri/`) │   │ ④ `zts_bridge`            │
+             │  Tauri v2 互換プロトコル &   │   │    (`src/bridge/`)        │
+             │  Comptime 標準コマンド群     │   │  Pure Zig HTTP + SSE      │
+             │  ・`window.__TAURI_INTERNALS`│   │  ブラウザ / Live Preview  │
+             │  ・`window`/`event`/`dialog` │   │  Playwright E2E 実行基盤  │
+             │  ・`tauri.conf` / ACL 読込   │   │  (本番ネイティブでは0B)   │
+             └──────────┬───────────────────┴───┴────────┬──────────────────┘
+                        │                                │
+      ┌─────────────────▼────────────────┐ ┌─────────────▼──────────────────┐
+      │ ② `zts_rpc` (`src/rpc/`)         │ │ ③ `zts_webview`                │
+      │  Pure Zig Comptime RPC & TS 型生成│ │    (`src/webview/`)            │
+      │  ・`codec`: camelCase JSON &     │ │  極薄 C ABI OS Window/WebView  │
+      │    `.alloc_if_needed` ゼロコピー │ │  ・`step()` (`poll` / `wait`)  │
+      │  ・`router`: Comptime 静的合成   │ │  ・Custom URI Scheme 非同期応答│
+      │  ・`ErrorSet` → TS Union 自動生成│ │  ・Linux / macOS / Win32       │
+      │  ※GUI/WebView 依存ゼロ！単体で   │ │  ※JSON/RPC/Tauri 依存ゼロ！   │
+      │    HTTP/WS/CLI デーモンでも利用可│ │    単体 C/Zig/ゲーム組込可能！ │
+      └─────────────────┬────────────────┘ └─────────────┬──────────────────┘
+                        └───────────────┬────────────────┘
+                                        ▼
+                      ┌──────────────────────────────────┐
+                      │ ① `zts_core` (`src/core/`)       │
+                      │  Zero-Dep Pure Zig データ構造群  │
+                      │  ・`HandlePool(T)` (53-bit 世代) │
+                      │  ・`OwnedBytes` (完了通知解放)   │
+                      │  ・MPSC Queue / URL / Glob / CSP │
+                      │  ※libc 不要・OS I/O 一切なし！  │
+                      └──────────────────────────────────┘
 ```
 
-| レイヤー | Z-Ts パス（予定） | 上流リファレンス（必読） | Pure Zig 単体テスト可否 |
+---
+
+## 2. 各パッケージの責務境界と単体ユースケース
+
+| パッケージ (`build.zig` 公開名) | ディレクトリ | 依存先 | 単体で誰がどう使えるか / テスト特性 |
 |---|---|---|---|
-| **L1: Windowing** | `src/window/` | `vendor/tao/src/` | OS 固有部は CI (`xvfb` / macOS / Windows) |
-| **L2: WebView** | `src/webview/` | `vendor/wry/src/` | OS 固有部は CI (`xvfb` / macOS / Windows) |
-| **L3: Runtime** | `src/runtime/` | `vendor/tauri/crates/tauri-runtime/`<br>`vendor/tauri/crates/tauri-runtime-wry/` | ◎ `HeadlessMockRuntime` 実装により 100% Pure Zig テスト可能 |
-| **L4: Utils & ACL** | `src/config/`, `src/acl/`, `src/assets/` | `vendor/tauri/crates/tauri-utils/src/` | ◎ 100% Pure Zig (`link_libc = false`) |
-| **L5: Core & IPC** | `src/ipc/`, `src/state/`, `src/event/`, `src/app/` | `vendor/tauri/crates/tauri/src/`<br>`vendor/tauri/crates/tauri-macros/` | ◎ `MockRuntime` 上で双方向 IPC ラウンドトリップまで Pure Zig テスト可能 |
-| **L6: Build / Bundler** | `src/bundler/`, `src/cli/`, `build.zig` | `vendor/tauri/crates/tauri-build/`<br>`vendor/tauri/crates/tauri-bundler/` | ◎ アーカイブ・マニフェスト生成は Pure Zig テスト可能 |
+| **① `zts_core`** | `src/core/` | `std` のみ (`link_libc = false`) | 53-bit 世代番号付き `HandlePool(T)`、非同期返却バッファ `OwnedBytes`、Glob/URL/CSP パーサ。**OS 非依存・0.01s 単体テスト**。 |
+| **② `zts_rpc`** | `src/rpc/` | `zts_core` (`link_libc = false`) | **WebView を使わない普通の Zig HTTP/WebSocket サーバーや CLI デーモンでもそのまま使える**、マクロ不要の `comptime` JSON-RPC ルーター ＋ TypeScript クライアント/エラー型自動生成器。 |
+| **③ `zts_webview`** | `src/webview/` + `include/zts_webview.h` | OS API のみ（Tauri/JSON 依存ゼロ） | **C / Python / Bun / ゲームエンジン（SDL/GLFW 親ウィンドウ埋め込み）からも単体で使える**、Custom URI Scheme 対応・`poll`/`wait` ステップ駆動型の極薄 WebView ライブラリ。 |
+| **④ `zts_bridge`** | `src/bridge/` | `std.Io.net`, `zts_core` | GUI 環境のないサーバー・Docker・Arena Live Preview・Playwright E2E テスト用のセキュア HTTP + SSE トランスポート。本番ネイティブアプリからは未 import により完全除去（0 バイト）。 |
+| **⑤ `zts_tauri`** | `src/tauri/` | `zts_core`, `zts_rpc` (+ 任意の Backend) | Tauri v2 ワイヤー互換層（`__TAURI_INTERNALS__`, `Tauri-Invoke-Key`, `Channel`）と、必要なものだけ `comptime` 合成できる標準コマンドモジュール（`window`, `event`, `path`, `fs`, `dialog` 等）。 |
+| **⑥ `zts`** | `src/root.zig` | 上記を統合再公開 | 数十行でフル機能のデスクトップアプリを構築するための統合モジュール。 |
 
 ---
 
-## 2. 並列マルチエージェント開発を可能にする境界設計原則
+## 3. マルチエージェント並列開発ルール（コンフリクトゼロ保証）
 
-複数のエージェントが同時に別モジュールを実装しても衝突せず結合できるよう、以下の 3 原則を守ります：
-
-1. **L3 `Runtime` 境界によるフロント/バック完全分離**:
-   - **OS バックエンド担当エージェント**は L1 (`window`) / L2 (`webview`) の実装に集中できる。
-   - **コア機能担当エージェント**は `MockRuntime` を使って、実 GUI ウィンドウなしでも L4 (`config`, `acl`, `assets`) や L5 (`ipc`, `state`, `event`, `plugin`) を **0.1 秒の Pure Zig 単体テスト** で並列に作り込める。
-2. **Rust proc-macro を Zig `comptime` 型リフレクションへ置き換える**:
-   - `#[tauri::command]` 相当の仕組みは外部コード生成器ではなく、任意の Zig 関数 `fn myCmd(ctx: Context, name: []const u8) !Greeting` を `@typeInfo` で解析し、JSON 引数デシリアライズ → 実行 → JSON レスポンス/エラー変換を行う `comptime` ラッパー関数として実装する。
-3. **1 モジュール = `src/<module>/mod.zig` 自己完結原則**:
-   - モジュール間の接続は公開型とスライス/インターフェースのみで行い、内部実装詳細を漏らさない。
-
----
-
-## 3. 未確定・今後合意すべき設計論点（Open Decisions）
-
-- [ ] **JS ワイヤープロトコル互換性**: `@tauri-apps/api` v2（`window.__TAURI_INTERNALS__.invoke` / `transformCallback` / カスタムプロトコル `ipc://localhost` or `http://ipc.localhost`）との完全互換を第 1 目標とするか、Z-Ts 軽量 JS ブリッジを先行させるか
-- [ ] **非同期コマンド実行モデル**: イベントループスレッドへのディスパッチキュー（`g_idle_add` / `dispatch_async_f` / `PostMessageW`）とスレッドプールの標準構成
-- [ ] **モバイル対応スコープ**: デスクトップ 3 OS（Linux / macOS / Windows）完成後に iOS / Android を視野に入れるか
+1. **各パッケージは独自の `src/<pkg>/mod.zig` と単体テストを持ち、互いに完全に独立して並列実装できる**：
+   - Agent A: `src/core/`
+   - Agent B: `src/rpc/`
+   - Agent C: `src/webview/`（さらに `linux.zig`, `macos.m`, `windows.zig` で OS ごとにも完全分離）
+   - Agent D: `src/bridge/`
+   - Agent E: `src/tauri/`（さらに `cmds/window.zig`, `cmds/dialog.zig`, `cmds/fs.zig` で完全分離）
+2. **Rust 由来のアンチパターン持ち込み禁止**:
+   - ❌ 動的 `PluginStore` VTable への全プラグイン一括登録（未使用コードが DCE されずバイナリが肥大化するため禁止 → **`zts_rpc.merge` による `comptime` 静的合成** を使う）
+   - ❌ 世代番号なしの連番 `ResourceId: u32` と `Any` ダウンキャストマップ（ABA バグの温床になるため禁止 → **`zts_core.HandlePool(T)`（IEEE 754 安全な 53-bit 世代ハンドル）** を使う）
+   - ❌ メインスレッドを乗っ取って戻らない `run()` 強制（`defer` リーク検査と外部ゲームループ統合を壊すため禁止 → **`step(.blocking / .non_blocking)` を基礎プリミティブ** にする）
