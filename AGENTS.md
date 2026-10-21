@@ -10,11 +10,11 @@
 記憶がない状態・新しいチャット環境に入ったら、**推測で動く前に必ず以下の順で現状を復元すること**：
 
 ```bash
-# Step 1: 現在ブランチ・自分が触っていたタスク・他の並列エージェントの稼働状況を一括把握（1秒）
+# Step 1: 現在ブランチ・自分が触っていたタスク・他の並列エージェントの稼働状況を一括把握（0.3秒）
 bash scripts/status.sh
 
-# Step 2: ゼロ設定ラッパー経由でテスト実行（Zig 0.17.0 未導入なら自動導入 + CI キャッシュ自動復元）
-./zigw build test
+# Step 2: ゼロ設定ラッパーで全単体テストを高速実行（キャッシュ0バイトの新チャット初回でも約5秒、2回目以降 0.02秒！）
+./zigw quick-test
 
 # Step 3: コミット・Push 前の必須チェック（ドキュメント構造検査 + Zig フォーマット検査）
 python3 scripts/check-docs.py && ./zigw fmt --check src/ build.zig build.zig.zon
@@ -66,18 +66,20 @@ Arena サンドボックスでは **新しいチャット（ブランチ）ご�
 
 ### 2.2 必要なプロファイルだけをオンデマンド導入する（毎回フル導入しない！）
 
-| 作業内容 | 実行コマンド | 所要時間目安 | 導入されるもの |
+| 作業内容 | 実行コマンド | 実測所要時間（コールド時） | 導入・実行されるもの |
 |---|---|---|---|
-| **通常の Zig 実装・単体テスト（全体の 8 割）** | `./zigw test src/...` または `./zigw build test` | **初回 約 5 秒**<br>（2回目以降 **0.1〜0.5 秒**） | Zig `0.17.0` + GitHub Actions 事前生成 `~/.cache/zig` 自動復元 |
+| **通常の Zig 実装・全単体テスト（全体の 8 割）** | `./zigw quick-test` | **初回 約 8.5 秒**（Zig 導入 3.5s + テスト 5.0s）<br>**2回目以降 `0.02 秒`（19ms）** | Zig `0.17.0` 自動導入 + `src/root.zig` テストスイート直接実行（94秒かかる `std.Build` ランナーのビルドをバイパス！） |
 | **上流 `vendor/` コード参照** | `bash scripts/setup-toolchains.sh --submodules` | 約 3 秒（未展開時のみ） | `vendor/{tauri,wry,tao}` 浅い展開 |
-| **Linux GTK3 / WebKit2GTK ネイティブリンク** | `bash scripts/setup-toolchains.sh --sysroot` | 約 8 秒 | Debian 12 `gtk+-3.0` (`3.24`), `webkit2gtk-4.1` (`2.50`), `pkg-config` |
+| **Linux GTK3 / WebKit2GTK ネイティブリンク** | `bash scripts/setup-toolchains.sh --sysroot` | 約 8 秒（ビルド実行は **+4.8 秒**） | Debian 12 `gtk+-3.0` (`3.24`), `webkit2gtk-4.1` (`2.50`), `pkg-config` |
 | **Rust リファレンスビルド / FFI 差分テスト** | `bash scripts/setup-toolchains.sh --rust` | 約 8 秒 | Rust `1.99.0` (`rustc`, `cargo`, `rustfmt`, `clippy`, `wasm32` std) |
 | **全環境フル検証** | `bash scripts/setup-toolchains.sh --verify` | 初回 約 20 秒 | 上記すべて + GTK3/WebKit2GTK/Rust FFI 実リンク実行検証 |
 
 ### 2.3 高速ビルドを維持する Zig 0.17 必須コーディング規約
 
-1. **TDD ループ中はダイレクト `./zigw test src/<module>/mod.zig` を活用する**
-   - `build.zig` ランナーを介さず対象モジュールだけを 0.1 秒でコンパイル・テストできる（コミット前には必ず `./zigw build test` も通す）。
+1. **ローカルチャットでは `./zigw quick-test` / `./zigw build-exe` を主軸にし、`zig build test` は `build.zig` 変更時または GitHub Actions で検証する**
+   - 空キャッシュから `zig build` を叩くと、本体のコンパイル前に巨大な `std.Build` ランナー自身のビルドだけで **約 94 秒** かかります。
+   - 一方、`./zigw quick-test`（`zig test src/root.zig`）や `./zigw build-exe` はキャッシュ完全ゼロの状態からでも **4.8〜5.0 秒、2回目以降は 0.02 秒** で完了します（`src/root.zig` から全サブモジュールのテストが辿れるよう `test { _ = @import("..."); }` を維持すること）。
+   - `build.zig` 自体のビルド検証は、永続 `actions/cache@v4` が効く GitHub Actions（macOS 19秒〜）が Push ごとに自動検証します。
 2. **`@cImport` は廃止済み & 巨大ヘッダの `addTranslateC` も原則禁止**
    - Zig `0.17.0` では `@cImport` は文法廃止済みです。
    - さらに `gtk/gtk.h` や `webkit2/webkit2.h` を `b.addTranslateC` で毎回パースさせると、キャッシュ揮発環境では **毎回 +50 秒** のペナルティが発生します。
@@ -92,9 +94,8 @@ Arena サンドボックスでは **新しいチャット（ブランチ）ご�
 
 ローカル Arena 環境の制約（キャッシュ揮発・Linux ヘッドレスのみ・`crates.io` 非接続）は、**GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))** で補完します（詳細は [`docs/environment/github-actions.md`](docs/environment/github-actions.md) 参照）：
 
-1. **Zig キャッシュ自動供給 (`warm-zig-cache` ジョブ)**:
-   - Push のたびに CI が `~/.cache/zig` を温めて orphan ブランチ `ci-cache-linux-x64` を自動更新し、全 Arena チャットの `./zigw` 初回実行を **94秒 → 約2.5秒** に高速化します。
-2. **3大 OS マトリクス & 実 GUI 仮想ディスプレイ検証 (`ci-linux` / `ci-macos` / `ci-windows`)**:
+1. **永続キャッシュ付き `zig build test` & 3大 OS マトリクス検証 (`ci-linux` / `ci-macos` / `ci-windows`)**:
+   - `actions/cache@v4` により `~/.cache/zig` と `.zig-cache` を永続保持するため、ローカルでは 94 秒かかる `zig build test` も CI 上では高速（macOS 実測 **19 秒**）に完了します。
    - **Linux**: `xvfb-run` 下での実 GTK3 ウィンドウ生成・WebKit2GTK レンダリング検証
    - **macOS (`arm64`)**: Cocoa / `WKWebView` ネイティブコードのビルド・実行検証
    - **Windows (`x86_64`)**: Win32 / `WebView2` ネイティブコードのビルド・実行検証

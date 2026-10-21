@@ -13,8 +13,8 @@
 - [x] `AGENTS.md` および並列エージェント・記憶リセット耐性ドキュメント構造（`docs/`）の構築
 - [x] 上流リポジトリ（`tauri`, `wry`, `tao`）の Git shallow submodule 導入
 - [x] Zig `0.17.0`（LLVM 22.1.8 内蔵確認済み）・Rust `1.99.0`・Linux `GTK3`/`WebKit2GTK 4.1` sysroot 環境構築
-- [x] 毎チャットのキャッシュ揮発に対応する `./zigw`（自動 Zig 導入 + `ci-cache-linux-x64` 自動キャッシュ復元）の実装
-- [x] GitHub Actions（Linux Xvfb + macOS + Windows + `warm-zig-cache`）の構築と実機稼働確認
+- [x] 毎チャットのキャッシュ揮発に対応する `./zigw`（約3.5秒 Zig 自動導入 + `./zigw quick-test` コールド 5.0s / ウォーム 0.02s）の実装
+- [x] GitHub Actions 3大 OS マトリクス（Linux Xvfb + macOS + Windows）＋ `scripts/ci-logs.sh`（`api.github.com` 経由ログリーダー）の構築とオールグリーン稼働確認
 
 ---
 
@@ -22,7 +22,8 @@
 
 - **完了したこと**:
   - PyPI `ziglang==0.17.0` に LLVM 22.1.8 / Clang 22.1.8 / LLD が静的リンク同梱されていることを実機検証（Windows / macOS クロスコンパイル含む）。
-  - コールドコンテナでの初回 `zig build test` が 94 秒かかる原因（`std.Build` ランナーと `compiler_rt` の再ビルド）を特定し、GitHub Actions から `ci-cache-linux-x64` orphan ブランチ経由で 25MB のプリウォームキャッシュを自動配信する仕組みを実装（94秒 → 約2.5秒）。
+  - コールドコンテナでの初回 `zig build test` が 94 秒かかる原因（`std.Build` ランナー再ビルド）と CI-Arena 間 CPU ハッシュ差異を実測で解明し、`./zigw quick-test`（コールド 5.00秒 / 2回目 0.019秒）＋ GitHub Actions 永続キャッシュ CI（macOS 19秒）の最適構成を確立。
+  - Arena から `gh run view --log` がブロックされる問題を発見し、`$GITHUB_STEP_SUMMARY` ミラーリング＋`scripts/ci-logs.sh` による完全ログ取得を実装。
   - 単一 `memory.md` を廃止し、`docs/tasks/<ID>-<slug>.md` 分割管理 + `scripts/status.sh` による他エージェント稼働レーダー + `scripts/check-docs.py` による機械的検査を導入。
 
 ---

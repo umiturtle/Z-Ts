@@ -24,35 +24,38 @@ if [[ -z "$RUN_ID" ]]; then
   exit 1
 fi
 
-RUN_META="$(gh api "repos/${REPO_SLUG}/actions/runs/${RUN_ID}")"
-echo "=================================================================="
-echo " Workflow Run #${RUN_ID}"
-echo "$RUN_META" | python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-print(f" Name       : {d.get(\"name\")}")
-print(f" Branch     : {d.get(\"head_branch\")} ({d.get(\"head_sha\", \"\")[:7]})")
-print(f" Status     : {d.get(\"status\")} / conclusion={d.get(\"conclusion\")}")
-print(f" URL        : {d.get(\"html_url\")}")
-'
-echo "=================================================================="
-
-JOBS_JSON="$(gh api "repos/${REPO_SLUG}/actions/runs/${RUN_ID}/jobs")"
-echo "$JOBS_JSON" | python3 - "$REPO_SLUG" << 'EOF'
+python3 - "$REPO_SLUG" "$RUN_ID" << 'EOF'
 import json, subprocess, sys
 
-repo_slug = sys.argv[1]
-data = json.load(sys.stdin)
+repo_slug, run_id = sys.argv[1], sys.argv[2]
 
-for job in data.get("jobs", []):
+run_meta = json.loads(subprocess.check_output(
+    ["gh", "api", f"repos/{repo_slug}/actions/runs/{run_id}"], text=True
+))
+print("==================================================================")
+print(f" Workflow Run #{run_id}")
+print(f" Name       : {run_meta.get('name')}")
+print(f" Branch     : {run_meta.get('head_branch')} ({(run_meta.get('head_sha') or '')[:7]})")
+print(f" Status     : {run_meta.get('status')} / conclusion={run_meta.get('conclusion')}")
+print(f" URL        : {run_meta.get('html_url')}")
+print("==================================================================")
+
+jobs_data = json.loads(subprocess.check_output(
+    ["gh", "api", f"repos/{repo_slug}/actions/runs/{run_id}/jobs"], text=True
+))
+
+for job in jobs_data.get("jobs", []):
     jid = job["id"]
     print(f"\n### Job: {job['name']} (id={jid}) -> {job['status']} / {job.get('conclusion')}")
     for st in job.get("steps", []):
-        mark = {"success": "OK", "failure": "FAIL", "skipped": "SKIP"}.get(st.get("conclusion") or "", st.get("status", ""))
+        mark = {"success": "OK", "failure": "FAIL", "skipped": "SKIP"}.get(
+            st.get("conclusion") or "", st.get("status", "")
+        )
         print(f"  [{mark:<4}] {st['name']}")
 
-    cr_raw = subprocess.check_output(["gh", "api", f"repos/{repo_slug}/check-runs/{jid}"], text=True)
-    cr = json.loads(cr_raw)
+    cr = json.loads(subprocess.check_output(
+        ["gh", "api", f"repos/{repo_slug}/check-runs/{jid}"], text=True
+    ))
     summary = (cr.get("output") or {}).get("summary") or ""
     if summary.strip():
         print("\n  --- Step Summary / Captured Output ---")

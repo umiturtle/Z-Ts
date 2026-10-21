@@ -3,15 +3,15 @@ set -euo pipefail
 
 # Z-Ts Modular Toolchain & Sysroot Bootstrap Script
 #
-# Because Arena chat sandboxes start with a fresh container filesystem per chat/branch,
-# avoid installing unnecessary heavy components on every chat. Pick ONLY the profile needed:
+# Arena chat sandboxes start with a fresh container filesystem on every new chat/branch.
+# Install ONLY the profile needed for your current task:
 #
-#   bash scripts/setup-toolchains.sh                # Minimal (default): Zig 0.17.0 + CI cache (~4s)
+#   bash scripts/setup-toolchains.sh                # Minimal (default): Zig 0.17.0 only (~3.5s)
 #   bash scripts/setup-toolchains.sh --submodules   # Also init shallow vendor/{tauri,wry,tao} (~3s)
 #   bash scripts/setup-toolchains.sh --sysroot      # Also install Debian 12 GTK3/WebKit2GTK sysroot (~8s)
 #   bash scripts/setup-toolchains.sh --rust         # Also install Rust 1.99.0 + rustfmt + clippy (~8s)
 #   bash scripts/setup-toolchains.sh --all          # Install everything above
-#   bash scripts/setup-toolchains.sh --verify       # Run end-to-end native C/GTK/WebKit + Rust FFI link test
+#   bash scripts/setup-toolchains.sh --verify       # Fast cold-cache C-ABI GTK3 + WebKit2GTK + Rust FFI link test (~5s)
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ZIG_VERSION="${ZIG_VERSION:-0.17.0}"
@@ -48,15 +48,13 @@ WORK_DIR="$(mktemp -d /tmp/zts-setup.XXXXXX)"
 cleanup() { rm -rf "$WORK_DIR"; }
 trap cleanup EXIT
 
-echo "[setup] Ensuring Zig ${ZIG_VERSION} + pre-warmed cache..."
+echo "[setup] Ensuring Zig ${ZIG_VERSION}..."
 if [[ "$FORCE" == "1" ]]; then
   rm -rf "/tmp/zts-toolchains/zig-${ZIG_VERSION}"
   sudo rm -f /usr/local/bin/zig 2>/dev/null || true
 fi
 "${REPO_ROOT}/zigw" version >/dev/null
-# Trigger cache hydration if cold
-"${REPO_ROOT}/zigw" build --help >/dev/null 2>&1 || true
-echo "  zig: $("${REPO_ROOT}/zigw" version) (LLVM/Clang: $("${REPO_ROOT}/zigw" cc --version | head -n 1))"
+echo "  zig: $("${REPO_ROOT}/zigw" version) (bundled LLVM/Clang: $("${REPO_ROOT}/zigw" cc --version | head -n 1))"
 
 if [[ "$WANT_SUBMODULES" == "1" ]]; then
   echo "[setup] Checking upstream submodules (vendor/tauri, vendor/wry, vendor/tao)..."
@@ -168,29 +166,10 @@ EOF
 fi
 
 if [[ "$WANT_VERIFY" == "1" ]]; then
-  echo "[verify] Building & running fast C-ABI GTK3 + WebKit2GTK + Rust FFI smoke test..."
+  echo "[verify] Building & running fast direct `zig build-exe` GTK3 + WebKit2GTK + Rust FFI smoke test..."
   VDIR="${WORK_DIR}/verify"
-  mkdir -p "${VDIR}/src"
-  cat << 'EOF' > "${VDIR}/build.zig"
-const std = @import("std");
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-    const mod = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    mod.linkSystemLibrary("gtk+-3.0", .{});
-    mod.linkSystemLibrary("webkit2gtk-4.1", .{});
-    mod.linkSystemLibrary("gcc_s", .{});
-    mod.addObjectFile(b.path("rust_ffi/target/release/librust_ffi.a"));
-    const exe = b.addExecutable(.{ .name = "verify", .root_module = mod });
-    b.step("run", "Run").dependOn(&b.addRunArtifact(exe).step);
-}
-EOF
-  cat << 'EOF' > "${VDIR}/src/main.zig"
+  mkdir -p "$VDIR"
+  cat << 'EOF' > "${VDIR}/main.zig"
 const std = @import("std");
 extern fn gtk_get_major_version() callconv(.c) c_uint;
 extern fn gtk_get_minor_version() callconv(.c) c_uint;
@@ -221,5 +200,9 @@ EOF
 pub extern "C" fn rust_add(a: i32, b: i32) -> i32 { a + b }
 EOF
   cargo build --release --quiet --manifest-path "${VDIR}/rust_ffi/Cargo.toml"
-  "${REPO_ROOT}/zigw" build run --build-file "${VDIR}/build.zig"
+  "${REPO_ROOT}/zigw" build-exe "${VDIR}/main.zig" \
+    "${VDIR}/rust_ffi/target/release/librust_ffi.a" \
+    -lc -L/usr/lib/x86_64-linux-gnu -lgtk-3 -lwebkit2gtk-4.1 -lgcc_s \
+    -femit-bin="${VDIR}/verify_bin"
+  "${VDIR}/verify_bin"
 fi
