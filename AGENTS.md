@@ -1,226 +1,132 @@
-# AGENTS.md — Z-Ts（Tauri in Zig）開発ガイドライン（雛形）
+# AGENTS.md — Z-Ts（Tauri in Zig）開発憲法・エージェント運用ハブ
 
-> **このドキュメントは、AIエージェントおよび人間の開発者が `Z-Ts`（Tauri の Zig 移植プロジェクト）を開発する際のガイドライン雛形です。**
-> **アーキテクチャ詳細・マイルストーンの確定に合わせて、本ドキュメント自体も継続的にアップデートしてください。**
-
----
-
-## 0. プロジェクト概要と現在地
-
-### 0.1 目的
-
-**`Z-Ts`** は、クロスプラットフォーム WebView デスクトップ/モバイルアプリフレームワーク **[Tauri v2](https://github.com/tauri-apps/tauri)** を **Zig (`0.17.0`)** へ移植・再構築するプロジェクトです。
-
-- **高速なビルドと単一ツールチェーン**: Rust の重量級 proc-macro（`syn` / `quote`）に依存していたコマンド生成・アセット埋め込み・設定検証を、Zig ネイティブの **`comptime` メタプログラミング**と **`build.zig` ビルドグラフ**で置き換える。
-- **明示的なメモリ・ライフサイクル管理**: `std.mem.Allocator` と `errdefer` により、IPC メッセージバッファ・ステート・ウィンドウリソースの所有権と解放タイミングを完全に可視化する。
-- **上流互換性と段階的検証**: リポジトリ内の `vendor/` に配置した本家 Rust 実装（`tauri` / `wry` / `tao`）を正確な仕様リファレンスとし、テスト駆動・差分テスト（Differential Testing）によって忠実かつ高品質に実装する。
-
-### 0.2 上流リファレンス（`vendor/`）と移植レイヤー対応表
-
-本家ソースコードは Git サブモジュールとして `vendor/` 配下にチェックアウト済みです。**推測で仕様を決めず、必ず対応する上流コードを読んでから設計・実装すること。**
-
-| レイヤー | Z-Ts モジュール案 | 対応する上流リポジトリ / クレート | 主な責務 |
-|---|---|---|---|
-| **L1: Windowing** | `src/window/` | `vendor/tao` | OS ウィンドウ生成、イベントループ、DPI・モニター情報、メニュー・入力イベント（Linux: GTK3 / macOS: AppKit / Windows: Win32） |
-| **L2: WebView** | `src/webview/` | `vendor/wry` | OS ネイティブ WebView 制御、初期化 JS 注入、IPC メッセージハンドラ、カスタムプロトコル処理（Linux: `webkit2gtk-4.1` / macOS: `WKWebView` / Windows: `WebView2`） |
-| **L3: Runtime 抽象** | `src/runtime/` | `vendor/tauri/crates/tauri-runtime`<br>`vendor/tauri/crates/tauri-runtime-wry` | バックエンド非依存の `Runtime` インターフェース、ウィンドウ・WebView ハンドル管理、イベントディスパッチ |
-| **L4: Config & Security** | `src/utils/`<br>`src/acl/` | `vendor/tauri/crates/tauri-utils` | `tauri.conf.json` パース、ACL（Capabilities / Permissions / Scope グロブ評価）、MIME 判定、アセット管理 |
-| **L5: Core & Comptime IPC** | `src/app/`<br>`src/ipc/`<br>`src/plugin/` | `vendor/tauri/crates/tauri`<br>`vendor/tauri/crates/tauri-macros`<br>`vendor/tauri/crates/tauri-codegen`<br>`vendor/tauri/crates/tauri-plugin` | `App` / `Builder`、`State` 管理、`comptime` 型リフレクションによる Command 引数デシリアライズ＆ディスパッチ（`invoke` / `Channel` / `Event`）、`asset://` プロトコル、Plugin 機構 |
-| **L6: Build & Tooling** | `build.zig`<br>`src/cli/`<br>`src/bundler/` | `vendor/tauri/crates/tauri-build`<br>`vendor/tauri/crates/tauri-cli`<br>`vendor/tauri/crates/tauri-bundler` | アセット埋め込み（`@embedFile` / codegen）、開発サーバー連携、パッケージング |
-| **JS Frontend Bridge** | （互換維持 / 検証対象） | `vendor/tauri/packages/api` | `@tauri-apps/api`（`window.__TAURI_INTERNALS__`）との IPC ワイヤープロトコル互換性 |
-
-### 0.3 設計上の要合意事項（雛形 TODO）
-
-<!-- TODO: ユーザーとの議論により方針が固まり次第、以下のチェックボックスと決定内容を更新すること -->
-- [ ] **ターゲット OS の実装順序**: Linux (`GTK3` + `WebKit2GTK 4.1`) 先行 → macOS / Windows 展開か、クロスプラットフォーム抽象を先に固めるか
-- [ ] **フロントエンド JS API 互換レベル**: `@tauri-apps/api` v2（`__TAURI_INTERNALS__` プロトコル）との 100% ドロップイン互換を目指すか、Z-Ts 専用の軽量 TS SDK も併設するか
-- [ ] **移植アプローチ**: 最初から Pure Zig + C API 直叩きで積み上げるか、過渡期に一部 `tao`/`wry` 等の C-ABI Rust ブリッジを比較・検証用に併用するか
-- [ ] **非同期ランタイム設計**: イベントループ（GTK/AppKit/Win32 メインループ）とバックグラウンドワーカー・IPC 非同期コマンドの統合モデル
+> **このファイルは、すべての AI エージェント（新規チャット開始時・コンテキスト圧縮による記憶リセット直後・並列稼働中）が最初に読むエントリーポイントです。**
+> **注意**: 並列エージェント間のマージコンフリクトを防ぐため、**このファイルに個別タスクの進捗ログを書き込んではいけません。**
 
 ---
 
-## 1. 実装フロー
+## 0. 最初の 30 秒ルーチン（新チャット開始時 / 記憶リセット直後）
 
-### 1.1 実装の進め方
+記憶がない状態・新しいチャット環境に入ったら、**推測で動く前に必ず以下の順で現状を復元すること**：
 
-実装を行う際は、必ず以下のフローに従うこと：
+```bash
+# Step 1: 現在ブランチ・自分が触っていたタスク・他の並列エージェントの稼働状況を一括把握（1秒）
+bash scripts/status.sh
 
-```
-1. 🧠 memory.md を確認
-   └─ 前回までの進捗・設計判断・残課題・次のステップを把握
+# Step 2: ゼロ設定ラッパー経由でテスト実行（Zig 0.17.0 未導入なら自動導入 + CI キャッシュ自動復元）
+./zigw build test
 
-2. 📋 ROADMAP.md / マイルストーンを確認
-   └─ 今回取り組む対象レイヤー・マイルストーンを選択
-
-3. 🔍 上流コード（vendor/tauri, vendor/wry, vendor/tao）を精読
-   └─ 対応する Rust 実装のデータ構造・エッジケース・セキュリティ境界を確認
-   └─ docs/ARCHITECTURE.md の設計原則と照合
-
-4. 📝 実装計画を立てる
-   └─ 小さな検証可能タスクに分解し、完了基準（テスト項目）を明確化
-
-5. 🔧 実装（TDD / 差分テスト駆動 / ベンチマーク駆動）
-   └─ テストを先に書き、最小実装 → リファクタリング → 1タスクごとにコミット
-
-6. 📚 ドキュメント & memory.md 更新
-   └─ ARCHITECTURE.md / ROADMAP.md / AGENTS.md / memory.md をコードと同期
+# Step 3: コミット・Push 前の必須チェック（ドキュメント構造検査 + Zig フォーマット検査）
+python3 scripts/check-docs.py && ./zigw fmt --check src/ build.zig build.zig.zon
 ```
 
 ---
 
-## 2. 設計原則と Zig 0.17 実装規約
+## 1. 記憶喪失対策 ＆ 並列マルチエージェント協調プロトコル（最重要）
 
-### 2.1 Rust から Zig への翻訳指針（「直訳」ではなく「Zig ネイティブ設計」）
+このプロジェクトでは **① 1 エージェント内でも一定間隔でコンテキスト（記憶）が飛ぶ** こと、かつ **② 複数のエージェントが別ブランチで同時に並列稼働する** ことを前提にリポジトリ構造を設計しています。
 
-1. **Proc-macro を `comptime` リフレクションへ昇華させる**
-   - Rust の `#[tauri::command]` が構文木変換で行っている「関数引数名・型の抽出 → JSON パース → `State<T>` / `Window` 注入 → 戻り値/エラーの JSON シリアライズ」は、Zig では `@typeInfo(@TypeOf(func)).@"fn"` を用いた `comptime` ハンドラ生成で簡潔・型安全に実装する。
-2. **明示的アロケータとリークゼロ保証**
-   - 動的確保を行う関数は必ず `allocator: std.mem.Allocator` を引数に受け取る（暗黙のグローバルアロケータ依存を避ける）。
-   - 1 回の IPC リクエスト処理のような短命データは `std.heap.ArenaAllocator` を活用し、リクエスト完了時に一括解放する。
-   - すべての単体テストで `std.testing.allocator` を使用し、**1 バイトのメモリリークも許さない**。
-3. **関数の責務分類を意識する**
-   - **PURE / COMPUTE**: I/O やグローバル状態を持たない純粋計算（URL ルーティング、ACL/Scope マッチング、JSON-RPC パース・シリアライズ等）。可能な限りロジックをここへ切り出し、OS GUI なしで高速単体テスト可能にする。
-   - **MUTATE**: アプリケーション `State`、ウィンドウレジストリ、イベントリスナー表の状態遷移。スレッド安全性（Mutex / メインスレッド制約）を型レベルで明確にする。
-   - **EFFECT**: GTK / WebKit2GTK / OS システムコール呼び出し。薄いプラットフォームバックエンド層に隔離する。
+### 1.1 絶対禁止事項（マージコンフリクト防止）
 
-### 2.2 Zig `0.17.0` 必須注意事項（重要）
+- ❌ **ルート直下に単一の `memory.md` / `PROGRESS.md` / `TODO.md` を作らない・追記しない**（`scripts/check-docs.py` と CI で機械的にブロックされます）。
+- ❌ **`AGENTS.md` や `docs/roadmap/milestones.md` のチェックボックスをタスク完了のたびに書き換えない**（全並列ブランチが同じ行を編集して PR マージ時に衝突するため）。
 
-このプロジェクトは **Zig `0.17.0`** を使用します。古いバージョンの Zig 構文を混入させないこと：
+### 1.2 分割ファイル（Sharded Files）による状態・記憶管理ルール
 
-1. **`@cImport` / `@cInclude` は廃止済み（使用不可）**
-   - Zig `0.17.0` ではソースコード内の `@cImport` はコンパイルエラーになります。
-   - C ヘッダ（GTK3, WebKit2GTK 等）を利用する場合は、必ず **`build.zig` 内で `b.addTranslateC(...)` を定義**し、`mod.addImport("c", tc.createModule())` としてモジュール経由で `@import("c")` するか、厳選した C ABI シンボルを直接 `extern fn ... callconv(.c)` で宣言すること。
-2. **`build.zig.zon` 規約**
-   - `.name = .z_ts` のように識別子リテラルを使用し、有効な `.fingerprint` と `.minimum_zig_version = "0.17.0"` を維持する。
-3. **Rust `staticlib` リンク時の注意**
-   - 差分テストや段階的ブリッジで Rust の `staticlib`（`.a`）を Zig バイナリにリンクする場合は、アンワインドシンボル解決のため `mod.linkSystemLibrary("gcc_s", .{})` と `link_libc = true` を指定する。
+すべての作業状態・引き継ぎメモ・設計書は **「1 タスク / 1 モジュール / 1 意思決定 ＝ 1 独立ファイル」** として分割配置します：
 
----
-
-## 3. 開発手法とテスト戦略
-
-### 3.1 開発手法の使い分け
-
-1. **テスト駆動開発（TDD: 🔴 RED → 🟢 GREEN → 🔵 REFACTOR → 📝 COMMIT）**
-   - IPC メッセージパーサー、`tauri.conf.json` バリデータ、ACL / Capability 認可エンジン、State 管理、イベントバスなどすべてのコアロジック。
-2. **差分テスト（Differential Testing against Upstream Rust）**
-   - 移植プロジェクト最大の武器。同じ入力（設定 JSON、IPC ペイロード、パス traversal 攻撃入力、Capability スコープ文字列など）を **Rust リファレンス実装** と **Zig 実装** の双方に与え、出力・エラー挙動が一致することを自動検証する。
-3. **ベンチマーク駆動開発（📊 BASELINE → 🎯 TARGET → 🔧 OPTIMIZE → 📊 MEASURE）**
-   - バイナリサイズ、起動時間、IPC ラウンドトリップスループット、メモリ使用量において本家 Rust 版を計測比較対象とする。
-
-### 3.2 テストは「これでもか」というほど増やす
-
-- **単体テスト**: 正常系・異常系・境界値・不正 UTF-8・巨大入力・アロケーション失敗（`std.testing.checkAllAllocationFailures`）まで網羅する（**目標：主要な公開関数ごとに最低 5〜10 ケース以上**）。
-- **セキュリティ回帰テスト**: Tauri の核であるカスタムプロトコルのパストラバーサル防止、Origin 検証、ACL 権限拒否ケースを重点的にテストする。
-- **統合テスト**: 実際の Linux `GTK3` + `WebKit2GTK 4.1` リンクを含めたビルド・ヘッドレス動作確認を行う。
-
----
-
-## 4. 開発環境とツールチェーン
-
-### 4.1 セットアップ済みツールチェーン（Debian 12 x86_64）
-
-本環境には以下のツールチェーンと Linux GUI/WebView 開発 sysroot が整備されています：
-
-| ツール / ライブラリ | バージョン | パス / 確認コマンド |
+| 種類 | 配置パス | 更新ルール（コンフリクト回避） |
 |---|---|---|
-| **Zig** | `0.17.0` | `zig version` / `python3 -m ziglang version` |
-| **Rust (`rustc` / `cargo`)** | `1.99.0` (Edition 2024 対応) | `rustc --version` / `cargo --version` |
-| **Rust 補助ツール** | `rustfmt` / `clippy` / `wasm32` std | `rustfmt --version` / `cargo clippy --version` |
-| **GTK3 / WebKit2GTK Sysroot** | GTK `3.24.38`, WebKit2GTK `2.50.6` (`4.1`) | `pkg-config --modversion gtk+-3.0 webkit2gtk-4.1` |
+| **タスク進捗 & 作業記憶（チェックポイント帳）** | [`docs/tasks/TEMPLATE.md`](docs/tasks/TEMPLATE.md) をコピーして<br>`docs/tasks/<ID>-<slug>.md` を作成 | **自分の担当タスクファイル 1 つだけ**を作成・更新する。他人のタスクファイルは触らない。 |
+| **サブシステム設計書** | `docs/architecture/<module>.md`<br>（全体図は [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md)） | 担当サブシステム専用ファイルを新規作成・編集する。 |
+| **技術的判断・知見（ADR）** | `docs/decisions/<NNNN>-<slug>.md`<br>（例: [`0001`](docs/decisions/0001-zig-017-and-sharded-agent-workflow.md)） | **追記専用（Add-only）** で新しい番号のファイルを追加する。 |
+| **環境・CI ナレッジ** | [`docs/environment/arena-and-caching.md`](docs/environment/arena-and-caching.md)<br>[`docs/environment/github-actions.md`](docs/environment/github-actions.md) | ツールチェーン・CI 構成変更時のみ更新する。 |
 
-### 4.2 環境の自動復旧・検証コマンド
+### 1.3 並列エージェントのタスク着手（分散ロック）フロー
 
-コンテナ再起動やスナップショット復元後にツールチェーンが見当たらない場合は、以下のスクリプト 1 コマンドで全環境（Zig + Rust + Linux GTK3/WebKit2GTK sysroot）をべき等に自動セットアップ＆リンク検証できます：
-
-```bash
-# ツールチェーン・sysroot の確認と自動セットアップ（フルリンク検証付き）
-bash scripts/setup-toolchains.sh --verify
-```
-
-### 4.3 基本ビルド・テストコマンド
-
-```bash
-# Zig 単体テスト実行
-zig build test
-
-# コードフォーマットチェック
-zig fmt --check src/ build.zig build.zig.zon
-```
-
-### 4.4 Arena サンドボックスにおけるネットワーク制約メモ
-
-この開発環境から外部通信可能なホストは以下に限定されています：
-- `github.com` / `codeload.github.com` / `api.github.com`
-- `registry.npmjs.org`
-- `pypi.org` / `files.pythonhosted.org`
-
-> **注意**: `static.rust-lang.org`、`ziglang.org`、`deb.debian.org`、`crates.io` への直接通信はブロックされています。
-> - Zig 本体: PyPI の `ziglang` ホイール経由で取得（`scripts/setup-toolchains.sh` 内蔵）
-> - Rust 本体 & Linux WebKit2GTK sysroot: npm の `@toolchain-bin/*` パッケージ経由で取得（`scripts/setup-toolchains.sh` 内蔵）
-> - Rust 外部クレートが必要な場合: `vendor/` 内のローカル path 依存、または `git = "https://github.com/..."` 依存を使用する。
+1. **`bash scripts/status.sh` を実行**し、`[4] Parallel Agents Radar` に表示される **リモート `arena/*` ブランチ** と **Open PR** を確認する。他エージェントが既に触っている `docs/tasks/<ID>-*.md` や `src/<module>/` には手を出さない。
+2. 自分が担当するタスクの `docs/tasks/<ID>-<slug>.md` を作成し、ヘッダを `- **Status**: in_progress` / `- **Branch**: <自分のブランチ名>` にして **最初に 1 コミット `git push` する**（これにより他エージェントの `status.sh` 上で即座にロックが可視化される）。
+3. **記憶飛び（コンテキストリセット）に備えるチェックポイント習慣**:
+   - 調査完了時・設計確定時・サブテスト通過時・ハマり原因特定時の区切りごとに、担当 `docs/tasks/<ID>-<slug>.md` の **`Current State` / `Decisions & Notes` / `Next Step` を具体的に更新してこまめにコミット**する。
+   - これにより、いつ記憶が飛んでも次のターンで `bash scripts/status.sh` を 1 回叩くだけで直前の思考と次の 1 手が 100% 復元される。
+4. **コード側の衝突最小化ルール**:
+   - 各モジュールは `src/<module>/mod.zig` 以下に自己完結させ、単体テストもモジュール内から走らせるように書く。
+   - 共有ファイル（`build.zig` / `src/root.zig`）への変更は最小限の 1 エントリ追加に留め、アルファベット順を維持する。
 
 ---
 
-## 5. ディレクトリ構成（初期案）
+## 2. 毎チャット環境リセット（キャッシュ揮発）への最適運用
 
-```text
-Z-Ts/
-├── AGENTS.md                 # AIエージェント・開発者向けガイドライン（本書）
-├── memory.md                 # セッション間の進捗・設計意図・引き継ぎ記録
-├── README.md                 # プロジェクト概要
-├── ROADMAP.md                # マイルストーン・移植ロードマップ（今後策定）
-├── build.zig                 # Zig 0.17 ビルド定義
-├── build.zig.zon             # Zig パッケージマニフェスト
-├── scripts/
-│   └── setup-toolchains.sh   # Zig / Rust / GTK3 & WebKit2GTK sysroot セットアップスクリプト
-├── docs/                     # アーキテクチャ設計・仕様対照ドキュメント（今後整備）
-├── src/                      # Z-Ts 本体ソースコード（Zig）
-│   └── root.zig              # ライブラリルート
-└── vendor/                   # 上流リファレンス実装（Git Submodules）
-    ├── tauri/                # tauri-apps/tauri (v2)
-    ├── wry/                  # tauri-apps/wry (WebView 抽象)
-    └── tao/                  # tauri-apps/tao (Window / EventLoop 抽象)
-```
+Arena サンドボックスでは **新しいチャット（ブランチ）ごとにコンテナが新規作成され、`/usr/local`・`~/.local`・`~/.cache/zig`・`.zig-cache`・`target` が毎回リセットされます**。無駄な待ち時間を出さないため、以下の仕組みを徹底してください（詳細計測データは [`docs/environment/arena-and-caching.md`](docs/environment/arena-and-caching.md) 参照）。
 
----
+### 2.1 LLVM / コンパイラ仕様の事実確認（検証済み）
 
-## 6. ドキュメント管理と引き継ぎ（`memory.md`）
+- **PyPI 版 `ziglang==0.17.0` には `LLVM 22.1.8` / `Clang 22.1.8` / `LLD` / `llvm-ar` が完全同梱（静的リンク）されています。**
+  - `-O ReleaseFast` / `-O ReleaseSmall` / `-fllvm`、C/C++ コンパイル（`./zigw cc` / `./zigw c++`）、クロスコンパイル（`x86_64-windows-gnu`, `aarch64-macos`, `wasm32`）すべて単体で動作します。
 
-### 6.1 ドキュメント同時更新の原則
+### 2.2 必要なプロファイルだけをオンデマンド導入する（毎回フル導入しない！）
 
-コードや設計を変更したら、必ず関連ドキュメントも同一作業内で更新すること：
-- `AGENTS.md` — 開発ルール・モジュール構成・ビルド手順の変更時
-- `docs/ARCHITECTURE.md` — レイヤー設計・データフロー・API 変更時
-- `ROADMAP.md` — マイルストーン進捗更新時
-- `memory.md` — **毎回の区切り・コミットごとに必ず更新**
+| 作業内容 | 実行コマンド | 所要時間目安 | 導入されるもの |
+|---|---|---|---|
+| **通常の Zig 実装・単体テスト（全体の 8 割）** | `./zigw test src/...` または `./zigw build test` | **初回 約 5 秒**<br>（2回目以降 **0.1〜0.5 秒**） | Zig `0.17.0` + GitHub Actions 事前生成 `~/.cache/zig` 自動復元 |
+| **上流 `vendor/` コード参照** | `bash scripts/setup-toolchains.sh --submodules` | 約 3 秒（未展開時のみ） | `vendor/{tauri,wry,tao}` 浅い展開 |
+| **Linux GTK3 / WebKit2GTK ネイティブリンク** | `bash scripts/setup-toolchains.sh --sysroot` | 約 8 秒 | Debian 12 `gtk+-3.0` (`3.24`), `webkit2gtk-4.1` (`2.50`), `pkg-config` |
+| **Rust リファレンスビルド / FFI 差分テスト** | `bash scripts/setup-toolchains.sh --rust` | 約 8 秒 | Rust `1.99.0` (`rustc`, `cargo`, `rustfmt`, `clippy`, `wasm32` std) |
+| **全環境フル検証** | `bash scripts/setup-toolchains.sh --verify` | 初回 約 20 秒 | 上記すべて + GTK3/WebKit2GTK/Rust FFI 実リンク実行検証 |
 
-### 6.2 `memory.md` の運用
+### 2.3 高速ビルドを維持する Zig 0.17 必須コーディング規約
 
-作業を開始する前に必ず `memory.md` を読み、作業完了時には以下を記録すること：
-1. 今回完了したこと
-2. 設計上の判断理由・発見した技術的知見・ハマりどころと解決策
-3. 未解決の課題・次に着手すべき具体的ステップ
+1. **TDD ループ中はダイレクト `./zigw test src/<module>/mod.zig` を活用する**
+   - `build.zig` ランナーを介さず対象モジュールだけを 0.1 秒でコンパイル・テストできる（コミット前には必ず `./zigw build test` も通す）。
+2. **`@cImport` は廃止済み & 巨大ヘッダの `addTranslateC` も原則禁止**
+   - Zig `0.17.0` では `@cImport` は文法廃止済みです。
+   - さらに `gtk/gtk.h` や `webkit2/webkit2.h` を `b.addTranslateC` で毎回パースさせると、キャッシュ揮発環境では **毎回 +50 秒** のペナルティが発生します。
+   - **鉄則**: コア層は **`link_libc = false`（Pure Zig）** を厳守し、OS ネイティブ C ライブラリ（GTK3 / WebKit2GTK 等）の境界は **必要な C 関数・構造体のみを `extern fn ... callconv(.c)` で明示した Pure Zig バインディングファイル** として `src/` にコミットすること（コールドリンクが **2 秒** で完了します）。
+3. **明示的 `Allocator` ＆ メモリリークゼロ**
+   - すべてのテストで `std.testing.allocator` を使用し、1 バイトのリークも残さない。
+4. **Rust `staticlib` リンク時は `mod.linkSystemLibrary("gcc_s", .{})` を付与する**。
 
 ---
 
-## 7. 品質姿勢とコミット規約
+## 3. GitHub Actions の積極活用ルール
 
-### 7.1 「言わなきゃいけないことを言う」
+ローカル Arena 環境の制約（キャッシュ揮発・Linux ヘッドレスのみ・`crates.io` 非接続）は、**GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))** で補完します（詳細は [`docs/environment/github-actions.md`](docs/environment/github-actions.md) 参照）：
 
-- 上流 Tauri の仕様上の複雑さやセキュリティ上の落とし穴を見つけたら曖昧にせず報告する。
-- 設計原則に矛盾する方針や、Zig への無理な直訳になりそうな箇所があれば代替案とともに指摘する。
-- テストが不十分なまま先に進まない。
+1. **Zig キャッシュ自動供給 (`warm-zig-cache` ジョブ)**:
+   - Push のたびに CI が `~/.cache/zig` を温めて orphan ブランチ `ci-cache-linux-x64` を自動更新し、全 Arena チャットの `./zigw` 初回実行を **94秒 → 約2.5秒** に高速化します。
+2. **3大 OS マトリクス & 実 GUI 仮想ディスプレイ検証 (`ci-linux` / `ci-macos` / `ci-windows`)**:
+   - **Linux**: `xvfb-run` 下での実 GTK3 ウィンドウ生成・WebKit2GTK レンダリング検証
+   - **macOS (`arm64`)**: Cocoa / `WKWebView` ネイティブコードのビルド・実行検証
+   - **Windows (`x86_64`)**: Win32 / `WebView2` ネイティブコードのビルド・実行検証
+3. **本家 Rust 版 Tauri との Differential Test & ベンチマーク実行**:
+   - CI 上では `crates.io` と永続キャッシュがフル稼働し、CPU ノイズも安定しているため、上流 Rust 実装との入出力比較ベクタ生成やパフォーマンス計測は GitHub Actions ジョブで実行し、以下のコマンドで結果を確認すること：
+   ```bash
+   git push origin <現在のブランチ名>
+   gh run list --branch <現在のブランチ名> --limit 5
+   gh run watch <run_id> --exit-status
+   gh run view <run_id> --log-failed
+   ```
 
-### 7.2 コミット粒度とメッセージ規約
+---
 
-**1 コミット = 1 つの明確でテスト通過済みの変更** とし、Conventional Commits 形式を用いる：
+## 4. アーキテクチャ・開発手法・ドキュメント索引
 
-```text
-<type>(<scope>): <subject>
+### 4.1 必読ドキュメントリンク
 
-- 変更内容・設計意図の要約
-- 検証したテスト項目
-```
+- 📚 **ドキュメント全体索引**: [`docs/INDEX.md`](docs/INDEX.md)
+- 🏗️ **全体アーキテクチャ & 上流 `vendor/` 対応表**: [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md)
+- 🗺️ **マイルストーン定義**: [`docs/roadmap/milestones.md`](docs/roadmap/milestones.md)
+- 📝 **タスク・記憶チェックポイント雛形**: [`docs/tasks/TEMPLATE.md`](docs/tasks/TEMPLATE.md)
+- ⚡ **Arena 実行環境・キャッシュ最適化詳細**: [`docs/environment/arena-and-caching.md`](docs/environment/arena-and-caching.md)
+- 🔄 **GitHub Actions 運用・オフロード詳細**: [`docs/environment/github-actions.md`](docs/environment/github-actions.md)
 
-- **Type**: `feat`, `fix`, `docs`, `test`, `perf`, `refactor`, `chore`, `build`
+### 4.2 品質基準と開発姿勢
+
+1. **上流コード精読ファースト**: 推測で仕様を作らず、必ず `vendor/tauri`・`vendor/wry`・`vendor/tao` の該当実装を読んでから設計・実装する。
+2. **TDD / 差分テスト / ベンチマーク駆動**:
+   - ロジック実装は **TDD（🔴 RED → 🟢 GREEN → 🔵 REFACTOR → 📝 COMMIT）** で進め、公開関数あたり **最低 5〜10 ケース以上**（正常系・異常系・境界値・セキュリティ境界・アロケーション失敗）のテストを書く。
+3. **「言わなきゃいけないことを言う」**:
+   - 設計上の矛盾、上流仕様の落とし穴、テスト不足、パフォーマンス悪化を見つけた場合は曖昧にせず明確に指摘・提案する。
+4. **コミット規約**:
+   - 1 コミット = 1 つの明確でテスト通過済みの変更とし、Conventional Commits（`feat`, `fix`, `docs`, `test`, `perf`, `refactor`, `chore`, `ci`）に従う。
+   - **セッションの現在ブランチ（`arena/...`）以外に checkout / push しないこと。**

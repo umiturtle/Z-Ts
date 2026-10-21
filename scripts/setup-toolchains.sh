@@ -1,22 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Z-Ts Toolchain & Linux Sysroot Setup Script
-# Designed for Debian 12 (bookworm) x86_64 environments including Arena sandboxes
-# where outbound access is restricted to github.com / registry.npmjs.org / pypi.org.
+# Z-Ts Modular Toolchain & Sysroot Bootstrap Script
+#
+# Because Arena chat sandboxes start with a fresh container filesystem per chat/branch,
+# avoid installing unnecessary heavy components on every chat. Pick ONLY the profile needed:
+#
+#   bash scripts/setup-toolchains.sh                # Minimal (default): Zig 0.17.0 + CI cache (~4s)
+#   bash scripts/setup-toolchains.sh --submodules   # Also init shallow vendor/{tauri,wry,tao} (~3s)
+#   bash scripts/setup-toolchains.sh --sysroot      # Also install Debian 12 GTK3/WebKit2GTK sysroot (~8s)
+#   bash scripts/setup-toolchains.sh --rust         # Also install Rust 1.99.0 + rustfmt + clippy (~8s)
+#   bash scripts/setup-toolchains.sh --all          # Install everything above
+#   bash scripts/setup-toolchains.sh --verify       # Run end-to-end native C/GTK/WebKit + Rust FFI link test
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ZIG_VERSION="${ZIG_VERSION:-0.17.0}"
 RUST_VERSION="${RUST_VERSION:-1.99.0}"
 RUST_ROOT="${RUST_ROOT:-/home/user/.local/toolchains/rust}"
 
+WANT_SUBMODULES=0
+WANT_SYSROOT=0
+WANT_RUST=0
+WANT_VERIFY=0
 FORCE=0
-VERIFY=0
+
 for arg in "$@"; do
   case "$arg" in
+    --minimal) ;;
+    --submodules) WANT_SUBMODULES=1 ;;
+    --sysroot) WANT_SYSROOT=1 ;;
+    --rust) WANT_RUST=1 ;;
+    --all) WANT_SUBMODULES=1; WANT_SYSROOT=1; WANT_RUST=1 ;;
+    --verify) WANT_SYSROOT=1; WANT_RUST=1; WANT_VERIFY=1 ;;
     --force) FORCE=1 ;;
-    --verify) VERIFY=1 ;;
+    -h|--help)
+      sed -n '3,13p' "$0"
+      exit 0
+      ;;
     *)
-      echo "Usage: $0 [--force] [--verify]" >&2
+      echo "Unknown option: $arg (use --help)" >&2
       exit 1
       ;;
   esac
@@ -26,38 +48,30 @@ WORK_DIR="$(mktemp -d /tmp/zts-setup.XXXXXX)"
 cleanup() { rm -rf "$WORK_DIR"; }
 trap cleanup EXIT
 
-echo "[1/4] Checking Zig ${ZIG_VERSION}..."
-CURRENT_ZIG="$(zig version 2>/dev/null || true)"
-if [[ "$FORCE" == "1" || "$CURRENT_ZIG" != "$ZIG_VERSION" ]]; then
-  echo "  Installing ziglang==${ZIG_VERSION} via PyPI..."
-  python3 - "$ZIG_VERSION" "$WORK_DIR" << 'EOF'
-import json, sys, urllib.request
+echo "[setup] Ensuring Zig ${ZIG_VERSION} + pre-warmed cache..."
+if [[ "$FORCE" == "1" ]]; then
+  rm -rf "/tmp/zts-toolchains/zig-${ZIG_VERSION}"
+  sudo rm -f /usr/local/bin/zig 2>/dev/null || true
+fi
+"${REPO_ROOT}/zigw" version >/dev/null
+# Trigger cache hydration if cold
+"${REPO_ROOT}/zigw" build --help >/dev/null 2>&1 || true
+echo "  zig: $("${REPO_ROOT}/zigw" version) (LLVM/Clang: $("${REPO_ROOT}/zigw" cc --version | head -n 1))"
 
-ver, work_dir = sys.argv[1], sys.argv[2]
-data = json.loads(urllib.request.urlopen("https://pypi.org/pypi/ziglang/json").read())
-wheels = [
-    f for f in data["releases"][ver]
-    if "manylinux" in f["filename"] and "x86_64" in f["filename"]
-]
-if not wheels:
-    raise RuntimeError(f"No Linux x86_64 wheel found for ziglang {ver}")
-w = wheels[0]
-dst = f"{work_dir}/{w['filename']}"
-urllib.request.urlretrieve(w["url"], dst)
-print(f"  Downloaded {w['filename']}")
-EOF
-  sudo pip3 install --no-index --find-links "$WORK_DIR" --break-system-packages --force-reinstall ziglang
-  sudo ln -sf /usr/local/lib/python3.11/dist-packages/ziglang/zig /usr/local/bin/zig
-else
-  echo "  Zig ${CURRENT_ZIG} already installed."
+if [[ "$WANT_SUBMODULES" == "1" ]]; then
+  echo "[setup] Checking upstream submodules (vendor/tauri, vendor/wry, vendor/tao)..."
+  if [[ ! -f "${REPO_ROOT}/vendor/tauri/Cargo.toml" || ! -f "${REPO_ROOT}/vendor/wry/Cargo.toml" || ! -f "${REPO_ROOT}/vendor/tao/Cargo.toml" ]]; then
+    git -C "$REPO_ROOT" submodule update --init --depth 1
+  fi
+  echo "  submodules ready."
 fi
 
-echo "[2/4] Checking Rust ${RUST_VERSION}..."
-CURRENT_RUSTC="$(rustc --version 2>/dev/null | awk '{print $2}' || true)"
-if [[ "$FORCE" == "1" || "$CURRENT_RUSTC" != "$RUST_VERSION" ]]; then
-  echo "  Installing Rust ${RUST_VERSION} components into ${RUST_ROOT}..."
-  mkdir -p "$RUST_ROOT"
-  python3 - "$RUST_VERSION" "$RUST_ROOT" "$WORK_DIR" << 'EOF'
+if [[ "$WANT_RUST" == "1" ]]; then
+  echo "[setup] Checking Rust ${RUST_VERSION}..."
+  CURRENT_RUSTC="$(rustc --version 2>/dev/null | awk '{print $2}' || true)"
+  if [[ "$FORCE" == "1" || "$CURRENT_RUSTC" != "$RUST_VERSION" ]]; then
+    mkdir -p "$RUST_ROOT"
+    python3 - "$RUST_VERSION" "$RUST_ROOT" "$WORK_DIR" << 'EOF'
 import json, os, shutil, sys, tarfile, urllib.request
 
 rust_ver, rust_root, work_dir = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -72,7 +86,7 @@ components = [
 
 for pkg in components:
     url = "https://registry.npmjs.org/" + pkg.replace("/", "%2f")
-    meta = json.loads(urllib.request.urlopen(url).read())
+    meta = json.loads(urllib.request.urlopen(url, timeout=20).read())
     latest = meta["dist-tags"]["latest"]
     tar_url = meta["versions"][latest]["dist"]["tarball"]
     tgz = os.path.join(work_dir, pkg.split("/")[1] + ".tgz")
@@ -93,24 +107,24 @@ for pkg in components:
     shutil.rmtree(ext, ignore_errors=True)
     os.remove(tgz)
 EOF
-  chmod +x "${RUST_ROOT}/bin/"* "${RUST_ROOT}/libexec/"* 2>/dev/null || true
-  find "${RUST_ROOT}/lib" -path '*/bin/*' -type f -exec chmod +x {} +
-  for bin in "${RUST_ROOT}/bin/"*; do
-    sudo ln -sf "$bin" "/usr/local/bin/$(basename "$bin")"
-  done
-else
-  echo "  Rust ${CURRENT_RUSTC} already installed."
+    chmod +x "${RUST_ROOT}/bin/"* "${RUST_ROOT}/libexec/"* 2>/dev/null || true
+    find "${RUST_ROOT}/lib" -path '*/bin/*' -type f -exec chmod +x {} +
+    for bin in "${RUST_ROOT}/bin/"*; do
+      sudo ln -sf "$bin" "/usr/local/bin/$(basename "$bin")"
+    done
+  fi
+  echo "  rustc: $(rustc --version) / $(cargo --version)"
 fi
 
-echo "[3/4] Checking Linux GTK3 / WebKit2GTK Sysroot..."
-if [[ "$FORCE" == "1" ]] || ! pkg-config --exists gtk+-3.0 webkit2gtk-4.1 2>/dev/null; then
-  echo "  Installing @toolchain-bin/sysroot-linux-x64..."
-  python3 - "$WORK_DIR" << 'EOF'
+if [[ "$WANT_SYSROOT" == "1" ]]; then
+  echo "[setup] Checking Debian 12 GTK3 / WebKit2GTK Sysroot..."
+  if [[ "$FORCE" == "1" ]] || ! pkg-config --exists gtk+-3.0 webkit2gtk-4.1 2>/dev/null; then
+    python3 - "$WORK_DIR" << 'EOF'
 import json, os, sys, tarfile, urllib.request
 
 work_dir = sys.argv[1]
 url = "https://registry.npmjs.org/@toolchain-bin%2fsysroot-linux-x64"
-meta = json.loads(urllib.request.urlopen(url).read())
+meta = json.loads(urllib.request.urlopen(url, timeout=20).read())
 latest = meta["dist-tags"]["latest"]
 tgz = os.path.join(work_dir, "sysroot.tgz")
 print(f"  Downloading sysroot @ {latest}...")
@@ -118,13 +132,12 @@ urllib.request.urlretrieve(meta["versions"][latest]["dist"]["tarball"], tgz)
 with tarfile.open(tgz, "r:gz") as tf:
     tf.extractall(os.path.join(work_dir, "sysroot"))
 EOF
-  chmod +x "${WORK_DIR}/sysroot/package/usr/bin/"*
-  sudo tar -C "${WORK_DIR}/sysroot/package" -cf - . \
-    | sudo tar -C / --keep-directory-symlink --skip-old-files -xf -
+    chmod +x "${WORK_DIR}/sysroot/package/usr/bin/"*
+    sudo tar -C "${WORK_DIR}/sysroot/package" -cf - . \
+      | sudo tar -C / --keep-directory-symlink --skip-old-files -xf -
 
-  # Convert flattened GNU ld INPUT(...) linker stub files back into real POSIX symlinks
-  # so both dynamic loader (ldconfig) and Zig's native ELF parser work seamlessly.
-  sudo python3 - << 'EOF'
+    # Convert GNU ld INPUT(...) linker stubs into real POSIX symlinks for ldconfig & Zig linker
+    sudo python3 - << 'EOF'
 import os, re
 
 pat = re.compile(r"^INPUT\(([^)\s]+)\)$")
@@ -149,70 +162,47 @@ for root_dir in ["/usr/lib", "/usr/include", "/usr/share"]:
                 pass
 print(f"  Converted {fixed} INPUT(...) stubs to POSIX symlinks.")
 EOF
-  sudo ldconfig 2>/dev/null || true
-else
-  echo "  GTK3 ($(pkg-config --modversion gtk+-3.0)) & WebKit2GTK ($(pkg-config --modversion webkit2gtk-4.1)) already configured."
+    sudo ldconfig 2>/dev/null || true
+  fi
+  echo "  gtk+-3.0: $(pkg-config --modversion gtk+-3.0) | webkit2gtk-4.1: $(pkg-config --modversion webkit2gtk-4.1)"
 fi
 
-echo "[4/4] Environment summary:"
-echo "  zig:          $(zig version)"
-echo "  rustc:        $(rustc --version)"
-echo "  cargo:        $(cargo --version)"
-echo "  rustfmt:      $(rustfmt --version)"
-echo "  clippy:       $(cargo clippy --version)"
-echo "  pkg-config:   $(pkg-config --version)"
-echo "  gtk+-3.0:     $(pkg-config --modversion gtk+-3.0)"
-echo "  webkit2gtk:   $(pkg-config --modversion webkit2gtk-4.1)"
-
-if [[ "$VERIFY" == "1" ]]; then
-  echo "Running end-to-end Zig + Rust FFI + GTK3/WebKit2GTK build & link verification..."
+if [[ "$WANT_VERIFY" == "1" ]]; then
+  echo "[verify] Building & running fast C-ABI GTK3 + WebKit2GTK + Rust FFI smoke test..."
   VDIR="${WORK_DIR}/verify"
   mkdir -p "${VDIR}/src"
-  cat << 'EOF' > "${VDIR}/c_headers.h"
-#include <gtk/gtk.h>
-#include <webkit2/webkit2.h>
-EOF
   cat << 'EOF' > "${VDIR}/build.zig"
 const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const tc = b.addTranslateC(.{
-        .root_source_file = b.path("c_headers.h"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const cflags_raw = b.run(&.{ "pkg-config", "--cflags-only-I", "gtk+-3.0", "webkit2gtk-4.1" });
-    var it = std.mem.tokenizeAny(u8, cflags_raw, " \t\r\n");
-    while (it.next()) |flag| {
-        if (std.mem.startsWith(u8, flag, "-I")) tc.addSystemIncludePath(.{ .cwd_relative = flag[2..] });
-    }
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
-    mod.addImport("c", tc.createModule());
     mod.linkSystemLibrary("gtk+-3.0", .{});
     mod.linkSystemLibrary("webkit2gtk-4.1", .{});
     mod.linkSystemLibrary("gcc_s", .{});
     mod.addObjectFile(b.path("rust_ffi/target/release/librust_ffi.a"));
     const exe = b.addExecutable(.{ .name = "verify", .root_module = mod });
-    const run_cmd = b.addRunArtifact(exe);
-    b.step("run", "Run").dependOn(&run_cmd.step);
+    b.step("run", "Run").dependOn(&b.addRunArtifact(exe).step);
 }
 EOF
   cat << 'EOF' > "${VDIR}/src/main.zig"
 const std = @import("std");
-const c = @import("c");
+extern fn gtk_get_major_version() callconv(.c) c_uint;
+extern fn gtk_get_minor_version() callconv(.c) c_uint;
+extern fn webkit_get_major_version() callconv(.c) c_uint;
+extern fn webkit_get_minor_version() callconv(.c) c_uint;
 extern fn rust_add(a: i32, b: i32) callconv(.c) i32;
-pub fn main() !void {
+pub fn main() void {
     std.debug.print("  Verified OK: GTK={d}.{d}, WebKit2GTK={d}.{d}, RustFFI={d}\n", .{
-        c.gtk_get_major_version(),
-        c.gtk_get_minor_version(),
-        c.webkit_get_major_version(),
-        c.webkit_get_minor_version(),
+        gtk_get_major_version(),
+        gtk_get_minor_version(),
+        webkit_get_major_version(),
+        webkit_get_minor_version(),
         rust_add(20, 22),
     });
 }
@@ -231,5 +221,5 @@ EOF
 pub extern "C" fn rust_add(a: i32, b: i32) -> i32 { a + b }
 EOF
   cargo build --release --quiet --manifest-path "${VDIR}/rust_ffi/Cargo.toml"
-  zig build run --build-file "${VDIR}/build.zig"
+  "${REPO_ROOT}/zigw" build run --build-file "${VDIR}/build.zig"
 fi
