@@ -12,7 +12,9 @@
 | [`architecture/00-overview.md`](architecture/00-overview.md) | Z-Ts 6 パッケージ直交アーキテクチャ・依存 DAG・モジュール境界契約 | 中頻度（全体方針変更時） |
 | [`architecture/web-zig-boundary.md`](architecture/web-zig-boundary.md) | HTML / CSS / TS ⇔ Zig `0.17.0` 言語仕様ギャップ 10 項目の解決規約 | 境界仕様（全パッケージ必読） |
 | `architecture/<module>.md` | 各サブシステム詳細設計（例: `config.md`, `ipc.md`, `acl.md`, `window-linux.md`） | モジュール単位で完全独立 |
-| [`roadmap/milestones.md`](roadmap/milestones.md) | マイルストーン（M0〜M6）の定義と並列依存グラフ | 低頻度（進捗は `tasks/` で管理） |
+| [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
+| [`roadmap/m1-foundation-packages.md`](roadmap/m1-foundation-packages.md) | M1 詳細仕様（コア 5 パッケージのファイル境界・公開型・DoD） | 実装仕様リファレンス |
+| [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
 | [`tasks/TEMPLATE.md`](tasks/TEMPLATE.md) | 1タスク＝1ファイルの作業計画＆記憶チェックポイント標準テンプレート | テンプレート |
 | `tasks/<ID>-<slug>.md` | 個別タスクの進捗・設計メモ・次の1手（例: [`tasks/M0-01-bootstrap.md`](tasks/M0-01-bootstrap.md)） | **担当ブランチ専有（競合ゼロ）** |
 | `decisions/<NNNN>-<slug>.md` | アーキテクチャ意思決定記録（ADR）（[`0001`](decisions/0001-zig-017-and-sharded-agent-workflow.md), [`0002`](decisions/0002-hybrid-architecture-proposal.md)） | **新規ファイル追加のみ（競合ゼロ）** |
