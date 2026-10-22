@@ -4,8 +4,10 @@
 
 const std = @import("std");
 
+pub const core = @import("core/mod.zig");
 pub const version = "0.1.0";
 
 test "z_ts scaffold version" {
+    _ = core;
     try std.testing.expectEqualStrings("0.1.0", version);
 }
