@@ -18,3 +18,14 @@
 3. **`std.Io.Mutex` のロック使い分け**:
    - キャンセル境界を持ちたくないナノ秒単位のデータ構造操作（リングバッファの `push`/`pop` や状態フラグ更新）には **`mu.lockUncancelable(io)` + `defer mu.unlock(io)`**（戻り値 `void`、エラー不要）を使う。
    - スリープ待機を伴う `Io.Condition.wait(io, &mu)` の前後ではキャンセル可能な **`try mu.lock(io)`** を使う。
+
+4. **Structure-of-Arrays (SoA) 化された `@typeInfo`（`M1-04` の `Schema` / `tsgen` 必読）**:
+   - Zig `0.17.0`（`std/lang.zig`）では `.@"struct"`・`.@"union"`・`.@"enum"` の型情報から `fields` スライスが廃止され、並列配列（SoA）になっている：
+     - **Struct**: `s_info.field_names`, `s_info.field_types`, `s_info.field_attrs`（デフォルト値の取得は **`f_attr.defaultValue(FieldType)`**）
+     - **Union**: `u_info.field_names`, `u_info.field_types`
+     - **Enum**: `enum_info.field_names` および **`enum_info.mode == .nonexhaustive`**（旧 `is_exhaustive` ではない）
+
+5. **配列繰り返し演算子と Sentinel 付きスライス複製**:
+   - 配列初期化の繰り返しには廃止された演算子ではなく **`@splat(value)`** を使用する（例: `var seen: [N]bool = @splat(false);`）。
+   - Sentinel 付きスライス（`[:0]u8` 等）の複製には **`allocator.dupeZ` ではなく `allocator.dupeSentinel(u8, slice, sentinel)`** を使用する。
+

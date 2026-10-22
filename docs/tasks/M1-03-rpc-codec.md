@@ -1,8 +1,8 @@
 # Task M1-03: `zts_rpc` 型システム & Web⇔Zig 境界 JSON コーデック
 
 - **Status**: `done`
-- **Branch**: `arena/939625cc-z-ts`
-- **Scope**: `src/rpc/{types,codec,naming}.zig, docs/tasks/M1-03-rpc-codec.md, docs/architecture/rpc-codec.md`
+- **Branch**: `arena/939625cc-z-ts`（初回実装） / `arena/ff647573-z-ts`（`M1-01`・`M1-02` 統合リファクタリング済み）
+- **Scope**: `src/rpc/{mod,naming,scanner,types,codec}.zig, docs/tasks/M1-03-rpc-codec.md, docs/architecture/rpc-codec.md`
 - **Upstream Reference**: `docs/architecture/web-zig-boundary.md`, `docs/roadmap/m1-foundation-packages.md`, `vendor/tauri/crates/tauri/src/ipc/`
 - **Next Step**: `M1-04（src/rpc/{mod,ctx,schema,tsgen}.zig: Schema/bind ルーター合成 & tsgen 実 tsc 検証）または他の M1 タスクへの着手`
 

@@ -12,15 +12,37 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
+const core = @import("../core/mod.zig");
 
 /// Maximum unsigned integer exactly representable in an IEEE 754 `f64` (`Number.MAX_SAFE_INTEGER = 2^53 - 1`).
-pub const max_safe_uint: u53 = std.math.maxInt(u53);
+pub const max_safe_uint: u53 = @intCast(core.MAX_JS_SAFE_INT);
 
 /// `Number.MAX_SAFE_INTEGER` (`9007199254740991`).
-pub const max_safe_int: i64 = (1 << 53) - 1;
+pub const max_safe_int: i64 = @intCast(core.MAX_JS_SAFE_INT);
 
 /// `Number.MIN_SAFE_INTEGER` (`-9007199254740991`).
-pub const min_safe_int: i64 = -((1 << 53) - 1);
+pub const min_safe_int: i64 = -max_safe_int;
+
+/// Lossless signed JS safe integer wrapper (`[-9007199254740991, +9007199254740991]` ⇔ JS `number`).
+/// Complements `u53` (`[0, 2^53 - 1]`) and `i53` (`[-2^52, 2^52 - 1]`) when full `±(2^53 - 1)` signed range is needed.
+pub const SafeInt = struct {
+    value: i64,
+
+    pub const zts_rpc_type = .safe_int;
+
+    pub fn init(v: i64) error{Overflow}!SafeInt {
+        if (v < min_safe_int or v > max_safe_int) return error.Overflow;
+        return .{ .value = v };
+    }
+
+    pub inline fn get(self: SafeInt) i64 {
+        return self.value;
+    }
+
+    pub inline fn eql(a: SafeInt, b: SafeInt) bool {
+        return a.value == b.value;
+    }
+};
 
 /// UTF-8 encoding of `U+FFFD REPLACEMENT CHARACTER` (`""`).
 pub const utf8_replacement_char = "\xEF\xBF\xBD";
@@ -540,55 +562,11 @@ pub fn isTaggedUnionWrapper(comptime T: type) bool {
         T.zts_rpc_type == .tagged_union;
 }
 
-/// 53-bit generational resource handle (`packed struct(u53) { index: u24, generation: u29 }`)
-/// compatible with `zts_core.HandlePool` and JS `MAX_SAFE_INTEGER (2^53 - 1)`.
-pub fn Handle(comptime Tag: @TypeOf(.enum_literal)) type {
-    return packed struct(u53) {
-        index: u24,
-        generation: u29,
-
-        pub const handle_tag = Tag;
-        pub const zts_handle_tag = Tag;
-        pub const zts_rpc_type = .handle;
-
-        pub const invalid: @This() = .{ .index = 0, .generation = 0 };
-
-        pub fn isValid(self: @This()) bool {
-            return self.generation != 0 and self.index != std.math.maxInt(u24);
-        }
-
-        pub fn toU53(self: @This()) u53 {
-            return @bitCast(self);
-        }
-
-        pub fn fromU53(raw: u53) error{InvalidHandle}!@This() {
-            const h: @This() = @bitCast(raw);
-            if (!h.isValid()) return error.InvalidHandle;
-            return h;
-        }
-
-        pub fn fromU53Unchecked(raw: u53) @This() {
-            return @bitCast(raw);
-        }
-
-        pub fn eql(self: @This(), other: @This()) bool {
-            return self.toU53() == other.toU53();
-        }
-
-        pub fn jsonStringify(self: @This(), jw: anytype) !void {
-            try jw.print("{d}", .{self.toU53()});
-        }
-
-        pub fn jsonParse(
-            allocator: Allocator,
-            source: anytype,
-            options: std.json.ParseOptions,
-        ) !@This() {
-            const raw = try std.json.innerParse(u53, allocator, source, options);
-            return fromU53(raw) catch return error.InvalidNumber;
-        }
-    };
-}
+/// Canonical 53-bit generational resource handle re-exported directly from `zts_core.Handle`.
+///
+/// Using a single nominal type definition ensures `core.WindowId` (`core.Handle(.window)`) and
+/// `rpc.types.Handle(.window)` are 100% identical Zig types with zero conversion boilerplate.
+pub const Handle = core.Handle;
 
 /// Returns `true` if `T` is a 53-bit generational handle type (either `rpc.types.Handle(Tag)`
 /// or `core.HandlePool(T, Tag).Handle` implementing `toU53`/`fromU53` or `zts_handle_tag`).
