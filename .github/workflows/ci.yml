@@ -71,6 +71,27 @@ jobs:
               xvfb-run -a ./zigw build test -Dgtk=true -Doptimize=ReleaseFast --summary all
           } 2>&1 | tee ci-output.log
 
+      - name: Cross-compile the Windows Win32 + Direct WebView2 backend from Linux (M3-02 gate)
+        run: |
+          set -o pipefail
+          {
+            rm -rf zig-out
+            ./zigw build -Dtarget=x86_64-windows-gnu --summary all
+            test -f zig-out/bin/zts_webview2_smoke.exe
+            # A single self-contained PE: no `WebView2Loader.dll` next to it, and the loader
+            # resolves the OS-installed runtime through `EmbeddedBrowserWebView.dll` directly.
+            if ls zig-out/bin/*.dll >/dev/null 2>&1; then
+              echo "::error::cross-compile shipped a DLL next to the executable"
+              exit 1
+            fi
+            grep -c "EmbeddedBrowserWebView.dll" zig-out/bin/zts_webview2_smoke.exe
+            if grep -q "WebView2Loader.dll" zig-out/bin/zts_webview2_smoke.exe; then
+              echo "::error::the binary still references WebView2Loader.dll"
+              exit 1
+            fi
+            ls -l zig-out/bin/zts_webview2_smoke.exe
+          } 2>&1 | tee -a ci-output.log
+
       - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
         run: |
           set -o pipefail
@@ -218,6 +239,35 @@ jobs:
             zig version
             zig build test --summary all
           } 2>&1 | tee ci-output.log
+
+      - name: Verify the native Win32 + Direct WebView2 E2E actually ran (M3-02 gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The backend prints `OK windows-wv2 checks=10 ...` only after a real HWND + WebView2
+          # controller served `tauri://` + `ipc://` traffic and a JS/IPC round trip completed.
+          if ! grep -q "OK windows-wv2 checks=" ci-output.log; then
+            echo "::error::Windows WebView2 E2E marker missing — the native backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK windows-wv2 .*" ci-output.log | tail -n 1
+
+      - name: Build & run the single-`.exe` WebView2 deployment smoke (M3-02 gate)
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            # Same cross-compile command Arena uses from Linux: one self-contained `.exe`, no
+            # `WebView2Loader.dll` and no CRT/MSVC redistributable is installed next to it.
+            zig build -Dtarget=x86_64-windows-gnu --summary all
+            ls -la zig-out/bin
+            if ls zig-out/bin/*.dll >/dev/null 2>&1; then
+              echo "::error::a runtime DLL was shipped next to the executable"
+              exit 1
+            fi
+            ./zig-out/bin/zts_webview2_smoke.exe
+          } 2>&1 | tee -a ci-output.log
 
       - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
         shell: bash

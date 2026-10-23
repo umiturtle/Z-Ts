@@ -93,9 +93,19 @@ pub fn build(b: *std.Build) void {
         "Enable native macOS Cocoa + WKWebView backend (default: auto-detected from the target OS)",
     ) orelse is_macos;
 
+    // Windows native backend (`Win32` + Direct `WebView2`, `M3-02`). Auto-enabled for Windows
+    // targets; the Win32/COM declarations are never analyzed on other OSes.
+    const is_windows = target.result.os.tag == .windows;
+    const enable_windows = b.option(
+        bool,
+        "windows",
+        "Enable native Windows Win32 + Direct WebView2 backend (default: auto-detected from the target OS)",
+    ) orelse is_windows;
+
     const webview_opts = b.addOptions();
     webview_opts.addOption(bool, "enable_gtk", is_linux and enable_gtk);
     webview_opts.addOption(bool, "enable_macos", is_macos and enable_macos);
+    webview_opts.addOption(bool, "enable_windows", is_windows and enable_windows);
 
     // -------------------------------------------------------------------------
     // 1. Standalone Public Modules (independently importable via `b.dependency`)
@@ -152,11 +162,12 @@ pub fn build(b: *std.Build) void {
     // Level 1d: `zts_webview` — Standalone minimal native WebView (`GTK3 + WebKit2GTK 4.1`),
     // `HeadlessMock`, and flat C ABI (`include/zts_webview.h`). Zero JSON / RPC / Tauri coupling!
     const native_macos = is_macos and enable_macos;
+    const native_windows = is_windows and enable_windows;
     const webview_mod = b.addModule("zts_webview", .{
         .root_source_file = b.path("src/webview/mod.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = (is_linux and enable_gtk) or native_macos,
+        .link_libc = (is_linux and enable_gtk) or native_macos or native_windows,
         .imports = &.{
             .{ .name = "zts_foundation", .module = foundation_mod },
             .{ .name = "webview_options", .module = webview_opts.createModule() },
@@ -177,6 +188,14 @@ pub fn build(b: *std.Build) void {
         webview_mod.linkFramework("Cocoa", .{});
         webview_mod.linkFramework("WebKit", .{});
         webview_mod.linkFramework("Foundation", .{});
+    }
+    if (native_windows) {
+        // Same import libraries Microsoft's `WebView2Loader.lib` declares — resolved from the
+        // Zig 0.17 toolchain's bundled `x86_64-windows-gnu` import libs (no SDK / MSVC needed).
+        for ([_][]const u8{
+            "user32", "kernel32", "ole32", "oleaut32", "shlwapi",
+            "dwmapi", "advapi32", "gdi32", "shell32",  "comdlg32",
+        }) |lib| webview_mod.linkSystemLibrary(lib, .{});
     }
 
     // Level 1e: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).
@@ -396,6 +415,26 @@ pub fn build(b: *std.Build) void {
         .name = "verify_webview_c_abi",
         .root_module = c_abi_mod,
     });
+
+    // `M3-02` deployment proof: a **single** self-contained `.exe` (no `WebView2Loader.dll`).
+    // Built for every Windows target — including Linux -> `-Dtarget=x86_64-windows-gnu` — and
+    // installed so `ci-windows` can execute the exact shipped binary.
+    if (native_windows) {
+        const smoke_mod = b.createModule(.{
+            .root_source_file = b.path("tests/webview/windows_smoke.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "zts_webview", .module = webview_mod },
+            },
+        });
+        const smoke_exe = b.addExecutable(.{
+            .name = "zts_webview2_smoke",
+            .root_module = smoke_mod,
+        });
+        b.installArtifact(smoke_exe);
+    }
 
     const foundation_tests = b.addTest(.{ .root_module = foundation_mod });
     const web_tests = b.addTest(.{ .root_module = web_mod });

@@ -95,7 +95,7 @@ if [[ "${1:-}" == "quick-test" ]]; then
   shift
   cd "$SCRIPT_DIR"
   mkdir -p .zig-cache
-  printf 'pub const enable_gtk = false;\npub const enable_macos = false;\n' > .zig-cache/quick_webview_options.zig
+  printf 'pub const enable_gtk = false;\npub const enable_macos = false;\npub const enable_windows = false;\n' > .zig-cache/quick_webview_options.zig
   TAURI_DEPS=(
     -Mzts_foundation=src/core/foundation.zig
     --dep zts_foundation -Mzts_web=src/core/web.zig
