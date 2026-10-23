@@ -4,7 +4,7 @@
 - **Branch**: `arena/2a8b6e65-z-ts`
 - **Scope**: `src/wasm/`, `src/ssg/`, `src/root.zig`, `build.zig`, `zigw`, `tests/ssg/`, `docs/decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`, `docs/architecture/ssg-and-wasm.md`, `docs/roadmap/`, `docs/architecture/00-overview.md`, `docs/tasks/M2-01-ssg-and-wasm-runtime.md`
 - **Upstream Reference**: [`docs/decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`](../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md), [`docs/architecture/ssg-and-wasm.md`](../architecture/ssg-and-wasm.md), [`docs/roadmap/m2-m5-platform-and-ecosystem.md`](../roadmap/m2-m5-platform-and-ecosystem.md)
-- **Next Step**: 3-OS GitHub Actions（Run 完了待ち）で `41/41` ステップ・全テストのグリーンを確認し、`M2-02`（`examples/` ショーケース）または `M3-01`（macOS `WKWebView`）へ進む。
+- **Next Step**: `M2-02`（`examples/` ショーケースサンプル）または `M3-01`（macOS `WKWebView` ネイティブ）へ進む。
 
 ---
 
@@ -45,3 +45,17 @@
 ./zigw build test -Dgtk=true           # Linux ネイティブ WebKit2GTK を含む完全版（CI / Xvfb）
 ./zigw build test -Dwasm-optimize=debug --summary all   # Wasm 側をデバッグビルドして調査する場合
 ```
+
+---
+
+## 4. CI 検証結果（GitHub Actions Run `#39912234718` — 3/3 OS ALL GREEN）
+
+| OS / 構成 | ビルドステップ | テスト | Wasm E2E |
+|---|---|---|---|
+| **Linux `Ubuntu 24.04 + Xvfb + WebKit2GTK 4.1`（Debug）** | **`41/41 steps succeeded`** | **`92/92 tests passed`** | `OK wasm checks=45 streamed=8 once=1 listen=2` |
+| **Linux（`-Doptimize=ReleaseFast`）** | **`41/41 steps succeeded`** | **`92/92 tests passed`** | `OK wasm checks=45 ...` |
+| **Windows（`x86_64 + WebView2`）** | **`41/41 steps succeeded`** | **`91/91 tests passed`** | `OK wasm checks=45 ...` |
+| **macOS（`arm64 + WKWebView`）** | **`41/41 steps succeeded`** | **`91/91 tests passed`** | `OK wasm checks=45 ...` |
+
+- `embedFrontendDir: embedded 3 files (451 bytes)` が 3 OS すべてで決定論的に成功（Windows でも `\` パスで同一結果）。
+- ReleaseFast でも Wasm 上の `@tauri-apps/api` v2 スイートが Debug と同一の 45 チェックを通過（`Channel<T>` 8 フレーム、`once` 1 回、`listen` 2 回）。
