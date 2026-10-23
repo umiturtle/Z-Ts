@@ -1,0 +1,16 @@
+{
+  "name": "zts-tauri-v2-e2e-suite",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "bundle": "esbuild src/e2e_suite.ts --bundle --format=iife --global-name=ZtsTauriSuite --platform=browser --target=es2022 --outfile=dist/e2e_suite.bundle.js"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.10.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0",
+    "typescript": "^5.8.2"
+  }
+}

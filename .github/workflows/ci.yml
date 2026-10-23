@@ -36,8 +36,10 @@ jobs:
           path: |
             ~/.cache/zig
             .zig-cache
-          key: linux-zig-0.17.0-ts7-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+            tests/tauri/node_modules
+          key: linux-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
           restore-keys: |
+            linux-zig-0.17.0-m107-
             linux-zig-0.17.0-ts7-
             linux-zig-0.17.0-
 
@@ -108,8 +110,10 @@ jobs:
           path: |
             ~/.cache/zig
             .zig-cache
-          key: macos-zig-0.17.0-ts7-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+            tests/tauri/node_modules
+          key: macos-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
           restore-keys: |
+            macos-zig-0.17.0-m107-
             macos-zig-0.17.0-ts7-
             macos-zig-0.17.0-
 
@@ -162,8 +166,10 @@ jobs:
           path: |
             ${{ env.LOCALAPPDATA }}\zig
             .zig-cache
-          key: windows-zig-0.17.0-ts7-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+            tests/tauri/node_modules
+          key: windows-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
           restore-keys: |
+            windows-zig-0.17.0-m107-
             windows-zig-0.17.0-ts7-
             windows-zig-0.17.0-
 

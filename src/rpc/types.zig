@@ -44,6 +44,21 @@ pub const SafeInt = struct {
     }
 };
 
+/// Zero-copy syntax-validated raw JSON value slice (`unknown` in TypeScript).
+///
+/// Ideal for generic event brokers (`plugin:event|emit`), pass-through RPC gateways,
+/// and late-bound payloads where re-parsing and re-serializing arbitrary JSON trees is unnecessary.
+pub const RawJson = struct {
+    raw: []const u8 = "null",
+
+    pub const zts_rpc_type = .raw_json;
+    pub const zts_ts_type: []const u8 = "unknown";
+
+    pub inline fn init(raw_slice: []const u8) RawJson {
+        return .{ .raw = if (raw_slice.len == 0) "null" else raw_slice };
+    }
+};
+
 /// UTF-8 encoding of `U+FFFD REPLACEMENT CHARACTER` (`""`).
 pub const utf8_replacement_char = "\xEF\xBF\xBD";
 

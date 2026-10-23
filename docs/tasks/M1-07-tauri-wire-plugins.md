@@ -1,34 +1,27 @@
 # Task M1-07: `zts_tauri` Tauri v2 ワイヤー互換プロトコル・`Channel(T)`・標準プラグイン群
 
-- **Status**: `in-progress`
+- **Status**: `done`
 - **Branch**: `arena/2a8b6e65-z-ts`
-- **Scope**: `src/tauri/`, `src/app_runtime.zig`, `src/rpc/{types,codec,tsgen,mod}.zig`, `src/bridge/js_init.zig`, `src/root.zig`, `build.zig`, `tests/tauri/`, `tests/standalone_modules.zig`, `.github/workflows/ci.yml`, `docs/tasks/M1-07-tauri-wire-plugins.md`
-- **Upstream Reference**: `docs/roadmap/m1-foundation-packages.md`, `docs/architecture/00-overview.md`, `docs/architecture/web-zig-boundary.md`, `docs/decisions/0002-hybrid-architecture-proposal.md`, `docs/decisions/0003-zig-017-runtime-findings.md`
-- **Next Step**: `M1-07` 完了および 3-OS GitHub Actions CI（実 `@tauri-apps/api` v2 E2E 含む）オールグリーンを確認し、フェーズ `M1` 全 7 タスク（`M1-01`〜`M1-07`）を完遂する。
+- **Scope**: `src/tauri/{mod,js_bootstrap,channel,resources,app,path,window,event,protocol}.zig`, `src/app_runtime.zig`, `src/rpc/{mod,types,codec,ctx,schema,tsgen}.zig`, `src/bridge/{server,js_init}.zig`, `src/root.zig`, `build.zig`, `zigw`, `scripts/prepare-tauri-e2e.mjs`, `tests/tauri/`, `.github/workflows/ci.yml`, `docs/decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md`
+- **Upstream Reference**: [`docs/roadmap/m1-foundation-packages.md`](../roadmap/m1-foundation-packages.md), [`docs/architecture/00-overview.md`](../architecture/00-overview.md), [`docs/architecture/web-zig-boundary.md`](../architecture/web-zig-boundary.md), [`docs/decisions/0002-hybrid-architecture-proposal.md`](../decisions/0002-hybrid-architecture-proposal.md), [`docs/decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md`](../decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md)
+- **Next Step**: フェーズ `M1` 全 7 タスク（`M1-01`〜`M1-07`）完了。次フェーズ `M2`（macOS `WKWebView` / Windows `WebView2` バックエンド・Capabilities ACL 統合等）へ着手可能。
 
 ---
 
-## 1. 目的と完了条件（Definition of Done）
+## 1. 完了した実装内容（Definition of Done 全項目達成）
 
-- [x] 分散ロック宣言コミット & リモート Push（並列エージェントとのスコープ分離確立）
-- [ ] **`src/tauri/js_bootstrap.zig`（本家 `@tauri-apps/api` v2 無修正完動ブートストラップ）**:
-  - `window.isTauri = true`、`window.__TAURI_INTERNALS__`（`invoke`, `transformCallback`, `unregisterCallback`, `runCallback`, `callbacks`, `convertFileSrc`, `ipc`, `postMessage`, `metadata.currentWindow` / `currentWebview`, `plugins.path.{sep, delimiter}`）および `window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener` を生成。
-  - `[data-tauri-drag-region]`（`""`, `"true"`, `"deep"`, `"false"`, クリッカブル要素除外、シングルクリック移動 `plugin:window|start_dragging`、ダブルクリック最大化切替 `plugin:window|internal_toggle_maximize`）＆ `-webkit-app-region: drag` イベント委譲を搭載。
-  - `src/bridge/js_init.zig` も同期アップデートし、ブラウザ `BridgeServer` 上でも本家 `@tauri-apps/api` v2 が無修正でそのまま動作することを保証。
-- [ ] **`src/tauri/channel.zig` (`Channel(T)`)**:
-  - `"__CHANNEL__:<id>"` ワイヤー形式の `jsonParse` デコード、`tsgen` 型連携（`{ readonly id: number; toJSON(): string } | string`）、0 始まり連番 `{"index":n,"message":...}` 順序保証ストリーミング送信、および `close()` 時の `{"end":true,"index":n}` 自動 `callbacks` クリーンアップ。
-- [ ] **`src/tauri/protocol.zig`（Tauri v2 Custom Protocol & `postMessage` ルーター）**:
-  - `tauri://localhost/*`（`zts_web.Assets` HTML 配信・`206 Partial Content` Range 対応）、`asset://localhost/*`（`glob` スコープ検査・パストラバーサル `403` 防御）、`ipc://localhost/<cmd>`（定数時間 `Tauri-Invoke-Key` 検査 + `Origin` 検査 + JSON / Raw Binary ディスパッチ + `Tauri-Response: ok|error`）、および `postMessage` フォールバックを単一モジュールで処理。
-- [ ] **標準 `comptime` プラグイン群（`window.zig`, `event.zig`, `path.zig`, `app.zig`, `resources.zig`）**:
-  - OS GUI / ソケット依存ゼロの Pure Zig (`link_libc = false`) で `zts_core.Host` VTable 越しに動作し、未使用プラグインは DCE で 0 バイト消去可能。
-- [ ] **実 `@tauri-apps/api` v2 パッケージによる E2E 検証 & 3-OS CI オールグリーン**:
-  - `HeadlessMock` 単体テスト、Node `BridgeServer` + 本物 `@tauri-apps/api` v2 E2E テスト、および Linux `Xvfb` + 実 WebKit2GTK 4.1 上での本物 `@tauri-apps/api` v2 バンドル E2E テストがリーク 0 バイトで完全通過し、Linux / macOS / Windows 全 3 OS CI がグリーンになること。
-
----
-
-## 2. 現在の進捗チェックポイント（Context Reset 復元用）
-
-- **完了したこと**:
-  - `vendor/tauri` (`v2.12.4`) の `scripts/{core,ipc,ipc-protocol,process-ipc-message-fn}.js`, `src/event/{mod,plugin}.rs`, `src/window/scripts/drag.js`, `packages/api/src/{core,event,window,app,path,dpi,global.d}.ts` を全件照合し、全コマンド名・引数名・ワイヤー形式を確定。
-- **次にやること**:
-  - `src/rpc/` の `RawJson` / `zts_ts_type` 拡張 → `src/tauri/` 全モジュール実装 → `src/app_runtime.zig` デスクトップ配線 → 実 `@tauri-apps/api` v2 結合テスト & Xvfb WebKit2GTK 4.1 E2E 実装。
+- [x] **分散ロック宣言コミット & リモート Push** (`25c6eeb`)
+- [x] **`src/tauri/js_bootstrap.zig` & `src/bridge/js_init.zig`（本家 `@tauri-apps/api` v2 無修正完動ブートストラップ）**:
+  - `window.isTauri = true`、`window.__TAURI_INTERNALS__`（`invoke`, `transformCallback`, `unregisterCallback`, `runCallback`, `callbacks`, `convertFileSrc`, `ipc`, `postMessage`, `metadata.currentWindow` / `currentWebview`, `plugins.path.{sep, delimiter}`）および `window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener` を出力。
+  - `plugin:event|listen` 解決時に `eventId -> handlerId` を同期登録し、`once()` / `unlisten()` 時のインフライト競合条件（Race Condition）を物理的にゼロ化。
+  - `[data-tauri-drag-region]`（`""`, `"true"`, `"deep"`, `"false"`, インタラクティブ要素 `<button>` 等除外、シングルクリック `plugin:window|start_dragging`、ダブルクリック `plugin:window|internal_toggle_maximize`）＆ `-webkit-app-region: drag` イベント委譲を完備。
+- [x] **`src/tauri/channel.zig` (`Channel(T)`)**:
+  - `"__CHANNEL__:<id>"` ワイヤー形式のゼロヒープ確保デコード（`decodeZtsJson`）、`tsgen` 共変型出力（`{ readonly id: number; readonly onmessage: (response: T) => void; toJSON(): string }`）、HTML 安全 JSON シリアライズによる 0 始まり連番 `{"index":n,"message":...}` ストリーミング送信、およびスタックバッファ 0 アロケーション `close()`（`{"end":true,"index":n}`）を実装。
+- [x] **`src/tauri/protocol.zig`（Tauri v2 Custom Protocol & `postMessage` ルーター）**:
+  - `tauri://` / `http://tauri.localhost`（`zts_web.Assets` SPA 配信 + `206 Partial Content` / `416` Range 対応 + `CSP` 付与）、`asset://` / `http://asset.localhost`（`asset_root_dir` 解決 + `glob` スコープ検査 + `..` / NUL バイト `403` 防御 + `206` Range 対応）、`ipc://` / `http://ipc.localhost`（定数時間 `Tauri-Invoke-Key` 検証 + `Origin` 検証 + パーセントデコード + JSON / `application/octet-stream` ディスパッチ + `Tauri-Response: ok|error`）、および `postMessage` フォールバックを Pure Zig (`link_libc = false`) で実装。
+- [x] **標準 `comptime` プラグイン群（`window.zig`, `event.zig`, `path.zig`, `app.zig`, `resources.zig`） & `DesktopRuntime` (`src/app_runtime.zig`)**:
+  - `CorePluginsSchema`（`.tauri_window`, `.tauri_event`, `.tauri_path`, `.tauri_app`, `.tauri_resources` — ユーザー側 `.app` 等と衝突しない名前空間設計）および `withCorePlugins(...)` 1 行マージを提供。
+- [x] **実 `@tauri-apps/api` v2 パッケージ（無修正 npm パッケージ）による 3 重 E2E 実証 (`tests/tauri/`)**:
+  1. `DemoOnlySchema.ts_bindings` バイト単位完全一致スナップショット検証 + `tsc --noEmit` (`strict: true`)
+  2. 全 3 OS（Linux / macOS / Windows）Live `BridgeServer` + `BridgeHost` + Node 22 HTTP/Cookie/SSE E2E スイート完走
+  3. Linux `Xvfb` + 実物 `WebKit2GTK 4.1` `DesktopRuntime(.native)`（`tauri://`, `ipc://`, `asset://` `206`/`403`, `[data-tauri-drag-region]` マウス委譲）フル E2E スイート完走（Debug / `ReleaseFast` 双方 0 リーク）

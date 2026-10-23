@@ -75,6 +75,7 @@ const preamble_ts =
     \\
     \\function _base64ToBytes(b64: unknown): Uint8Array {
     \\  if (b64 instanceof Uint8Array) return b64;
+    \\  if (b64 instanceof ArrayBuffer) return new Uint8Array(b64);
     \\  if (Array.isArray(b64)) return new Uint8Array(b64 as number[]);
     \\  const bin = atob(b64 as string);
     \\  const out = new Uint8Array(bin.length);
@@ -277,7 +278,8 @@ pub fn renderTsTypeComptime(comptime T: type, comptime is_return_pos: bool) []co
                 else => "unknown",
             },
             .@"struct" => |s| blk: {
-                if (std.meta.hasFn(T, "jsonStringify") or std.meta.hasFn(T, "jsonParse")) {
+                if (@hasDecl(T, "zts_ts_type")) break :blk T.zts_ts_type;
+                if (std.meta.hasFn(T, "jsonStringify") or std.meta.hasFn(T, "jsonParse") or std.meta.hasFn(T, "decodeZtsJson")) {
                     break :blk "unknown";
                 }
                 if (s.is_tuple) {
@@ -391,9 +393,21 @@ fn renderErrorSetTsType(comptime es_info: std.builtin.Type.ErrorSet) []const u8 
     comptime {
         const names = es_info.error_names orelse return "string";
         if (names.len == 0) return "never";
+        // Sort deterministically so generated `.ts` output NEVER depends on Zig's global
+        // translation-unit error-table registration order!
+        var sorted: [names.len][:0]const u8 = names[0..names.len].*;
+        var i: usize = 1;
+        while (i < sorted.len) : (i += 1) {
+            const cur = sorted[i];
+            var j: usize = i;
+            while (j > 0 and std.mem.order(u8, sorted[j - 1], cur) == .gt) : (j -= 1) {
+                sorted[j] = sorted[j - 1];
+            }
+            sorted[j] = cur;
+        }
         var acc: []const u8 = "";
-        for (names, 0..) |err_name, i| {
-            if (i > 0) acc = acc ++ " | ";
+        for (sorted, 0..) |err_name, idx| {
+            if (idx > 0) acc = acc ++ " | ";
             acc = acc ++ "\"" ++ err_name ++ "\"";
         }
         return acc;

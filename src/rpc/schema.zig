@@ -179,6 +179,7 @@ fn inspectCommandFn(comptime ns: NamespaceMeta, comptime fn_name: [:0]const u8, 
 
 /// Builds a statically typed, zero-allocation RPC Router Schema from one or more command namespaces.
 pub fn Schema(comptime specs: anytype) type {
+    @setEvalBranchQuota(200_000);
     const SpecsType = @TypeOf(specs);
     const specs_info = @typeInfo(SpecsType);
     if (specs_info != .@"struct") {
@@ -279,6 +280,7 @@ pub fn Schema(comptime specs: anytype) type {
     return struct {
         const SelfSchema = @This();
 
+        pub const raw_specs = specs;
         pub const namespaces: []const NamespaceMeta = &parsed_namespaces;
         pub const commands: []const CommandMeta = &parsed_commands;
 
@@ -448,8 +450,49 @@ pub fn Schema(comptime specs: anytype) type {
     };
 }
 
-/// Alias matching `ADR-0002` `zts.rpc.merge(.{ ... })` terminology.
-pub const merge = Schema;
+/// Merges either a struct of namespaces (`.{ .a = A, .b = B }`) OR a tuple of pre-built
+/// `Schema(...)` types (`.{ AppSchema, CorePluginsSchema }`) into a single flat `Schema`.
+pub fn merge(comptime input: anytype) type {
+    @setEvalBranchQuota(200_000);
+    const InT = @TypeOf(input);
+    const info = @typeInfo(InT);
+    if (info != .@"struct") {
+        @compileError("zts_rpc.merge expects either .{ .ns = Cmds } or .{ SchemaA, SchemaB }");
+    }
+    if (!info.@"struct".is_tuple) {
+        return Schema(input);
+    }
+
+    const total_fields: usize = comptime blk: {
+        var n: usize = 0;
+        for (info.@"struct".field_names) |fname| {
+            const Elem = @field(input, fname);
+            n += @typeInfo(@TypeOf(Elem.raw_specs)).@"struct".field_names.len;
+        }
+        break :blk n;
+    };
+
+    const CombinedSpecs = comptime blk: {
+        var names: [total_fields][:0]const u8 = undefined;
+        var field_types: [total_fields]type = undefined;
+        var attrs: [total_fields]std.builtin.Type.Struct.FieldAttributes = undefined;
+        var idx: usize = 0;
+        for (info.@"struct".field_names) |fname| {
+            const Elem = @field(input, fname);
+            const sub = Elem.raw_specs;
+            for (@typeInfo(@TypeOf(sub)).@"struct".field_names) |sub_name| {
+                const sub_val = @field(sub, sub_name);
+                names[idx] = sub_name;
+                field_types[idx] = @TypeOf(sub_val);
+                attrs[idx] = .{ .default_value_ptr = &sub_val, .@"comptime" = true };
+                idx += 1;
+            }
+        }
+        break :blk @Struct(.auto, null, &names, &field_types, &attrs);
+    };
+
+    return Schema(CombinedSpecs{});
+}
 
 // ============================================================================
 // Unit Tests

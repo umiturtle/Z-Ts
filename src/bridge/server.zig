@@ -160,6 +160,16 @@ pub const BridgeServer = struct {
         return self.bound_port;
     }
 
+    /// Attaches or updates the RPC handler after server creation.
+    pub fn setRpcHandler(self: *BridgeServer, handler: rpc.Handler) void {
+        self.config.rpc_handler = handler;
+    }
+
+    /// Attaches a typed environment pointer (`*T`) injected into every incoming `rpc.Ctx`.
+    pub fn setEnv(self: *BridgeServer, ptr: anytype) void {
+        self.config = self.config.withEnv(ptr);
+    }
+
     pub fn baseUrl(self: *const BridgeServer, buf: *[64]u8) []const u8 {
         return std.fmt.bufPrint(buf, "http://127.0.0.1:{d}", .{self.bound_port}) catch unreachable;
     }

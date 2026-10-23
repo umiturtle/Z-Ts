@@ -2,11 +2,9 @@
 //!
 //! Injects a self-contained runtime bridge into served HTML pages so browser tabs,
 //! Arena Live Preview iframes, Playwright E2E tests, and remote control overlays
-//! work identically to native WebViews without touching application frontend code:
-//! - Installs both `globalThis.__ZTS_IPC__` AND `window.__TAURI_INTERNALS__`.
-//! - Attaches `Tauri-Invoke-Key` + `credentials: "same-origin"` on `POST /__zts_ipc__/<cmd>`.
-//! - Automatically handles both JSON responses and raw `application/octet-stream` -> `Uint8Array`.
-//! - Opens `EventSource("/__zts_events__?key=...")` to apply live `emit`, `eval`, and `document.title` updates.
+//! run BOTH standalone `tsgen` clients (`globalThis.__ZTS_IPC__`) AND unmodified
+//! official `@tauri-apps/api` v2 packages (`window.__TAURI_INTERNALS__`,
+//! `window.__TAURI_EVENT_PLUGIN_INTERNALS__`, `Channel`, `Size`, `listen`, etc.).
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
@@ -19,9 +17,21 @@ const template_fmt =
     \\<script>
     \\(() => {{
     \\  const KEY = "{s}";
+    \\  const TO_IPC = "__TAURI_TO_IPC_KEY__";
     \\  const cbs = new Map();
     \\  let nextId = 1;
     \\  const listeners = new Map();
+    \\  const eventRegistry = Object.create(null);
+    \\
+    \\  function replacer(_k, val) {{
+    \\    if (val instanceof Map) return Object.fromEntries(val.entries());
+    \\    if (val instanceof Uint8Array) return Array.from(val);
+    \\    if (val instanceof ArrayBuffer) return Array.from(new Uint8Array(val));
+    \\    if (typeof val === "object" && val !== null && TO_IPC in val) {{
+    \\      return val[TO_IPC]();
+    \\    }}
+    \\    return val;
+    \\  }}
     \\
     \\  async function invoke(cmd, args, options) {{
     \\    const isBin = args instanceof Uint8Array || args instanceof ArrayBuffer;
@@ -31,7 +41,7 @@ const template_fmt =
     \\    }}, (options && options.headers) || {{}});
     \\    const body = isBin
     \\      ? (args instanceof Uint8Array ? args : new Uint8Array(args))
-    \\      : JSON.stringify(args === undefined ? {{}} : args);
+    \\      : JSON.stringify(args === undefined ? {{}} : args, replacer);
     \\    const res = await fetch("/__zts_ipc__/" + encodeURIComponent(cmd), {{
     \\      method: "POST",
     \\      credentials: "same-origin",
@@ -41,22 +51,33 @@ const template_fmt =
     \\    const ct = res.headers.get("content-type") || "";
     \\    const isOk = (res.headers.get("tauri-response") || (res.ok ? "ok" : "error")) === "ok";
     \\    if (ct.includes("application/octet-stream")) {{
-    \\      const buf = new Uint8Array(await res.arrayBuffer());
-    \\      if (!isOk) throw buf;
-    \\      return buf;
+    \\      const out = new Uint8Array(await res.arrayBuffer());
+    \\      if (!isOk) throw out;
+    \\      return out;
     \\    }}
     \\    const data = await res.json();
     \\    if (!isOk) throw data;
+    \\    if (cmd === "plugin:event|listen" && args && typeof args.event === "string") {{
+    \\      registerEventListener(args.event, data, args.handler, args.target);
+    \\    }}
     \\    return data;
     \\  }}
     \\
     \\  const bridge = {{
     \\    invoke,
+    \\    callbacks: cbs,
+    \\    metadata: {{
+    \\      currentWindow: {{ label: "main" }},
+    \\      currentWebview: {{ label: "main", windowLabel: "main" }},
+    \\    }},
+    \\    plugins: {{
+    \\      path: {{ sep: "/", delimiter: ":" }},
+    \\    }},
     \\    transformCallback(fn, once) {{
     \\      const id = nextId++;
     \\      cbs.set(id, (payload) => {{
     \\        if (once) cbs.delete(id);
-    \\        return fn(payload);
+    \\        return fn && fn(payload);
     \\      }});
     \\      return id;
     \\    }},
@@ -76,8 +97,35 @@ const template_fmt =
     \\    }},
     \\  }};
     \\
+    \\  function registerEventListener(eventName, eventId, handlerId, target) {{
+    \\    if (!eventRegistry[eventName]) eventRegistry[eventName] = Object.create(null);
+    \\    eventRegistry[eventName][eventId] = {{ handlerId, target }};
+    \\  }}
+    \\
+    \\  function deliverEvent(eventName, payload, eventIds) {{
+    \\    const table = eventRegistry[eventName];
+    \\    if (!table) return;
+    \\    const ids = Array.isArray(eventIds) ? eventIds : Object.keys(table).map(Number);
+    \\    for (const id of ids) {{
+    \\      const entry = table[id];
+    \\      if (entry) bridge.runCallback(entry.handlerId, {{ event: eventName, id, payload }});
+    \\    }}
+    \\  }}
+    \\
+    \\  globalThis.isTauri = true;
+    \\  globalThis.__ztsRegisterEvent = registerEventListener;
+    \\  globalThis.__ztsDeliverEvent = deliverEvent;
     \\  globalThis.__ZTS_IPC__ = bridge;
     \\  globalThis.__TAURI_INTERNALS__ = bridge;
+    \\  globalThis.__TAURI_EVENT_PLUGIN_INTERNALS__ = {{
+    \\    unregisterListener(eventName, eventId) {{
+    \\      const table = eventRegistry[eventName];
+    \\      if (table && table[eventId]) {{
+    \\        bridge.unregisterCallback(table[eventId].handlerId);
+    \\        delete table[eventId];
+    \\      }}
+    \\    }},
+    \\  }};
     \\
     \\  if (typeof EventSource !== "undefined") {{
     \\    const es = new EventSource("/__zts_events__?key=" + KEY);
@@ -85,6 +133,7 @@ const template_fmt =
     \\      const msg = JSON.parse(ev.data);
     \\      const set = listeners.get(msg.event);
     \\      if (set) for (const fn of set) fn(msg.payload);
+    \\      deliverEvent(msg.event, msg.payload, null);
     \\      if (typeof window !== "undefined") {{
     \\        window.dispatchEvent(new CustomEvent("zts:event", {{ detail: msg }}));
     \\      }}

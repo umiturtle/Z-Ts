@@ -30,6 +30,7 @@ pub const Bytes = types.Bytes;
 pub const Handle = types.Handle;
 pub const OsPath = types.OsPath;
 pub const Patch = types.Patch;
+pub const RawJson = types.RawJson;
 pub const SafeInt = types.SafeInt;
 pub const TaggedUnion = types.TaggedUnion;
 pub const UnionConfig = types.UnionConfig;

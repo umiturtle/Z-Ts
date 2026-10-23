@@ -103,7 +103,22 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // Level 2: `z_ts` — Full umbrella module re-exporting all orthogonal layers + `BridgeHost` & `WebviewHost`.
+    // Level 1f: `zts_tauri` — Pure-Zig Tauri v2 wire protocol, `Channel(T)`, JS bootstrap & core plugins.
+    // Zero OS GUI / socket dependencies (`link_libc = false`) — runs identically over `WebviewHost` or `BridgeHost`.
+    const tauri_mod = b.addModule("zts_tauri", .{
+        .root_source_file = b.path("src/tauri/mod.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = false,
+        .imports = &.{
+            .{ .name = "zts_foundation", .module = foundation_mod },
+            .{ .name = "zts_web", .module = web_mod },
+            .{ .name = "zts_core", .module = core_mod },
+            .{ .name = "zts_rpc", .module = rpc_mod },
+        },
+    });
+
+    // Level 2: `z_ts` — Full umbrella module re-exporting all orthogonal layers + `BridgeHost`, `WebviewHost` & `DesktopRuntime`.
     const root_mod = b.addModule("z_ts", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -115,6 +130,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "zts_rpc", .module = rpc_mod },
             .{ .name = "zts_bridge", .module = bridge_mod },
             .{ .name = "zts_webview", .module = webview_mod },
+            .{ .name = "zts_tauri", .module = tauri_mod },
         },
     });
 
@@ -166,17 +182,40 @@ pub fn build(b: *std.Build) void {
     const bridge_tests = b.addTest(.{ .root_module = bridge_mod });
     const webview_tests = b.addTest(.{ .root_module = webview_mod });
     const core_tests = b.addTest(.{ .root_module = core_mod });
+    const tauri_tests = b.addTest(.{ .root_module = tauri_mod });
     const standalone_tests = b.addTest(.{ .root_module = standalone_consumer_mod });
     const umbrella_tests = b.addTest(.{ .root_module = root_mod });
 
-    const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full Z-Ts suite");
+    // Bundle unmodified upstream `@tauri-apps/api` v2 (`tsc --noEmit --strict` + `esbuild`) and
+    // run full live E2E tests against BOTH `BridgeServer`+Node22 (all 3 OSes) AND `WebKit2GTK 4.1`!
+    const prepare_tauri_js = b.addSystemCommand(&.{ "node", "scripts/prepare-tauri-e2e.mjs" });
+    const bundled_tauri_js = prepare_tauri_js.addOutputFileArg("e2e_suite.bundle.js");
+    // Invalidate bundle whenever TS sources or lockfile change
+    prepare_tauri_js.addFileInput(b.path("tests/tauri/src/e2e_suite.ts"));
+    prepare_tauri_js.addFileInput(b.path("tests/tauri/src/generated_api.ts"));
+    prepare_tauri_js.addFileInput(b.path("tests/tauri/package.json"));
+
+    const tauri_e2e_mod = b.createModule(.{
+        .root_source_file = b.path("tests/tauri/e2e_live.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "z_ts", .module = root_mod },
+            .{ .name = "e2e_bundle", .module = b.createModule(.{ .root_source_file = bundled_tauri_js }) },
+        },
+    });
+    const tauri_e2e_tests = b.addTest(.{ .root_module = tauri_e2e_mod });
+
+    const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full Z-Ts & Tauri v2 E2E suite");
     test_step.dependOn(&b.addRunArtifact(foundation_tests).step);
     test_step.dependOn(&b.addRunArtifact(web_tests).step);
     test_step.dependOn(&b.addRunArtifact(rpc_tests).step);
     test_step.dependOn(&b.addRunArtifact(bridge_tests).step);
     test_step.dependOn(&b.addRunArtifact(webview_tests).step);
     test_step.dependOn(&b.addRunArtifact(core_tests).step);
+    test_step.dependOn(&b.addRunArtifact(tauri_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);
     test_step.dependOn(&b.addRunArtifact(c_abi_exe).step);
     test_step.dependOn(&b.addRunArtifact(umbrella_tests).step);
+    test_step.dependOn(&b.addRunArtifact(tauri_e2e_tests).step);
 }

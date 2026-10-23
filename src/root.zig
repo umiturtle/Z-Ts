@@ -19,10 +19,20 @@ pub const core = @import("zts_core");
 pub const rpc = @import("zts_rpc");
 pub const bridge = @import("zts_bridge");
 pub const webview = @import("zts_webview");
+pub const tauri = @import("zts_tauri");
 pub const bridge_host = @import("bridge_host.zig");
 pub const webview_host = @import("webview_host.zig");
+pub const app_runtime = @import("app_runtime.zig");
 pub const BridgeHost = bridge_host.BridgeHost;
 pub const WebviewHost = webview_host.WebviewHost;
+pub const DesktopConfig = app_runtime.DesktopConfig;
+pub const DesktopRuntime = app_runtime.DesktopRuntime;
+
+test {
+    _ = bridge_host;
+    _ = webview_host;
+    _ = app_runtime;
+}
 
 test "z_ts scaffold version & unified nominal Handle identity across standalone modules" {
     try std.testing.expectEqual(@as(usize, 0), version.major);

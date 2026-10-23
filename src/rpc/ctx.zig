@@ -61,6 +61,9 @@ pub const Ctx = struct {
         return @ptrCast(@alignCast(raw));
     }
 
+    /// Alias for `env(T)` for callers expecting `getEnv`.
+    pub const getEnv = env;
+
     /// Returns `*T` or `error.MissingContext` (which serializes with 0 heap allocations as `{"code":"MissingContext"}`).
     pub fn requireEnv(self: *const Ctx, comptime T: type) error{MissingContext}!*T {
         return self.env(T) orelse error.MissingContext;
