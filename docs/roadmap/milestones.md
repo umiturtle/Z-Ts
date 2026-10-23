@@ -42,9 +42,9 @@ Wave 2 [並列4] ── M1 後半: ルーター/TS生成・トランスポート
    └─ M1-07: zts_tauri   (__TAURI_INTERNALS__ JS, Channel, drag-region, 標準コマンド群)
    │
    ▼
-Wave 3 [統合]  ── M2: Vertical Slice 3 モード完全実証ゲート
-   ├─ M2-01: `zts` 統合ファサード & `build.zig` マルチモジュール公開
-   └─ M2-02: 本家 `@tauri-apps/api` UI が ①0ms Mock / ②Live Preview / ③Linux Xvfb で完動!
+Wave 3 [統合]  ── M2: 4 モード同型実証 & 双方向 SSG / WebAssembly パイプライン
+   ├─ M2-01: 双方向 SSG (`embedFrontendDir` + `zts_ssg` `dist/` 出力) & `zts_wasm` 4 モード E2E 実証
+   └─ M2-02: デスクトップ / Live Preview / 静的 SSG Web 出力リファレンスサンプル (`examples/`)
    │
    ▼
 Wave 4 [並列5] ── M3 & M4: 3 大 OS 制覇 + デスクトップ標準機能の一斉並列展開
@@ -79,8 +79,8 @@ Wave 5 [仕上げ] ── M5: ビルド統合・CLI・インストーラ・対�
 | **`M1-05`** | `zts_bridge` セキュア HTTP+SSE ブリッジ | W2 | `M1-01`, `M1-02` | `src/bridge/` | `quick-test` + HTTP E2E |
 | **`M1-06`** | `zts_webview` C ABI・Mock・Linux WebKit2GTK | W2 | `M1-01`, `M1-02` | `src/webview/{mod,c_api,mock,linux}.zig`, `include/zts_webview.h` | `quick-test` + Actions Linux |
 | **`M1-07`** | `zts_tauri` ワイヤー層・Channel・基本コマンド | W2 | `M1-01`, `M1-04` | `src/tauri/{mod,protocol,channel,js_bootstrap,window,event,path,app}.zig` | `quick-test` |
-| **`M2-01`** | `zts` ファサード & `build.zig` モジュール公開 | W3 | `M1-04`..`M1-07` | `src/root.zig`, `src/app.zig`, `build.zig` | `zig build test` (3 OS) |
-| **`M2-02`** | Vertical Slice デモ & `@tauri-apps/api` E2E | W3 | `M2-01` | `examples/counter/`, `tests/e2e/` | Mock + Bridge + Xvfb |
+| **`M2-01`** | 双方向 SSG (`embedFrontendDir` / `zts_ssg`) & `zts_wasm` 4 モード同型実証 | W3 | `M1-04`..`M1-07` | `src/wasm/`, `src/ssg/`, `tests/ssg/`, `build.zig`, `src/root.zig` | 4-Mode E2E (Mock + Bridge + Xvfb + Wasm SSG) |
+| **`M2-02`** | デスクトップ / Live Preview / SSG 出力ショーケースサンプル | W3 | `M2-01` | `examples/counter/` | 3 成果物ビルド & E2E |
 | **`M3-01`** | macOS ネイティブ (`WKWebView` + `NSWindow`) | W4 | `M1-06`, `M2-01` | `src/webview/{macos.zig,macos_shim.m}` | Actions `macos-latest` |
 | **`M3-02`** | Windows ネイティブ (`Win32` + 内蔵 WebView2) | W4 | `M1-06`, `M2-01` | `src/webview/{windows,webview2_com,webview2_loader}.zig` | Actions `windows-latest` |
 | **`M3-03`** | 親ウィンドウ Overlay 埋め込み & C ABI サンプル | W4 | `M3-01`, `M3-02` | `examples/c_embed/`, `src/webview/embed_test.zig` | C コンパイルリンク実行 |

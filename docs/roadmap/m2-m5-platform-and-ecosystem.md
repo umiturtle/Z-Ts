@@ -4,21 +4,24 @@
 
 ---
 
-## M2：Vertical Slice フルスタック実証ゲート（Wave 3）
+## M2：4 モード同型実証 & 双方向 SSG / WebAssembly パイプライン（Wave 3）
 
-### `M2-01`：`zts` 統合ファサード & `build.zig` マルチモジュール公開
-- **専有スコープ**: `src/root.zig`, `src/app.zig`, `build.zig`
+### `M2-01`：双方向 SSG パイプライン（`zts_ssg` / `embedFrontendDir`）& `WasmHost` 4 モード同型実証
+- **専有スコープ**: `src/wasm/`, `src/ssg/`, `src/root.zig`, `build.zig`, `tests/ssg/`, `docs/decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`
 - **内容**:
-  - `build.zig` から `zts`, `zts_core`, `zts_rpc`, `zts_webview`, `zts_bridge` の 5 公開モジュールを `b.addModule` でエクスポートし、外部 Zig プロジェクトが任意の層だけを選択利用できるようにする。
-  - `zts.App` Pinned 初期化（`init` / `deinit` / `step` / `run`）と、`Io.Group` によるバックグラウンド IPC タスクのライフサイクル統合（ウィンドウ終了時の安全な一括キャンセル待機）。
-- **完了条件 (DoD)**: Linux / macOS / Windows の GitHub Actions 3 ジョブすべてで `zig build test` がグリーンになること。
+  1. **Inbound SSG（フロントエンド静的ビルド成果物の自動取り込み）**:
+     - `build.zig` 公開ヘルパー `embedFrontendDir` と Pure Zig スキャナ `src/ssg/embed_dir_main.zig` により、Astro / Next.js（`output: 'export'`）/ Vite 等の出力ディレクトリ（`out/`・`dist/`）を再帰走査し、OS 非依存の決定論的ソート済み `@embedFile` `zts_web.Assets` モジュールを自動生成する。
+  2. **`zts_wasm`（`wasm32-freestanding` ランタイム & `WasmHost`）**:
+     - アプリ側の `zts_rpc.Schema` と `zts_tauri` 標準プラグイン群（`window`, `event`, `path`, `app`, `resources`, `Channel(T)`）を 1 行のコード分岐もなく `wasm32-freestanding` の `.wasm` バイナリへコンパイルし、無改造 `@tauri-apps/api` v2 と線形メモリ直接呼び出しで接続する `WasmHost`・`WasmApp`・`js_bootstrap` を提供する。
+  3. **Outbound SSG（サーバー不要・プリレンダリング静的サイト `dist/` エクスポータ `zts_ssg`）**:
+     - 静的/動的ルートごとのプリレンダリング（`<title>`・OGP メタタグ・HTML 安全エスケープ済み初期 JSON データ `<script id="__ZTS_SSG_DATA__">`・静的 HTML フラグメント注入）、ディレクトリ階層に応じた相対 URL 自動補正（GitHub Pages サブパス完全対応）、スコープ検査付き `_zts/assets/` 書き出し、および `.nojekyll` / `_headers` / `404.html` 生成を行う。
+- **完了条件 (DoD)**:
+  - **4 モード完全同型 E2E 実証**: 同一の Zig コマンド実装と無改造 `@tauri-apps/api` v2 スイートが **① `HeadlessMock` / ② `BridgeServer` (HTTP+SSE) / ③ Linux Native `WebKit2GTK 4.1` (`xvfb-run`) / ④ `wasm32-freestanding` 静的 SSG `dist/` (`WebAssembly.instantiate`)** の **全 4 環境** で完全一致動作し、Linux / macOS / Windows 全 3 OS CI でオールグリーンになること。
 
-### `M2-02`：ショーケースアプリ & `@tauri-apps/api` 3 モード E2E 実証
-- **専有スコープ**: `examples/counter/`, `tests/e2e/`
+### `M2-02`：ショーケースサンプルアプリ & ベンチマーク基盤整備
+- **専有スコープ**: `examples/counter/`
 - **内容**:
-  - 実際の npm パッケージ `@tauri-apps/api` と、自動生成された `bindings.gen.ts` の両方を使う TypeScript フロントエンドを構築。
-  - 同一の Zig アプリコードのまま **① `HeadlessMock` (0.01s) / ② `HttpBridge` (Arena Live Preview & 実ブラウザ) / ③ Linux Native `WebKit2GTK` (`xvfb-run`)** の 3 環境すべてで、JSON RPC・大容量 `Uint8Array` エコー・`Channel` 進捗ストリーム・ウィンドウタイトル変更・エラー型ハンドリングが 100% 一致して動作することを自動テストで証明する。
-- **★ 重要なフィードバックポイント**: この時点で実フロントエンドとの統合で露出した細部の仕様ギャップをすべて洗い出し、M3 横展開の前にコアへ反映する。
+  - デスクトップ単一バイナリ・Live Preview・静的 SSG Web 出力（`dist/`）の 3 成果物を 1 つのサンプルプロジェクトから生成できるリファレンス実装を提供する。
 
 ---
 
