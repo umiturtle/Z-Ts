@@ -41,41 +41,18 @@ jobs:
             linux-zig-0.17.0-ts7-
             linux-zig-0.17.0-
 
-      - name: Cache APT packages
-        uses: actions/cache@v4
-        with:
-          path: /home/runner/.apt-cache
-          key: ubuntu-24.04-webkit2gtk-apt-v1
-
       - name: Install GTK3, WebKit2GTK 4.1 & Xvfb
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          set -o pipefail
-          {
-            sudo sed -i -E 's|http://([a-z0-9.-]+\.)?(archive|security)\.ubuntu\.com/ubuntu/?|https://mirrors.edge.kernel.org/ubuntu/|g' /etc/apt/sources.list.d/ubuntu.sources || true
-            sudo rm -f /var/lib/man-db/auto-update
-            mkdir -p /home/runner/.apt-cache/partial
-            sudo apt-get \
-              -o Acquire::ForceIPv4=true \
-              -o Acquire::https::Timeout=15 \
-              -o Acquire::http::Timeout=15 \
-              -o Acquire::Retries=2 \
-              -o Dir::Cache::Archives=/home/runner/.apt-cache \
-              update
-            sudo apt-get \
-              -o Acquire::ForceIPv4=true \
-              -o Acquire::https::Timeout=15 \
-              -o Acquire::http::Timeout=15 \
-              -o Acquire::Retries=2 \
-              -o Dir::Cache::Archives=/home/runner/.apt-cache \
-              install -y --no-install-recommends \
-              pkg-config \
-              libgtk-3-dev \
-              libwebkit2gtk-4.1-dev \
-              libayatana-appindicator3-dev \
-              xvfb
-          } 2>&1 | tee -a ci-output.log
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            xvfb
 
       - name: Lint docs, check formatting & run tests under Xvfb
         run: |
@@ -85,7 +62,7 @@ jobs:
             python3 scripts/check-docs.py
             ./zigw fmt --check src/ tests/ build.zig build.zig.zon
             xvfb-run -a ./zigw build test --summary all
-          } 2>&1 | tee -a ci-output.log
+          } 2>&1 | tee ci-output.log
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()
