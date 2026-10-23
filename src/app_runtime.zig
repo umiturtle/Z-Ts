@@ -97,8 +97,12 @@ pub const DesktopRuntime = struct {
 
     pub fn destroy(self: *DesktopRuntime) void {
         const alloc = self.allocator;
-        self.plugins.destroy();
+        // Detach callbacks BEFORE destroying GTK/OS windows so synchronous GObject `"destroy"`
+        // signals emitted inside `engine.deinit()` never touch torn-down plugin registries!
+        self.engine.setCloseHandler(null);
+        self.engine.setMessageHandler(null);
         self.engine.deinit();
+        self.plugins.destroy();
         alloc.destroy(self);
     }
 

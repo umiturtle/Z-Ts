@@ -75,21 +75,23 @@ export async function runSuite(opts: SuiteOptions): Promise<SuiteSummary> {
     check(isTauri() === true, "isTauri() must return true");
 
     // 2. `@tauri-apps/api/app`
-    check((await getName()) === "Z-Ts Studio", "app.getName()");
+    const gotName = await getName();
+    check(gotName === "Z-Ts Studio", `app.getName() got ${JSON.stringify(gotName)}`);
     check((await getVersion()) === "2.7.0", "app.getVersion()");
     check((await getIdentifier()) === "jp.zts.studio", "app.getIdentifier()");
     check((await getTauriVersion()).length > 0, "app.getTauriVersion()");
 
-    // 3. `@tauri-apps/api/path`
-    const resPath = await resolveResource("packs/scene01.zpack");
+    // 3. `@tauri-apps/api/path` (cross-platform `/` & `\\` separator normalization)
+    const slash = (p: string): string => p.replaceAll("\\", "/");
+    const resPath = slash(await resolveResource("packs/scene01.zpack"));
     check(resPath.endsWith("packs/scene01.zpack"), `resolveResource got ${resPath}`);
-    const dataDir = await appDataDir();
+    const dataDir = slash(await appDataDir());
     check(dataDir.includes("jp.zts.studio"), `appDataDir got ${dataDir}`);
-    const joined = await join("/alpha/beta", "gamma", "voice.ogg");
+    const joined = slash(await join("/alpha/beta", "gamma", "voice.ogg"));
     check(joined === "/alpha/beta/gamma/voice.ogg", `join got ${joined}`);
-    const norm = await normalize("/alpha/beta/../gamma/./voice.ogg");
+    const norm = slash(await normalize("/alpha/beta/../gamma/./voice.ogg"));
     check(norm === "/alpha/gamma/voice.ogg", `normalize got ${norm}`);
-    check((await dirname(norm)) === "/alpha/gamma", "dirname()");
+    check(slash(await dirname(norm)) === "/alpha/gamma", "dirname()");
     check((await basename(norm, ".ogg")) === "voice", "basename(path, ext)");
     check((await extname("/archive/pack.tar.gz")) === "gz", "extname()");
     check(sep().length === 1, "sep()");

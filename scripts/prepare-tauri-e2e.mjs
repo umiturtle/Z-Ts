@@ -8,7 +8,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tauriTestDir = path.join(rootDir, "tests", "tauri");
@@ -37,7 +37,7 @@ execFileSync(process.execPath, [tscBin, "-p", path.join(tauriTestDir, "tsconfig.
 // 2. Bundle unmodified `@tauri-apps/api` v2 + `generated_api.ts` in-process via `esbuild` JS API (~5ms, 100% OS-agnostic!)
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
 const { buildSync } = await import(
-  path.join(tauriTestDir, "node_modules", "esbuild", "lib", "main.js")
+  pathToFileURL(path.join(tauriTestDir, "node_modules", "esbuild", "lib", "main.js")).href
 );
 buildSync({
   entryPoints: [path.join(tauriTestDir, "src", "e2e_suite.ts")],

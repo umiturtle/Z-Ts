@@ -36,3 +36,9 @@ Z-Ts は以下の 2 つの一見相反する要件を同時に満たす必要が
 ### 2.4 `zts_rpc.tsgen` における `ErrorSet` の辞書順ソート（決定論的コード生成）
 - Zig `0.17.0` では `@typeInfo(ErrorSet).error_set.error_names` の列挙順が **翻訳単位ごとのグローバルエラーテーブル登録順（import 順）に依存して変動する** ことがスナップショット E2E 検証で判明した。
 - `tsgen.zig` の `renderErrorSetTsType` にて `comptime` 辞書順ソートを導入し、どのターゲット・どの翻訳単位から生成しても **100% バイト単位で再現可能な TypeScript 型定義** が出力されることを保証した。
+
+### 2.5 実機 WebKit2GTK 4.1 E2E で検証・解決した C/GObject 境界知見
+1. **`webkit_uri_scheme_response_set_http_headers` 時の `Content-Type` ヘッダ明示付与**:
+   - WebKit2GTK 4.1 では `webkit_uri_scheme_response_set_http_headers(resp, soup_hdrs)` を使用すると、JS `fetch()` の `res.headers.get("content-type")` は `soup_hdrs` テーブルを参照する。`soup_hdrs` に `"Content-Type"` を明示 `soup_message_headers_append` しないと `res.headers.get("content-type")` が空になり、Tauri v2 `ipc-protocol.js` が全レスポンスを `res.arrayBuffer()` 分岐で処理してしまうため、`soup_hdrs` 側にも必ず `Content-Type` を格納する。
+2. **GObject 同期 `"destroy"` シグナルと RAII 逆順破棄 (`DesktopRuntime.destroy`)**:
+   - `gtk_widget_destroy(toplevel)` は呼び出しスレッド上で同期的に `"destroy"` シグナルを発火する。`DesktopRuntime.destroy` では必ず先に `setCloseHandler(null)` / `setMessageHandler(null)` でコールバックを切り離し、`engine.deinit()` 完了後に `plugins.destroy()` を解放する。

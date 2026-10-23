@@ -427,6 +427,7 @@ pub const LinuxGtkBackend = struct {
             c.webkit_uri_scheme_response_set_content_type(wk_resp, ct_z.ptr);
 
             const soup_hdrs = c.soup_message_headers_new(c.SOUP_MESSAGE_HEADERS_RESPONSE);
+            c.soup_message_headers_append(soup_hdrs, "Content-Type", ct_z.ptr);
             c.soup_message_headers_append(soup_hdrs, "Access-Control-Allow-Origin", "*");
             c.soup_message_headers_append(soup_hdrs, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             c.soup_message_headers_append(soup_hdrs, "Access-Control-Allow-Headers", "*");
