@@ -5,6 +5,7 @@
 //! - `zts_foundation`: Zero-dep data structures (`OwnedBytes`, `HandlePool`, `RingQueue`, `geometry`, `glob`).
 //! - `zts_web`: Standalone embedded asset delivery, HTTP `206` Range seeking, MIME, URL & CSP.
 //! - `zts_rpc`: Standalone `comptime` JSON/Binary RPC router, codec & strict TypeScript generator (`tsgen`).
+//! - `zts_bridge`: Standalone pure-Zig HTTP/1.1 + `206` Range + triple-CSRF RPC + SSE live server.
 //! - `zts_core`: Desktop `Host` VTable + re-exports of `zts_foundation` and `zts_web`.
 
 const std = @import("std");
@@ -15,6 +16,9 @@ pub const foundation = @import("zts_foundation");
 pub const web = @import("zts_web");
 pub const core = @import("zts_core");
 pub const rpc = @import("zts_rpc");
+pub const bridge = @import("zts_bridge");
+pub const bridge_host = @import("bridge_host.zig");
+pub const BridgeHost = bridge_host.BridgeHost;
 
 test "z_ts scaffold version & unified nominal Handle identity across standalone modules" {
     try std.testing.expectEqual(@as(usize, 0), version.major);
@@ -66,4 +70,6 @@ test {
     _ = web;
     _ = core;
     _ = rpc;
+    _ = bridge;
+    _ = bridge_host;
 }

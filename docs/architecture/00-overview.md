@@ -59,11 +59,11 @@ Z-Ts の下位レイヤは、デスクトップ WebView フレームワーク以
 | **`zts_rpc`** | `src/rpc/*.zig` | `zts_foundation` のみ (`link_libc = false`) | **Window/WebView/Tauri 依存ゼロ**の汎用 `comptime` JSON/Binary RPC ルーター（`Schema`/`bind`）、ゼロ確保エラー応答、型安全環境注入 `Ctx.withEnv(&T)` / `requireEnv(T)`、トランスポート中立 `tsgen`（`createIpcTransport` / `createFetchTransport`）。 |
 | **`zts_core`** | `src/core/{mod,host}.zig` | `zts_foundation`, `zts_web` (`link_libc = false`) | デスクトップフレームワーク共通コア（プラットフォーム非依存 Window `Host` VTable・`CallContext`・`RecordingHost` + 下位再公開）。 |
 | **`zts_webview`** | `src/webview/` + `include/zts_webview.h` | OS API のみ（Tauri/JSON 依存ゼロ） | C ABI でも単体組み込み可能な Custom URI Scheme 対応・`step(.blocking / .poll)` 駆動型の極薄 WebView ライブラリ。 |
-| **`zts_bridge`** | `src/bridge/` | `std.Io.net`, `zts_core` | ブラウザ / Live Preview / Playwright E2E 用の HTTP + SSE トランスポート（未使用時は DCE で 0 バイト）。 |
+| **`zts_bridge`** | `src/bridge/{mod,auth,sse,js_init,server}.zig` | `zts_foundation`, `zts_web`, `zts_rpc` (`link_libc = false`) | **Window/GUI 依存ゼロ**の組み込み HTTP/1.1 + `206` Range + 三重 CSRF 防御 RPC + リアルタイム SSE サーバー（Live Preview・Playwright E2E・外部配信ツール/エンジン制御 UI で単体利用可能。未使用時は 0B）。 |
 | **`zts_tauri`** | `src/tauri/` | `zts_core`, `zts_rpc` | Tauri v2 ワイヤー互換層および `comptime` 選択可能な標準プラグイン群。 |
-| **`z_ts`** | `src/root.zig` | 上記を統合再公開 | デスクトップアプリ向けオールインワン統合 SDK。 |
+| **`z_ts`** | `src/{root,bridge_host}.zig` | 上記を統合再公開 | デスクトップアプリ向けオールインワン統合 SDK（`zts_core.Host` VTable を SSE へ中継する `BridgeHost` を同梱）。 |
 
-> **CI 自動強制ガード (`tests/standalone_modules.zig`)**: `zig build test` は `z_ts`・`zts_core` を一切インポートしない独立コンパイルターゲットで `zts_foundation`・`zts_web`・`zts_rpc` をビルド・実行します。下位モジュールへデスクトップ/Tauri 固有の依存を混入させると即座にコンパイルエラーとなります。
+> **CI 自動強制ガード (`tests/standalone_modules.zig`)**: `zig build test` は `z_ts`・`zts_core` を一切インポートしない独立コンパイルターゲットで `zts_foundation`・`zts_web`・`zts_rpc`・`zts_bridge` をビルド・実行します。下位モジュールへデスクトップ/Tauri 固有の依存を混入させると即座にコンパイルエラーとなります。
 
 ---
 

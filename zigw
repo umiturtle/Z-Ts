@@ -95,6 +95,7 @@ if [[ "${1:-}" == "quick-test" ]]; then
     --dep zts_web \
     --dep zts_core \
     --dep zts_rpc \
+    --dep zts_bridge \
     -Mroot="${SCRIPT_DIR}/src/root.zig" \
     -Mzts_foundation="${SCRIPT_DIR}/src/core/foundation.zig" \
     --dep zts_foundation \
@@ -104,6 +105,10 @@ if [[ "${1:-}" == "quick-test" ]]; then
     -Mzts_core="${SCRIPT_DIR}/src/core/mod.zig" \
     --dep zts_foundation \
     -Mzts_rpc="${SCRIPT_DIR}/src/rpc/mod.zig" \
+    --dep zts_foundation \
+    --dep zts_web \
+    --dep zts_rpc \
+    -Mzts_bridge="${SCRIPT_DIR}/src/bridge/mod.zig" \
     "$@"
 fi
 

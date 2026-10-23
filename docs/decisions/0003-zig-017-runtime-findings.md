@@ -39,5 +39,10 @@
    - 同一ビルドグラフ内で複数の公開モジュール（`zts_foundation`, `zts_web`, `zts_rpc`, `zts_core`, `z_ts`）を構成する場合、**1 つの `.zig` ファイルが複数モジュールから相対パス `@import("...")` されるとコンパイルエラーになる**。
    - 必ず下位モジュールのファイルを上位モジュールからは Named Module（例: `@import("zts_foundation")`）経由でインポートすること。これにより `Handle(.window)` や `OwnedBytes` の公称型同一性（Nominal Type Identity）も全パッケージ横断で 100% 保証される。
 
+8. **`std.Io.net` / `std.http.Server` 実装時の 3 大必須鉄則（`M1-05` `zts_bridge` で実証）**:
+   - **`req.readerExpectContinue` / `readerExpectNone` 呼び出し前のヘッダ退避**: `std.http.Server.Request` はボディリーダを開始した瞬間に内部で `req.head.invalidateStrings()` を実行し、`target` や全ヘッダスライスを無効化する。必ずボディ読み取り前に `method`・`target`・必要ヘッダをリクエスト Arena へ `dupe` し、認証失敗時はボディを 1 バイトも読む前に `403 Forbidden` を返すこと。
+   - **SSE ストリーミングの 2 段フラッシュ**: `req.respondStreaming(..., .{ .transfer_encoding = .none })` で返す `std.http.BodyWriter` は上位バッファ `bw.writer.flush()` だけでは下位ソケット Writer のバッファ（例: 8 KiB）に留まり TCP パケットが送出されない。必ず **`try bw.writer.flush(); try bw.flush();`** の両方を呼んで OS ソケットへ即時送出すること。
+   - **2-vCPU 環境でのスレッドプール枯渇回避と 3-OS クリーン終了**: 長寿命の SSE ストリームや HTTP/1.1 Keep-Alive 接続を `std.Io.Threaded` の共有ワーカープール（2 コア環境では 1〜2 スレッド）に乗せるとプールが埋まって後続リクエストが詰まる。ブロッキング接続ループは軽量スタックの OS スレッド（`std.Thread.spawn`）へ分離し、停止時は「全ストリーム `shutdown(io, .both)` + `127.0.0.1:<port>` への Loopback Wake Connect + リスナー `close` + `join`」で Linux / macOS / Windows 全 OS デッドロックゼロ終了を保証すること。
+
 
 

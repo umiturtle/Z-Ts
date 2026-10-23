@@ -12,6 +12,7 @@ const testing = std.testing;
 const foundation = @import("zts_foundation");
 const web = @import("zts_web");
 const rpc = @import("zts_rpc");
+const bridge = @import("zts_bridge");
 
 test "Standalone modules (`zts_foundation`, `zts_web`, `zts_rpc`) operate completely independently of desktop host layers" {
     // 1. `zts_foundation`: Generational handles + slot pool + MPSC ring queue
@@ -69,4 +70,14 @@ test "Standalone modules (`zts_foundation`, `zts_web`, `zts_rpc`) operate comple
     const decoded = try rpc.decode(ResourceId, testing.allocator, res.body.slice());
     defer decoded.deinit();
     try testing.expectEqual(h1, decoded.value);
+
+    // 4. `zts_bridge`: Live HTTP/1.1 + `206` Range + triple-CSRF RPC + SSE server with ZERO windowing coupling!
+    const srv = try bridge.BridgeServer.start(testing.allocator, testing.io, .{
+        .host = "127.0.0.1",
+        .port = 0,
+        .assets = assets,
+        .rpc_handler = handler,
+    });
+    defer srv.stopAndDeinit();
+    try testing.expect(srv.port() > 0);
 }

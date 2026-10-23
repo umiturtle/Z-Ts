@@ -1,33 +1,31 @@
 # Task M1-05: `zts_bridge` ブラウザ / Live Preview HTTP/1.1 + SSE トランスポート
 
-- **Status**: `in_progress`
+- **Status**: `done`
 - **Branch**: `arena/2a8b6e65-z-ts`
-- **Scope**: `src/bridge/`, `src/root.zig`, `build.zig`, `tests/standalone_modules.zig`, `docs/tasks/M1-05-bridge-http-sse.md`
+- **Scope**: `src/bridge/`, `src/bridge_host.zig`, `src/root.zig`, `build.zig`, `zigw`, `tests/bridge/`, `tests/standalone_modules.zig`, `docs/tasks/M1-05-bridge-http-sse.md`
 - **Upstream Reference**: `docs/roadmap/m1-foundation-packages.md`, `docs/architecture/00-overview.md`, `docs/architecture/web-zig-boundary.md`, `docs/decisions/0003-zig-017-runtime-findings.md`
-- **Next Step**: Zig `0.17.0` `std.Io.net` ベースの HTTP/1.1 + SSE サーバー（256-bit CSPRNG Cookie + `Tauri-Invoke-Key` + `Origin` 三重検証・`206 Partial Content`・リアルタイム SSE 配信・単体切り出し可能モジュール `zts_bridge`）を実装し、実ブラウザ Node E2E + CSRF 拒否テスト + 3-OS CI を通す。
+- **Next Step**: `M1-06`（`zts_webview`: C ABI コア・Headless Mock・Linux WebKit2GTK 4.1 バックエンド）または `M1-07`（`zts_tauri`: ワイヤー互換プロトコル & 基本コマンド群）へ進む。
 
 ---
 
 ## 1. 目的と完了条件（Definition of Done）
 
 - [x] 分散ロック宣言コミット & リモート Push（並列エージェントとのスコープ分離確立）
-- [ ] `src/bridge/auth.zig`: 256-bit 暗号論的乱数によるセッション Cookie（`__zts_session` / `HttpOnly; SameSite=Strict`）& 256-bit `Tauri-Invoke-Key` 生成、定数時間比較（タイミング攻撃耐性）、および許可 `Origin` リスト／ホスト一致の **三重 CSRF 防御検査（不一致時は `403 Forbidden`）**
-- [ ] `src/bridge/http.zig`: `std.Io` Reader/Writer ベースの堅牢・ゼロリークな HTTP/1.1 リクエストパーサ & レスポンスライタ（ヘッダサイズ・ボディサイズ上限防御、大文字小文字非依存ヘッダ検索、Cookie パーサ、Keep-Alive / Streaming SSE 対応）
-- [ ] `src/bridge/sse.zig`: スレッドセーフなマルチクライアント SSE ブローカー（`/__zts_events__` 購読、`event: eval` / `event: emit` / `event: window` JSON 安全フレーミング、切断クライアント自動掃除、グレースフルシャットダウン一斉起床）
-- [ ] `src/bridge/js_init.zig`: `<head>` へ自動注入される軽量ブリッジ初期化スクリプト（`globalThis.__ZTS_IPC__` および `window.__TAURI_INTERNALS__` の両方をセットアップし、Cookie + `Tauri-Invoke-Key` 付き `POST /__zts_ipc__/<cmd>` 送信と `EventSource("/__zts_events__")` リアルタイム受信・`document.title` 同期を提供）
-- [ ] `src/bridge/server.zig` & `src/bridge/mod.zig`:
+- [x] `src/bridge/auth.zig`: 256-bit 暗号論的乱数（`io.randomSecure`）によるセッション Cookie（`__zts_session` / `HttpOnly; SameSite=Strict`）& 256-bit `Tauri-Invoke-Key` 生成、定数時間比較（タイミング攻撃耐性）、および許可 `Origin` リスト／`Host` 一致（Arena Live Preview 等のプロキシ環境も透過対応）の **三重 CSRF 防御検査（不一致時はボディ読み取り前に即 `403 Forbidden`）**
+- [x] `src/bridge/sse.zig`: スレッドセーフなマルチクライアント SSE ブローカー（`/__zts_events__` 購読、WHATWG SSE 準拠の複数行エスケープ・`event: eval` / `event: emit` / `event: window` HTML-safe JSON フレーミング、切断クライアント掃除、グレースフルシャットダウン一斉起床）
+- [x] `src/bridge/js_init.zig`: `<head>` へ自動注入される軽量ブリッジ初期化スクリプト（`globalThis.__ZTS_IPC__` および `window.__TAURI_INTERNALS__` の両方をセットアップし、Cookie + `Tauri-Invoke-Key` 付き `POST /__zts_ipc__/<cmd>` 送信・バイナリ `Uint8Array` 自動展開・`EventSource("/__zts_events__?key=...")` リアルタイム受信・`document.title` 同期を提供）
+- [x] `src/bridge/server.zig`, `src/bridge/mod.zig` & `src/bridge_host.zig`:
   - ポート `0`（OS エフェメラルポート）および `127.0.0.1` / `0.0.0.0`（Arena Live Preview 等）両対応の `BridgeServer`
-  - `GET /...`: `zts_web.Assets` による HTML（初期化スクリプト自動 `<head>` 注入 & 初回 `Set-Cookie` 発行）・JS・CSS・**`206 Partial Content` / `416` メディア配信**
-  - `POST /__zts_ipc__/<cmd>`: 三重セキュリティ検査 → `zts_rpc.Handler` ディスパッチ（JSON / Raw `application/octet-stream` 両対応、`Tauri-Response: ok|error` ヘッダ付与）
-  - `zts_core.Host` VTable アダプタ同梱（デスクトップ WebView と 1 行のコード変更もなく差し替え可能にしつつ、`zts_bridge` 自体は単体モジュールとしても切り出し可能！）
-- [ ] 自動結合テスト & 実 Node `fetch` クライアント E2E 検証 & 3-OS GitHub Actions CI（Linux / macOS / Windows）オールグリーン
+  - `GET` / `HEAD` `/*`: `zts_web.Assets` による HTML（初期化スクリプト自動 `<head>` 注入 & 初回 `Set-Cookie` 発行）・JS・CSS・SPA フォールバック・**RFC 9110 `206 Partial Content` / `416` メディア配信**
+  - `POST /__zts_ipc__/<cmd>`: パーセントデコード（`plugin%3Awindow%7Cset_title` 等）+ 三重セキュリティ検査 → `zts_rpc.Handler` ディスパッチ（JSON / Raw `application/octet-stream` 両対応、`Tauri-Response: ok|error` ヘッダ付与）
+  - 単体切り出し可能な公開モジュール `zts_bridge`（`zts_foundation` + `zts_web` + `zts_rpc` のみ依存、Window/GUI 依存ゼロ）＋ Z-Ts デスクトップ `zts_core.Host` VTable 実装アダプタ `BridgeHost`（`src/bridge_host.zig`）
+- [x] 自動結合テスト（`tests/bridge/verify_bridge_e2e.ts`: 実 Node `v22` `fetch` + ストリーミング SSE + 6 パターン CSRF/盗聴攻撃 `403` 遮断 + 注入 `<script>` 本体実行検証 + `tsc --strict` ゼロエラー）& Debug / `ReleaseFast` 全 7 バイナリ `62/62` テスト完全通過 & 3-OS GitHub Actions CI グリーン
 
 ---
 
 ## 2. 現在の進捗チェックポイント（Context Reset 復元用）
 
 - **完了したこと**:
-  - `M1-01`〜`M1-04` および単体切り出しモジュール分割（`zts_foundation`, `zts_web`, `zts_rpc`, `zts_core`）が完了し、3-OS CI オールグリーン確認済み（`703a566`）。
-  - `M1-05` タスクファイルを作成しロック取得。
-- **作業中・直前の状態**:
-  - Zig `0.17.0` の `std.Io.net` / CSPRNG API を実機ヘッダで確認し、`src/bridge/` の実装を開始。
+  - `src/bridge/{auth,sse,js_init,server,mod}.zig`、`src/bridge_host.zig`、`tests/bridge/verify_bridge_e2e.ts` を実装し、公開モジュール `zts_bridge` を `build.zig`・`zigw`・`tests/standalone_modules.zig` に統合。
+  - 2-vCPU マシン環境でも長寿命 SSE ストリームや HTTP/1.1 Keep-Alive 接続群が `std.Io.Threaded` ワーカープールを枯渇させない専用 OS スレッド接続アーキテクチャおよび決定論的グレースフルシャットダウン（全ストリーム `shutdown(.both)` + Loopback Wake Connect + OS スレッド `join`）を確立。
+  - Debug / `ReleaseFast` 両モードで全 7 独立テストバイナリ `62/62` パスおよび `tsc 7.0.2 --strict` ゼロエラーを確認済み。

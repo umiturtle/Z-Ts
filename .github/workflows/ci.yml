@@ -60,6 +60,7 @@ jobs:
           {
             chmod +x ./zigw
             python3 scripts/check-docs.py
+            npx -y -p typescript tsc --noEmit --strict --target esnext --module esnext --moduleResolution bundler tests/bridge/verify_bridge_e2e.ts
             ./zigw fmt --check src/ tests/ build.zig build.zig.zon
             xvfb-run -a ./zigw build test --summary all
           } 2>&1 | tee ci-output.log

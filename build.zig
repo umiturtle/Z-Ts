@@ -42,7 +42,21 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // Level 1c: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).
+    // Level 1c: `zts_bridge` — Standalone pure-Zig HTTP/1.1 + `206` Range + triple-CSRF RPC + SSE server.
+    // Zero OS GUI / WebView dependencies (consumable standalone by engines, streaming tools & servers).
+    const bridge_mod = b.addModule("zts_bridge", .{
+        .root_source_file = b.path("src/bridge/mod.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = false,
+        .imports = &.{
+            .{ .name = "zts_foundation", .module = foundation_mod },
+            .{ .name = "zts_web", .module = web_mod },
+            .{ .name = "zts_rpc", .module = rpc_mod },
+        },
+    });
+
+    // Level 1d: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).
     const core_mod = b.addModule("zts_core", .{
         .root_source_file = b.path("src/core/mod.zig"),
         .target = target,
@@ -54,7 +68,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // Level 2: `z_ts` — Full umbrella module re-exporting all orthogonal layers.
+    // Level 2: `z_ts` — Full umbrella module re-exporting all orthogonal layers + `BridgeHost`.
     const root_mod = b.addModule("z_ts", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -64,6 +78,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "zts_web", .module = web_mod },
             .{ .name = "zts_core", .module = core_mod },
             .{ .name = "zts_rpc", .module = rpc_mod },
+            .{ .name = "zts_bridge", .module = bridge_mod },
         },
     });
 
@@ -71,8 +86,8 @@ pub fn build(b: *std.Build) void {
     // 2. Test Targets (strictly enforces standalone extractability in CI!)
     // -------------------------------------------------------------------------
 
-    // Standalone external-consumer simulation: links ONLY `zts_foundation`, `zts_web`, `zts_rpc`
-    // WITHOUT `zts_core` or `z_ts`, guaranteeing zero accidental coupling to desktop windowing!
+    // Standalone external-consumer simulation: links ONLY `zts_foundation`, `zts_web`,
+    // `zts_rpc`, and `zts_bridge` WITHOUT `zts_core` or `z_ts`!
     const standalone_consumer_mod = b.createModule(.{
         .root_source_file = b.path("tests/standalone_modules.zig"),
         .target = target,
@@ -82,12 +97,14 @@ pub fn build(b: *std.Build) void {
             .{ .name = "zts_foundation", .module = foundation_mod },
             .{ .name = "zts_web", .module = web_mod },
             .{ .name = "zts_rpc", .module = rpc_mod },
+            .{ .name = "zts_bridge", .module = bridge_mod },
         },
     });
 
     const foundation_tests = b.addTest(.{ .root_module = foundation_mod });
     const web_tests = b.addTest(.{ .root_module = web_mod });
     const rpc_tests = b.addTest(.{ .root_module = rpc_mod });
+    const bridge_tests = b.addTest(.{ .root_module = bridge_mod });
     const core_tests = b.addTest(.{ .root_module = core_mod });
     const standalone_tests = b.addTest(.{ .root_module = standalone_consumer_mod });
     const umbrella_tests = b.addTest(.{ .root_module = root_mod });
@@ -96,6 +113,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(foundation_tests).step);
     test_step.dependOn(&b.addRunArtifact(web_tests).step);
     test_step.dependOn(&b.addRunArtifact(rpc_tests).step);
+    test_step.dependOn(&b.addRunArtifact(bridge_tests).step);
     test_step.dependOn(&b.addRunArtifact(core_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);
     test_step.dependOn(&b.addRunArtifact(umbrella_tests).step);
