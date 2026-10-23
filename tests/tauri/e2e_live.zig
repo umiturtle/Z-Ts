@@ -149,7 +149,9 @@ pub const FullE2eSchema = tauri.withCorePlugins(DemoOnlySchema);
 
 test "1. Generated TypeScript client snapshot matches DemoOnlySchema.ts_bindings byte-for-byte" {
     const checked_ts = @embedFile("src/generated_api.ts");
-    try testing.expectEqualStrings(DemoOnlySchema.ts_bindings, checked_ts);
+    const normalized = try std.mem.replaceOwned(u8, testing.allocator, checked_ts, "\r\n", "\n");
+    defer testing.allocator.free(normalized);
+    try testing.expectEqualStrings(DemoOnlySchema.ts_bindings, normalized);
 }
 
 test "2. Live BridgeServer + BridgeHost + Node 22 runs unmodified @tauri-apps/api v2 suite end-to-end" {

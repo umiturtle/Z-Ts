@@ -123,18 +123,14 @@ pub const LinuxGtkBackend = struct {
         self.pending.deinitWith(alloc, cancelWebKitRequest);
         self.completions.deinit();
 
-        // 2. Destroy any still-open GTK windows / child webviews.
-        var win_it = self.windows.iterator();
-        while (win_it.next()) |slot| {
-            const w = slot.value_ptr;
-            if (!w.destroyed_by_signal) {
-                if (w.toplevel) |top| {
-                    c.gtk_widget_destroy(top);
-                } else {
-                    c.gtk_widget_destroy(@ptrCast(w.webview));
-                }
-            }
-            c.g_object_unref(w.ucm);
+        // 2. Detach callbacks and close all still-open GTK windows via `closeWindow` so
+        // synchronous GObject `"destroy"` signals cannot double-unref `ucm` or mutate an active iterator.
+        self.close_handler = null;
+        self.message_handler = null;
+        while (true) {
+            var win_it = self.windows.iterator();
+            const first = win_it.next() orelse break;
+            self.closeWindow(first.handle) catch break;
         }
         self.windows.deinit(alloc);
 

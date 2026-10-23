@@ -214,19 +214,32 @@ export async function runSuite(opts: SuiteOptions): Promise<SuiteSummary> {
       bar.appendChild(closeBtn);
       document.body.appendChild(bar);
 
-      // Clicking `<button>` inside drag region MUST NOT trigger window drag!
-      closeBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, buttons: 1, detail: 1 }));
+      // 9a. Clicking `<button>` inside drag region MUST NOT trigger window drag!
+      closeBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, buttons: 1, detail: 1 }));
       await new Promise((r) => setTimeout(r, 30));
-      const dragsAfterBtn = await api.dragCount();
-      check(dragsAfterBtn === 0, `<button> inside drag region must NOT start drag (got ${dragsAfterBtn})`);
+      check((await api.dragCount()) === 0, "<button> inside drag region must NOT start drag");
 
-      // Single-clicking `<span>` inside drag region MUST invoke `plugin:window|start_dragging`!
-      caption.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, buttons: 1, detail: 1 }));
-      const deadlineDrag = Date.now() + 2000;
-      while ((await api.dragCount()) < 1 && Date.now() < deadlineDrag) {
+      // 9b. Per upstream Tauri v2 `drag.js`, `data-tauri-drag-region=""` only drags direct target (`el === path[0]`), NOT child `<span>`!
+      caption.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, buttons: 1, detail: 1 }));
+      await new Promise((r) => setTimeout(r, 30));
+      check((await api.dragCount()) === 0, 'Child <span> under data-tauri-drag-region="" must NOT start drag');
+
+      // 9c. Direct click on `bar` (`el === path[0]`) MUST invoke `plugin:window|start_dragging`!
+      bar.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, buttons: 1, detail: 1 }));
+      const deadlineDirect = Date.now() + 2000;
+      while ((await api.dragCount()) < 1 && Date.now() < deadlineDirect) {
         await new Promise((r) => setTimeout(r, 15));
       }
-      dragTriggered = (await api.dragCount()) === 1;
+      check((await api.dragCount()) === 1, 'Direct click on [data-tauri-drag-region=""] must trigger start_dragging');
+
+      // 9d. Switching to `data-tauri-drag-region="deep"` MUST also drag non-clickable child `<span>`!
+      bar.setAttribute("data-tauri-drag-region", "deep");
+      caption.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, buttons: 1, detail: 1 }));
+      const deadlineDeep = Date.now() + 2000;
+      while ((await api.dragCount()) < 2 && Date.now() < deadlineDeep) {
+        await new Promise((r) => setTimeout(r, 15));
+      }
+      dragTriggered = (await api.dragCount()) === 2;
       check(dragTriggered, "Single-click on [data-tauri-drag-region] must trigger start_dragging");
 
       // Double-clicking `<span>` inside drag region MUST invoke `plugin:window|internal_toggle_maximize`!
