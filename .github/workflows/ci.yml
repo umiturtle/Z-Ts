@@ -41,10 +41,30 @@ jobs:
             linux-zig-0.17.0-ts7-
             linux-zig-0.17.0-
 
+      - name: Cache APT packages
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.apt-cache
+          key: ubuntu-24.04-webkit2gtk-apt-v1
+
       - name: Install GTK3, WebKit2GTK 4.1 & Xvfb
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
+          sudo rm -f /var/lib/man-db/auto-update
+          mkdir -p /home/runner/.apt-cache/partial
+          sudo apt-get \
+            -o Acquire::ForceIPv4=true \
+            -o Acquire::http::Timeout=15 \
+            -o Acquire::Retries=3 \
+            -o Dir::Cache::Archives=/home/runner/.apt-cache \
+            update -qq
+          sudo apt-get \
+            -o Acquire::ForceIPv4=true \
+            -o Acquire::http::Timeout=15 \
+            -o Acquire::Retries=3 \
+            -o Dir::Cache::Archives=/home/runner/.apt-cache \
+            install -y --no-install-recommends \
             pkg-config \
             libgtk-3-dev \
             libwebkit2gtk-4.1-dev \
