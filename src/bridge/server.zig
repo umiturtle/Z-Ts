@@ -136,14 +136,17 @@ pub const BridgeServer = struct {
             }
 
             // 2. Wake blocking `accept()` reliably across Linux, macOS, AND Windows Winsock2
-            //    via a fast loopback poke before closing the listener socket.
+            //    via a fast loopback poke and join `accept_thread` BEFORE closing the listener
+            //    handle (preventing Windows AFD `NTSTATUS=0xc0000008 INVALID_HANDLE` noise).
             const wake_addr: Io.net.IpAddress = .{ .ip4 = .loopback(self.bound_port) };
             if (wake_addr.connect(io, .{ .mode = .stream })) |wake_stream| {
                 wake_stream.close(io);
-            } else |_| {}
-
-            self.net_server.socket.close(io);
-            self.accept_thread.join();
+                self.accept_thread.join();
+                self.net_server.socket.close(io);
+            } else |_| {
+                self.net_server.socket.close(io);
+                self.accept_thread.join();
+            }
         }
 
         self.active_conns.deinit(self.allocator);

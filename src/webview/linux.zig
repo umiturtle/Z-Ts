@@ -436,8 +436,10 @@ pub const LinuxGtkBackend = struct {
                 const vz = scratch.dupeSentinel(u8, h.value, 0) catch continue;
                 c.soup_message_headers_append(soup_hdrs, nz.ptr, vz.ptr);
             }
+            // Verified via `objdump -d` against `libwebkit2gtk-4.1.so.0`:
+            // `webkit_uri_scheme_response_set_http_headers` is `[transfer full]` — it moves
+            // `soup_hdrs` directly without `soup_message_headers_ref` and unrefs on finalize.
             c.webkit_uri_scheme_response_set_http_headers(wk_resp, soup_hdrs);
-            c.soup_message_headers_unref(soup_hdrs);
 
             c.webkit_uri_scheme_request_finish_with_response(webkit_req, wk_resp);
             c.g_object_unref(wk_resp);

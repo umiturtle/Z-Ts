@@ -46,7 +46,7 @@
 
 9. **C 静的ライブラリ出力時の Zig 遅延解析と WebKit2GTK 4.1 統合鉄則（`M1-06` `zts_webview` で実証）**:
    - **`export fn` シンボルの強制実体化**: `b.addLibrary(.{ .linkage = .static, ... })` でサブモジュール（`c_api.zig`）内の `pub export fn` を C 側へ公開する場合、ルート `mod.zig` 側で `pub const c_api = @import("c_api.zig");` と書いただけでは遅延解析によりシンボルが出力されない。必ずルート直下に `comptime { _ = c_api; }` を置くこと。
-   - **GIO ゼロコピーストリーム解放**: `g_memory_input_stream_new_from_data` の `GDestroyNotify` は `user_data` ではなく先頭 `data` ポインタを渡すため Zig スライス解放には使えない。必ず **`g_bytes_new_with_free_func(slice.ptr, slice.len, cb, holder)` + `g_memory_input_stream_new_from_bytes`** を使用し、終了時に `g_main_context_iteration` を回して in-flight `GBytes` の解放完了を回収すること。
+   - **GIO ゼロコピーストリーム解放 & `SoupMessageHeaders` 所有権**: `g_memory_input_stream_new_from_data` の `GDestroyNotify` は `user_data` ではなく先頭 `data` ポインタを渡すため Zig スライス解放には使えない。必ず **`g_bytes_new_with_free_func(slice.ptr, slice.len, cb, holder)` + `g_memory_input_stream_new_from_bytes`** を使用し、終了時に `g_main_context_iteration` を回して in-flight `GBytes` の解放完了を回収すること。また **`webkit_uri_scheme_response_set_http_headers(resp, hdrs)` は `[transfer full]`（内部で `soup_message_headers_ref` を呼ばずポインタ所有権を直接奪う）** ため、呼び出し直後に `soup_message_headers_unref(hdrs)` を呼ぶと Use-After-Free (`SIGSEGV` at `0x2`) になる点に注意すること。
    - **Ubuntu 24.04 Xvfb / WebKit2GTK 4.1 実行設定**: `ubuntu-24.04` ランナーでは AppArmor userns 制限対策として `sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`、ソフトウェア Xvfb 描画高速化として `WEBKIT_DISABLE_DMABUF_RENDERER=1` / `WEBKIT_DISABLE_COMPOSITING_MODE=1` を併用する。
 
 
