@@ -43,11 +43,25 @@
 
 ## 3. 下流タスク（`M1-05` `zts_bridge` / `M1-06` `zts_tauri` / `M1-07` `zts_webview`）向け接続ガイド
 
+> **重要（単体切り出し境界）**: `zts_rpc` は **`zts_foundation` のみ** に依存しており、デスクトップ Window `Host` (`zts_core.Host`) や Tauri 型への直接依存を持ちません。ホスト固有コンテキストはゼロ確保の型安全 DI スロット `Ctx.withEnv(&env)` / `ctx.requireEnv(T)` で受け渡します。
+
 1. **アプリ / プラグイン側の定義と `Handler` 取得**:
    ```zig
+   const WindowPlugin = struct {
+       pub const rpc_prefix = "plugin:window|";
+
+       pub fn set_title(ctx: *zts.rpc.Ctx, args: struct {
+           window: zts.core.WindowId,
+           title: []const u8,
+       }) (zts.core.HostError || error{MissingContext})!void {
+           const call = try ctx.requireEnv(zts.core.CallContext);
+           try call.host.setWindowTitle(args.window, args.title);
+       }
+   };
+
    const Rpc = zts.rpc.Schema(.{
        .app = .{ .State = AppState, .Cmds = AppCommands },
-       .window = WindowPlugin, // `pub const rpc_prefix = "plugin:window|";`
+       .window = WindowPlugin,
    });
 
    var router = Rpc.bind(.{ .app = &app_state });
@@ -56,14 +70,9 @@
 2. **IPC トランスポート層（Tauri custom protocol / Z-Ts native bridge）からの呼び出し**:
    ```zig
    _ = worker_arena.reset(.retain_capacity);
-   var ctx: zts.rpc.Ctx = .{
-       .io = io,
-       .scratch = worker_arena.allocator(),
-       .host = host,
-       .window_id = caller_window_id,
-       .origin = caller_origin,
-       .raw_body = request_body_bytes,
-   };
-   var resp: zts.core.OutgoingResponse = handler.dispatch(response_gpa, &ctx, command_name, request_body_bytes);
+   const call_ctx: zts.core.CallContext = .{ .host = host, .window_id = caller_window_id };
+   var ctx = zts.rpc.Ctx.init(io, worker_arena.allocator()).withEnv(&call_ctx);
+   ctx.origin = caller_origin;
+   var resp = handler.dispatch(response_gpa, &ctx, command_name, request_body_bytes);
    defer resp.deinit(); // または `host.respond(request_id, resp)` へ所有権ムーブ
    ```

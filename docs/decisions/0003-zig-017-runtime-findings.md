@@ -35,4 +35,9 @@
    - **`@Struct` / `@Tuple` 組み込み**: `@Type(.{ .@"struct" = ... })` ではなく組み込み **`@Struct(.auto, null, field_names, &field_types, &field_attrs)`**（`std.builtin.Type.Struct.FieldAttributes` 配列）を使用する。
    - **`std.Io.Group.concurrent` のワーカー関数戻り値型**: ワーカー関数の戻り値は `void` または **`std.Io.Cancelable!void`**（`error{Canceled}!void`）でなければならない。
 
+7. **Zig `0.17.0` Named Module 排他所属ルール（`files must belong to only one module`）**:
+   - 同一ビルドグラフ内で複数の公開モジュール（`zts_foundation`, `zts_web`, `zts_rpc`, `zts_core`, `z_ts`）を構成する場合、**1 つの `.zig` ファイルが複数モジュールから相対パス `@import("...")` されるとコンパイルエラーになる**。
+   - 必ず下位モジュールのファイルを上位モジュールからは Named Module（例: `@import("zts_foundation")`）経由でインポートすること。これにより `Handle(.window)` や `OwnedBytes` の公称型同一性（Nominal Type Identity）も全パッケージ横断で 100% 保証される。
+
+
 

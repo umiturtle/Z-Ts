@@ -14,7 +14,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
-const core = @import("../core/mod.zig");
+const core = @import("zts_foundation");
 const codec = @import("codec.zig");
 const ctx_mod = @import("ctx.zig");
 const naming = @import("naming.zig");
@@ -479,26 +479,33 @@ test "Schema & bind compose stateful + Host-driven plugins with 0-allocation err
         }
     };
 
-    const WindowPlugin = struct {
-        pub const rpc_prefix = "plugin:window|";
+    const TargetId = core.Handle(.target);
+    const HostEnv = struct {
+        pool: core.HandlePool([]const u8, .target) = .empty,
+    };
 
-        pub fn set_title(ctx: *Ctx, args: struct {
-            window: core.WindowId,
-            title: []const u8,
-        }) core.HostError!void {
-            try ctx.host.setWindowTitle(args.window, args.title);
+    const EnvPlugin = struct {
+        pub const rpc_prefix = "plugin:env|";
+
+        pub fn set_label(ctx: *Ctx, args: struct {
+            target: TargetId,
+            label: []const u8,
+        }) error{ MissingContext, StaleHandle }!void {
+            const env = try ctx.requireEnv(HostEnv);
+            const slot = env.pool.getPtr(args.target) orelse return error.StaleHandle;
+            slot.* = args.label;
         }
     };
 
     const Rpc = Schema(.{
         .app = .{ .prefix = "", .State = AppState, .Cmds = AppCommands },
-        .window = WindowPlugin,
+        .env_plugin = EnvPlugin,
     });
 
     var state = AppState{};
-    var spy = core.RecordingHost.init(testing.allocator);
-    defer spy.deinit();
-    const win_id = try spy.host().createWindow(.{ .title = "Before" });
+    var host_env = HostEnv{};
+    defer host_env.pool.deinit(testing.allocator);
+    const target_id = try host_env.pool.acquire(testing.allocator, "Before");
 
     var router = Rpc.bind(.{ .app = &state }).withAuth(struct {
         fn allow(ctx: *const Ctx, cmd: []const u8) bool {
@@ -545,22 +552,17 @@ test "Schema & bind compose stateful + Host-driven plugins with 0-allocation err
         try testing.expectEqualStrings("{\"code\":\"Forbidden\"}", denied.body.slice());
     }
 
-    // 4. `plugin:window|set_title` mutates `RecordingHost` window title via `core.WindowId` with 0 heap allocs!
+    // 4. `plugin:env|set_label` mutates injected `HostEnv` via `Ctx.withEnv`/`requireEnv` with 0 heap allocs!
     {
         var req_buf: [128]u8 = undefined;
-        const req_json = try std.fmt.bufPrint(&req_buf, "{{\"window\":{d},\"title\":\"After RPC!\"}}", .{win_id.toU53()});
-        var ctx = Ctx{
-            .io = testing.io,
-            .scratch = testing.failing_allocator,
-            .host = spy.host(),
-            .window_id = win_id,
-            .origin = "tauri://localhost",
-        };
-        var ok_win = h.dispatch(testing.failing_allocator, &ctx, "plugin:window|set_title", req_json);
-        defer ok_win.deinit();
-        try testing.expectEqual(core.IpcStatus.ok, ok_win.status);
-        try testing.expectEqualStrings("null", ok_win.body.slice());
-        try testing.expectEqualStrings("After RPC!", spy.windows.get(win_id).?.title);
+        const req_json = try std.fmt.bufPrint(&req_buf, "{{\"target\":{d},\"label\":\"After RPC!\"}}", .{target_id.toU53()});
+        var ctx = Ctx.init(testing.io, testing.failing_allocator).withEnv(&host_env);
+        ctx.origin = "tauri://localhost";
+        var ok_env = h.dispatch(testing.failing_allocator, &ctx, "plugin:env|set_label", req_json);
+        defer ok_env.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, ok_env.status);
+        try testing.expectEqualStrings("null", ok_env.body.slice());
+        try testing.expectEqualStrings("After RPC!", host_env.pool.getPtr(target_id).?.*);
     }
 
     // 5. Reserved word `delete` resets state with 0 heap allocations (`void` -> static `"null"`)

@@ -1,22 +1,21 @@
-//! Execution Context (`Ctx`), Authorization Hook & Type-Erased RPC `Handler` (`src/rpc/ctx.zig`).
+//! Transport- & Domain-Independent Execution Context (`Ctx`) & RPC `Handler` (`src/rpc/ctx.zig`).
 //!
-//! Designed so `zts_rpc` has **zero dependency on OS GUI / WebView / HTTP transport crates**:
-//! - Standalone HTTP/WebSocket servers, CLI daemons, unit tests, `zts_bridge`, and `zts_webview`
-//!   all invoke commands through the exact same 2-word `Handler` fat pointer (`userdata + dispatchFn`).
+//! `zts_rpc` depends **exclusively** on `zts_foundation` (zero windowing VTables, zero WebView
+//! headers, zero HTTP server coupling), making the entire `src/rpc/` package directly reusable in
+//! standalone engines, media/streaming tools, HTTP/WebSocket servers, CLI daemons, and Z-Ts apps:
+//! - Callers inject any domain-specific runtime context (e.g. a desktop `CallContext`, a media
+//!   pipeline handle, or a session object) with zero heap allocations via `ctx.withEnv(&my_env)`,
+//!   and commands retrieve it with compile-time type-checked safety via `ctx.env(T)` / `ctx.requireEnv(T)`.
 //! - Error responses (`ErrorSet`) resolve to compile-time static string literals (`{"code":"..."}`)
 //!   wrapped in `OwnedBytes.static(...)`, guaranteeing **0 bytes of heap allocation on error paths**.
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const core = @import("../core/mod.zig");
+const core = @import("zts_foundation");
 
-const noopHostVTable = core.Host.VTable{};
-
-/// Inert default `Host` instance used when running RPC handlers outside a GUI host (e.g. CLI/HTTP/tests).
-pub const inert_host: core.Host = .{
-    .userdata = null,
-    .vtable = &noopHostVTable,
-};
+fn typeIdOf(comptime T: type) usize {
+    return @intFromPtr(@typeName(T).ptr);
+}
 
 /// Per-invocation execution context passed to RPC command functions requesting `*Ctx`.
 pub const Ctx = struct {
@@ -25,14 +24,14 @@ pub const Ctx = struct {
     /// Reusable per-request scratch allocator (e.g. resettable `ArenaAllocator`).
     /// Temporary allocations made here are automatically reclaimed after the call returns.
     scratch: Allocator,
-    /// Platform-independent window/webview host VTable (`inert_host` when headless/standalone).
-    host: core.Host = inert_host,
-    /// Calling window handle (`core.WindowId.invalid` when invoked outside a window context).
-    window_id: core.WindowId = .invalid,
-    /// Verified caller Web Origin (e.g. `"tauri://localhost"`), inspectable by `AuthorizeFn` or commands.
+    /// Optional caller origin / peer identifier (e.g. `"tauri://localhost"`, `"ws://127.0.0.1"`).
     origin: []const u8 = "",
     /// Raw unparsed request payload bytes.
     raw_body: []const u8 = "",
+    /// Optional zero-allocation type-erased pointer to host/engine-specific per-call environment.
+    env_ptr: ?*anyopaque = null,
+    /// Compile-time `@typeName(T).ptr` identity tag guarding `env(T)` against wrong-type casts.
+    env_type_id: usize = 0,
 
     /// Convenience constructor for standalone / unit-test invocations.
     pub fn init(io: std.Io, scratch: Allocator) Ctx {
@@ -40,6 +39,31 @@ pub const Ctx = struct {
             .io = io,
             .scratch = scratch,
         };
+    }
+
+    /// Attaches a strongly typed pointer `*T` to this `Ctx` with zero allocations.
+    pub fn withEnv(self: Ctx, ptr: anytype) Ctx {
+        const PtrT = @TypeOf(ptr);
+        const info = @typeInfo(PtrT);
+        if (info != .pointer or info.pointer.size != .one) {
+            @compileError("zts_rpc.Ctx.withEnv expects a single-item pointer `*T` or `*const T`.");
+        }
+        var copy = self;
+        copy.env_ptr = @ptrCast(@constCast(ptr));
+        copy.env_type_id = typeIdOf(info.pointer.child);
+        return copy;
+    }
+
+    /// Returns `*T` if an environment of exact type `T` was attached via `withEnv`, else `null`.
+    pub fn env(self: *const Ctx, comptime T: type) ?*T {
+        const raw = self.env_ptr orelse return null;
+        if (self.env_type_id != typeIdOf(T)) return null;
+        return @ptrCast(@alignCast(raw));
+    }
+
+    /// Returns `*T` or `error.MissingContext` (which serializes with 0 heap allocations as `{"code":"MissingContext"}`).
+    pub fn requireEnv(self: *const Ctx, comptime T: type) error{MissingContext}!*T {
+        return self.env(T) orelse error.MissingContext;
     }
 };
 
@@ -105,7 +129,7 @@ pub const Responses = struct {
     };
 };
 
-/// Type-erased 2-word RPC dispatcher consumed by `zts_bridge`, `zts_webview` hosts, and tests.
+/// Type-erased 2-word RPC dispatcher consumed by any transport (HTTP, WebSocket, stdio, WebView IPC).
 pub const Handler = struct {
     userdata: ?*anyopaque = null,
     dispatchFn: *const fn (

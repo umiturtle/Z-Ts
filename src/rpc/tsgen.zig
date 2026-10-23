@@ -17,7 +17,7 @@ const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
-const core = @import("../core/mod.zig");
+const core = @import("zts_foundation");
 const naming = @import("naming.zig");
 const types = @import("types.zig");
 
@@ -82,21 +82,25 @@ const preamble_ts =
     \\  return out;
     \\}
     \\
-    \\declare const window: {
-    \\  __TAURI_INTERNALS__?: {
-    \\    invoke(cmd: string, args?: unknown): Promise<unknown>;
-    \\  };
-    \\} | undefined;
+    \\type _GlobalIpcHost = {
+    \\  __ZTS_IPC__?: { invoke(cmd: string, args?: unknown): Promise<unknown> };
+    \\  __TAURI_INTERNALS__?: { invoke(cmd: string, args?: unknown): Promise<unknown> };
+    \\};
     \\
-    \\/** Default transport connecting directly to `window.__TAURI_INTERNALS__` when running in Z-Ts / Tauri. */
-    \\export function createTauriTransport(): RpcTransport {
+    \\/**
+    \\ * Default embedded IPC transport.
+    \\ * Automatically bridges `globalThis.__ZTS_IPC__` (standalone engines / WebViews) or `window.__TAURI_INTERNALS__`.
+    \\ */
+    \\export function createIpcTransport(): RpcTransport {
     \\  return {
     \\    async invoke(command: string, args: unknown): Promise<WireResponse> {
-    \\      if (typeof window === "undefined" || !window.__TAURI_INTERNALS__) {
+    \\      const g = globalThis as unknown as _GlobalIpcHost;
+    \\      const bridge = g.__ZTS_IPC__ ?? g.__TAURI_INTERNALS__;
+    \\      if (!bridge) {
     \\        return { ok: false, error: { code: "TransportUnavailable" } };
     \\      }
     \\      try {
-    \\        const data = await window.__TAURI_INTERNALS__.invoke(command, args);
+    \\        const data = await bridge.invoke(command, args);
     \\        return { ok: true, data };
     \\      } catch (err: unknown) {
     \\        if (typeof err === "object" && err !== null && "code" in err && typeof (err as { code: unknown }).code === "string") {
@@ -104,6 +108,32 @@ const preamble_ts =
     \\        }
     \\        return { ok: false, error: { code: err instanceof Error ? err.message : String(err) } };
     \\      }
+    \\    },
+    \\  };
+    \\}
+    \\
+    \\/** Alias for `createIpcTransport()` when targeting Tauri-compatible runtimes. */
+    \\export const createTauriTransport: () => RpcTransport = createIpcTransport;
+    \\
+    \\/**
+    \\ * Standard HTTP JSON-RPC transport (`POST <endpoint>` with `{ command, payload }` or custom headers).
+    \\ * Ideal for browser sources, remote control panels, dev servers, and non-WebView UIs.
+    \\ */
+    \\export function createFetchTransport(endpointUrl: string, headers?: Readonly<Record<string, string>>): RpcTransport {
+    \\  return {
+    \\    async invoke(command: string, args: unknown): Promise<WireResponse> {
+    \\      const reqInit: RequestInit = {
+    \\        method: "POST",
+    \\        headers: { "content-type": "application/json", "x-zts-command": command, ...(headers ?? {}) },
+    \\        body: JSON.stringify(args),
+    \\      };
+    \\      const res = await fetch(endpointUrl, reqInit);
+    \\      const body: unknown = await res.json();
+    \\      if (res.ok) return { ok: true, data: body };
+    \\      if (typeof body === "object" && body !== null && "code" in body && typeof (body as { code: unknown }).code === "string") {
+    \\        return { ok: false, error: { code: (body as { code: string }).code } };
+    \\      }
+    \\      return { ok: false, error: { code: `HTTP_${res.status}` } };
     \\    },
     \\  };
     \\}
@@ -650,7 +680,7 @@ fn emitClientFactoryComptime(comptime SchemaType: type) []const u8 {
         }
 
         return "// Type-Safe RPC Client Factory\n" ++
-            "export function createRpcClient(transport: RpcTransport = createTauriTransport()) {\n" ++
+            "export function createRpcClient(transport: RpcTransport = createIpcTransport()) {\n" ++
             "  const _try = {\n" ++
             try_root ++
             "  };\n" ++
@@ -774,11 +804,11 @@ test "tsgen passes real `tsc --noEmit --strict --exactOptionalPropertyTypes --er
             };
         }
 
-        // 3. Nominal Branded Handles (`WindowId` vs `FileHandle`)
+        // 3. Nominal Branded Handles (`Handle(.window)` vs `Handle(.file)`)
         pub fn inspect_handle(args: struct {
-            win: core.WindowId,
+            win: types.Handle(.window),
             file: FileHandle,
-        }) core.WindowId {
+        }) types.Handle(.window) {
             _ = args.file;
             return args.win;
         }
@@ -793,7 +823,7 @@ test "tsgen passes real `tsc --noEmit --strict --exactOptionalPropertyTypes --er
         pub const rpc_prefix = "plugin:window|";
 
         pub fn set_title(args: struct {
-            window: core.WindowId,
+            window: types.Handle(.window),
             title: []const u8,
         }) error{WindowNotFound}!void {
             if (args.title.len == 0) return error.WindowNotFound;

@@ -83,7 +83,7 @@ jobs:
           {
             chmod +x ./zigw
             python3 scripts/check-docs.py
-            ./zigw fmt --check src/ build.zig build.zig.zon
+            ./zigw fmt --check src/ tests/ build.zig build.zig.zon
             xvfb-run -a ./zigw build test --summary all
           } 2>&1 | tee -a ci-output.log
 

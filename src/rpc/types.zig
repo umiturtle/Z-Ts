@@ -12,7 +12,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
-const core = @import("../core/mod.zig");
+const core = @import("zts_foundation");
 
 /// Maximum unsigned integer exactly representable in an IEEE 754 `f64` (`Number.MAX_SAFE_INTEGER = 2^53 - 1`).
 pub const max_safe_uint: u53 = @intCast(core.MAX_JS_SAFE_INT);

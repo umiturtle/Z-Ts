@@ -17,7 +17,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
-const core = @import("../core/mod.zig");
+const core = @import("zts_foundation");
 const html_escape = core.html_escape;
 pub const naming = @import("naming.zig");
 pub const scanner = @import("scanner.zig");
@@ -1691,15 +1691,16 @@ test "Boundary #6 (53-bit integer guard & BigInt): compile-time rejection of raw
     }
 }
 
-test "Boundary #8 & #9 & #10: HTML-safe JSON escaping, Enum string literals, and unified core.WindowId Handle roundtrip" {
-    // Compile-time proof that `types.Handle(.window)` and `core.WindowId` are the EXACT same Zig type!
-    comptime std.debug.assert(types.Handle(.window) == core.WindowId);
+test "Boundary #8 & #9 & #10: HTML-safe JSON escaping, Enum string literals, and unified Handle(.window) roundtrip" {
+    const WindowHandle = core.Handle(.window);
+    // Compile-time proof that `types.Handle(.window)` and `foundation.Handle(.window)` are the EXACT same Zig type!
+    comptime std.debug.assert(types.Handle(.window) == WindowHandle);
 
     const Theme = enum { light, dark, high_contrast };
     const NonExhaustiveAction = enum(u8) { open = 1, close = 2, _ };
 
     const Payload = struct {
-        window: core.WindowId,
+        window: WindowHandle,
         theme: Theme,
         action: NonExhaustiveAction,
         signed_safe: types.SafeInt,
@@ -1726,7 +1727,7 @@ test "Boundary #8 & #9 & #10: HTML-safe JSON escaping, Enum string literals, and
     try testing.expectError(error.InvalidEnumTag, encodeAlloc(testing.allocator, @as(NonExhaustiveAction, @fromBackingInt(@intCast(99)))));
 
     // Invalid generation-0 handle & out-of-range SafeInt are rejected on decode
-    try testing.expectError(error.InvalidHandle, decode(core.WindowId, testing.failing_allocator, "0"));
+    try testing.expectError(error.InvalidHandle, decode(WindowHandle, testing.failing_allocator, "0"));
     try testing.expectError(error.Overflow, decode(types.SafeInt, testing.failing_allocator, "-9007199254740992"));
 
     const parsed = try decode(Payload, testing.allocator, html_safe_json);

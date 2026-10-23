@@ -8,9 +8,11 @@
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const handle_pool = @import("handle_pool.zig");
-const owned_bytes = @import("owned_bytes.zig");
-const geometry = @import("geometry.zig");
+const foundation = @import("zts_foundation");
+const handle_pool = foundation.handle_pool;
+const owned_bytes = foundation.owned_bytes;
+const geometry = foundation.geometry;
+const response = foundation.response;
 
 pub const Handle = handle_pool.Handle;
 pub const OwnedBytes = owned_bytes.OwnedBytes;
@@ -58,21 +60,13 @@ pub const WindowSpec = struct {
     initial_url: []const u8 = "tauri://localhost/",
 };
 
-pub const IpcStatus = enum {
-    ok,
-    err,
-};
+pub const IpcStatus = response.IpcStatus;
+pub const OutgoingResponse = response.OutgoingResponse;
 
-/// Payload returned to complete a pending IPC / custom-protocol request on the main loop.
-pub const OutgoingResponse = struct {
-    status: IpcStatus = .ok,
-    http_code: u16 = 200,
-    content_type: []const u8 = "application/json",
-    body: OwnedBytes = .empty,
-
-    pub fn deinit(self: *OutgoingResponse) void {
-        self.body.deinit();
-    }
+/// Per-call desktop window context injectable into `zts_rpc.Ctx` via `ctx.withEnv(&call_ctx)`.
+pub const CallContext = struct {
+    host: Host,
+    window_id: WindowId = .invalid,
 };
 
 pub const HostError = error{
