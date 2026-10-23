@@ -10,6 +10,12 @@
 //! real COM layout (`comptime` size assertions at the bottom prove it).
 
 const std = @import("std");
+const builtin = @import("builtin");
+
+/// `callconv(CC)` only exists for Windows targets, but this file is analyzed on every OS
+/// (so the slot-count assertions and the GUID test run in all CI jobs). `.c` is ABI-identical
+/// for these four-pointer vtables on non-Windows hosts.
+pub const CC: std.builtin.CallingConvention = if (builtin.os.tag == .windows) .winapi else .c;
 
 /// `HRESULT` (`long` on Win32).
 pub const HResult = i32;
@@ -97,11 +103,11 @@ pub const ICoreWebView2Environment = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2Environment, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2Environment) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2Environment) callconv(.winapi) u32,
-        CreateCoreWebView2Controller: *const fn (*ICoreWebView2Environment, hwnd: ?*anyopaque, handler: ?*anyopaque) callconv(.winapi) HResult,
-        CreateWebResourceResponse: *const fn (*ICoreWebView2Environment, content: ?*anyopaque, status_code: i32, reason: ?[*:0]const u16, headers: ?[*:0]const u16, response: *?*ICoreWebView2WebResourceResponse) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2Environment, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2Environment) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2Environment) callconv(CC) u32,
+        CreateCoreWebView2Controller: *const fn (*ICoreWebView2Environment, hwnd: ?*anyopaque, handler: ?*anyopaque) callconv(CC) HResult,
+        CreateWebResourceResponse: *const fn (*ICoreWebView2Environment, content: ?*anyopaque, status_code: i32, reason: ?[*:0]const u16, headers: ?[*:0]const u16, response: *?*ICoreWebView2WebResourceResponse) callconv(CC) HResult,
         get_BrowserVersionString: ?*const anyopaque,
         add_NewBrowserVersionAvailable: ?*const anyopaque,
         remove_NewBrowserVersionAvailable: ?*const anyopaque,
@@ -117,19 +123,19 @@ pub const ICoreWebView2Controller = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2Controller, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2Controller) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2Controller) callconv(.winapi) u32,
+        QueryInterface: *const fn (*ICoreWebView2Controller, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2Controller) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2Controller) callconv(CC) u32,
         get_IsVisible: ?*const anyopaque,
-        put_IsVisible: *const fn (*ICoreWebView2Controller, visible: i32) callconv(.winapi) HResult,
+        put_IsVisible: *const fn (*ICoreWebView2Controller, visible: i32) callconv(CC) HResult,
         get_Bounds: ?*const anyopaque,
-        put_Bounds: *const fn (*ICoreWebView2Controller, bounds: Rect) callconv(.winapi) HResult,
+        put_Bounds: *const fn (*ICoreWebView2Controller, bounds: Rect) callconv(CC) HResult,
         get_ZoomFactor: ?*const anyopaque,
         put_ZoomFactor: ?*const anyopaque,
         add_ZoomFactorChanged: ?*const anyopaque,
         remove_ZoomFactorChanged: ?*const anyopaque,
         SetBoundsAndZoomFactor: ?*const anyopaque,
-        MoveFocus: *const fn (*ICoreWebView2Controller, reason: i32) callconv(.winapi) HResult,
+        MoveFocus: *const fn (*ICoreWebView2Controller, reason: i32) callconv(CC) HResult,
         add_MoveFocusRequested: ?*const anyopaque,
         remove_MoveFocusRequested: ?*const anyopaque,
         add_GotFocus: ?*const anyopaque,
@@ -141,8 +147,8 @@ pub const ICoreWebView2Controller = extern struct {
         get_ParentWindow: ?*const anyopaque,
         put_ParentWindow: ?*const anyopaque,
         NotifyParentWindowPositionChanged: ?*const anyopaque,
-        Close: *const fn (*ICoreWebView2Controller) callconv(.winapi) HResult,
-        get_CoreWebView2: *const fn (*ICoreWebView2Controller, out: *?*ICoreWebView2) callconv(.winapi) HResult,
+        Close: *const fn (*ICoreWebView2Controller) callconv(CC) HResult,
+        get_CoreWebView2: *const fn (*ICoreWebView2Controller, out: *?*ICoreWebView2) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2Controller) *const VTable {
@@ -155,13 +161,13 @@ pub const ICoreWebView2 = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2) callconv(.winapi) u32,
-        get_Settings: *const fn (*ICoreWebView2, out: *?*ICoreWebView2Settings) callconv(.winapi) HResult,
-        get_Source: *const fn (*ICoreWebView2, out: *?PWStr) callconv(.winapi) HResult,
-        Navigate: *const fn (*ICoreWebView2, uri: [*:0]const u16) callconv(.winapi) HResult,
-        NavigateToString: *const fn (*ICoreWebView2, html: [*:0]const u16) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2) callconv(CC) u32,
+        get_Settings: *const fn (*ICoreWebView2, out: *?*ICoreWebView2Settings) callconv(CC) HResult,
+        get_Source: *const fn (*ICoreWebView2, out: *?PWStr) callconv(CC) HResult,
+        Navigate: *const fn (*ICoreWebView2, uri: [*:0]const u16) callconv(CC) HResult,
+        NavigateToString: *const fn (*ICoreWebView2, html: [*:0]const u16) callconv(CC) HResult,
         add_NavigationStarting: ?*const anyopaque,
         remove_NavigationStarting: ?*const anyopaque,
         add_ContentLoading: ?*const anyopaque,
@@ -182,15 +188,15 @@ pub const ICoreWebView2 = extern struct {
         remove_PermissionRequested: ?*const anyopaque,
         add_ProcessFailed: ?*const anyopaque,
         remove_ProcessFailed: ?*const anyopaque,
-        AddScriptToExecuteOnDocumentCreated: *const fn (*ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(.winapi) HResult,
+        AddScriptToExecuteOnDocumentCreated: *const fn (*ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CC) HResult,
         RemoveScriptToExecuteOnDocumentCreated: ?*const anyopaque,
-        ExecuteScript: *const fn (*ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(.winapi) HResult,
+        ExecuteScript: *const fn (*ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CC) HResult,
         CapturePreview: ?*const anyopaque,
-        Reload: *const fn (*ICoreWebView2) callconv(.winapi) HResult,
-        PostWebMessageAsJson: *const fn (*ICoreWebView2, msg: [*:0]const u16) callconv(.winapi) HResult,
-        PostWebMessageAsString: *const fn (*ICoreWebView2, msg: [*:0]const u16) callconv(.winapi) HResult,
-        add_WebMessageReceived: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(.winapi) HResult,
-        remove_WebMessageReceived: *const fn (*ICoreWebView2, token: i64) callconv(.winapi) HResult,
+        Reload: *const fn (*ICoreWebView2) callconv(CC) HResult,
+        PostWebMessageAsJson: *const fn (*ICoreWebView2, msg: [*:0]const u16) callconv(CC) HResult,
+        PostWebMessageAsString: *const fn (*ICoreWebView2, msg: [*:0]const u16) callconv(CC) HResult,
+        add_WebMessageReceived: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CC) HResult,
+        remove_WebMessageReceived: *const fn (*ICoreWebView2, token: i64) callconv(CC) HResult,
         CallDevToolsProtocolMethod: ?*const anyopaque,
         get_BrowserProcessId: ?*const anyopaque,
         get_CanGoBack: ?*const anyopaque,
@@ -198,7 +204,7 @@ pub const ICoreWebView2 = extern struct {
         GoBack: ?*const anyopaque,
         GoForward: ?*const anyopaque,
         GetDevToolsProtocolEventReceiver: ?*const anyopaque,
-        Stop: *const fn (*ICoreWebView2) callconv(.winapi) HResult,
+        Stop: *const fn (*ICoreWebView2) callconv(CC) HResult,
         add_NewWindowRequested: ?*const anyopaque,
         remove_NewWindowRequested: ?*const anyopaque,
         add_DocumentTitleChanged: ?*const anyopaque,
@@ -206,16 +212,16 @@ pub const ICoreWebView2 = extern struct {
         get_DocumentTitle: ?*const anyopaque,
         AddHostObjectToScript: ?*const anyopaque,
         RemoveHostObjectFromScript: ?*const anyopaque,
-        OpenDevToolsWindow: *const fn (*ICoreWebView2) callconv(.winapi) HResult,
+        OpenDevToolsWindow: *const fn (*ICoreWebView2) callconv(CC) HResult,
         add_ContainsFullScreenElementChanged: ?*const anyopaque,
         remove_ContainsFullScreenElementChanged: ?*const anyopaque,
         get_ContainsFullScreenElement: ?*const anyopaque,
-        add_WebResourceRequested: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(.winapi) HResult,
-        remove_WebResourceRequested: *const fn (*ICoreWebView2, token: i64) callconv(.winapi) HResult,
-        AddWebResourceRequestedFilter: *const fn (*ICoreWebView2, uri: [*:0]const u16, resource_context: i32) callconv(.winapi) HResult,
+        add_WebResourceRequested: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CC) HResult,
+        remove_WebResourceRequested: *const fn (*ICoreWebView2, token: i64) callconv(CC) HResult,
+        AddWebResourceRequestedFilter: *const fn (*ICoreWebView2, uri: [*:0]const u16, resource_context: i32) callconv(CC) HResult,
         RemoveWebResourceRequestedFilter: ?*const anyopaque,
-        add_WindowCloseRequested: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(.winapi) HResult,
-        remove_WindowCloseRequested: *const fn (*ICoreWebView2, token: i64) callconv(.winapi) HResult,
+        add_WindowCloseRequested: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CC) HResult,
+        remove_WindowCloseRequested: *const fn (*ICoreWebView2, token: i64) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2) *const VTable {
@@ -228,19 +234,19 @@ pub const ICoreWebView2Settings = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2Settings, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2Settings) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2Settings) callconv(.winapi) u32,
+        QueryInterface: *const fn (*ICoreWebView2Settings, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2Settings) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2Settings) callconv(CC) u32,
         get_IsScriptEnabled: ?*const anyopaque,
-        put_IsScriptEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(.winapi) HResult,
+        put_IsScriptEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(CC) HResult,
         get_IsWebMessageEnabled: ?*const anyopaque,
-        put_IsWebMessageEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(.winapi) HResult,
+        put_IsWebMessageEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(CC) HResult,
         get_AreDefaultScriptDialogsEnabled: ?*const anyopaque,
         put_AreDefaultScriptDialogsEnabled: ?*const anyopaque,
         get_IsStatusBarEnabled: ?*const anyopaque,
-        put_IsStatusBarEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(.winapi) HResult,
+        put_IsStatusBarEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(CC) HResult,
         get_AreDevToolsEnabled: ?*const anyopaque,
-        put_AreDevToolsEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(.winapi) HResult,
+        put_AreDevToolsEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(CC) HResult,
         get_AreDefaultContextMenusEnabled: ?*const anyopaque,
         put_AreDefaultContextMenusEnabled: ?*const anyopaque,
         get_AreHostObjectsAllowed: ?*const anyopaque,
@@ -261,16 +267,16 @@ pub const ICoreWebView2WebResourceRequest = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebResourceRequest, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2WebResourceRequest) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2WebResourceRequest) callconv(.winapi) u32,
-        get_Uri: *const fn (*ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2WebResourceRequest, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2WebResourceRequest) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2WebResourceRequest) callconv(CC) u32,
+        get_Uri: *const fn (*ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(CC) HResult,
         put_Uri: ?*const anyopaque,
-        get_Method: *const fn (*ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(.winapi) HResult,
+        get_Method: *const fn (*ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(CC) HResult,
         put_Method: ?*const anyopaque,
-        get_Content: *const fn (*ICoreWebView2WebResourceRequest, out: *?*anyopaque) callconv(.winapi) HResult,
+        get_Content: *const fn (*ICoreWebView2WebResourceRequest, out: *?*anyopaque) callconv(CC) HResult,
         put_Content: ?*const anyopaque,
-        get_Headers: *const fn (*ICoreWebView2WebResourceRequest, out: *?*ICoreWebView2HttpRequestHeaders) callconv(.winapi) HResult,
+        get_Headers: *const fn (*ICoreWebView2WebResourceRequest, out: *?*ICoreWebView2HttpRequestHeaders) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2WebResourceRequest) *const VTable {
@@ -283,16 +289,16 @@ pub const ICoreWebView2WebResourceResponse = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebResourceResponse, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2WebResourceResponse) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2WebResourceResponse) callconv(.winapi) u32,
+        QueryInterface: *const fn (*ICoreWebView2WebResourceResponse, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2WebResourceResponse) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2WebResourceResponse) callconv(CC) u32,
         get_Content: ?*const anyopaque,
-        put_Content: *const fn (*ICoreWebView2WebResourceResponse, stream: ?*anyopaque) callconv(.winapi) HResult,
+        put_Content: *const fn (*ICoreWebView2WebResourceResponse, stream: ?*anyopaque) callconv(CC) HResult,
         get_Headers: ?*const anyopaque,
         get_StatusCode: ?*const anyopaque,
-        put_StatusCode: *const fn (*ICoreWebView2WebResourceResponse, status_code: i32) callconv(.winapi) HResult,
+        put_StatusCode: *const fn (*ICoreWebView2WebResourceResponse, status_code: i32) callconv(CC) HResult,
         get_ReasonPhrase: ?*const anyopaque,
-        put_ReasonPhrase: *const fn (*ICoreWebView2WebResourceResponse, reason_phrase: [*:0]const u16) callconv(.winapi) HResult,
+        put_ReasonPhrase: *const fn (*ICoreWebView2WebResourceResponse, reason_phrase: [*:0]const u16) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2WebResourceResponse) *const VTable {
@@ -305,13 +311,13 @@ pub const ICoreWebView2WebResourceRequestedEventArgs = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2WebResourceRequestedEventArgs) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2WebResourceRequestedEventArgs) callconv(.winapi) u32,
-        get_Request: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2WebResourceRequest) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2WebResourceRequestedEventArgs) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2WebResourceRequestedEventArgs) callconv(CC) u32,
+        get_Request: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2WebResourceRequest) callconv(CC) HResult,
         get_Response: ?*const anyopaque,
-        put_Response: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, response: ?*ICoreWebView2WebResourceResponse) callconv(.winapi) HResult,
-        GetDeferral: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2Deferral) callconv(.winapi) HResult,
+        put_Response: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, response: ?*ICoreWebView2WebResourceResponse) callconv(CC) HResult,
+        GetDeferral: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2Deferral) callconv(CC) HResult,
         get_ResourceContext: ?*const anyopaque,
     };
 
@@ -325,10 +331,10 @@ pub const ICoreWebView2Deferral = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2Deferral, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2Deferral) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2Deferral) callconv(.winapi) u32,
-        Complete: *const fn (*ICoreWebView2Deferral) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2Deferral, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2Deferral) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2Deferral) callconv(CC) u32,
+        Complete: *const fn (*ICoreWebView2Deferral) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2Deferral) *const VTable {
@@ -341,15 +347,15 @@ pub const ICoreWebView2HttpRequestHeaders = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2HttpRequestHeaders, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2HttpRequestHeaders) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2HttpRequestHeaders) callconv(.winapi) u32,
+        QueryInterface: *const fn (*ICoreWebView2HttpRequestHeaders, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2HttpRequestHeaders) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2HttpRequestHeaders) callconv(CC) u32,
         GetHeader: ?*const anyopaque,
         GetHeaders: ?*const anyopaque,
         Contains: ?*const anyopaque,
         SetHeader: ?*const anyopaque,
         RemoveHeader: ?*const anyopaque,
-        GetIterator: *const fn (*ICoreWebView2HttpRequestHeaders, out: *?*ICoreWebView2HttpHeadersCollectionIterator) callconv(.winapi) HResult,
+        GetIterator: *const fn (*ICoreWebView2HttpRequestHeaders, out: *?*ICoreWebView2HttpHeadersCollectionIterator) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2HttpRequestHeaders) *const VTable {
@@ -362,12 +368,12 @@ pub const ICoreWebView2HttpHeadersCollectionIterator = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2HttpHeadersCollectionIterator) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2HttpHeadersCollectionIterator) callconv(.winapi) u32,
-        GetCurrentHeader: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, name: *?PWStr, value: *?PWStr) callconv(.winapi) HResult,
-        get_HasCurrentHeader: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, out: *i32) callconv(.winapi) HResult,
-        MoveNext: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, out: *i32) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2HttpHeadersCollectionIterator) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2HttpHeadersCollectionIterator) callconv(CC) u32,
+        GetCurrentHeader: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, name: *?PWStr, value: *?PWStr) callconv(CC) HResult,
+        get_HasCurrentHeader: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, out: *i32) callconv(CC) HResult,
+        MoveNext: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, out: *i32) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2HttpHeadersCollectionIterator) *const VTable {
@@ -380,12 +386,12 @@ pub const ICoreWebView2WebMessageReceivedEventArgs = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2WebMessageReceivedEventArgs) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2WebMessageReceivedEventArgs) callconv(.winapi) u32,
-        get_Source: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(.winapi) HResult,
-        get_WebMessageAsJson: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(.winapi) HResult,
-        TryGetWebMessageAsString: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2WebMessageReceivedEventArgs) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2WebMessageReceivedEventArgs) callconv(CC) u32,
+        get_Source: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CC) HResult,
+        get_WebMessageAsJson: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CC) HResult,
+        TryGetWebMessageAsString: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2WebMessageReceivedEventArgs) *const VTable {
@@ -398,10 +404,10 @@ pub const ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler = extern st
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) callconv(.winapi) u32,
-        Invoke: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, hresult: HResult, result: ?*ICoreWebView2Environment) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) callconv(CC) u32,
+        Invoke: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, hresult: HResult, result: ?*ICoreWebView2Environment) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) *const VTable {
@@ -414,10 +420,10 @@ pub const ICoreWebView2CreateCoreWebView2ControllerCompletedHandler = extern str
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) callconv(.winapi) u32,
-        Invoke: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, hresult: HResult, result: ?*ICoreWebView2Controller) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) callconv(CC) u32,
+        Invoke: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, hresult: HResult, result: ?*ICoreWebView2Controller) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) *const VTable {
@@ -430,10 +436,10 @@ pub const ICoreWebView2WebMessageReceivedEventHandler = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebMessageReceivedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2WebMessageReceivedEventHandler) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2WebMessageReceivedEventHandler) callconv(.winapi) u32,
-        Invoke: *const fn (*ICoreWebView2WebMessageReceivedEventHandler, sender: *ICoreWebView2, args: *ICoreWebView2WebMessageReceivedEventArgs) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2WebMessageReceivedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2WebMessageReceivedEventHandler) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2WebMessageReceivedEventHandler) callconv(CC) u32,
+        Invoke: *const fn (*ICoreWebView2WebMessageReceivedEventHandler, sender: *ICoreWebView2, args: *ICoreWebView2WebMessageReceivedEventArgs) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2WebMessageReceivedEventHandler) *const VTable {
@@ -446,10 +452,10 @@ pub const ICoreWebView2WebResourceRequestedEventHandler = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebResourceRequestedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2WebResourceRequestedEventHandler) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2WebResourceRequestedEventHandler) callconv(.winapi) u32,
-        Invoke: *const fn (*ICoreWebView2WebResourceRequestedEventHandler, sender: *ICoreWebView2, args: *ICoreWebView2WebResourceRequestedEventArgs) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2WebResourceRequestedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2WebResourceRequestedEventHandler) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2WebResourceRequestedEventHandler) callconv(CC) u32,
+        Invoke: *const fn (*ICoreWebView2WebResourceRequestedEventHandler, sender: *ICoreWebView2, args: *ICoreWebView2WebResourceRequestedEventArgs) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2WebResourceRequestedEventHandler) *const VTable {
@@ -462,10 +468,10 @@ pub const ICoreWebView2WindowCloseRequestedEventHandler = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,
-        AddRef: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler) callconv(.winapi) u32,
-        Release: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler) callconv(.winapi) u32,
-        Invoke: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler, sender: *ICoreWebView2, args: ?*anyopaque) callconv(.winapi) HResult,
+        QueryInterface: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
+        AddRef: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler) callconv(CC) u32,
+        Release: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler) callconv(CC) u32,
+        Invoke: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler, sender: *ICoreWebView2, args: ?*anyopaque) callconv(CC) HResult,
     };
 
     pub inline fn vt(self: *const ICoreWebView2WindowCloseRequestedEventHandler) *const VTable {

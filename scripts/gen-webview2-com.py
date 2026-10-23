@@ -159,6 +159,12 @@ def emit(vtables: dict[str, list[str]], guids: dict[str, str]) -> str:
     w("//! real COM layout (`comptime` size assertions at the bottom prove it).")
     w("")
     w('const std = @import("std");')
+    w('const builtin = @import("builtin");')
+    w("")
+    w("/// `callconv(CC)` only exists for Windows targets, but this file is analyzed on every OS")
+    w("/// (so the slot-count assertions and the GUID test run in all CI jobs). `.c` is ABI-identical")
+    w("/// for these four-pointer vtables on non-Windows hosts.")
+    w("pub const CC: std.builtin.CallingConvention = if (builtin.os.tag == .windows) .winapi else .c;")
     w("")
     w("/// `HRESULT` (`long` on Win32).")
     w("pub const HResult = i32;")
@@ -214,7 +220,7 @@ def emit(vtables: dict[str, list[str]], guids: dict[str, str]) -> str:
     w("    return (hexDigit(s[0]) << 4) | hexDigit(s[1]);")
     w("}")
     w("")
-    w("fn hexDigit(c: u8) u8 {")
+    w("fn hexDigit(comptime c: u8) u8 {")
     w("    return switch (c) {")
     w("        '0'...'9' => c - '0',")
     w("        'a'...'f' => c - 'a' + 10,")
@@ -225,7 +231,7 @@ def emit(vtables: dict[str, list[str]], guids: dict[str, str]) -> str:
     w("")
     w("fn parseU16(comptime s: []const u8) u16 {")
     w("    var out: u16 = 0;")
-    w("    for (s) |c| {")
+    w("    inline for (s) |c| {")
     w("        if (c == '-') continue;")
     w("        out = out * 16 + hexDigit(c);")
     w("    }")
@@ -234,7 +240,7 @@ def emit(vtables: dict[str, list[str]], guids: dict[str, str]) -> str:
     w("")
     w("fn parseU32(comptime s: []const u8) u32 {")
     w("    var out: u32 = 0;")
-    w("    for (s) |c| {")
+    w("    inline for (s) |c| {")
     w("        if (c == '-') continue;")
     w("        out = out * 16 + hexDigit(c);")
     w("    }")
@@ -256,14 +262,14 @@ def emit(vtables: dict[str, list[str]], guids: dict[str, str]) -> str:
         w("    pub const VTable = extern struct {")
         for idx, m in enumerate(methods):
             if idx == 0:
-                w(f"        QueryInterface: *const fn (*{name}, *const Guid, out: ?*?*anyopaque) callconv(.winapi) HResult,")
+                w(f"        QueryInterface: *const fn (*{name}, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,")
             elif idx == 1:
-                w(f"        AddRef: *const fn (*{name}) callconv(.winapi) u32,")
+                w(f"        AddRef: *const fn (*{name}) callconv(CC) u32,")
             elif idx == 2:
-                w(f"        Release: *const fn (*{name}) callconv(.winapi) u32,")
+                w(f"        Release: *const fn (*{name}) callconv(CC) u32,")
             elif m in typed:
                 params, ret = typed[m]
-                w(f"        {m}: *const fn (*{name}{', ' if params else ''}{params}) callconv(.winapi) {ret},")
+                w(f"        {m}: *const fn (*{name}{', ' if params else ''}{params}) callconv(CC) {ret},")
             else:
                 w(f"        {m}: ?*const anyopaque,")
         w("    };")
