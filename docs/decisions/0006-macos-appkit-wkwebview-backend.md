@@ -78,8 +78,18 @@ pub fn cssToCocoaY(screen_top: f64, css_y: f64, window_height: f64) f64 {
 
 ```
 Access-Control-Allow-Origin: *
-Access-Control-Expose-Headers: Tauri-Response,Tauri-Callback,Tauri-Error,Content-Type,...
+Access-Control-Expose-Headers: Tauri-Response,Tauri-Callback,Tauri-Error,Content-Type,...,
+                              Access-Control-Allow-Origin,Access-Control-Allow-Methods,...
 ```
+
+`Access-Control-Allow-Origin` 自体も `Expose-Headers` に列挙している。WebKit は「safelist 外の
+レスポンスヘッダ」を `fetch()` から隠すため、これが無いと JS 側から CORS 状態を観測できない
+（初回 CI で実際に踏んだ。§4 参照）。
+
+`OPTIONS` プリフライトは `ZtsAnswerPreflight()` がシム内で 204 応答し、**Zig 側へは一切渡さない**
+（`zts_tauri` のハンドラは実 VERB のみを実装しているため）。実測（macOS 26 / WebKit）では
+カスタムスキーム間 `fetch` にプリフライトは飛んでこなかったが、応答側の CORS ヘッダは必須だった。
+防御として実装を残し、処理件数を CI マーカー（`preflights=N`）で可視化している。
 
 （GTK 版では `webkit_security_manager_register_uri_scheme_as_cors_enabled` が同じ役割を担う。）
 
@@ -104,6 +114,13 @@ Access-Control-Expose-Headers: Tauri-Response,Tauri-Callback,Tauri-Error,Content
 ---
 
 ## 4. 結果とトレードオフ
+
+**実測結果（Run `#39932834622`、3/3 OS GREEN）**
+
+```
+OK macos-wk checks=10 binary=98304 sum=42 screen=1024x674 preflights=0
+Build Summary: 41/41 steps succeeded; 96/96 tests passed   (macOS arm64)
+```
 
 **得られたもの**
 - macOS 実機で `DesktopRuntime` / `zts_tauri` / `examples/counter` がゼロ変更で動作。

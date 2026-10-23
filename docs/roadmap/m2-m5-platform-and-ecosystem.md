@@ -37,6 +37,11 @@
   - `NSApplication` / `NSWindow`（**CSS 左上原点 ⇔ Cocoa 左下原点の Y 軸自動変換**、透過タイトルバー、`performWindowDragWithEvent`）+ `step(.blocking / .poll)`。
   - `WKURLSchemeHandler` による `ipc://` / `asset://` / `tauri://` 非同期応答（`stopURLSchemeTask` 競合クラッシュを `PendingRequest` 世代チェックで 100% 防止）。
 - **完了条件 (DoD)**: GitHub Actions `ci-macos`（Apple Silicon `arm64`）上で実ウィンドウ起動・IPC 往復・クリーン終了 E2E テストが通過すること。
+- **実装**: [`../decisions/0006-macos-appkit-wkwebview-backend.md`](../decisions/0006-macos-appkit-wkwebview-backend.md) /
+  [`../tasks/M3-01-macos-wkwebview.md`](../tasks/M3-01-macos-wkwebview.md)
+  （Objective-C は `src/webview/macos_shim.m` 1 ファイル・`zts_macos_*` 33 関数の Flat C ABI に集約し、
+  `@cImport` / `addTranslateC` は不採用。Y 軸変換は `src/webview/coords.zig` の純関数として全 OS で単体テスト。
+  Run `#39932834622` で 3/3 OS GREEN、macOS は `OK macos-wk checks=10 binary=98304 sum=42 screen=1024x674 preflights=0`。）
 
 ### `M3-02`：Windows ネイティブバックエンド（`Win32` + DLL 不要 Direct `WebView2`）
 - **専有スコープ**: `src/webview/{windows,webview2_com,webview2_loader}.zig`
