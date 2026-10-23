@@ -967,11 +967,17 @@ test "LinuxGtkBackend renders HTML, injects UserScript, streams bidirectional bi
     }
 
     const report = ctx.final_report orelse return error.MissingJsReport;
-    if (!std.mem.eql(u8, "{\"bootInjected\":true,\"binOk\":true,\"tauriHdr\":\"ok\",\"sum\":42}", report)) {
-        std.debug.print("\n[LinuxGtkBackend E2E] Unexpected JS report: {s}\n", .{report});
-    }
-    try testing.expectEqualStrings(
-        "{\"bootInjected\":true,\"binOk\":true,\"tauriHdr\":\"ok\",\"sum\":42}",
-        report,
-    );
+    const ParsedReport = struct {
+        bootInjected: bool,
+        binOk: bool,
+        tauriHdr: []const u8,
+        sum: i64,
+    };
+    var parsed = try std.json.parseFromSlice(ParsedReport, testing.allocator, report, .{});
+    defer parsed.deinit();
+
+    try testing.expect(parsed.value.bootInjected);
+    try testing.expect(parsed.value.binOk);
+    try testing.expectEqualStrings("ok", parsed.value.tauriHdr);
+    try testing.expectEqual(@as(i64, 42), parsed.value.sum);
 }
