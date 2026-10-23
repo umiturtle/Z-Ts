@@ -37,7 +37,7 @@ jobs:
             ~/.cache/zig
             .zig-cache
             tests/tauri/node_modules
-          key: linux-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
+          key: linux-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig', 'examples/**/*.zig', 'examples/**/*.ts', 'examples/**/*.mjs') }}
           restore-keys: |
             linux-zig-0.17.0-m107-
             linux-zig-0.17.0-ts7-
@@ -64,12 +64,21 @@ jobs:
           {
             python3 scripts/check-docs.py
             npx -y -p typescript tsc --noEmit --strict --target esnext --module esnext --moduleResolution bundler tests/bridge/verify_bridge_e2e.ts
-            ./zigw fmt --check src/ tests/ build.zig build.zig.zon
+            ./zigw fmt --check src/ tests/ examples/ build.zig build.zig.zon examples/counter/build.zig.zon
             WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
               xvfb-run -a ./zigw build test -Dgtk=true --summary all
             WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
               xvfb-run -a ./zigw build test -Dgtk=true -Doptimize=ReleaseFast --summary all
           } 2>&1 | tee ci-output.log
+
+      - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
+        run: |
+          set -o pipefail
+          {
+            cd examples/counter
+            ../../zigw build test --summary all
+            ../../zigw build --summary all
+          } 2>&1 | tee -a ci-output.log
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()
@@ -113,7 +122,7 @@ jobs:
             ~/.cache/zig
             .zig-cache
             tests/tauri/node_modules
-          key: macos-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
+          key: macos-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig', 'examples/**/*.zig', 'examples/**/*.ts', 'examples/**/*.mjs') }}
           restore-keys: |
             macos-zig-0.17.0-m107-
             macos-zig-0.17.0-ts7-
@@ -126,6 +135,15 @@ jobs:
             chmod +x ./zigw
             ./zigw build test --summary all
           } 2>&1 | tee ci-output.log
+
+      - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
+        run: |
+          set -o pipefail
+          {
+            cd examples/counter
+            ../../zigw build test --summary all
+            ../../zigw build --summary all
+          } 2>&1 | tee -a ci-output.log
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()
@@ -169,7 +187,7 @@ jobs:
             ${{ env.LOCALAPPDATA }}\zig
             .zig-cache
             tests/tauri/node_modules
-          key: windows-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
+          key: windows-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig', 'examples/**/*.zig', 'examples/**/*.ts', 'examples/**/*.mjs') }}
           restore-keys: |
             windows-zig-0.17.0-m107-
             windows-zig-0.17.0-ts7-
@@ -188,6 +206,16 @@ jobs:
             zig version
             zig build test --summary all
           } 2>&1 | tee ci-output.log
+
+      - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cd examples/counter
+            ../../zigw build test --summary all
+            ../../zigw build --summary all
+          } 2>&1 | tee -a ci-output.log
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()

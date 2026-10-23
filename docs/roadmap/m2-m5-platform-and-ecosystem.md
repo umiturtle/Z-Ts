@@ -22,6 +22,9 @@
 - **専有スコープ**: `examples/counter/`
 - **内容**:
   - デスクトップ単一バイナリ・Live Preview・静的 SSG Web 出力（`dist/`）の 3 成果物を 1 つのサンプルプロジェクトから生成できるリファレンス実装を提供する。
+- **実装**: [`../../examples/counter/README.md`](../../examples/counter/README.md)
+  （`zig build` / `zig build desktop` / `zig build live` / `zig build dist` / `zig build test`、設計は
+  [`../architecture/ssg-and-wasm.md`](../architecture/ssg-and-wasm.md) §6）。
 
 ---
 

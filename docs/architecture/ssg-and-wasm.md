@@ -164,3 +164,54 @@ pub const panic = std.debug.FullPanic(zts_wasm.host.reportPanic);  // ブラウ�
 - ブラウザ上では OS ネイティブ権限（任意パス読書き・ネイティブウィンドウ移動・画面キャプチャ等）は使えません。`WasmHost` は仮想状態を保持して `Unsupported` を返します。
 - セーブデータ等の永続化は将来 `M4-02`（ストレージ抽象）で OPFS / IndexedDB バックエンドへ接続します。
 - `build.zig` の `embedFrontendDir` は現状リポジトリ内ヘルパーです。`M5-01` で `src/build_tools/` へ抽出し、外部プロジェクトから `b.dependency("z_ts")` 経由で利用できるパッケージへ昇格させます。
+
+---
+
+## 6. ショーケース実装 `examples/counter/`（`M2-02`）
+
+4 モード同型と双方向 SSG を **1 つのサンプルプロジェクト** から実際に 3 成果物として出す
+リファレンスです。詳細は [`../../examples/counter/README.md`](../../examples/counter/README.md)。
+
+```bash
+cd examples/counter
+zig build            # ①②③ を zig-out/ へ
+zig build test       # 単体 + 実 TCP E2E + 実 WebAssembly E2E
+```
+
+| # | 成果物 | コマンド | 出力 | `RuntimeMode` / `Host` |
+|---|---|---|---|---|
+| ① | デスクトップ単一バイナリ | `zig build desktop` | `zig-out/bin/counter` | `.desktop` / `WebviewHost` |
+| ② | Live Preview（ブラウザ） | `zig build live` | `zig-out/bin/counter-live` | `.bridge` / `BridgeHost` |
+| ③ | 静的 SSG Web | `zig build dist` | `zig-out/dist/` + `counter.wasm` | `.wasm` / `WasmHost` |
+
+### 6.1 「分岐 0 行」の実現方法
+
+アプリ実装は `examples/counter/src/app.zig` の 1 ファイルのみで、`App(comptime runtime: RuntimeMode)`
+という comptime パラメータだけが異なります。`src/desktop.zig` / `src/live.zig` / `src/wasm_app.zig` は
+それぞれ `App(.desktop)` / `App(.bridge)` / `App(.wasm)` をインスタンス化して入出力を繋ぐだけです。
+
+- フロントエンド `web/main.ts` は無改造 `@tauri-apps/api` v2 の `invoke` / `listen` のみを使用。
+- 環境判定は JS 側にも Zig 側にも無く、`getState` が返す `mode` を画面に表示するだけ。
+- バックエンド → フロントエンドの `counter:changed` は `Host.evalJs` 一本で、
+  ① `WebviewHost`（`ipc://`）/ ② `BridgeHost`（SSE `eval` フレーム）/ ③ `WasmHost`（`zts_host_eval_js`）
+  のいずれでも同じ JS が実行される。
+
+### 6.2 外部パッケージとしての消費（path dependency）
+
+`examples/counter/build.zig.zon` はルートを `z_ts = .{ .path = "../.." }` として参照し、
+`build.zig` 側は `b.dependency("z_ts", .{ .target = target, .optimize = optimize })` から
+`dep.module("zts_web")` … `dep.module("z_ts")` を取得します。これにより
+「ルート `build.zig` を変更せずに standalone モジュール群を再利用できる」ことが CI で常時検証されます。
+
+`embedFrontendDir` は現状ルート `build.zig` 内の関数で依存パッケージからは呼べないため、
+サンプル側に同型実装（`dep.builder.path("src/ssg/mod.zig")` を root にしたスキャナ起動）を置いています。
+`M5-01` で `src/build_tools/` へ抽出した時点でこの重複は解消されます。
+
+### 6.3 実測値（Linux Debug / `-Dwasm-optimize=small`）
+
+| 項目 | 値 |
+|---|---|
+| `counter.wasm`（`ReleaseSmall`） | 約 184 KB |
+| `dist/` 合計 | 約 233 KB |
+| `zig build test` | 7 テスト / Live プローブ 43 チェック / SSG プローブ 28 チェック |
+| Live Preview 起動 | `counter-live --port 8788 --host 0.0.0.0` → `http://localhost:8788/` |

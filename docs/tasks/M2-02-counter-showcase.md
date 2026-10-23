@@ -1,10 +1,10 @@
 # Task M2-02: ショーケースサンプル `examples/counter/`（1 プロジェクト → 3 成果物）
 
-- **Status**: `in_progress`
+- **Status**: `review`
 - **Branch**: `arena/16ce0c2f-z-ts`
-- **Scope**: `examples/counter/`, `docs/tasks/M2-02-counter-showcase.md`, `.github/workflows/ci.yml`, `docs/architecture/ssg-and-wasm.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`
+- **Scope**: `examples/counter/`, `docs/tasks/M2-02-counter-showcase.md`, `.github/workflows/ci.yml`, `docs/architecture/ssg-and-wasm.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`, `docs/INDEX.md`
 - **Upstream Reference**: [`docs/architecture/ssg-and-wasm.md`](../architecture/ssg-and-wasm.md), [`docs/decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`](../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md), `src/app_runtime.zig`, `src/bridge/server.zig`
-- **Next Step**: `examples/counter/build.zig` が `b.dependency("z_ts")` 経由でルートモジュールを取得できることを最小構成で確認 → `src/app.zig`（共有コマンド）→ `desktop/live/wasm/ssg` の 4 エントリポイント → Node プローブ（`tests/live_probe.mjs` / `tests/ssg_probe.mjs`）実装。
+- **Next Step**: CI（3 OS）で `examples/counter` の `zig build test` + `zig build` がグリーンになったら本ファイルを `done` にし、§4 に CI 実測表を追記する。
 
 ---
 
@@ -12,34 +12,64 @@
 
 **目的**: 「1 つのサンプルプロジェクトからデスクトップ単一バイナリ・Live Preview (HTTP Bridge)・静的 SSG Web (`dist/`) の 3 成果物を生成できる」ことをコードで示すリファレンス実装を `examples/counter/` に置く。同時に、外部プロジェクトが `b.dependency("z_ts")` で本リポジトリの standalone モジュール群を **パッケージとして** 消費できることを実証する。
 
-- [ ] `examples/counter/` が独立パッケージとして `build.zig` + `build.zig.zon`（`z_ts` への path dependency）を持ち、ルート `build.zig` を汚さずにビルドできる
-- [ ] アプリコードは 1 実装のみ（`src/app.zig`）。成果物ごとの `if (target)` 分岐が **0 行**（`App(RuntimeMode)` の comptime パラメータで同一コマンド実装を共有）
-- [ ] 3 成果物:
-  - [ ] `counter`（デスクトップ単一バイナリ: `DesktopRuntime` + `embedFrontendDir` 済みフロントエンド）
-  - [ ] `counter-live`（`BridgeServer` + `BridgeHost`: `0.0.0.0:<port>` で待受、Arena Live Preview / ブラウザで動作）
-  - [ ] `counter.wasm` + `dist/`（`zts_wasm` + `zts_ssg.exportStaticSite`: サーバ不要の静的サイト）
-- [ ] フロントエンド（`web/main.ts`）は無改造の `@tauri-apps/api` v2（`invoke` / `listen`）のみを使用し、3 環境で同一バンドルが動作
-- [ ] 単体テスト（正常系・異常系・境界値・`std.testing.allocator` リーク 0）＋実プロセス E2E:
-  - [ ] `zig build test`（サンプルパッケージ側）で `live` の実 TCP RPC / CSRF 拒否 / SSE、`dist/` の実 `.wasm` 実行が自動検証される
+- [x] `examples/counter/` が独立パッケージとして `build.zig` + `build.zig.zon`（`z_ts` への path dependency）を持ち、ルート `build.zig` を汚さずにビルドできる
+- [x] アプリコードは 1 実装のみ（`src/app.zig`）。成果物ごとの `if (target)` 分岐が **0 行**（`App(RuntimeMode)` の comptime パラメータで同一コマンド実装を共有）
+- [x] 3 成果物:
+  - [x] `counter`（デスクトップ単一バイナリ: `DesktopRuntime` + `embedFrontendDir` 済みフロントエンド）
+  - [x] `counter-live`（`BridgeServer` + `BridgeHost`: `0.0.0.0:<port>` で待受、Arena Live Preview / ブラウザで動作）
+  - [x] `counter.wasm` + `dist/`（`zts_wasm` + `zts_ssg.exportStaticSite`: サーバ不要の静的サイト）
+- [x] フロントエンド（`web/main.ts`）は無改造の `@tauri-apps/api` v2（`invoke` / `listen`）のみを使用し、3 環境で同一バンドルが動作
+- [x] 単体テスト（正常系・異常系・境界値・`std.testing.allocator` リーク 0）＋実プロセス E2E:
+  - [x] `zig build test`（サンプルパッケージ側）で `live` の実 TCP RPC / CSRF 拒否 / SSE、`dist/` の実 `.wasm` 実行が自動検証される
 - [ ] 3 OS GitHub Actions で `examples/counter` ビルド & テストがグリーン
-- [ ] `examples/counter/README.md`（日本語）に 3 成果物の作り方と配信先を記載
+- [x] `examples/counter/README.md`（日本語）に 3 成果物の作り方と配信先を記載
 
 ---
 
 ## 2. 現在の進捗チェックポイント（Context Reset 復元用）
 
-<!-- サブタスク完了・設計決定・デバッグ判明のたびにここを上書き更新すること -->
 - **完了したこと**:
-  - タスクシェード作成（分散ロック宣言）
-  - 既存 `M2-01` の API（`embedFrontendDir` / `exportStaticSite` / `BridgeServer` / `Instance(Spec)`）の再調査
+  - タスクシェード作成（分散ロック宣言 `e362b8d`）
+  - `build.zig.zon` の path dependency 実証（ルート fingerprint とは独立に自動採番される）
+  - `src/app.zig`: `App(comptime RuntimeMode)` + `State` + `Commands`（`get_state` / `increment` / `decrement` / `reset` / `set_step`）+ `Spec`、単体テスト 6 ケース
+  - `src/desktop.zig`（`DesktopRuntime` + `--selftest`）/ `src/live.zig`（`BridgeServer` + `BridgeHost`, 0.0.0.0:8788）/ `src/wasm_app.zig`（`exportApp(Spec)`）/ `src/ssg_export.zig`
+  - `web/main.ts`（無改造 `@tauri-apps/api` v2 の `invoke` / `listen` のみ）+ `index.html` / `styles.css` / `tsconfig.json`
+  - `scripts/build-web.mjs`（`tsc --noEmit` strict → esbuild IIFE、`tests/tauri` の依存を `nodePaths` / `paths` で共有）
+  - `tests/live_probe.mjs`（43 チェック）/ `tests/ssg_probe.mjs`（28 チェック）/ `src/live_test.zig`（実 TCP）
+  - `examples/counter/README.md`（日本語・6 章）、`docs/architecture/ssg-and-wasm.md` §6、roadmap / INDEX 追記
+  - `.github/workflows/ci.yml`: 3 OS ジョブに `examples/counter` の `zig build test` + `zig build` を追加、`zig fmt --check` とキャッシュキーに `examples/**` を追加
 - **作業中・直前の状態**:
-  - これから `examples/counter/build.zig` の依存モジュール取得方式を検証
+  - ローカル全テストグリーン（§3）。CI 実測待ち。
 
 ---
 
-## 3. 設計判断・技術メモ・ハマりどころ
+## 3. ローカル検証結果（`Linux x86_64`, Zig 0.17.0）
 
-- **`build.zig` ヘルパーの重複を許容**: `embedFrontendDir` は現状ルート `build.zig` 内の関数で、依存パッケージからは呼べない。`M5-01` で `src/build_tools/` へ抽出するまでの暫定措置として、`examples/counter/build.zig` に同等実装を置く（`zts_ssg` モジュール自体は依存パッケージ経由で再利用）。
-- **`zts_ssg` スキャナは `dep.builder.path("src/ssg/mod.zig")`** を root にした別モジュールとして起動する。ルート `build.zig` と同じ「同一ファイル・別モジュール」パターン（1 ビルド内で 2 モジュールに同一 `.zig` を入れない、という制約はモジュール単位で満たす）。
-- **`RuntimeMode` は comptime パラメータ**: JS 側で環境判定をしない。`getState` が返す `mode` フィールドに `@tagName(runtime)` を埋め、画面に表示する。
-- **Live Preview の bind**: Arena プレビューはプロキシ経由なので `0.0.0.0` に bind し、`PORT` 環境変数を尊重する。
+```bash
+cd examples/counter
+../../zigw build test --summary all   # -> 15/15 steps succeeded; 7/7 tests passed
+../../zigw build --summary all        # -> zig-out/{bin/counter, bin/counter-live, bin/counter.wasm, dist/}
+```
+
+| 検証 | 結果 |
+|---|---|
+| `src/app.zig` 単体テスト | **7/7 pass**（境界値 `step` 0/1/100/101、`i53` オーバーフロー、未知コマンド、`counter:changed`、`Instance(Spec)` リーク 0） |
+| Live Preview 実 TCP | `OK live checks=43 count=5 mutations=7` |
+| 静的 SSG (`dist/`) 実 `.wasm` | `OK ssg checks=28 count=0 step=5 events=7 wasm=187360B` |
+| デスクトップ `--selftest` | `OK desktop mode=desktop count=2 step=1 mutations=2 html=1667B` |
+| 生成物 | `counter` 27.6MB / `counter-live` 18.5MB / `counter.wasm` 184KB (ReleaseSmall) / `dist/` 233KB |
+| Live Preview 実機確認 | `counter-live --port 8788 --host 0.0.0.0` に `Host: <port>-xxx.e2b.app` + `Origin: https://<port>-xxx.e2b.app` で `increment` → `{"count":1,...}`（Arena プロキシ経由でも `same_host` 検証が通る） |
+| ルート側デグレ無し | `./zigw quick-test` 全モジュール pass、`./zigw fmt --check src/ tests/ examples/ build.zig build.zig.zon examples/counter/build.zig.zon` OK、`python3 scripts/check-docs.py` OK (29 files) |
+
+---
+
+## 4. 設計判断・技術メモ・ハマりどころ
+
+- **`build.zig` ヘルパーの重複を許容**: `embedFrontendDir` はルート `build.zig` 内の関数で、依存パッケージからは呼べない。`M5-01` で `src/build_tools/` へ抽出するまでの暫定措置として、`examples/counter/build.zig` に同等実装を置いた（`dep.builder.path("src/ssg/mod.zig")` を root にしたスキャナを起動）。ルート `build.zig` と同じ「同一 `.zig` を別モジュールとして起動する」パターン。
+- **`RuntimeMode` は comptime パラメータ**: JS 側で UA / `location` を判定しない。`getState` が返す `mode` フィールドに `@tagName(runtime)` を埋め、画面に表示する。
+- **Zig 0.17 の `std.Build`**: `b.args`（`zig build run -- ...` の転送）と `b.pathFromRoot` は存在しない。前者は `preview` ステップを既定ポート固定にし、後者は `tests/live_probe.mjs` を `@embedFile`（モジュール化）+ `testing.tmpDir` へ書き出して解決した。
+- **`i53` は符号込み 53 ビット**（`[-2^52, 2^52-1]`）。JS の `Number.MAX_SAFE_INTEGER` 全域が必要なら `zts_rpc.types.SafeInt`。カウンタの上限は `std.math.maxInt(i53)` を使う。
+- **Bridge のイベント配送は `emit` ではなく `eval` フレーム**: `EventBus.dispatchRaw` → `Host.evalJs` → `SseHub.publishEval`。ブラウザは `es.addEventListener("eval", ...)` で `runCallback(...)` を実行する。
+- **SSE は `?key=` 必須**: `EventSource` は独自ヘッダを付けられないため `verifySseRequest` がクエリパラメータを受理する（Cookie は HttpOnly で自動送信）。
+- **デスクトップでは `__TAURI_INTERNALS__` が HTML に無い**: `inject_bootstrap_into_html = false` + `init_scripts` 注入のため、`--selftest` は `app.js` / `id="count"` の存在で検証する。
+- **SSG `_headers` は CSP を出さない**（`application/wasm` + immutable のみ）。CSP は Bridge 側のヘッダで付与する設計。
