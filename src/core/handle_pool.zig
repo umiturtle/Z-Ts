@@ -63,6 +63,10 @@ pub fn Handle(comptime Tag: @TypeOf(.enum_literal)) type {
             return h;
         }
 
+        pub inline fn fromU53Unchecked(raw: u53) Self {
+            return @bitCast(raw);
+        }
+
         pub inline fn toU64(self: Self) u64 {
             return @as(u64, self.toU53());
         }
