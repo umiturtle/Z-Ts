@@ -1,10 +1,10 @@
 # Task M2-02: ショーケースサンプル `examples/counter/`（1 プロジェクト → 3 成果物）
 
-- **Status**: `review`
+- **Status**: `done`
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `examples/counter/`, `docs/tasks/M2-02-counter-showcase.md`, `.github/workflows/ci.yml`, `docs/architecture/ssg-and-wasm.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`, `docs/INDEX.md`
 - **Upstream Reference**: [`docs/architecture/ssg-and-wasm.md`](../architecture/ssg-and-wasm.md), [`docs/decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`](../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md), `src/app_runtime.zig`, `src/bridge/server.zig`
-- **Next Step**: CI（3 OS）で `examples/counter` の `zig build test` + `zig build` がグリーンになったら本ファイルを `done` にし、§4 に CI 実測表を追記する。
+- **Next Step**: 次フェーズ（`M3-01` macOS `WKWebView` / `M3-02` Windows `WebView2` / `M4-02` Scoped FS）へ進む。`examples/counter` はコード変更なしで 3 OS ネイティブ化できる受け皿として `M3-xx` の検証対象に使う。
 
 ---
 
@@ -21,7 +21,7 @@
 - [x] フロントエンド（`web/main.ts`）は無改造の `@tauri-apps/api` v2（`invoke` / `listen`）のみを使用し、3 環境で同一バンドルが動作
 - [x] 単体テスト（正常系・異常系・境界値・`std.testing.allocator` リーク 0）＋実プロセス E2E:
   - [x] `zig build test`（サンプルパッケージ側）で `live` の実 TCP RPC / CSRF 拒否 / SSE、`dist/` の実 `.wasm` 実行が自動検証される
-- [ ] 3 OS GitHub Actions で `examples/counter` ビルド & テストがグリーン
+- [x] 3 OS GitHub Actions で `examples/counter` ビルド & テストがグリーン
 - [x] `examples/counter/README.md`（日本語）に 3 成果物の作り方と配信先を記載
 
 ---
@@ -39,7 +39,7 @@
   - `examples/counter/README.md`（日本語・6 章）、`docs/architecture/ssg-and-wasm.md` §6、roadmap / INDEX 追記
   - `.github/workflows/ci.yml`: 3 OS ジョブに `examples/counter` の `zig build test` + `zig build` を追加、`zig fmt --check` とキャッシュキーに `examples/**` を追加
 - **作業中・直前の状態**:
-  - ローカル全テストグリーン（§3）。CI 実測待ち。
+  - 完了。ローカル / 3 OS CI ともにグリーン（§3・§5）。
 
 ---
 
@@ -73,3 +73,20 @@ cd examples/counter
 - **SSE は `?key=` 必須**: `EventSource` は独自ヘッダを付けられないため `verifySseRequest` がクエリパラメータを受理する（Cookie は HttpOnly で自動送信）。
 - **デスクトップでは `__TAURI_INTERNALS__` が HTML に無い**: `inject_bootstrap_into_html = false` + `init_scripts` 注入のため、`--selftest` は `app.js` / `id="count"` の存在で検証する。
 - **SSG `_headers` は CSP を出さない**（`application/wasm` + immutable のみ）。CSP は Bridge 側のヘッダで付与する設計。
+
+---
+
+## 5. CI 検証結果（GitHub Actions Run `#39919214847` — 3/3 OS ALL GREEN）
+
+| OS / 構成 | `examples/counter` `zig build test` | `zig build`（3 成果物） | 実プロセス E2E |
+|---|---|---|---|
+| **Linux（`Ubuntu 24.04 + Xvfb + WebKit2GTK 4.1`）** | **`15/15 steps succeeded; 13/13 tests passed`** | **`14/14 steps succeeded`** | `OK live checks=43` / `OK ssg checks=28` / `OK desktop ...` |
+| **macOS（`arm64 + WKWebView`）** | **`15/15 steps succeeded; 13/13 tests passed`** | **`14/14 steps succeeded`** | 同上（同一 43 / 28 チェック） |
+| **Windows（`x86_64 + WebView2`）** | **`15/15 steps succeeded; 13/13 tests passed`** | **`14/14 steps succeeded`** | 同上（`counter-ssg pages=2 static=2 wasm=187360B`） |
+
+- 3 OS すべてで `embedFrontendDir: embedded 3 files (17717 bytes)` が決定論的に一致
+  （Windows の `D:\a\Z-Ts\Z-Ts\.zig-cache\...` 形式でも同じマニフェスト）。
+- `counter.wasm` は 3 OS で **187,360 バイト** と完全一致（`-Dwasm-optimize=small` の再現性）。
+- テスト数が 13 なのは、Zig のテストランナーが `live_test.zig` から到達可能な
+  `app.zig` の 6 テストも同一コンパイル単位で実行するため（6 + 6 + 1 = 13）。
+- 3 OS のどこでも追加インストールは発生せず、既存の `tests/tauri/node_modules` を共有。
