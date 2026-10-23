@@ -58,7 +58,7 @@ Z-Ts の下位レイヤは、デスクトップ WebView フレームワーク以
 | **`zts_web`** | `src/core/{web,assets,http_range,mime,csp}.zig` | `zts_foundation` (`link_libc = false`) | 静的/動的アセット解決、RFC 9110 `206 Partial Content` バイトレンジシーク配信、MIME 判定、CSP 生成（Window/RPC 非依存）。 |
 | **`zts_rpc`** | `src/rpc/*.zig` | `zts_foundation` のみ (`link_libc = false`) | **Window/WebView/Tauri 依存ゼロ**の汎用 `comptime` JSON/Binary RPC ルーター（`Schema`/`bind`）、ゼロ確保エラー応答、型安全環境注入 `Ctx.withEnv(&T)` / `requireEnv(T)`、トランスポート中立 `tsgen`（`createIpcTransport` / `createFetchTransport`）。 |
 | **`zts_core`** | `src/core/{mod,host}.zig` | `zts_foundation`, `zts_web` (`link_libc = false`) | デスクトップフレームワーク共通コア（プラットフォーム非依存 Window `Host` VTable・`CallContext`・`RecordingHost` + 下位再公開）。 |
-| **`zts_webview`** | `src/webview/{mod,types,pending,mock,gtk_bindings,linux,c_api}.zig` + `include/zts_webview.h` | `zts_foundation` (+ OS GUI APIs; JSON/RPC/Tauri 依存ゼロ) | C99 ABI（`libzts_webview_static.a`）でも単体組み込み可能な Custom URI Scheme 非同期ゼロコピー応答・子ウィジェット埋め込み・`step(.blocking / .poll)` 駆動型の極薄 WebView エンジン + `HeadlessMock`。 |
+| **`zts_webview`** | `src/webview/{mod,types,pending,coords,mock,gtk_bindings,linux,macos,c_api}.zig` + `src/webview/macos_shim.m` + `include/zts_webview.h` | `zts_foundation` (+ OS GUI APIs; JSON/RPC/Tauri 依存ゼロ) | C99 ABI（`libzts_webview_static.a`）でも単体組み込み可能な Custom URI Scheme 非同期ゼロコピー応答・子ウィジェット埋め込み・`step(.blocking / .poll)` 駆動型の極薄 WebView エンジン + `HeadlessMock`。ネイティブは Linux GTK3/WebKit2GTK 4.1 と macOS Cocoa/WKWebView（`zts_macos_*` Flat C ABI、唯一の Objective-C は `macos_shim.m` のみ）。 |
 | **`zts_bridge`** | `src/bridge/{mod,auth,sse,js_init,server}.zig` | `zts_foundation`, `zts_web`, `zts_rpc` (`link_libc = false`) | **Window/GUI 依存ゼロ**の組み込み HTTP/1.1 + `206` Range + 三重 CSRF 防御 RPC + リアルタイム SSE サーバー（Live Preview・Playwright E2E・外部配信ツール/エンジン制御 UI で単体利用可能。未使用時は 0B）。 |
 | **`zts_tauri`** | `src/tauri/` | `zts_core`, `zts_rpc` (`link_libc = false`) | Tauri v2 ワイヤー互換層および `comptime` 選択可能な標準プラグイン群。 |
 | **`zts_wasm`** | `src/wasm/{mod,io_stub,host,runtime,js_bootstrap}.zig` | `zts_foundation`, `zts_web`, `zts_core`, `zts_rpc`, `zts_tauri` (`link_libc = false`) | `wasm32-freestanding` 向け `WasmHost`・`WasmApp` エクスポート ABI・WebAssembly インメモリ IPC ブートストラップ生成。 |
@@ -74,7 +74,7 @@ Z-Ts の下位レイヤは、デスクトップ WebView フレームワーク以
 1. **各パッケージは独自の `src/<pkg>/mod.zig` と単体テストを持ち、互いに完全に独立して並列実装できる**：
    - Agent A: `src/core/`
    - Agent B: `src/rpc/`
-   - Agent C: `src/webview/`（さらに `linux.zig`, `macos.m`, `windows.zig` で OS ごとにも完全分離）
+   - Agent C: `src/webview/`（さらに `linux.zig`, `macos.zig` + `macos_shim.m`, `windows.zig` で OS ごとにも完全分離）
    - Agent D: `src/bridge/`
    - Agent E: `src/tauri/`（さらに `cmds/window.zig`, `cmds/dialog.zig`, `cmds/fs.zig` で完全分離）
 2. **Rust 由来のアンチパターン持ち込み禁止**:

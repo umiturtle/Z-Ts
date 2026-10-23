@@ -95,7 +95,7 @@ if [[ "${1:-}" == "quick-test" ]]; then
   shift
   cd "$SCRIPT_DIR"
   mkdir -p .zig-cache
-  printf 'pub const enable_gtk = false;\n' > .zig-cache/quick_webview_options.zig
+  printf 'pub const enable_gtk = false;\npub const enable_macos = false;\n' > .zig-cache/quick_webview_options.zig
   TAURI_DEPS=(
     -Mzts_foundation=src/core/foundation.zig
     --dep zts_foundation -Mzts_web=src/core/web.zig
@@ -117,6 +117,11 @@ if [[ "${1:-}" == "quick-test" ]]; then
     --dep zts_foundation --dep webview_options -Mzts_webview=src/webview/mod.zig
     -Mwebview_options=.zig-cache/quick_webview_options.zig
   )
+  # `zts_webview` (HeadlessMock + `coords.zig` CSS⇔Cocoa math) links no OS library when both
+  # native backends are disabled, so it stays in the sub-second `quick-test` loop (`M3-01`).
+  "$ZIG_BIN" test --dep zts_foundation --dep webview_options -Mroot=src/webview/mod.zig \
+    --dep zts_foundation -Mzts_foundation=src/core/foundation.zig \
+    -Mwebview_options=.zig-cache/quick_webview_options.zig "$@"
   "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc -Mroot=src/tauri/mod.zig "${TAURI_DEPS[@]}" "$@"
   "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc --dep zts_tauri -Mroot=src/wasm/mod.zig "${WASM_DEPS[@]}" "$@"
   "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_wasm -Mroot=src/ssg/mod.zig "${SSG_DEPS[@]}" "$@"

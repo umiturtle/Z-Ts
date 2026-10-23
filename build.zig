@@ -84,8 +84,18 @@ pub fn build(b: *std.Build) void {
         "Enable native Linux GTK3 + WebKit2GTK 4.1 backend (default: auto-detected via pkg-config)",
     ) orelse (is_linux and target.query.isNative() and detectSystemGtkWebkit(b));
 
+    // macOS native backend (`Cocoa` + `WKWebView`, `M3-01`). Auto-enabled for macOS targets;
+    // the Objective-C shim is NEVER compiled on Linux/Windows (`-Dmacos=false` keeps it out).
+    const is_macos = target.result.os.tag == .macos;
+    const enable_macos = b.option(
+        bool,
+        "macos",
+        "Enable native macOS Cocoa + WKWebView backend (default: auto-detected from the target OS)",
+    ) orelse is_macos;
+
     const webview_opts = b.addOptions();
     webview_opts.addOption(bool, "enable_gtk", is_linux and enable_gtk);
+    webview_opts.addOption(bool, "enable_macos", is_macos and enable_macos);
 
     // -------------------------------------------------------------------------
     // 1. Standalone Public Modules (independently importable via `b.dependency`)
@@ -141,11 +151,12 @@ pub fn build(b: *std.Build) void {
 
     // Level 1d: `zts_webview` — Standalone minimal native WebView (`GTK3 + WebKit2GTK 4.1`),
     // `HeadlessMock`, and flat C ABI (`include/zts_webview.h`). Zero JSON / RPC / Tauri coupling!
+    const native_macos = is_macos and enable_macos;
     const webview_mod = b.addModule("zts_webview", .{
         .root_source_file = b.path("src/webview/mod.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = is_linux and enable_gtk,
+        .link_libc = (is_linux and enable_gtk) or native_macos,
         .imports = &.{
             .{ .name = "zts_foundation", .module = foundation_mod },
             .{ .name = "webview_options", .module = webview_opts.createModule() },
@@ -156,6 +167,16 @@ pub fn build(b: *std.Build) void {
         webview_mod.linkSystemLibrary("webkit2gtk-4.1", .{});
         webview_mod.linkSystemLibrary("libsoup-3.0", .{});
         webview_mod.linkSystemLibrary("javascriptcoregtk-4.1", .{});
+    }
+    if (native_macos) {
+        // Pure C ABI Objective-C shim: no `@cImport`, no `addTranslateC`, ~2s cold link.
+        webview_mod.addCSourceFile(.{
+            .file = b.path("src/webview/macos_shim.m"),
+            .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
+        });
+        webview_mod.linkFramework("Cocoa", .{});
+        webview_mod.linkFramework("WebKit", .{});
+        webview_mod.linkFramework("Foundation", .{});
     }
 
     // Level 1e: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).
@@ -364,6 +385,13 @@ pub fn build(b: *std.Build) void {
         .root_module = webview_mod,
     });
     c_abi_mod.linkLibrary(c_abi_lib);
+    if (native_macos) {
+        // A static archive does not propagate the frameworks its objects need, so the strict C99
+        // ABI consumer declares them itself (`M3-01`).
+        c_abi_mod.linkFramework("Cocoa", .{});
+        c_abi_mod.linkFramework("WebKit", .{});
+        c_abi_mod.linkFramework("Foundation", .{});
+    }
     const c_abi_exe = b.addExecutable(.{
         .name = "verify_webview_c_abi",
         .root_module = c_abi_mod,
