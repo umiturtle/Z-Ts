@@ -7,6 +7,9 @@
 //! - `zts_rpc`: Standalone `comptime` JSON/Binary RPC router, codec & strict TypeScript generator (`tsgen`).
 //! - `zts_bridge`: Standalone pure-Zig HTTP/1.1 + `206` Range + triple-CSRF RPC + SSE live server.
 //! - `zts_webview`: Standalone minimal native WebView (`GTK3 + WebKit2GTK 4.1`) + `HeadlessMock` + C ABI.
+//! - `zts_tauri`: Tauri v2 wire protocol, `Channel(T)` streaming & standard plugin command modules.
+//! - `zts_wasm`: Isomorphic `wasm32-freestanding` runtime (`WasmHost`, `Instance`, C ABI exports).
+//! - `zts_ssg`: Bidirectional static site generation (`embedFrontendDir` + serverless `dist/` exporter).
 //! - `zts_core`: Desktop `Host` VTable + re-exports of `zts_foundation` and `zts_web`.
 
 const std = @import("std");
@@ -20,6 +23,8 @@ pub const rpc = @import("zts_rpc");
 pub const bridge = @import("zts_bridge");
 pub const webview = @import("zts_webview");
 pub const tauri = @import("zts_tauri");
+pub const wasm = @import("zts_wasm");
+pub const ssg = @import("zts_ssg");
 pub const bridge_host = @import("bridge_host.zig");
 pub const webview_host = @import("webview_host.zig");
 pub const app_runtime = @import("app_runtime.zig");
@@ -86,6 +91,9 @@ test {
     _ = rpc;
     _ = bridge;
     _ = webview;
+    _ = tauri;
+    _ = wasm;
+    _ = ssg;
     _ = bridge_host;
     _ = webview_host;
 }

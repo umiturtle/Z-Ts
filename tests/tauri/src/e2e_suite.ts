@@ -38,7 +38,7 @@ import {
 import { createIpcTransport, createRpcClient } from "./generated_api";
 
 export interface SuiteOptions {
-  readonly mode: "webkit" | "bridge";
+  readonly mode: "webkit" | "bridge" | "wasm";
   readonly assetProbeBytes?: boolean;
 }
 
@@ -250,6 +250,15 @@ export async function runSuite(opts: SuiteOptions): Promise<SuiteSummary> {
         await new Promise((r) => setTimeout(r, 15));
       }
       check((await win.isMaximized()) === !beforeMax, "Double-click on drag region must toggle maximize");
+    } else if (opts.mode === "wasm") {
+      // 9'. Serverless WebAssembly: `convertFileSrc` resolves to a relative static asset path so the
+      // same `dist/` works at domain root or any GitHub Pages subpath, served with native CDN `206`.
+      const assetUrl = convertFileSrc("audio/voice_clip.bin");
+      check(assetUrl === "./_zts/assets/audio/voice_clip.bin", `Unexpected Wasm asset URL: ${assetUrl}`);
+      const rangeResp = await fetch(assetUrl, { headers: { Range: "bytes=4-11" } });
+      check(rangeResp.status === 206, `static asset Range expected 206, got ${rangeResp.status}`);
+      check((await rangeResp.text()) === "CLIPDATA", "static asset 206 slice mismatch");
+      await emit("wasm:smoke", { ok: true });
     } else {
       // Even in non-WebKit mode, verify `emit` roundtrip via `EventBus`
       await emit("bridge:smoke", { ok: true });

@@ -84,8 +84,13 @@ pub const OwnedBytes = struct {
 
     fn releaseZigAllocator(bytes: []const u8, ctx_ptr: ?*anyopaque, ctx_meta: ?*const anyopaque) void {
         const vtable: *const Allocator.VTable = @ptrCast(@alignCast(ctx_meta.?));
+        // `Allocator.ptr` is documented as possibly `undefined` for stateless allocators
+        // (`std.heap.wasm_allocator`, `std.heap.smp_allocator`, `std.heap.page_allocator`, ...).
+        // Storing it through `?*anyopaque` can therefore legally observe `null` on some targets
+        // (`wasm32-freestanding`, ReleaseFast/Small), so it MUST NOT be force-unwrapped here:
+        // the allocator's vtable is fully self-contained and ignores `ptr` in those cases.
         const allocator: Allocator = .{
-            .ptr = ctx_ptr.?,
+            .ptr = if (ctx_ptr) |p| p else undefined,
             .vtable = vtable,
         };
         const mut_ptr: [*]u8 = @constCast(bytes.ptr);
