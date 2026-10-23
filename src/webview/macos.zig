@@ -59,6 +59,7 @@ const shim = struct {
     extern fn zts_macos_wakeup(h: ?*anyopaque) void;
     extern fn zts_macos_request_quit(h: ?*anyopaque) void;
     extern fn zts_macos_quit_requested(h: ?*anyopaque) c_int;
+    extern fn zts_macos_preflight_count(h: ?*anyopaque) u64;
     extern fn zts_macos_set_callbacks(
         h: ?*anyopaque,
         msg_userdata: ?*anyopaque,
@@ -255,6 +256,12 @@ pub const MacOsBackend = struct {
 
     pub fn quitRequested(self: *MacOsBackend) bool {
         return shim.zts_macos_quit_requested(self.handle) != 0;
+    }
+
+    /// Number of CORS preflights (`OPTIONS`) answered inside the shim instead of reaching Zig.
+    /// Exposed for the E2E report + CI marker so preflight coverage is visible in the logs.
+    pub fn preflightCount(self: *MacOsBackend) u64 {
+        return shim.zts_macos_preflight_count(self.handle);
     }
 
     // -----------------------------------------------------------------------
@@ -869,7 +876,7 @@ test "MacOsBackend renders HTML, injects UserScript, streams binary & JSON over 
 
     // CI marker: verified by `.github/workflows/ci.yml` so the native gate can never silently skip.
     std.debug.print(
-        "OK macos-wk checks=10 binary=98304 sum={d} screen={d:.0}x{d:.0}\n",
-        .{ parsed.value.sum.?, screen.width, screen.height },
+        "OK macos-wk checks=10 binary=98304 sum={d} screen={d:.0}x{d:.0} preflights={d}\n",
+        .{ parsed.value.sum.?, screen.width, screen.height, backend.preflightCount() },
     );
 }

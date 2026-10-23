@@ -71,18 +71,6 @@ jobs:
               xvfb-run -a ./zigw build test -Dgtk=true -Doptimize=ReleaseFast --summary all
           } 2>&1 | tee ci-output.log
 
-      - name: Verify the native Cocoa + WKWebView E2E actually ran (M3-01 gate)
-        run: |
-          set -euo pipefail
-          # The E2E prints `OK macos-wk checks=10 ...` only when a real NSWindow + WKWebView was
-          # created and the JS/IPC round trip completed. Absence => skipped or silently degraded.
-          if ! grep -q "OK macos-wk checks=" ci-output.log; then
-            echo "::error::macOS WKWebView E2E marker missing — the native backend was skipped or failed."
-            tail -n 200 ci-output.log
-            exit 1
-          fi
-          grep -o "OK macos-wk .*" ci-output.log | tail -n 1
-
       - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
         run: |
           set -o pipefail
@@ -147,6 +135,18 @@ jobs:
             chmod +x ./zigw
             ./zigw build test --summary all
           } 2>&1 | tee ci-output.log
+
+      - name: Verify the native Cocoa + WKWebView E2E actually ran (M3-01 gate)
+        run: |
+          set -euo pipefail
+          # The E2E prints `OK macos-wk checks=10 ...` only when a real NSWindow + WKWebView was
+          # created and the JS/IPC round trip completed. Absence => skipped or silently degraded.
+          if ! grep -q "OK macos-wk checks=" ci-output.log; then
+            echo "::error::macOS WKWebView E2E marker missing — the native backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK macos-wk .*" ci-output.log | tail -n 1
 
       - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
         run: |

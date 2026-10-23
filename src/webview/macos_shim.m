@@ -98,6 +98,7 @@ typedef void (*zts_macos_close_cb)(void *userdata, unsigned long long win);
 @property (nonatomic, assign) unsigned long long nextWindow;
 @property (atomic, assign) BOOL quit;
 @property (atomic, assign) BOOL had_windows;
+@property (atomic, assign) unsigned long long preflights;
 @property (nonatomic, assign) BOOL regular;
 @property (nonatomic, assign) void *msgUserdata;
 @property (nonatomic, assign) zts_macos_message_cb msgCb;
@@ -162,8 +163,13 @@ static void ZtsApplyCorsHeaders(NSMutableDictionary<NSString *, NSString *> *hea
         headers[@"Access-Control-Allow-Origin"] = @"*";
     }
     if (headers[@"Access-Control-Expose-Headers"] == nil) {
+        // `@tauri-apps/api` needs `Tauri-Response`; the `Access-Control-*` names are listed too so
+        // integration tests (and JS diagnostics) can observe the negotiated CORS state — WebKit
+        // hides non-safelisted response headers from `fetch()` without this.
         headers[@"Access-Control-Expose-Headers"] =
-            @"Tauri-Response,Tauri-Callback,Tauri-Error,Content-Type,Content-Length,Content-Range,Accept-Ranges";
+            @"Tauri-Response,Tauri-Callback,Tauri-Error,Content-Type,Content-Length,Content-Range,"
+            @"Accept-Ranges,Access-Control-Allow-Origin,Access-Control-Allow-Methods,"
+            @"Access-Control-Allow-Headers,Access-Control-Max-Age";
     }
 }
 
@@ -171,7 +177,9 @@ static void ZtsApplyCorsHeaders(NSMutableDictionary<NSString *, NSString *> *hea
 /// `zts_tauri` only implement real verbs, and `@tauri-apps/api` v2 issues `application/json` /
 /// binary-body requests that WebKit preflights on custom schemes.
 ///
-static void ZtsAnswerPreflight(id<WKURLSchemeTask> task, NSDictionary<NSString *, NSString *> *headers) {
+static void ZtsAnswerPreflight(ZtsBackend *b, id<WKURLSchemeTask> task,
+                               NSDictionary<NSString *, NSString *> *headers) {
+    b.preflights += 1;
     NSMutableDictionary<NSString *, NSString *> *out = [NSMutableDictionary new];
     ZtsApplyCorsHeaders(out);
     out[@"Access-Control-Allow-Methods"] = @"GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS";
@@ -297,7 +305,7 @@ static void ZtsAnswerPreflight(id<WKURLSchemeTask> task, NSDictionary<NSString *
 
     // CORS preflight is answered entirely inside the shim (see `ZtsAnswerPreflight`).
     if ([method caseInsensitiveCompare:@"OPTIONS"] == NSOrderedSame) {
-        ZtsAnswerPreflight(task, headers);
+        ZtsAnswerPreflight(b, task, headers);
         return;
     }
 
@@ -483,6 +491,11 @@ void zts_macos_request_quit(void *h) {
     if (b == nil) return;
     b.quit = YES;
     zts_macos_wakeup(h);
+}
+
+unsigned long long zts_macos_preflight_count(void *h) {
+    ZtsBackend *b = ZtsB(h);
+    return b != nil ? b.preflights : 0;
 }
 
 int zts_macos_quit_requested(void *h) {
