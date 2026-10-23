@@ -1,6 +1,6 @@
 # Task M1-04: `zts_rpc` `Schema`/`bind` ルーター合成 & `tsgen`（実 `tsc` 検証 & Live Node E2E 付き）
 
-- **Status**: `review`
+- **Status**: `done`
 - **Branch**: `arena/2a8b6e65-z-ts`
 - **Scope**: `src/rpc/{mod,ctx,schema,tsgen}.zig`, `tests/tsgen/`, `build.zig`, `.github/workflows/ci.yml`, `docs/tasks/M1-04-rpc-schema-tsgen.md`
 - **Upstream Reference**: `docs/roadmap/m1-foundation-packages.md`, `docs/architecture/00-overview.md`, `docs/architecture/web-zig-boundary.md`, `docs/decisions/0002-hybrid-architecture-proposal.md`
