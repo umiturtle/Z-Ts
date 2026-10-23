@@ -90,26 +90,7 @@ ZIG_BIN="$(find_zig || install_zig_fast)"
 
 if [[ "${1:-}" == "quick-test" ]]; then
   shift
-  exec "$ZIG_BIN" test \
-    --dep zts_foundation \
-    --dep zts_web \
-    --dep zts_core \
-    --dep zts_rpc \
-    --dep zts_bridge \
-    -Mroot="${SCRIPT_DIR}/src/root.zig" \
-    -Mzts_foundation="${SCRIPT_DIR}/src/core/foundation.zig" \
-    --dep zts_foundation \
-    -Mzts_web="${SCRIPT_DIR}/src/core/web.zig" \
-    --dep zts_foundation \
-    --dep zts_web \
-    -Mzts_core="${SCRIPT_DIR}/src/core/mod.zig" \
-    --dep zts_foundation \
-    -Mzts_rpc="${SCRIPT_DIR}/src/rpc/mod.zig" \
-    --dep zts_foundation \
-    --dep zts_web \
-    --dep zts_rpc \
-    -Mzts_bridge="${SCRIPT_DIR}/src/bridge/mod.zig" \
-    "$@"
+  exec "$ZIG_BIN" build test -j2 "$@"
 fi
 
 exec "$ZIG_BIN" "$@"

@@ -13,6 +13,7 @@ const foundation = @import("zts_foundation");
 const web = @import("zts_web");
 const rpc = @import("zts_rpc");
 const bridge = @import("zts_bridge");
+const webview = @import("zts_webview");
 
 test "Standalone modules (`zts_foundation`, `zts_web`, `zts_rpc`) operate completely independently of desktop host layers" {
     // 1. `zts_foundation`: Generational handles + slot pool + MPSC ring queue
@@ -80,4 +81,12 @@ test "Standalone modules (`zts_foundation`, `zts_web`, `zts_rpc`) operate comple
     });
     defer srv.stopAndDeinit();
     try testing.expect(srv.port() > 0);
+
+    // 5. `zts_webview`: Standalone step-driven WebView engine with ZERO JSON / RPC / Tauri coupling!
+    var wv_engine = try webview.Engine.init(testing.allocator, testing.io, .headless_mock);
+    defer wv_engine.deinit();
+    const wv_win = try wv_engine.createWindow(.{ .title = "Standalone Engine Overlay" });
+    try wv_engine.evalJs(wv_win, "window.__overlay = 1;");
+    wv_engine.requestQuit();
+    try testing.expect(!wv_engine.step(.poll));
 }

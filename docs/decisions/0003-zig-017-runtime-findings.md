@@ -44,5 +44,10 @@
    - **SSE ストリーミングの 2 段フラッシュ**: `req.respondStreaming(..., .{ .transfer_encoding = .none })` で返す `std.http.BodyWriter` は上位バッファ `bw.writer.flush()` だけでは下位ソケット Writer のバッファ（例: 8 KiB）に留まり TCP パケットが送出されない。必ず **`try bw.writer.flush(); try bw.flush();`** の両方を呼んで OS ソケットへ即時送出すること。
    - **2-vCPU 環境でのスレッドプール枯渇回避と 3-OS クリーン終了**: 長寿命の SSE ストリームや HTTP/1.1 Keep-Alive 接続を `std.Io.Threaded` の共有ワーカープール（2 コア環境では 1〜2 スレッド）に乗せるとプールが埋まって後続リクエストが詰まる。ブロッキング接続ループは軽量スタックの OS スレッド（`std.Thread.spawn`）へ分離し、停止時は「全ストリーム `shutdown(io, .both)` + `127.0.0.1:<port>` への Loopback Wake Connect + リスナー `close` + `join`」で Linux / macOS / Windows 全 OS デッドロックゼロ終了を保証すること。
 
+9. **C 静的ライブラリ出力時の Zig 遅延解析と WebKit2GTK 4.1 統合鉄則（`M1-06` `zts_webview` で実証）**:
+   - **`export fn` シンボルの強制実体化**: `b.addLibrary(.{ .linkage = .static, ... })` でサブモジュール（`c_api.zig`）内の `pub export fn` を C 側へ公開する場合、ルート `mod.zig` 側で `pub const c_api = @import("c_api.zig");` と書いただけでは遅延解析によりシンボルが出力されない。必ずルート直下に `comptime { _ = c_api; }` を置くこと。
+   - **GIO ゼロコピーストリーム解放**: `g_memory_input_stream_new_from_data` の `GDestroyNotify` は `user_data` ではなく先頭 `data` ポインタを渡すため Zig スライス解放には使えない。必ず **`g_bytes_new_with_free_func(slice.ptr, slice.len, cb, holder)` + `g_memory_input_stream_new_from_bytes`** を使用し、終了時に `g_main_context_iteration` を回して in-flight `GBytes` の解放完了を回収すること。
+   - **Ubuntu 24.04 Xvfb / WebKit2GTK 4.1 実行設定**: `ubuntu-24.04` ランナーでは AppArmor userns 制限対策として `sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`、ソフトウェア Xvfb 描画高速化として `WEBKIT_DISABLE_DMABUF_RENDERER=1` / `WEBKIT_DISABLE_COMPOSITING_MODE=1` を併用する。
+
 
 

@@ -57,12 +57,14 @@ jobs:
       - name: Lint docs, check formatting & run tests under Xvfb
         run: |
           set -o pipefail
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          chmod +x ./zigw
           {
-            chmod +x ./zigw
             python3 scripts/check-docs.py
             npx -y -p typescript tsc --noEmit --strict --target esnext --module esnext --moduleResolution bundler tests/bridge/verify_bridge_e2e.ts
             ./zigw fmt --check src/ tests/ build.zig build.zig.zon
-            xvfb-run -a ./zigw build test --summary all
+            WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
+              xvfb-run -a ./zigw build test -Dgtk=true --summary all
           } 2>&1 | tee ci-output.log
 
       - name: Publish captured output to Check Run API for Arena agents

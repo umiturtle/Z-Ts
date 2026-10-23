@@ -1,8 +1,24 @@
 const std = @import("std");
 
+fn detectSystemGtkWebkit(b: *std.Build) bool {
+    var code: u8 = 0;
+    _ = b.runAllowFail(&.{ "pkg-config", "--exists", "webkit2gtk-4.1", "gtk+-3.0" }, &code, .ignore) catch return false;
+    return code == 0;
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const is_linux = target.result.os.tag == .linux;
+    const enable_gtk = b.option(
+        bool,
+        "gtk",
+        "Enable native Linux GTK3 + WebKit2GTK 4.1 backend (default: auto-detected via pkg-config)",
+    ) orelse (is_linux and target.query.isNative() and detectSystemGtkWebkit(b));
+
+    const webview_opts = b.addOptions();
+    webview_opts.addOption(bool, "enable_gtk", is_linux and enable_gtk);
 
     // -------------------------------------------------------------------------
     // 1. Standalone Public Modules (independently importable via `b.dependency`)
@@ -56,7 +72,26 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // Level 1d: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).
+    // Level 1d: `zts_webview` — Standalone minimal native WebView (`GTK3 + WebKit2GTK 4.1`),
+    // `HeadlessMock`, and flat C ABI (`include/zts_webview.h`). Zero JSON / RPC / Tauri coupling!
+    const webview_mod = b.addModule("zts_webview", .{
+        .root_source_file = b.path("src/webview/mod.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = is_linux and enable_gtk,
+        .imports = &.{
+            .{ .name = "zts_foundation", .module = foundation_mod },
+            .{ .name = "webview_options", .module = webview_opts.createModule() },
+        },
+    });
+    if (is_linux and enable_gtk) {
+        webview_mod.linkSystemLibrary("gtk+-3.0", .{});
+        webview_mod.linkSystemLibrary("webkit2gtk-4.1", .{});
+        webview_mod.linkSystemLibrary("libsoup-3.0", .{});
+        webview_mod.linkSystemLibrary("javascriptcoregtk-4.1", .{});
+    }
+
+    // Level 1e: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).
     const core_mod = b.addModule("zts_core", .{
         .root_source_file = b.path("src/core/mod.zig"),
         .target = target,
@@ -68,7 +103,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // Level 2: `z_ts` — Full umbrella module re-exporting all orthogonal layers + `BridgeHost`.
+    // Level 2: `z_ts` — Full umbrella module re-exporting all orthogonal layers + `BridgeHost` & `WebviewHost`.
     const root_mod = b.addModule("z_ts", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -79,15 +114,16 @@ pub fn build(b: *std.Build) void {
             .{ .name = "zts_core", .module = core_mod },
             .{ .name = "zts_rpc", .module = rpc_mod },
             .{ .name = "zts_bridge", .module = bridge_mod },
+            .{ .name = "zts_webview", .module = webview_mod },
         },
     });
 
     // -------------------------------------------------------------------------
-    // 2. Test Targets (strictly enforces standalone extractability in CI!)
+    // 2. Test Targets (strictly enforces standalone extractability & C ABI in CI!)
     // -------------------------------------------------------------------------
 
-    // Standalone external-consumer simulation: links ONLY `zts_foundation`, `zts_web`,
-    // `zts_rpc`, and `zts_bridge` WITHOUT `zts_core` or `z_ts`!
+    // Standalone external-consumer simulation: links ONLY standalone foundation modules
+    // WITHOUT `zts_core` or `z_ts`!
     const standalone_consumer_mod = b.createModule(.{
         .root_source_file = b.path("tests/standalone_modules.zig"),
         .target = target,
@@ -98,23 +134,49 @@ pub fn build(b: *std.Build) void {
             .{ .name = "zts_web", .module = web_mod },
             .{ .name = "zts_rpc", .module = rpc_mod },
             .{ .name = "zts_bridge", .module = bridge_mod },
+            .{ .name = "zts_webview", .module = webview_mod },
         },
+    });
+
+    // Strict C99 ABI consumer executable verifying `include/zts_webview.h` layout & exported symbols!
+    const c_abi_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    c_abi_mod.addIncludePath(b.path("include"));
+    c_abi_mod.addCSourceFile(.{
+        .file = b.path("tests/webview/verify_c_abi.c"),
+        .flags = &.{ "-std=c99", "-Wall", "-Wextra", "-Werror" },
+    });
+    const c_abi_lib = b.addLibrary(.{
+        .name = "zts_webview_static",
+        .linkage = .static,
+        .root_module = webview_mod,
+    });
+    c_abi_mod.linkLibrary(c_abi_lib);
+    const c_abi_exe = b.addExecutable(.{
+        .name = "verify_webview_c_abi",
+        .root_module = c_abi_mod,
     });
 
     const foundation_tests = b.addTest(.{ .root_module = foundation_mod });
     const web_tests = b.addTest(.{ .root_module = web_mod });
     const rpc_tests = b.addTest(.{ .root_module = rpc_mod });
     const bridge_tests = b.addTest(.{ .root_module = bridge_mod });
+    const webview_tests = b.addTest(.{ .root_module = webview_mod });
     const core_tests = b.addTest(.{ .root_module = core_mod });
     const standalone_tests = b.addTest(.{ .root_module = standalone_consumer_mod });
     const umbrella_tests = b.addTest(.{ .root_module = root_mod });
 
-    const test_step = b.step("test", "Run isolated standalone package tests + full Z-Ts integration suite");
+    const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full Z-Ts suite");
     test_step.dependOn(&b.addRunArtifact(foundation_tests).step);
     test_step.dependOn(&b.addRunArtifact(web_tests).step);
     test_step.dependOn(&b.addRunArtifact(rpc_tests).step);
     test_step.dependOn(&b.addRunArtifact(bridge_tests).step);
+    test_step.dependOn(&b.addRunArtifact(webview_tests).step);
     test_step.dependOn(&b.addRunArtifact(core_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);
+    test_step.dependOn(&b.addRunArtifact(c_abi_exe).step);
     test_step.dependOn(&b.addRunArtifact(umbrella_tests).step);
 }

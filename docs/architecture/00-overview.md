@@ -58,12 +58,12 @@ Z-Ts の下位レイヤは、デスクトップ WebView フレームワーク以
 | **`zts_web`** | `src/core/{web,assets,http_range,mime,csp}.zig` | `zts_foundation` (`link_libc = false`) | 静的/動的アセット解決、RFC 9110 `206 Partial Content` バイトレンジシーク配信、MIME 判定、CSP 生成（Window/RPC 非依存）。 |
 | **`zts_rpc`** | `src/rpc/*.zig` | `zts_foundation` のみ (`link_libc = false`) | **Window/WebView/Tauri 依存ゼロ**の汎用 `comptime` JSON/Binary RPC ルーター（`Schema`/`bind`）、ゼロ確保エラー応答、型安全環境注入 `Ctx.withEnv(&T)` / `requireEnv(T)`、トランスポート中立 `tsgen`（`createIpcTransport` / `createFetchTransport`）。 |
 | **`zts_core`** | `src/core/{mod,host}.zig` | `zts_foundation`, `zts_web` (`link_libc = false`) | デスクトップフレームワーク共通コア（プラットフォーム非依存 Window `Host` VTable・`CallContext`・`RecordingHost` + 下位再公開）。 |
-| **`zts_webview`** | `src/webview/` + `include/zts_webview.h` | OS API のみ（Tauri/JSON 依存ゼロ） | C ABI でも単体組み込み可能な Custom URI Scheme 対応・`step(.blocking / .poll)` 駆動型の極薄 WebView ライブラリ。 |
+| **`zts_webview`** | `src/webview/{mod,types,pending,mock,gtk_bindings,linux,c_api}.zig` + `include/zts_webview.h` | `zts_foundation` (+ OS GUI APIs; JSON/RPC/Tauri 依存ゼロ) | C99 ABI（`libzts_webview_static.a`）でも単体組み込み可能な Custom URI Scheme 非同期ゼロコピー応答・子ウィジェット埋め込み・`step(.blocking / .poll)` 駆動型の極薄 WebView エンジン + `HeadlessMock`。 |
 | **`zts_bridge`** | `src/bridge/{mod,auth,sse,js_init,server}.zig` | `zts_foundation`, `zts_web`, `zts_rpc` (`link_libc = false`) | **Window/GUI 依存ゼロ**の組み込み HTTP/1.1 + `206` Range + 三重 CSRF 防御 RPC + リアルタイム SSE サーバー（Live Preview・Playwright E2E・外部配信ツール/エンジン制御 UI で単体利用可能。未使用時は 0B）。 |
 | **`zts_tauri`** | `src/tauri/` | `zts_core`, `zts_rpc` | Tauri v2 ワイヤー互換層および `comptime` 選択可能な標準プラグイン群。 |
-| **`z_ts`** | `src/{root,bridge_host}.zig` | 上記を統合再公開 | デスクトップアプリ向けオールインワン統合 SDK（`zts_core.Host` VTable を SSE へ中継する `BridgeHost` を同梱）。 |
+| **`z_ts`** | `src/{root,bridge_host,webview_host}.zig` | 上記を統合再公開 | デスクトップアプリ向けオールインワン統合 SDK（`BridgeHost` & `WebviewHost` の両 `zts_core.Host` VTable 実装を同梱）。 |
 
-> **CI 自動強制ガード (`tests/standalone_modules.zig`)**: `zig build test` は `z_ts`・`zts_core` を一切インポートしない独立コンパイルターゲットで `zts_foundation`・`zts_web`・`zts_rpc`・`zts_bridge` をビルド・実行します。下位モジュールへデスクトップ/Tauri 固有の依存を混入させると即座にコンパイルエラーとなります。
+> **CI 自動強制ガード (`tests/standalone_modules.zig` & `tests/webview/verify_c_abi.c`)**: `zig build test` は `z_ts`・`zts_core` を一切インポートしない独立コンパイルターゲットで `zts_foundation`・`zts_web`・`zts_rpc`・`zts_bridge`・`zts_webview` をビルド・実行し、さらに厳格 `-std=c99 -Wall -Wextra -Werror` の C ホストバイナリとの静的リンク実行を強制検証します。
 
 ---
 
