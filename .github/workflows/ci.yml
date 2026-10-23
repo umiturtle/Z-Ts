@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Linux CI (Docs lint + Formatting + Xvfb GTK3 / WebKit2GTK 4.1)
+  # 1. Linux CI (Docs lint + Formatting + Xvfb GTK3 / WebKit2GTK 4.1 + tsc/Node)
   # ---------------------------------------------------------------------------
   ci-linux:
     name: Linux (Ubuntu 24.04 + Xvfb + WebKit2GTK 4.1)
@@ -26,14 +26,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Zig artifacts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+
+      - name: Cache Zig & TypeScript toolchain artifacts
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/zig
             .zig-cache
-          key: linux-zig-0.17.0-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+          key: linux-zig-0.17.0-ts7-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
           restore-keys: |
+            linux-zig-0.17.0-ts7-
             linux-zig-0.17.0-
 
       - name: Install GTK3, WebKit2GTK 4.1 & Xvfb
@@ -79,7 +84,7 @@ jobs:
             }
 
   # ---------------------------------------------------------------------------
-  # 2. macOS CI (Apple Silicon — AppKit / WKWebView target verification)
+  # 2. macOS CI (Apple Silicon — AppKit / WKWebView + tsc/Node verification)
   # ---------------------------------------------------------------------------
   ci-macos:
     name: macOS (arm64 + WKWebView)
@@ -87,14 +92,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Zig artifacts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+
+      - name: Cache Zig & TypeScript toolchain artifacts
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/zig
             .zig-cache
-          key: macos-zig-0.17.0-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+          key: macos-zig-0.17.0-ts7-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
           restore-keys: |
+            macos-zig-0.17.0-ts7-
             macos-zig-0.17.0-
 
       - name: Build & test on macOS
@@ -128,7 +138,7 @@ jobs:
             }
 
   # ---------------------------------------------------------------------------
-  # 3. Windows CI (x86_64 — Win32 / WebView2 target verification)
+  # 3. Windows CI (x86_64 — Win32 / WebView2 + tsc/Node verification)
   # ---------------------------------------------------------------------------
   ci-windows:
     name: Windows (x86_64 + WebView2)
@@ -136,14 +146,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Zig artifacts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+
+      - name: Cache Zig & TypeScript toolchain artifacts
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.LOCALAPPDATA }}\zig
             .zig-cache
-          key: windows-zig-0.17.0-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
+          key: windows-zig-0.17.0-ts7-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
           restore-keys: |
+            windows-zig-0.17.0-ts7-
             windows-zig-0.17.0-
 
       - name: Setup Zig 0.17.0

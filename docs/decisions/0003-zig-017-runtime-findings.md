@@ -29,3 +29,10 @@
    - 配列初期化の繰り返しには廃止された演算子ではなく **`@splat(value)`** を使用する（例: `var seen: [N]bool = @splat(false);`）。
    - Sentinel 付きスライス（`[:0]u8` 等）の複製には **`allocator.dupeZ` ではなく `allocator.dupeSentinel(u8, slice, sentinel)`** を使用する。
 
+6. **関数・エラーセットの SoA `@typeInfo` と動的構造体生成 `@Struct`（`M1-04` で追加確認）**:
+   - **Fn**: `.@"fn"` は `fn_info.attrs.varargs`（旧 `is_generic` は存在しないため `fn_info.return_type == null` と各要素 `maybe_param_type == null` で `anytype` を検出する）および **`fn_info.param_types: []const ?type`** を使う。関数呼び出しタプル型は `std.meta.ArgsTuple(FnType)`（内部で `@Tuple` 組み込みを使用）で取得できる。
+   - **ErrorSet**: `.error_set` は `error_names: ?[]const [:0]const u8` を持つ構造体である。
+   - **`@Struct` / `@Tuple` 組み込み**: `@Type(.{ .@"struct" = ... })` ではなく組み込み **`@Struct(.auto, null, field_names, &field_types, &field_attrs)`**（`std.builtin.Type.Struct.FieldAttributes` 配列）を使用する。
+   - **`std.Io.Group.concurrent` のワーカー関数戻り値型**: ワーカー関数の戻り値は `void` または **`std.Io.Cancelable!void`**（`error{Canceled}!void`）でなければならない。
+
+
