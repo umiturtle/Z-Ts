@@ -11,7 +11,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
-const html_escape = @import("html_escape.zig");
+const foundation = @import("zts_foundation");
+const html_escape = foundation.html_escape;
 
 pub const SCRIPT_NONCE_PLACEHOLDER = "__TAURI_SCRIPT_NONCE__";
 pub const STYLE_NONCE_PLACEHOLDER = "__TAURI_STYLE_NONCE__";

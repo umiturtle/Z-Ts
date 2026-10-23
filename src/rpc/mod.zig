@@ -1,24 +1,42 @@
-//! `zts_rpc` — Type-Safe Web ⇔ Zig JSON Codec, Wire Wrapper Types & Naming Rules (`link_libc = false`).
+//! `zts_rpc` — Standalone `comptime` RPC Router, Type-Safe JSON Codec & TypeScript Generator (`link_libc = false`).
 //!
-//! Built directly atop `zts_core` (`Handle(Tag)` nominal identity + `html_escape` XSS-safe string streaming).
-//! Ready for `M1-04` (`schema.zig` / `tsgen.zig`) to plug in cleanly without touching existing files.
+//! Exports the full RPC layer (`M1-03` + `M1-04`) built cleanly atop `zts_core`:
+//! - `Schema` / `merge` & `bind`: Zero-overhead `comptime` multi-namespace router composition.
+//! - `Ctx` & `Handler`: Platform-independent per-call context & 2-word fat-pointer dispatcher.
+//! - `tsgen`: Strict TypeScript bindings & client generator (`--strict --exactOptionalPropertyTypes --erasableSyntaxOnly`).
+//! - `codec` / `types` / `naming`: 53-bit safe integer guard, zero-copy string borrowing, `BigInt`, `Bytes`, `OsPath`, `Patch`, `Handle`.
 
 pub const codec = @import("codec.zig");
+pub const ctx = @import("ctx.zig");
 pub const naming = @import("naming.zig");
 pub const scanner = @import("scanner.zig");
+pub const schema = @import("schema.zig");
+pub const tsgen = @import("tsgen.zig");
 pub const types = @import("types.zig");
 
-// Top-level ergonomic type & codec re-exports
+// Router & Context types (`M1-04`)
+pub const AuthorizeFn = ctx.AuthorizeFn;
+pub const CommandMeta = schema.CommandMeta;
+pub const Ctx = ctx.Ctx;
+pub const Handler = ctx.Handler;
+pub const NamespaceMeta = schema.NamespaceMeta;
+pub const Responses = ctx.Responses;
+pub const Schema = schema.Schema;
+pub const merge = schema.merge;
+
+// Boundary Wrapper Types (`M1-03`)
 pub const BigInt = types.BigInt;
 pub const Bytes = types.Bytes;
 pub const Handle = types.Handle;
 pub const OsPath = types.OsPath;
 pub const Patch = types.Patch;
+pub const RawJson = types.RawJson;
 pub const SafeInt = types.SafeInt;
 pub const TaggedUnion = types.TaggedUnion;
 pub const UnionConfig = types.UnionConfig;
 pub const UnionStyle = types.UnionStyle;
 
+// Codec Options & Functions (`M1-03`)
 pub const BytesFormat = codec.BytesFormat;
 pub const DecodeError = codec.DecodeError;
 pub const DecodeOptions = codec.DecodeOptions;
@@ -43,7 +61,10 @@ pub const isValidRpcType = codec.isValidRpcType;
 
 test {
     _ = codec;
+    _ = ctx;
     _ = naming;
     _ = scanner;
+    _ = schema;
+    _ = tsgen;
     _ = types;
 }

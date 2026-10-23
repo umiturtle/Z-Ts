@@ -17,7 +17,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
-const core = @import("../core/mod.zig");
+const core = @import("zts_foundation");
 const html_escape = core.html_escape;
 pub const naming = @import("naming.zig");
 pub const scanner = @import("scanner.zig");
@@ -107,7 +107,9 @@ pub fn checkRpcType(comptime T: type) ?[]const u8 {
 }
 
 fn hasCustomJsonHook(comptime T: type) bool {
-    return std.meta.hasFn(T, "jsonStringify") or std.meta.hasFn(T, "jsonParse");
+    return std.meta.hasFn(T, "jsonStringify") or
+        std.meta.hasFn(T, "jsonParse") or
+        std.meta.hasFn(T, "decodeZtsJson");
 }
 
 fn checkRpcTypeInner(comptime T: type) ?[]const u8 {
@@ -293,6 +295,12 @@ pub fn freeDecoded(comptime T: type, allocator: Allocator, value: T, input: []co
                 if (!isSliceInsideInput(value.raw, input)) allocator.free(value.raw);
                 return;
             }
+            if (comptime T == types.RawJson) {
+                if (!std.mem.eql(u8, value.raw, "null") and !isSliceInsideInput(value.raw, input)) {
+                    allocator.free(value.raw);
+                }
+                return;
+            }
             if (comptime types.isTaggedUnionWrapper(T)) {
                 freeDecoded(T.InnerUnion, allocator, value.value, input);
                 return;
@@ -416,8 +424,16 @@ fn encodeValue(writer: *std.Io.Writer, value: anytype, options: EncodeOptions) E
                 try encodeOsPath(writer, value, options.html_safe);
                 return;
             }
+            if (comptime T == types.RawJson) {
+                try writer.writeAll(if (value.raw.len == 0) "null" else value.raw);
+                return;
+            }
             if (comptime types.isTaggedUnionWrapper(T)) {
                 try encodeUnion(writer, T.InnerUnion, value.value, T.union_config, options);
+                return;
+            }
+            if (comptime std.meta.hasFn(T, "writeJson")) {
+                try value.writeJson(writer);
                 return;
             }
             if (comptime std.meta.hasFn(T, "jsonStringify")) {
@@ -759,8 +775,21 @@ fn decodeValue(
             }
             if (comptime T == types.Bytes) return decodeBytes(allocator, cursor, options);
             if (comptime T == types.OsPath) return decodeOsPath(allocator, cursor, options);
+            if (comptime T == types.RawJson) {
+                cursor.skipWhitespace();
+                const start_pos = cursor.pos;
+                try cursor.skipValue(options.max_depth);
+                const slice = cursor.input[start_pos..cursor.pos];
+                return .{ .raw = if (options.allocate == .alloc_always) try allocator.dupe(u8, slice) else slice };
+            }
             if (comptime types.isTaggedUnionWrapper(T)) {
                 return T.init(try decodeUnion(T.InnerUnion, allocator, cursor, T.union_config, options));
+            }
+            if (comptime std.meta.hasFn(T, "decodeZtsJson")) {
+                cursor.skipWhitespace();
+                const start_pos = cursor.pos;
+                try cursor.skipValue(options.max_depth);
+                return T.decodeZtsJson(allocator, cursor.input[start_pos..cursor.pos]);
             }
             if (comptime std.meta.hasFn(T, "jsonParse")) {
                 return decodeCustomJsonParse(T, allocator, cursor, options);
@@ -1691,15 +1720,16 @@ test "Boundary #6 (53-bit integer guard & BigInt): compile-time rejection of raw
     }
 }
 
-test "Boundary #8 & #9 & #10: HTML-safe JSON escaping, Enum string literals, and unified core.WindowId Handle roundtrip" {
-    // Compile-time proof that `types.Handle(.window)` and `core.WindowId` are the EXACT same Zig type!
-    comptime std.debug.assert(types.Handle(.window) == core.WindowId);
+test "Boundary #8 & #9 & #10: HTML-safe JSON escaping, Enum string literals, and unified Handle(.window) roundtrip" {
+    const WindowHandle = core.Handle(.window);
+    // Compile-time proof that `types.Handle(.window)` and `foundation.Handle(.window)` are the EXACT same Zig type!
+    comptime std.debug.assert(types.Handle(.window) == WindowHandle);
 
     const Theme = enum { light, dark, high_contrast };
     const NonExhaustiveAction = enum(u8) { open = 1, close = 2, _ };
 
     const Payload = struct {
-        window: core.WindowId,
+        window: WindowHandle,
         theme: Theme,
         action: NonExhaustiveAction,
         signed_safe: types.SafeInt,
@@ -1726,7 +1756,7 @@ test "Boundary #8 & #9 & #10: HTML-safe JSON escaping, Enum string literals, and
     try testing.expectError(error.InvalidEnumTag, encodeAlloc(testing.allocator, @as(NonExhaustiveAction, @fromBackingInt(@intCast(99)))));
 
     // Invalid generation-0 handle & out-of-range SafeInt are rejected on decode
-    try testing.expectError(error.InvalidHandle, decode(core.WindowId, testing.failing_allocator, "0"));
+    try testing.expectError(error.InvalidHandle, decode(WindowHandle, testing.failing_allocator, "0"));
     try testing.expectError(error.Overflow, decode(types.SafeInt, testing.failing_allocator, "-9007199254740992"));
 
     const parsed = try decode(Payload, testing.allocator, html_safe_json);

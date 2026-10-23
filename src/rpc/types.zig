@@ -12,7 +12,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
-const core = @import("../core/mod.zig");
+const core = @import("zts_foundation");
 
 /// Maximum unsigned integer exactly representable in an IEEE 754 `f64` (`Number.MAX_SAFE_INTEGER = 2^53 - 1`).
 pub const max_safe_uint: u53 = @intCast(core.MAX_JS_SAFE_INT);
@@ -41,6 +41,21 @@ pub const SafeInt = struct {
 
     pub inline fn eql(a: SafeInt, b: SafeInt) bool {
         return a.value == b.value;
+    }
+};
+
+/// Zero-copy syntax-validated raw JSON value slice (`unknown` in TypeScript).
+///
+/// Ideal for generic event brokers (`plugin:event|emit`), pass-through RPC gateways,
+/// and late-bound payloads where re-parsing and re-serializing arbitrary JSON trees is unnecessary.
+pub const RawJson = struct {
+    raw: []const u8 = "null",
+
+    pub const zts_rpc_type = .raw_json;
+    pub const zts_ts_type: []const u8 = "unknown";
+
+    pub inline fn init(raw_slice: []const u8) RawJson {
+        return .{ .raw = if (raw_slice.len == 0) "null" else raw_slice };
     }
 };
 

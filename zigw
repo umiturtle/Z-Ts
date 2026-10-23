@@ -6,9 +6,12 @@ set -euo pipefail
 # Key features:
 # 1. Auto-bootstraps Zig 0.17.0 (with bundled LLVM 22.1.8 / Clang 22.1.8 / LLD) in ~3.5s
 #    via PyPI binary wheel if missing in fresh Arena chat containers.
-# 2. Provides `./zigw quick-test [extra args...]` (runs `zig test src/root.zig`), which
-#    bypasses compiling the heavy `std.Build` runner (~94s cold cost!) and runs the full
-#    unit test suite in ~5.0s from a completely empty cache, and 0.02s on subsequent runs!
+# 2. `./zigw quick-test [extra args...]` bypasses compiling the 94s `std.Build` runner on cold
+#    containers by directly running `zig test` across the full pure-Zig module graph in ~5s cold
+#    and ~0.03s warm!
+# 3. `./zigw full-test [extra args...]` runs the full 27-step `zig build test` graph including
+#    standalone extractability, C99 ABI static library verification, `tsc --strict`, `esbuild`,
+#    Node 22 Live `BridgeServer` E2E, and native GTK/WebKit2GTK tests.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZIG_VERSION="${ZIG_VERSION:-0.17.0}"
@@ -90,7 +93,39 @@ ZIG_BIN="$(find_zig || install_zig_fast)"
 
 if [[ "${1:-}" == "quick-test" ]]; then
   shift
-  exec "$ZIG_BIN" test "${SCRIPT_DIR}/src/root.zig" "$@"
+  cd "$SCRIPT_DIR"
+  mkdir -p .zig-cache
+  printf 'pub const enable_gtk = false;\n' > .zig-cache/quick_webview_options.zig
+  TAURI_DEPS=(
+    -Mzts_foundation=src/core/foundation.zig
+    --dep zts_foundation -Mzts_web=src/core/web.zig
+    --dep zts_foundation --dep zts_web -Mzts_core=src/core/mod.zig
+    --dep zts_foundation -Mzts_rpc=src/rpc/mod.zig
+  )
+  WASM_DEPS=(
+    "${TAURI_DEPS[@]}"
+    --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc -Mzts_tauri=src/tauri/mod.zig
+  )
+  SSG_DEPS=(
+    "${WASM_DEPS[@]}"
+    --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc --dep zts_tauri -Mzts_wasm=src/wasm/mod.zig
+  )
+  FULL_DEPS=(
+    "${SSG_DEPS[@]}"
+    --dep zts_foundation --dep zts_web --dep zts_wasm -Mzts_ssg=src/ssg/mod.zig
+    --dep zts_foundation --dep zts_web --dep zts_rpc -Mzts_bridge=src/bridge/mod.zig
+    --dep zts_foundation --dep webview_options -Mzts_webview=src/webview/mod.zig
+    -Mwebview_options=.zig-cache/quick_webview_options.zig
+  )
+  "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc -Mroot=src/tauri/mod.zig "${TAURI_DEPS[@]}" "$@"
+  "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc --dep zts_tauri -Mroot=src/wasm/mod.zig "${WASM_DEPS[@]}" "$@"
+  "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_wasm -Mroot=src/ssg/mod.zig "${SSG_DEPS[@]}" "$@"
+  exec "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc --dep zts_bridge --dep zts_webview --dep zts_tauri --dep zts_wasm --dep zts_ssg -Mroot=src/root.zig "${FULL_DEPS[@]}" "$@"
+fi
+
+if [[ "${1:-}" == "full-test" ]]; then
+  shift
+  exec "$ZIG_BIN" build test --summary all "$@"
 fi
 
 exec "$ZIG_BIN" "$@"

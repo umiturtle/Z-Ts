@@ -48,16 +48,24 @@
 
 ---
 
-## 2. 各パッケージの責務境界と単体ユースケース
+## 2. 各パッケージの責務境界と単体切り出し不変条件（CI 強制）
 
-| パッケージ (`build.zig` 公開名) | ディレクトリ | 依存先 | 単体で誰がどう使えるか / テスト特性 |
+Z-Ts の下位レイヤは、デスクトップ WebView フレームワーク以外の別プロダクト（外部エンジン・メディア/配信ツール・サーバー等）からも `b.dependency("z_ts", .{}).module("<name>")`（またはディレクトリ単位の切り出し）で単体利用できるよう、**各 `.zig` ソースファイルが厳密に単一モジュールにのみ所属する排他 DAG** を構成します。
+
+| `build.zig` 公開モジュール名 | 専属ファイル範囲 | 依存先 | 単体で提供する責務（上位レイヤへの逆依存厳禁） |
 |---|---|---|---|
-| **① `zts_core`** | `src/core/` | `std` のみ (`link_libc = false`) | 53-bit 世代番号付き `HandlePool(T)`、非同期返却バッファ `OwnedBytes`、Glob/URL/CSP パーサ。**OS 非依存・0.01s 単体テスト**。 |
-| **② `zts_rpc`** | `src/rpc/` | `zts_core` (`link_libc = false`) | **WebView を使わない普通の Zig HTTP/WebSocket サーバーや CLI デーモンでもそのまま使える**、マクロ不要の `comptime` JSON-RPC ルーター ＋ TypeScript クライアント/エラー型自動生成器。 |
-| **③ `zts_webview`** | `src/webview/` + `include/zts_webview.h` | OS API のみ（Tauri/JSON 依存ゼロ） | **C / Python / Bun / ゲームエンジン（SDL/GLFW 親ウィンドウ埋め込み）からも単体で使える**、Custom URI Scheme 対応・`poll`/`wait` ステップ駆動型の極薄 WebView ライブラリ。 |
-| **④ `zts_bridge`** | `src/bridge/` | `std.Io.net`, `zts_core` | GUI 環境のないサーバー・Docker・Arena Live Preview・Playwright E2E テスト用のセキュア HTTP + SSE トランスポート。本番ネイティブアプリからは未 import により完全除去（0 バイト）。 |
-| **⑤ `zts_tauri`** | `src/tauri/` | `zts_core`, `zts_rpc` (+ 任意の Backend) | Tauri v2 ワイヤー互換層（`__TAURI_INTERNALS__`, `Tauri-Invoke-Key`, `Channel`）と、必要なものだけ `comptime` 合成できる標準コマンドモジュール（`window`, `event`, `path`, `fs`, `dialog` 等）。 |
-| **⑥ `zts`** | `src/root.zig` | 上記を統合再公開 | 数十行でフル機能のデスクトップアプリを構築するための統合モジュール。 |
+| **`zts_foundation`** | `src/core/{foundation,owned_bytes,response,handle_pool,queue,geometry,url,glob,html_escape}.zig` | `std` のみ (`link_libc = false`) | Window/WebView/HTTP 非依存の純粋汎用ランタイム基盤（`OwnedBytes`, `OutgoingResponse`, 53-bit 世代 `HandlePool`, `RingQueue`, `geometry`, `url`, `glob`）。 |
+| **`zts_web`** | `src/core/{web,assets,http_range,mime,csp}.zig` | `zts_foundation` (`link_libc = false`) | 静的/動的アセット解決、RFC 9110 `206 Partial Content` バイトレンジシーク配信、MIME 判定、CSP 生成（Window/RPC 非依存）。 |
+| **`zts_rpc`** | `src/rpc/*.zig` | `zts_foundation` のみ (`link_libc = false`) | **Window/WebView/Tauri 依存ゼロ**の汎用 `comptime` JSON/Binary RPC ルーター（`Schema`/`bind`）、ゼロ確保エラー応答、型安全環境注入 `Ctx.withEnv(&T)` / `requireEnv(T)`、トランスポート中立 `tsgen`（`createIpcTransport` / `createFetchTransport`）。 |
+| **`zts_core`** | `src/core/{mod,host}.zig` | `zts_foundation`, `zts_web` (`link_libc = false`) | デスクトップフレームワーク共通コア（プラットフォーム非依存 Window `Host` VTable・`CallContext`・`RecordingHost` + 下位再公開）。 |
+| **`zts_webview`** | `src/webview/{mod,types,pending,mock,gtk_bindings,linux,c_api}.zig` + `include/zts_webview.h` | `zts_foundation` (+ OS GUI APIs; JSON/RPC/Tauri 依存ゼロ) | C99 ABI（`libzts_webview_static.a`）でも単体組み込み可能な Custom URI Scheme 非同期ゼロコピー応答・子ウィジェット埋め込み・`step(.blocking / .poll)` 駆動型の極薄 WebView エンジン + `HeadlessMock`。 |
+| **`zts_bridge`** | `src/bridge/{mod,auth,sse,js_init,server}.zig` | `zts_foundation`, `zts_web`, `zts_rpc` (`link_libc = false`) | **Window/GUI 依存ゼロ**の組み込み HTTP/1.1 + `206` Range + 三重 CSRF 防御 RPC + リアルタイム SSE サーバー（Live Preview・Playwright E2E・外部配信ツール/エンジン制御 UI で単体利用可能。未使用時は 0B）。 |
+| **`zts_tauri`** | `src/tauri/` | `zts_core`, `zts_rpc` (`link_libc = false`) | Tauri v2 ワイヤー互換層および `comptime` 選択可能な標準プラグイン群。 |
+| **`zts_wasm`** | `src/wasm/{mod,io_stub,host,runtime,js_bootstrap}.zig` | `zts_foundation`, `zts_web`, `zts_core`, `zts_rpc`, `zts_tauri` (`link_libc = false`) | `wasm32-freestanding` 向け `WasmHost`・`WasmApp` エクスポート ABI・WebAssembly インメモリ IPC ブートストラップ生成。 |
+| **`zts_ssg`** | `src/ssg/{mod,manifest_gen,exporter,embed_dir_main}.zig` | `zts_foundation`, `zts_web`, `zts_wasm` (`link_libc = false`) | フロントエンド SSG ディレクトリ（`out/`・`dist/`）の決定論的 `@embedFile` マニフェスト生成、ルート別プリレンダリング、およびサーバー不要静的サイト（`dist/` + `.wasm` + `.nojekyll` + `_headers`）エクスポータ。 |
+| **`z_ts`** | `src/{root,bridge_host,webview_host,app_runtime}.zig` | 上記を統合再公開 | デスクトップ & Web ハイブリッド統合 SDK（`BridgeHost`, `WebviewHost`, `WasmHost`, `DesktopRuntime`, `ssg` を再公開）。 |
+
+> **CI 自動強制ガード (`tests/standalone_modules.zig` & `tests/webview/verify_c_abi.c`)**: `zig build test` は `z_ts`・`zts_core` を一切インポートしない独立コンパイルターゲットで `zts_foundation`・`zts_web`・`zts_rpc`・`zts_bridge`・`zts_webview` をビルド・実行し、さらに厳格 `-std=c99 -Wall -Wextra -Werror` の C ホストバイナリとの静的リンク実行を強制検証します。
 
 ---
 

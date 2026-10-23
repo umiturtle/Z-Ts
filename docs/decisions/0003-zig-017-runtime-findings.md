@@ -29,3 +29,25 @@
    - 配列初期化の繰り返しには廃止された演算子ではなく **`@splat(value)`** を使用する（例: `var seen: [N]bool = @splat(false);`）。
    - Sentinel 付きスライス（`[:0]u8` 等）の複製には **`allocator.dupeZ` ではなく `allocator.dupeSentinel(u8, slice, sentinel)`** を使用する。
 
+6. **関数・エラーセットの SoA `@typeInfo` と動的構造体生成 `@Struct`（`M1-04` で追加確認）**:
+   - **Fn**: `.@"fn"` は `fn_info.attrs.varargs`（旧 `is_generic` は存在しないため `fn_info.return_type == null` と各要素 `maybe_param_type == null` で `anytype` を検出する）および **`fn_info.param_types: []const ?type`** を使う。関数呼び出しタプル型は `std.meta.ArgsTuple(FnType)`（内部で `@Tuple` 組み込みを使用）で取得できる。
+   - **ErrorSet**: `.error_set` は `error_names: ?[]const [:0]const u8` を持つ構造体である。
+   - **`@Struct` / `@Tuple` 組み込み**: `@Type(.{ .@"struct" = ... })` ではなく組み込み **`@Struct(.auto, null, field_names, &field_types, &field_attrs)`**（`std.builtin.Type.Struct.FieldAttributes` 配列）を使用する。
+   - **`std.Io.Group.concurrent` のワーカー関数戻り値型**: ワーカー関数の戻り値は `void` または **`std.Io.Cancelable!void`**（`error{Canceled}!void`）でなければならない。
+
+7. **Zig `0.17.0` Named Module 排他所属ルール（`files must belong to only one module`）**:
+   - 同一ビルドグラフ内で複数の公開モジュール（`zts_foundation`, `zts_web`, `zts_rpc`, `zts_core`, `z_ts`）を構成する場合、**1 つの `.zig` ファイルが複数モジュールから相対パス `@import("...")` されるとコンパイルエラーになる**。
+   - 必ず下位モジュールのファイルを上位モジュールからは Named Module（例: `@import("zts_foundation")`）経由でインポートすること。これにより `Handle(.window)` や `OwnedBytes` の公称型同一性（Nominal Type Identity）も全パッケージ横断で 100% 保証される。
+
+8. **`std.Io.net` / `std.http.Server` 実装時の 3 大必須鉄則（`M1-05` `zts_bridge` で実証）**:
+   - **`req.readerExpectContinue` / `readerExpectNone` 呼び出し前のヘッダ退避**: `std.http.Server.Request` はボディリーダを開始した瞬間に内部で `req.head.invalidateStrings()` を実行し、`target` や全ヘッダスライスを無効化する。必ずボディ読み取り前に `method`・`target`・必要ヘッダをリクエスト Arena へ `dupe` し、認証失敗時はボディを 1 バイトも読む前に `403 Forbidden` を返すこと。
+   - **SSE ストリーミングの 2 段フラッシュ**: `req.respondStreaming(..., .{ .transfer_encoding = .none })` で返す `std.http.BodyWriter` は上位バッファ `bw.writer.flush()` だけでは下位ソケット Writer のバッファ（例: 8 KiB）に留まり TCP パケットが送出されない。必ず **`try bw.writer.flush(); try bw.flush();`** の両方を呼んで OS ソケットへ即時送出すること。
+   - **2-vCPU 環境でのスレッドプール枯渇回避と 3-OS クリーン終了**: 長寿命の SSE ストリームや HTTP/1.1 Keep-Alive 接続を `std.Io.Threaded` の共有ワーカープール（2 コア環境では 1〜2 スレッド）に乗せるとプールが埋まって後続リクエストが詰まる。ブロッキング接続ループは軽量スタックの OS スレッド（`std.Thread.spawn`）へ分離し、停止時は「全ストリーム `shutdown(io, .both)` + `127.0.0.1:<port>` への Loopback Wake Connect + リスナー `close` + `join`」で Linux / macOS / Windows 全 OS デッドロックゼロ終了を保証すること。
+
+9. **C 静的ライブラリ出力時の Zig 遅延解析と WebKit2GTK 4.1 統合鉄則（`M1-06` `zts_webview` で実証）**:
+   - **`export fn` シンボルの強制実体化**: `b.addLibrary(.{ .linkage = .static, ... })` でサブモジュール（`c_api.zig`）内の `pub export fn` を C 側へ公開する場合、ルート `mod.zig` 側で `pub const c_api = @import("c_api.zig");` と書いただけでは遅延解析によりシンボルが出力されない。必ずルート直下に `comptime { _ = c_api; }` を置くこと。
+   - **GIO ゼロコピーストリーム解放 & `SoupMessageHeaders` 所有権**: `g_memory_input_stream_new_from_data` の `GDestroyNotify` は `user_data` ではなく先頭 `data` ポインタを渡すため Zig スライス解放には使えない。必ず **`g_bytes_new_with_free_func(slice.ptr, slice.len, cb, holder)` + `g_memory_input_stream_new_from_bytes`** を使用し、終了時に `g_main_context_iteration` を回して in-flight `GBytes` の解放完了を回収すること。また **`webkit_uri_scheme_response_set_http_headers(resp, hdrs)` は `[transfer full]`（内部で `soup_message_headers_ref` を呼ばずポインタ所有権を直接奪う）** ため、呼び出し直後に `soup_message_headers_unref(hdrs)` を呼ぶと Use-After-Free (`SIGSEGV` at `0x2`) になる点に注意すること。
+   - **Ubuntu 24.04 Xvfb / WebKit2GTK 4.1 実行設定**: `ubuntu-24.04` ランナーでは AppArmor userns 制限対策として `sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`、ソフトウェア Xvfb 描画高速化として `WEBKIT_DISABLE_DMABUF_RENDERER=1` / `WEBKIT_DISABLE_COMPOSITING_MODE=1` を併用する。
+
+
+

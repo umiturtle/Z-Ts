@@ -11,6 +11,7 @@
 | [`../AGENTS.md`](../AGENTS.md) | 全エージェント必読のエントリーポイント・運用ルール | 低頻度（進捗追記禁止） |
 | [`architecture/00-overview.md`](architecture/00-overview.md) | Z-Ts 6 パッケージ直交アーキテクチャ・依存 DAG・モジュール境界契約 | 中頻度（全体方針変更時） |
 | [`architecture/web-zig-boundary.md`](architecture/web-zig-boundary.md) | HTML / CSS / TS ⇔ Zig `0.17.0` 言語仕様ギャップ 10 項目の解決規約 | 境界仕様（全パッケージ必読） |
+| [`architecture/ssg-and-wasm.md`](architecture/ssg-and-wasm.md) | 双方向 SSG（`embedFrontendDir` / `dist/` 出力）と `zts_wasm` 4 モード同型アーキテクチャ | サブシステム設計（静的 Web 出力時） |
 | `architecture/<module>.md` | 各サブシステム詳細設計（例: `config.md`, `ipc.md`, `acl.md`, `window-linux.md`） | モジュール単位で完全独立 |
 | [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
 | [`roadmap/m1-foundation-packages.md`](roadmap/m1-foundation-packages.md) | M1 詳細仕様（コア 5 パッケージのファイル境界・公開型・DoD） | 実装仕様リファレンス |
