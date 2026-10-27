@@ -1868,8 +1868,10 @@ test "WindowsWebView2Backend serves tauri:// + ipc:// through a real WebView2 (E
     try std.testing.expect(parsed.value.deferral orelse false);
     try std.testing.expect(parsed.value.ua orelse false);
     try std.testing.expect((parsed.value.dpr orelse 0) >= 1.0);
-    try std.testing.expectEqual(@as(u32, 1), e2e.tauri_hits);
-    try std.testing.expectEqual(@as(u32, 1), e2e.ipc_hits);
+    // `>= 1` and not `== 1`: Chromium also fetches `/favicon.ico` through the same filter, and a
+    // browser is free to retry. The contract is "our handler served the document", not "once".
+    try std.testing.expect(e2e.tauri_hits >= 1);
+    try std.testing.expect(e2e.ipc_hits >= 1);
     try std.testing.expectEqualStrings("POST", e2e.method());
     // The `application/json` POST is cross-origin, so Chromium must have preflighted it and the
     // backend must have answered `OPTIONS` itself (204 + `Access-Control-Allow-*`) without Zig.
