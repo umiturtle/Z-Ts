@@ -120,3 +120,14 @@
   5. CI 3 OS に「gallery 実行 → マーカーゲート → artifact 保存（`screenshots-<os>`）」を追加。Linux はさらに Live Preview（`counter-live`）と SSG `dist/` を headless Chrome で撮影。
 - **完了条件（DoD）**: 3 OS の CI で `OK gallery host=<gtk3|cocoa|win32> patterns=8 captured=8` と `OK screenshots …` が出ること。`--require-native` により mock フォールバックは失敗扱い。
 
+### `M5-05`（追加タスク）：OS 間パリティ & 9 フレームワーク比較
+- **専有スコープ**: `examples/gallery/`, `examples/frameworks/`, `scripts/{build-fonts.py,gen-framework-demos.mjs,check-font-coverage.mjs,compare-screenshots.mjs,lib/png.mjs}`, `.github/workflows/ci.yml`
+- **タスクファイル**: [`../tasks/M5-05-framework-os-parity.md`](../tasks/M5-05-framework-os-parity.md) / **設計判断**: [`../decisions/0010-cross-os-pixel-parity.md`](../decisions/0010-cross-os-pixel-parity.md) / **設計**: [`../architecture/screenshot-parity.md`](../architecture/screenshot-parity.md)
+- **内容**:
+  1. **Linux の文字化けを根絶**: Noto Sans/Serif JP + JetBrains Mono を使う文字だけにサブセット化して同梱し、`/zts/fonts/*` として 3 OS に同一バイト列を配信。`check-font-coverage.mjs` で収録外の文字を CI で落とす。
+  2. **レイアウト指紋**: `load` + `document.fonts.ready` 後の要素矩形（≤1px 丸め）と `font_ok` を `manifest.json` に記録し、OS 間で ≤1px 一致を強制。
+  3. **画素比較**: 依存ゼロの PNG デコーダで全画素差分・背景色（厳密）・平均輝度を比較（`--max-diff 0.06` / `--max-mad 6`）。
+  4. **9 フレームワーク**（Angular / Solid / Svelte / SolidStart / Next.js / Nuxt / Astro / SvelteKit / React）を各 CLI で実ビルドし、同一 DOM・同一文言の画面を `tauri://localhost/fw/<name>/` で配信して撮影。
+  5. **`ci-parity` ジョブ**: 3 OS の artifact をまとめて比較し `OK parity …` をマーカーにする。
+- **完了条件（DoD）**: `OK gallery host=<gtk3|cocoa|win32> patterns=17 captured=17` と `OK parity hosts=… patterns=17 …` が同一 Run で出ること。
+

@@ -21,6 +21,8 @@ const Io = std.Io;
 
 const webview = @import("zts_webview");
 const foundation = @import("zts_foundation");
+const builtin = @import("builtin");
+const fw = @import("fw_assets.zig");
 
 /// The custom scheme the gallery serves itself from. WebView2 has no custom-scheme API, so
 /// `windows.zig` maps `tauri://localhost/x` onto `http://tauri.localhost/x`; registering the
@@ -35,13 +37,20 @@ const Pattern = struct {
     theme: []const u8,
     css_width: u32,
     css_height: u32,
-    html: []const u8,
+    /// Embedded single-file page (the 8 hand-written patterns).
+    html: ?[]const u8 = null,
+    /// Path inside the embedded framework asset table (`fw/<name>/index.html`).
+    /// Framework demos are real multi-file builds, served exactly like an app's `dist/`.
+    route: []const u8 = "",
     /// Extra settle time after the load event before the capture is requested (ms).
     settle_ms: u32 = 700,
     /// Expected RGB of the centre pixel when the page paints a known colour (scheme round trip).
     expect_center_rgb: ?[3]u8 = null,
     /// The page must have posted at least one `__ztsPostMessage` before it is considered ready.
     expects_message: bool = false,
+    /// Framework demos render (and hydrate) *after* `load`: wait for the app's own
+    /// `{"app":"ready"}` message instead of trusting the load event alone.
+    requires_app_ready: bool = false,
 };
 
 const patterns = [_]Pattern{
@@ -105,6 +114,83 @@ const patterns = [_]Pattern{
         .css_height = 240,
         .html = @embedFile("web/compact-grid.html"),
     },
+
+    // -- 9 framework builds (M5-05) -------------------------------------------------------------
+    // Every demo renders the same 760×520 dashboard-like screen with the same DOM classes, so the
+    // 3-OS comparator can diff them against each other *and* across OSes. Sources live in
+    // `examples/frameworks/<name>/`; `scripts/gen-framework-demos.mjs` rebuilds the bundled HTML.
+    .{
+        .name = "fw-react",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/react/index.html",
+        .requires_app_ready = true,
+    },
+    .{
+        .name = "fw-solid",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/solid/index.html",
+        .requires_app_ready = true,
+    },
+    .{
+        .name = "fw-svelte",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/svelte/index.html",
+        .requires_app_ready = true,
+    },
+    .{
+        .name = "fw-angular",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/angular/index.html",
+        .requires_app_ready = true,
+    },
+    .{
+        .name = "fw-next",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/next/index.html",
+        .requires_app_ready = true,
+    },
+    .{
+        .name = "fw-nuxt",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/nuxt/index.html",
+        .requires_app_ready = true,
+    },
+    .{
+        .name = "fw-astro",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/astro/index.html",
+        .requires_app_ready = true,
+    },
+    .{
+        .name = "fw-sveltekit",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/sveltekit/index.html",
+        .requires_app_ready = true,
+    },
+    .{
+        .name = "fw-solidstart",
+        .theme = "light",
+        .css_width = 760,
+        .css_height = 520,
+        .route = "fw/solidstart/index.html",
+        .requires_app_ready = true,
+    },
 };
 
 /// Per-window bookkeeping while a pattern is on screen.
@@ -116,6 +202,11 @@ const WindowState = struct {
     /// capture must match (the OS may clamp a window to the screen, and window chrome is not part
     /// of the web content).
     report: ?[]u8 = null,
+    /// The `{"app":"layout", …}` message: element boxes measured after fonts finished loading.
+    /// Cross-OS comparison uses this, not the pixels, to prove the *layout* is identical.
+    layout: ?[]u8 = null,
+    /// The page's own `{"app":"ready"}` message (framework demos post it after hydration).
+    app_ready: bool = false,
 };
 
 const Gallery = struct {
@@ -155,6 +246,14 @@ fn patternForPath(path: []const u8) ?usize {
         var buf: [96]u8 = undefined;
         const wanted = std.fmt.bufPrint(&buf, "/{s}", .{p.name}) catch continue;
         if (std.mem.eql(u8, path, wanted)) return idx;
+        // Framework demos live at their published path; `/fw/<name>` (no file) serves index.html.
+        if (p.route.len != 0) {
+            var route_buf: [128]u8 = undefined;
+            const route = std.fmt.bufPrint(&route_buf, "/{s}", .{p.route}) catch continue;
+            if (std.mem.eql(u8, path, route)) return idx;
+            const dir = route[0 .. route.len - "index.html".len];
+            if (std.mem.eql(u8, path, dir) or std.mem.eql(u8, path, dir[0 .. dir.len - 1])) return idx;
+        }
     }
     // `/` (and `/index.html`) serves the first pattern, so a plain navigation always renders.
     if (std.mem.eql(u8, path, "/") or std.mem.eql(u8, path, "/index.html")) return 0;
@@ -165,6 +264,44 @@ fn onSchemeRequest(userdata: ?*anyopaque, req: webview.types.SchemeRequest) void
     const g: *Gallery = @ptrCast(@alignCast(userdata orelse return));
     const path = pathOf(req.uri);
 
+    // Published framework builds (`/fw/<name>/…`), served like a real app's `dist/`.
+    if (std.mem.startsWith(u8, path, "/fw/")) {
+        if (fw_asset(path[1..])) |asset| {
+            serveBytes(g, req, asset.bytes, asset.content_type);
+            return;
+        }
+        // A directory-shaped request (`/fw/react/`) maps to its `index.html`.
+        var buf: [160]u8 = undefined;
+        if (std.mem.endsWith(u8, path, "/")) {
+            const index_path = std.fmt.bufPrint(&buf, "{s}index.html", .{path[1..]}) catch "";
+            if (fw_asset(index_path)) |asset| {
+                serveBytes(g, req, asset.bytes, asset.content_type);
+                return;
+            }
+        }
+    }
+
+    // Bundled fonts: the *same* bytes on every OS, which is what makes the rasters comparable.
+    if (fontFor(path)) |asset| {
+        const owned = foundation.OwnedBytes.dupe(g.allocator, asset.bytes) catch {
+            g.engine.completeRequest(req.request_id, .{
+                .status_code = 500,
+                .content_type = "text/plain",
+                .body = .{},
+            }) catch {};
+            return;
+        };
+        g.engine.completeRequest(req.request_id, .{
+            .status_code = 200,
+            .content_type = asset.content_type,
+            .body = owned,
+        }) catch {
+            var mutable = owned;
+            mutable.deinit();
+        };
+        return;
+    }
+
     var status: u16 = 200;
     var content_type: []const u8 = "text/html; charset=utf-8";
     var body: []const u8 = "<!doctype html><meta charset=utf-8><title>404</title><p>404</p>";
@@ -173,7 +310,9 @@ fn onSchemeRequest(userdata: ?*anyopaque, req: webview.types.SchemeRequest) void
         content_type = "application/json";
         body = "{\"accent\":\"#123456\",\"ok\":true}";
     } else if (patternForPath(path)) |idx| {
-        body = patterns[idx].html;
+        // Framework demos are multi-file sites: the navigation goes to `/fw/<name>/index.html`
+        // and every chunk is fetched from the same embedded table.
+        body = patterns[idx].html orelse "<!doctype html><meta charset=utf-8><title>see /fw</title>";
     } else {
         status = 404;
     }
@@ -200,9 +339,34 @@ fn onMessage(userdata: ?*anyopaque, win: webview.WindowId, message: []const u8) 
     const g: *Gallery = @ptrCast(@alignCast(userdata orelse return));
     const ws = g.stateFor(win) orelse return;
     ws.messages += 1;
+
+    if (std.mem.indexOf(u8, message, "\"app\":\"layout\"")) |_| {
+        if (ws.layout == null) ws.layout = g.allocator.dupe(u8, message) catch null;
+        return;
+    }
+    if (std.mem.indexOf(u8, message, "\"app\":\"ready\"")) |_| {
+        ws.app_ready = true;
+        return;
+    }
     if (ws.report == null) {
         ws.report = g.allocator.dupe(u8, message) catch null;
     }
+}
+
+/// `document.fonts.check()` result from the layout message: both bundled families really loaded.
+/// Framework bundlers emit `<!DOCTYPE html>` (uppercase), so the doctype check is case-insensitive.
+fn containsDoctype(html: []const u8) bool {
+    const needle = "<!doctype html>";
+    if (html.len < needle.len) return false;
+    for (0..html.len - needle.len + 1) |i| {
+        if (std.ascii.eqlIgnoreCase(html[i .. i + needle.len], needle)) return true;
+    }
+    return false;
+}
+
+fn fontOk(layout: ?[]const u8) bool {
+    const msg = layout orelse return false;
+    return std.mem.indexOf(u8, msg, "\"font_ok\":true") != null;
 }
 
 /// Reads `"key": <number>` out of the page's tiny ready message (no JSON parser needed here).
@@ -218,6 +382,108 @@ fn jsonNumber(msg: []const u8, key: []const u8) ?u32 {
     return std.fmt.parseInt(u32, msg[i..end], 10) catch null;
 }
 
+// ---------------------------------------------------------------------------
+// Bundled fonts (OS 間で画素を一致させるための唯一のフォント)
+// ---------------------------------------------------------------------------
+//
+// システムフォント（Hiragino / Yu Gothic / Noto CJK / 何も無い Ubuntu）を使うと、同じ HTML でも
+// OS ごとに字形・字幅・行送りが変わり、スクリーンショット比較が成立しない。3 OS のブラウザに
+// **同一の woff2 ファイル**を配信することで、レイアウトと字形を一致させる。
+// 再生成は `python3 scripts/build-fonts.py`（Noto Sans/Serif JP + JetBrains Mono のサブセット）。
+
+const FontAsset = struct {
+    path: []const u8,
+    content_type: []const u8,
+    bytes: []const u8,
+};
+
+const font_assets = [_]FontAsset{
+    .{
+        .path = "/zts/fonts/zts-sans-400.woff2",
+        .content_type = "font/woff2",
+        .bytes = @embedFile("web/fonts/zts-sans-400.woff2"),
+    },
+    .{
+        .path = "/zts/fonts/zts-sans-700.woff2",
+        .content_type = "font/woff2",
+        .bytes = @embedFile("web/fonts/zts-sans-700.woff2"),
+    },
+    .{
+        .path = "/zts/fonts/zts-serif-400.woff2",
+        .content_type = "font/woff2",
+        .bytes = @embedFile("web/fonts/zts-serif-400.woff2"),
+    },
+    .{
+        .path = "/zts/fonts/zts-mono-400.woff2",
+        .content_type = "font/woff2",
+        .bytes = @embedFile("web/fonts/zts-mono-400.woff2"),
+    },
+};
+
+fn fw_asset(path: []const u8) ?*const fw.Asset {
+    var buf: [192]u8 = undefined;
+    const wanted = std.fmt.bufPrint(&buf, "/{s}", .{path}) catch return null;
+    for (&fw.assets) |*asset| {
+        if (std.mem.eql(u8, asset.path, wanted)) return asset;
+    }
+    return null;
+}
+
+fn serveBytes(g: *Gallery, req: webview.types.SchemeRequest, bytes: []const u8, content_type: []const u8) void {
+    const owned = foundation.OwnedBytes.dupe(g.allocator, bytes) catch {
+        g.engine.completeRequest(req.request_id, .{
+            .status_code = 500,
+            .content_type = "text/plain",
+            .body = .{},
+        }) catch {};
+        return;
+    };
+    g.engine.completeRequest(req.request_id, .{
+        .status_code = 200,
+        .content_type = content_type,
+        .body = owned,
+    }) catch {
+        var mutable = owned;
+        mutable.deinit();
+    };
+}
+
+fn fontFor(path: []const u8) ?*const FontAsset {
+    for (&font_assets) |*asset| {
+        if (std.mem.eql(u8, asset.path, path)) return asset;
+    }
+    return null;
+}
+
+/// Injected at `DOCUMENT_START`, before any page CSS is parsed:
+///  - `@font-face` を 4 本（ZTS Sans 400/700・Serif・Mono）。ページが自前で宣言していても害は無い。
+///  - スクロールバーを隠す（GTK はオーバーレイ、Windows はクラシック、macOS は自動非表示と
+///    3 OS で幅が違い、そのぶん本文の折り返し位置が変わってしまう）。
+///  - 合成・ヒンティング依存の差を減らす（`font-synthesis: none` / `text-size-adjust: none`）。
+const parity_script =
+    \\(function () {
+    \\  try {
+    \\    var css = [
+    \\      '@font-face{font-family:"ZTS Sans";font-style:normal;font-weight:400;font-display:block;' +
+    \\        'src:url("/zts/fonts/zts-sans-400.woff2") format("woff2")}',
+    \\      '@font-face{font-family:"ZTS Sans";font-style:normal;font-weight:700;font-display:block;' +
+    \\        'src:url("/zts/fonts/zts-sans-700.woff2") format("woff2")}',
+    \\      '@font-face{font-family:"ZTS Serif";font-style:normal;font-weight:400;font-display:block;' +
+    \\        'src:url("/zts/fonts/zts-serif-400.woff2") format("woff2")}',
+    \\      '@font-face{font-family:"ZTS Mono";font-style:normal;font-weight:400;font-display:block;' +
+    \\        'src:url("/zts/fonts/zts-mono-400.woff2") format("woff2")}',
+    \\      'html{scrollbar-width:none;-webkit-text-size-adjust:100%;}',
+    \\      '::-webkit-scrollbar{width:0;height:0;}',
+    \\      'body{font-synthesis:none;}'
+    \\    ].join('\n');
+    \\    var style = document.createElement('style');
+    \\    style.setAttribute('data-zts', 'parity');
+    \\    style.textContent = css;
+    \\    (document.head || document.documentElement).appendChild(style);
+    \\  } catch (e) { /* nothing to do: the page's own fonts still apply */ }
+    \\})();
+;
+
 /// Injected at `DOCUMENT_START` (after the backends install `window.__ztsPostMessage`), so the
 /// gallery knows exactly when a page finished loading *and* how big its viewport really is.
 const ready_script =
@@ -230,6 +496,41 @@ const ready_script =
     \\      dpr: window.devicePixelRatio || 1
     \\    }));
     \\  } catch (e) { /* older hosts without the alias: the app falls back to a timed wait */ }
+    \\  // 2 通目: レイアウト指紋。フォントのロード完了後・次フレームで測る。
+    \\  // 3 OS のギャラリー出力を `scripts/compare-screenshots.mjs` が突き合わせ、
+    \\  // 「同じ解像度なら同じ位置・同じ大きさ」を機械的に保証する。
+    \\  var post = function (payload) {
+    \\    try { window.__ztsPostMessage(JSON.stringify(payload)); } catch (e) {}
+    \\  };
+    \\  var measure = function () {
+    \\    var sel = 'body,.shell,.head,.card,.counter,.value,.features,.features>li,.meta,' +
+    \\              'h1,h2,h3,p,ul,li,button,footer,.badge,.title,.sub,.brand,.logo,.tag';
+    \\    var boxes = [];
+    \\    var nodes = document.querySelectorAll(sel);
+    \\    for (var i = 0; i < nodes.length && i < 40; i++) {
+    \\      var r = nodes[i].getBoundingClientRect();
+    \\      boxes.push([Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]);
+    \\    }
+    \\    var fontOk = false;
+    \\    try {
+    \\      fontOk = document.fonts.check('16px "ZTS Sans"') && document.fonts.check('16px "ZTS Mono"');
+    \\    } catch (e) { fontOk = false; }
+    \\    post({
+    \\      app: 'layout',
+    \\      boxes: boxes,
+    \\      doc_w: document.documentElement.scrollWidth,
+    \\      doc_h: document.documentElement.scrollHeight,
+    \\      font_ok: fontOk
+    \\    });
+    \\  };
+    \\  var fontsDone = (document.fonts && document.fonts.ready) ? document.fonts.ready : null;
+    \\  if (fontsDone && fontsDone.then) {
+    \\    fontsDone.then(function () {
+    \\      requestAnimationFrame(function () { requestAnimationFrame(measure); });
+    \\    });
+    \\  } else {
+    \\    requestAnimationFrame(measure);
+    \\  }
     \\});
 ;
 
@@ -245,15 +546,46 @@ fn pump(g: *Gallery, frames: usize, sleep_ms: i64) void {
 }
 
 /// Drives the loop until the page reports `ready` (or the budget expires).
+/// Drives the loop until the page reported its **layout fingerprint** (fonts loaded, next frame
+/// measured). Returns `false` on timeout — the capture still happens, and CI logs say so.
 fn waitForReady(g: *Gallery, win: webview.WindowId, timeout_ms: i64) bool {
     var waited: i64 = 0;
     while (waited < timeout_ms) : (waited += 10) {
         _ = g.engine.step(.poll);
         const ws = g.stateFor(win) orelse return false;
-        if (ws.messages > 0) return true;
+        if (ws.layout != null) return true;
         g.io.sleep(.fromMilliseconds(10), .awake) catch {};
     }
     return false;
+}
+
+/// Framework demos hydrate after `load`: wait for their `{"app":"ready"}` on top of the layout.
+fn waitForApp(g: *Gallery, win: webview.WindowId, timeout_ms: i64) bool {
+    var waited: i64 = 0;
+    while (waited < timeout_ms) : (waited += 10) {
+        _ = g.engine.step(.poll);
+        const ws = g.stateFor(win) orelse return false;
+        if (ws.app_ready) return true;
+        g.io.sleep(.fromMilliseconds(10), .awake) catch {};
+    }
+    return false;
+}
+
+/// Escapes `text` as a JSON string body (quotes, backslashes, control characters).
+fn writeJsonString(writer: *std.Io.Writer, text: []const u8) !void {
+    try writer.writeByte('"');
+    for (text) |byte| {
+        switch (byte) {
+            '"' => try writer.writeAll("\\\""),
+            '\\' => try writer.writeAll("\\\\"),
+            '\n' => try writer.writeAll("\\n"),
+            '\r' => try writer.writeAll("\\r"),
+            '\t' => try writer.writeAll("\\t"),
+            0x00...0x08, 0x0b, 0x0c, 0x0e...0x1f => try writer.print("\\u{x:0>4}", .{byte}),
+            else => try writer.writeByte(byte),
+        }
+    }
+    try writer.writeByte('"');
 }
 
 /// Polls until the backend hands back an image (`null` = still rendering).
@@ -302,8 +634,11 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
             .initial_html = null,
         });
 
-        var url_buf: [128]u8 = undefined;
-        const url = try std.fmt.bufPrint(&url_buf, "{s}://localhost/{s}", .{ scheme_name, p.name });
+        var url_buf: [192]u8 = undefined;
+        const url = if (p.route.len != 0)
+            try std.fmt.bufPrint(&url_buf, "{s}://localhost/{s}", .{ scheme_name, p.route })
+        else
+            try std.fmt.bufPrint(&url_buf, "{s}://localhost/{s}", .{ scheme_name, p.name });
         try g.engine.navigate(id, url);
 
         try g.windows.append(g.allocator, .{ .id = id, .pattern = idx });
@@ -311,6 +646,7 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
             // The ready report is owned by the window state, so releasing the window releases it.
             if (g.stateFor(id)) |state| {
                 if (state.report) |report| g.allocator.free(report);
+                if (state.layout) |layout| g.allocator.free(layout);
             }
             _ = g.windows.pop();
             g.engine.closeWindow(id) catch {};
@@ -321,6 +657,12 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
         //    capture a blank surface (the first CI run proved exactly that).
         const is_mock = std.mem.eql(u8, host, "mock"); // the mock runs no JS: nothing to wait for
         const ready = if (is_mock) false else waitForReady(g, id, 20_000);
+        // 1b. Framework demos mount after `load`: wait for their own ready message.
+        if (p.requires_app_ready and !is_mock) {
+            if (!waitForApp(g, id, 20_000)) {
+                std.debug.print("gallery: {s} app never signalled ready within 20s\n", .{p.name});
+            }
+        }
         // 2. Let late work settle: fonts, `scrollIntoView()` and the fetch round trip.
         pump(g, p.settle_ms / 10, 10);
 
@@ -372,6 +714,12 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
         if (p.expect_center_rgb) |rgb| {
             try writer.print(", \"expect_center_rgb\": [{d}, {d}, {d}]", .{ rgb[0], rgb[1], rgb[2] });
         }
+        // Layout fingerprint (`{"app":"layout", …}`) — the cross-OS comparator consumes this.
+        if (ws_ptr.layout) |layout| {
+            try writer.writeAll(", \"layout\": ");
+            try writeJsonString(writer, layout);
+        }
+        try writer.print(", \"font_ok\": {s}", .{if (fontOk(ws_ptr.layout)) "true" else "false"});
         try writer.writeAll(" }");
         captured += 1;
 
@@ -501,8 +849,16 @@ test "gallery: every pattern has a unique name, sane size and non-empty HTML" {
         try testing.expect(p.name.len < 40);
         try testing.expect(p.css_width >= 200 and p.css_width <= 4000);
         try testing.expect(p.css_height >= 150 and p.css_height <= 4000);
-        try testing.expect(std.mem.indexOf(u8, p.html, "<!doctype html>") != null);
-        try testing.expect(std.mem.indexOf(u8, p.html, "<title>") != null);
+        if (p.html) |html| {
+            try testing.expect(containsDoctype(html));
+        } else {
+            // Framework demos are served from the embedded asset table instead.
+            try testing.expect(p.route.len > 0);
+            var route_buf: [128]u8 = undefined;
+            const route = std.fmt.bufPrint(&route_buf, "/{s}", .{p.route}) catch unreachable;
+            try testing.expectEqual(@as(?usize, idx), patternForPath(route));
+        }
+        if (p.html) |html| try testing.expect(std.mem.indexOf(u8, html, "<title>") != null);
         for (patterns[idx + 1 ..]) |other| {
             try testing.expect(!std.mem.eql(u8, p.name, other.name));
         }

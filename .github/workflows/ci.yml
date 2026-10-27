@@ -65,6 +65,7 @@ jobs:
           chmod +x ./zigw
           {
             python3 scripts/check-docs.py
+            node scripts/check-font-coverage.mjs
             npx -y -p typescript tsc --noEmit --strict --target esnext --module esnext --moduleResolution bundler tests/bridge/verify_bridge_e2e.ts
             ./zigw fmt --check src/ tests/ examples/ build.zig build.zig.zon examples/counter/build.zig.zon
             WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
@@ -131,7 +132,7 @@ jobs:
             WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
               xvfb-run -a examples/gallery/zig-out/bin/zts_gallery \
                 --out "$RUNNER_TEMP/shots" --require-native
-            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 8
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
           } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
 
       - name: Gate on the screenshot markers (M5-04)
@@ -283,6 +284,8 @@ jobs:
             chmod +x ./zigw
             ./zigw build test --summary all
           } 2>&1 | tee ci-output.log
+          # 同梱フォントに無い文字を書くと Linux だけ豆腐になる — 最後に必ず踏む。
+          node scripts/check-font-coverage.mjs
 
       - name: Verify the native Cocoa + WKWebView E2E actually ran (M3-01 gate)
         run: |
@@ -324,7 +327,7 @@ jobs:
           {
             ( cd examples/gallery && ../../zigw build install --summary all )
             examples/gallery/zig-out/bin/zts_gallery --out "$RUNNER_TEMP/shots" --require-native
-            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 8
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
           } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
 
       - name: Gate on the screenshot markers (M5-04)
@@ -465,6 +468,7 @@ jobs:
             # inside WebView2 on a headless runner still leaves a readable trail in the log.
             ZTS_WEBVIEW_TRACE=1 zig build test --summary all
           } 2>&1 | tee -a ci-output.log
+          node scripts/check-font-coverage.mjs
 
       - name: Verify the native Win32 + Direct WebView2 E2E actually ran (M3-02 gate)
         shell: bash
@@ -528,7 +532,7 @@ jobs:
             ( cd examples/gallery && ../../zigw build install --summary all )
             ZTS_WEBVIEW_TRACE=1 examples/gallery/zig-out/bin/zts_gallery.exe \
               --out "$RUNNER_TEMP/shots" --require-native
-            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 8
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
           } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
 
       - name: Gate on the screenshot markers (M5-04)
@@ -577,5 +581,90 @@ jobs:
                 repo: context.repo.repo,
                 check_run_id: me.id,
                 output: { title: 'Windows CI Output', summary: '```text\n' + log + '\n```' },
+              });
+            }
+
+  ci-parity:
+    name: Cross-OS parity (same pixels, same layout)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Runs even when a platform job failed: the comparison report is the most useful artifact in
+    # that case. It still *fails* unless all three artifacts are present and identical enough.
+    if: always() && !cancelled()
+    needs: [ci-linux, ci-macos, ci-windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download every OS gallery
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: screenshots-*
+
+      - name: Compare the three OS captures
+        run: |
+          set -o pipefail
+          {
+            ls -l artifacts
+            for os in linux macos windows; do
+              if [ ! -f "artifacts/screenshots-$os/manifest.json" ]; then
+                echo "::error::missing artifacts/screenshots-$os/manifest.json — that OS captured nothing"
+                exit 1
+              fi
+            done
+            # Every OS must have decoded the *bundled* fonts (see docs/environment/github-actions.md).
+            for os in linux macos windows; do
+              node scripts/verify-screenshots.mjs "artifacts/screenshots-$os" --require-native --require-counts 17
+            done
+            # Layout fingerprints must be identical (≤1px) and rasters close (≤6% of pixels differ).
+            node scripts/compare-screenshots.mjs \
+              artifacts/screenshots-linux artifacts/screenshots-macos artifacts/screenshots-windows \
+              --max-diff 0.06 --max-mad 6 --json parity.json
+          } 2>&1 | tee parity.log
+
+      - name: Gate on the parity marker
+        if: always()
+        run: |
+          if ! grep -q "OK parity hosts=" parity.log; then
+            echo "::error::no OK parity marker — the 3 OS captures were not compared"
+            tail -n 120 parity.log || true
+            exit 1
+          fi
+          grep -o "OK parity .*" parity.log | tail -n 1
+
+      - name: Upload the parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-report
+          path: |
+            parity.json
+            parity.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Publish the parity report to the Check Run API
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('parity.log') ? fs.readFileSync('parity.log', 'utf8').slice(-60000) : '(no output)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name.startsWith('Cross-OS parity'));
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'Cross-OS parity', summary: '```text\n' + log + '\n```' },
               });
             }

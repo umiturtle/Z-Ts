@@ -1,0 +1,11 @@
+{
+  "name": "zts-demo-astro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build"
+  },
+  "dependencies": {
+    "astro": "^6.4.8"
+  }
+}

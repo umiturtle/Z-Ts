@@ -97,3 +97,53 @@ bash scripts/ci-logs.sh <run_id>
 > 失敗時の切り分けは `bash scripts/ci-logs.sh <run_id>` の `gallery:` 行を見る。
 > 各パターンについて `no ready report (timed wait)` が出ていれば §3.3 の 1 行目、
 > `bytes` が極端に小さいまま `OK` していれば撮影対象が空白、と判断できる。
+
+---
+
+## 4. OS 間パリティ・ジョブ（`M5-05`）
+
+`ci-parity` は 3 つの OS ジョブが **すべて終わってから** 走り、成果物を 1 か所で比較する。
+
+```yaml
+ci-parity:
+  if: always() && !cancelled()      # 1 つ落ちても「どこが違うか」を出す
+  needs: [ci-linux, ci-macos, ci-windows]
+  timeout-minutes: 15
+  steps:
+    - actions/download-artifact@v4  # pattern: screenshots-*
+    - node scripts/verify-screenshots.mjs artifacts/screenshots-<os> --require-native --require-counts 17
+    - node scripts/compare-screenshots.mjs artifacts/screenshots-linux artifacts/screenshots-macos \
+        artifacts/screenshots-windows --max-diff 0.06 --max-mad 6 --json parity.json
+    - Gate on the parity marker       # `OK parity hosts=…` が無ければ exit 1
+    - actions/upload-artifact@v4      # parity-report（parity.json + parity.log、14 日）
+```
+
+- **マーカーが唯一の合格条件**: `OK parity hosts=linux,cocoa,win32 patterns=17 …`。
+  `grep` に失敗したら `::error::` を出して落とす（無言スキップ禁止）。
+- 比較に失敗したときのログはそのまま原因になる（例: `layout differs by 5px at box #3`）。
+- `bash scripts/ci-logs.sh <run_id>` でも `parity.log` と同じ内容が読める。
+
+### 4.1 3 OS のギャラリーが満たすべきこと
+
+| 項目 | マーカー / フィールド | 落ちたときの意味 |
+|---|---|---|
+| ネイティブ描画 | `OK gallery host=gtk3\|cocoa\|win32 patterns=17 captured=17` | 1 パターンでも撮れていない |
+| フォント | `manifest.font_ok === true` | 同梱 woff2 が読めていない（= Linux は豆腐） |
+| レイアウト指紋 | `manifest.layout` が存在 | `document.fonts.ready` が発火していない |
+| PNG 検証 | `OK screenshots host=… patterns=17 loose=N` | 白紙・寸法違い・SHA 不一致 |
+| 3 OS 一致 | `OK parity …` | レイアウト / 画素 / 背景色の差 |
+
+### 4.2 フォントを更新したとき
+
+1. `pip install --break-system-packages fonttools brotli`
+2. `python3 scripts/build-fonts.py`（`examples/gallery/src/web/fonts/` と `coverage.txt` を更新）
+3. `node scripts/check-font-coverage.mjs` で緑を確認 → コミット
+
+CI は生成物をそのまま使う（`npm`/`pip` を追加しない）。
+
+### 4.3 9 フレームワークの再生成
+
+`node scripts/gen-framework-demos.mjs [name…]`（ネットワーク必要）。
+`examples/gallery/src/web/fw/<name>/` と `src/fw_assets.zig` が更新されるので、
+`examples/frameworks/node_modules` と各 `dist/` はコミットしない（`.gitignore` 済み）。
+

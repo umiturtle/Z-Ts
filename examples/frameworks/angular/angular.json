@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "projects": {
+    "demo": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "index": "src/index.html",
+            "tsConfig": "tsconfig.json",
+            "outputPath": "dist",
+            "inlineStyleLanguage": "css",
+            "assets": [],
+            "styles": []
+          },
+          "configurations": {
+            "production": {
+              "optimization": false,
+              "sourceMap": false,
+              "outputHashing": "none"
+            },
+            "development": {}
+          },
+          "defaultConfiguration": "production"
+        }
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
-# `examples/gallery` — スクリーンショット回帰ギャラリー（`M5-04`）
+# `examples/gallery` — スクリーンショット回帰ギャラリー（`M5-04` / `M5-05`）
 
-1 つの実行ファイルが **8 パターンのウィンドウを順に作り、それぞれを PNG に落として
-`manifest.json` を書く** 検証用ギャラリーです。CI（Linux / macOS / Windows）がこれを実行し、
+1 つの実行ファイルが **17 パターンのウィンドウを順に作り、それぞれを PNG に落として
+`manifest.json` を書く** 検証用ギャラリーです（8 つの手書きパターン + 9 フレームワーク）。CI（Linux / macOS / Windows）がこれを実行し、
 `scripts/verify-screenshots.mjs` が画素を機械検証したうえで artifact に保存します。
 設計判断は [`../../docs/decisions/0009-screenshot-capture-and-ci-gallery.md`](../../docs/decisions/0009-screenshot-capture-and-ci-gallery.md)。
 
@@ -10,11 +10,12 @@
 ```bash
 cd examples/gallery
 ../../zigw build test --summary all      # 3 本の単体テスト
-../../zigw build screenshots             # zig-out/screenshots/ に 8 枚 + manifest.json
+../../zigw build screenshots             # zig-out/screenshots/ に 17 枚 + manifest.json
 ../../zigw build install
 ./zig-out/bin/zts_gallery --out /tmp/shots --require-native
 ./zig-out/bin/zts_gallery --out /tmp/shots --only js-roundtrip
-cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --require-counts 8
+cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --require-counts 17
+node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（= 豆腐）を検出
 ```
 
 | フラグ | 効果 |
@@ -26,7 +27,7 @@ cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --re
 `DISPLAY` の無い Linux では GTK が起動できず `SKIP gallery … (DisplayUnavailable)` + exit 0 に
 なります。CI は `xvfb-run` で実行し `--require-native` を付けているため、この経路は通りません。
 
-## 8 パターン
+## 17 パターン
 
 | 名前 | 寸法 (CSS px) | テーマ | 何を検証するか |
 |---|---|---|---|
@@ -38,9 +39,26 @@ cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --re
 | `hidpi-ruler` | 560×400 | light | `devicePixelRatio` と 1px 罫線 |
 | `wide-split` | 1000×600 | mixed | 1024 幅前後のレイアウト崩れ |
 | `compact-grid` | 320×240 | dark | 最小サイズの下限 |
+| `fw-react` … `fw-solidstart` | 760×520 | light | 9 フレームワークの同一画面（[`../frameworks/`](../frameworks/README.md)） |
 
 出力名は `<host>-<name>.png`（`host` は `gtk3` / `cocoa` / `win32` / `mock`）。HTML は
 `src/web/*.html` を `@embedFile` で同梱しているため、実行時にファイルを探しません。
+
+## フォント（3 OS で画素を一致させる要）
+
+ページは **システムフォントを使いません**。`ZTS Sans` / `ZTS Serif` / `ZTS Mono` を
+`src/web/fonts/*.woff2` に同梱し、`/zts/fonts/<file>` として配信します（3 OS のブラウザが
+同一ファイルを描画するので字形・字幅が一致します）。`DOCUMENT_START` で `@font-face` 4 本と
+「スクロールバーを隠す」CSS を注入します。
+
+- 再生成: `python3 scripts/build-fonts.py`（使う文字だけにサブセット化）
+- カバレッジ検査: `node scripts/check-font-coverage.mjs`（収録外の文字があれば CI が落ちる）
+
+## レイアウト指紋
+
+`load` と `document.fonts.ready` の後、要素の矩形（最大 40 個・1px 丸め）と
+`font_ok` を `{"app":"layout", …}` として投稿し、`manifest.json` の `layout` に保存します。
+`scripts/compare-screenshots.mjs` が 3 OS でこれを突き合わせ、**1px を超える差があれば失敗** にします。
 
 ## カスタムスキームは `tauri://`（重要）
 
@@ -61,6 +79,7 @@ cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --re
 
 - `<host>-<name>.png` — Web コンテンツの CSS 画素をそのまま PNG にしたもの（ウィンドウ装飾なし）
 - `manifest.json` — `{host, os, generated_by, patterns:[{name, file, theme, css_width, css_height,
-  width, height, bytes, messages, sha256, expect_center_rgb?}]}`
+  width, height, bytes, messages, sha256, expect_center_rgb?, layout, font_ok}]}`
+  （`layout` はページが投稿した JSON を文字列のまま保存したもの）
 
 `index.html`（コンタクトシート）は検証スクリプトが生成します。

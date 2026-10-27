@@ -14,149 +14,22 @@
 // `index.html` contact sheet next to the PNGs for humans.
 //
 // Usage:
-//   node scripts/verify-screenshots.mjs <dir> [--require-native] [--require-counts 8]
+//   5. `font_ok` — the page's own `document.fonts.check()` for the bundled ZTS fonts. Every OS
+//      must render with the *same* woff2 files, otherwise the cross-OS comparison is meaningless.
+//   6. a layout fingerprint (`{"app":"layout", boxes:[…]}`) must be present: it is what
+//      `scripts/compare-screenshots.mjs` diffs between Linux / macOS / Windows.
+//
+// Usage:
+//   node scripts/verify-screenshots.mjs <dir> [--require-native] [--require-counts 17]
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { inflateSync } from 'node:zlib';
 import path from 'node:path';
-
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const CHANNELS = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
+import { parsePng, unfilter, stats } from './lib/png.mjs';
 
 function fail(msg) {
   console.error(`FAIL screenshots ${msg}`);
   process.exit(1);
-}
-
-function parsePng(buf, file) {
-  if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_SIGNATURE)) fail(`${file}: not a PNG`);
-  let offset = 8;
-  let ihdr = null;
-  let palette = null;
-  const idat = [];
-  let sawIend = false;
-  while (offset + 8 <= buf.length) {
-    const len = buf.readUInt32BE(offset);
-    const type = buf.toString('ascii', offset + 4, offset + 8);
-    const data = buf.subarray(offset + 8, offset + 8 + len);
-    if (data.length !== len) fail(`${file}: truncated ${type} chunk`);
-    if (type === 'IHDR') {
-      ihdr = {
-        width: data.readUInt32BE(0),
-        height: data.readUInt32BE(4),
-        bitDepth: data[8],
-        colorType: data[9],
-        compression: data[10],
-        filter: data[11],
-        interlace: data[12],
-      };
-    } else if (type === 'PLTE') {
-      palette = data;
-    } else if (type === 'IDAT') {
-      idat.push(data);
-    } else if (type === 'IEND') {
-      sawIend = true;
-      break;
-    }
-    offset += 12 + len;
-  }
-  if (!ihdr) fail(`${file}: missing IHDR`);
-  if (!sawIend) fail(`${file}: missing IEND`);
-  if (ihdr.bitDepth !== 8) fail(`${file}: unsupported bit depth ${ihdr.bitDepth}`);
-  if (!CHANNELS[ihdr.colorType]) fail(`${file}: unsupported colour type ${ihdr.colorType}`);
-  if (ihdr.interlace !== 0) fail(`${file}: interlaced PNGs are not supported`);
-  if (idat.length === 0) fail(`${file}: no IDAT`);
-  return { ihdr, palette, raw: inflateSync(Buffer.concat(idat)) };
-}
-
-function unfilter(parsed, file) {
-  const { ihdr, raw } = parsed;
-  const channels = CHANNELS[ihdr.colorType];
-  const bpp = channels; // bit depth 8
-  const stride = ihdr.width * bpp;
-  const expected = (stride + 1) * ihdr.height;
-  if (raw.length < expected) fail(`${file}: IDAT is ${raw.length}B, expected ${expected}B`);
-
-  const out = Buffer.alloc(stride * ihdr.height);
-  let prev = Buffer.alloc(stride);
-  for (let y = 0; y < ihdr.height; y += 1) {
-    const filter = raw[y * (stride + 1)];
-    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
-    const cur = out.subarray(y * stride, (y + 1) * stride);
-    for (let x = 0; x < stride; x += 1) {
-      const a = x >= bpp ? cur[x - bpp] : 0;
-      const b = prev[x];
-      const c = x >= bpp ? prev[x - bpp] : 0;
-      let value = line[x];
-      switch (filter) {
-        case 0:
-          break;
-        case 1:
-          value = (value + a) & 0xff;
-          break;
-        case 2:
-          value = (value + b) & 0xff;
-          break;
-        case 3:
-          value = (value + ((a + b) >> 1)) & 0xff;
-          break;
-        case 4: {
-          const p = a + b - c;
-          const pa = Math.abs(p - a);
-          const pb = Math.abs(p - b);
-          const pc = Math.abs(p - c);
-          const pred = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-          value = (value + pred) & 0xff;
-          break;
-        }
-        default:
-          fail(`${file}: unknown filter type ${filter} on row ${y}`);
-      }
-      cur[x] = value;
-    }
-    prev = cur;
-  }
-  return { pixels: out, channels, stride };
-}
-
-function stats(decoded, parsed) {
-  const { pixels, channels, stride } = decoded;
-  const { width, height, colorType } = parsed.ihdr;
-  const palette = parsed.palette;
-  const seen = new Set();
-  let sum = 0;
-  let min = 255;
-  let max = 0;
-  const stepX = Math.max(1, Math.floor(width / 240));
-  const stepY = Math.max(1, Math.floor(height / 240));
-
-  const rgbAt = (x, y) => {
-    const i = y * stride + x * channels;
-    if (colorType === 3) {
-      const idx = pixels[i] * 3;
-      return [palette[idx], palette[idx + 1], palette[idx + 2]];
-    }
-    if (colorType === 0 || colorType === 4) {
-      const g = pixels[i];
-      return [g, g, g];
-    }
-    return [pixels[i], pixels[i + 1], pixels[i + 2]];
-  };
-
-  for (let y = 0; y < height; y += stepY) {
-    for (let x = 0; x < width; x += stepX) {
-      const [r, g, b] = rgbAt(x, y);
-      seen.add((r << 16) | (g << 8) | b);
-      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      sum += lum;
-      min = Math.min(min, lum);
-      max = Math.max(max, lum);
-    }
-  }
-  const samples = Math.ceil(width / stepX) * Math.ceil(height / stepY);
-  const center = rgbAt(Math.floor(width / 2), Math.floor(height / 2));
-  return { unique: seen.size, mean: sum / samples, min, max, center };
 }
 
 function contactSheet(dir, manifest, loose) {
@@ -250,7 +123,7 @@ for (const entry of manifest.patterns) {
     fail(`${entry.name}: non-uniform scale (${width}x${height} vs css ${entry.css_width}x${entry.css_height})`);
   }
 
-  const decoded = unfilter(parsed, entry.file);
+  const decoded = unfilter(parsed);
   const s = stats(decoded, parsed);
 
   if (s.unique < 8) fail(`${entry.name}: only ${s.unique} unique colours — looks blank`);
@@ -275,6 +148,15 @@ for (const entry of manifest.patterns) {
     }
   }
 
+  // Native runs must prove the bundled fonts loaded and the page measured itself: without both,
+  // the 3-OS comparison has nothing to compare.
+  if (!isMock) {
+    if (entry.font_ok !== true) {
+      fail(`${entry.name}: bundled ZTS fonts did not load (font_ok=false) — Linux would render tofu`);
+    }
+    if (!entry.layout) fail(`${entry.name}: no layout fingerprint (page never measured itself)`);
+  }
+
   checked += 1;
   lines.push(
     `  ${entry.name.padEnd(16)} ${String(width).padStart(5)}x${String(height).padEnd(5)} ` +
@@ -293,7 +175,7 @@ for (const name of readdirSync(dir).sort()) {
   if (!name.toLowerCase().endsWith('.png') || known.has(name)) continue;
   const buf = readFileSync(path.join(dir, name));
   const parsed = parsePng(buf, name);
-  const decoded = unfilter(parsed, name);
+  const decoded = unfilter(parsed);
   const s = stats(decoded, parsed);
   if (parsed.ihdr.width < 64 || parsed.ihdr.height < 64) fail(`${name}: ${parsed.ihdr.width}x${parsed.ihdr.height} too small`);
   if (s.unique < 8) fail(`${name}: only ${s.unique} unique colours — looks blank`);
