@@ -1,8 +1,8 @@
 # Task M3-02: Windows ネイティブバックエンド（`Win32` + DLL 不要 Direct `WebView2`）
 
-- **Status**: `done`（Run [`#40474070313`](https://github.com/umiturtle/Z-Ts/actions/runs/40474070313) で 3/3 GREEN）
+- **Status**: `done`（Run [`#40475213250`](https://github.com/umiturtle/Z-Ts/actions/runs/40475213250) で 3/3 GREEN）
 - **Branch**: `arena/16ce0c2f-z-ts`
-- **Scope**: `src/webview/{windows,win32,webview2_com,webview2_loader,windows_util}.zig`, `tests/webview/windows_smoke.zig`, `src/webview/mod.zig`, `build.zig`, `zigw`, `scripts/gen-webview2-com.py`, `.github/workflows/ci.yml`, `docs/tasks/M3-02-windows-webview2.md`, `docs/decisions/0007-*.md`
+- **Scope**: `src/webview/{windows,win32,webview2_com,webview2_loader,windows_util}.zig`, `tests/webview/{windows_smoke,windows_e2e}.zig`, `src/webview/mod.zig`, `build.zig`, `zigw`, `scripts/gen-webview2-com.py`, `.github/workflows/ci.yml`, `docs/tasks/M3-02-windows-webview2.md`, `docs/decisions/0007-*.md`
 - **Upstream Reference**: `vendor/wry/src/webview2/`, [`sumatrapdfreader/sumatrapdf` `ext/webview2/WebView2Loader.cpp`](https://github.com/sumatrapdfreader/sumatrapdf/blob/master/ext/webview2/WebView2Loader.cpp)（MS 純正ローダのクリーンルーム再実装）, `vendor/tao/src/platform_impl/windows/`
 - **Next Step**: `M3-03`（Overlay 埋め込み & C ABI）へ。再検証は
   `gh api "repos/umiturtle/Z-Ts/actions/runs?branch=arena/16ce0c2f-z-ts&per_page=1" --jq '.workflow_runs[0].id'`
