@@ -419,6 +419,9 @@ pub fn build(b: *std.Build) void {
         .root_module = c_abi_mod,
     });
 
+    // Declared outside the Windows block so the `test` step can depend on it conditionally.
+    var windows_e2e_run: ?*std.Build.Step.Run = null;
+
     // `M3-02` deployment proof: a **single** self-contained `.exe` (no `WebView2Loader.dll`).
     // Built for every Windows target — including Linux -> `-Dtarget=x86_64-windows-gnu` — and
     // installed so `ci-windows` can execute the exact shipped binary.
@@ -437,6 +440,25 @@ pub fn build(b: *std.Build) void {
             .root_module = smoke_mod,
         });
         b.installArtifact(smoke_exe);
+
+        // The E2E runs as a *standalone executable*, not as a `test` block: a crash inside a COM or
+        // browser callback must surface as plain stderr in the CI log (and not as an opaque
+        // "1 crash" in the test runner's accounting). `zig build test` depends on it below.
+        const e2e_mod = b.createModule(.{
+            .root_source_file = b.path("tests/webview/windows_e2e.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "zts_webview", .module = webview_mod },
+            },
+        });
+        const e2e_exe = b.addExecutable(.{
+            .name = "zts_webview2_e2e",
+            .root_module = e2e_mod,
+        });
+        const run_e2e = b.addRunArtifact(e2e_exe);
+        windows_e2e_run = run_e2e;
     }
 
     const foundation_tests = b.addTest(.{ .root_module = foundation_mod });
@@ -494,4 +516,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(wasm_app_native_tests).step);
     test_step.dependOn(&b.addRunArtifact(embedded_consumer_tests).step);
     test_step.dependOn(&run_wasm_e2e.step);
+    // Native Windows E2E (`M3-02`): real HWND + WebView2 round trip, `OK windows-wv2 …` marker.
+    if (windows_e2e_run) |run_e2e| test_step.dependOn(&run_e2e.step);
 }

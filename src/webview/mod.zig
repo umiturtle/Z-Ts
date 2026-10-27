@@ -52,6 +52,7 @@ pub const StepMode = types.StepMode;
 pub const BackendKind = types.BackendKind;
 pub const WebviewError = types.WebviewError;
 pub const HeaderPair = types.HeaderPair;
+pub const OwnedBytes = types.OwnedBytes;
 pub const SchemeRequest = types.SchemeRequest;
 pub const SchemeResponse = types.SchemeResponse;
 pub const SchemeHandler = types.SchemeHandler;
@@ -196,6 +197,29 @@ pub const Engine = union(enum) {
                 b.close_handler = handler;
             },
         }
+    }
+
+    /// CORS preflights (`OPTIONS`) absorbed by the platform layer before reaching Zig. Non-zero on
+    /// the backends that intercept them itself (WKWebView shim, WebView2 `WebResourceRequested`),
+    /// so E2E reports can prove the CORS path was exercised without a Zig round trip.
+    pub fn preflightCount(self: *Engine) u64 {
+        return switch (self.*) {
+            .headless_mock => 0,
+            .linux_gtk => 0,
+            .macos_wk => |b| if (comptime has_native_macos) b.preflightCount() else 0,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.preflightCount() else 0,
+        };
+    }
+
+    /// Human-readable native WebView runtime version (`"155.0.4283.62"` for WebView2), or `null`
+    /// on backends where the OS provides the engine without a queryable version.
+    pub fn runtimeVersion(self: *Engine) ?[]const u8 {
+        return switch (self.*) {
+            .headless_mock => null,
+            .linux_gtk => null,
+            .macos_wk => null,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.runtime.versionString() else null,
+        };
     }
 
     pub fn completeRequest(self: *Engine, req_id: RequestId, resp: SchemeResponse) WebviewError!void {
