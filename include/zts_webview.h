@@ -192,7 +192,33 @@ int32_t zts_webview_window_set_always_on_top(zts_webview_engine_t *engine, zts_w
 int32_t zts_webview_window_set_focus(zts_webview_engine_t *engine, zts_window_id_t win);
 int32_t zts_webview_window_start_drag(zts_webview_engine_t *engine, zts_window_id_t win);
 
-/* --- 4. Script Injection, Evaluation, Navigation & DevTools --- */
+/* --- 4. Screenshot Capture (PNG) --- */
+/*
+ * Capture is asynchronous on every backend (WebKit snapshot / WKWebView snapshot / WebView2
+ * CapturePreview), so it integrates with the same host loop as everything else:
+ *
+ *     zts_webview_window_capture(engine, win);
+ *     for (;;) {
+ *         zts_webview_poll(engine);
+ *         zts_capture_t shot = {0};
+ *         if (zts_webview_capture_take(engine, win, &shot) != ZTS_WEBVIEW_OK) break;  // failed
+ *         if (shot.len > 0) { write(shot.data, shot.len); zts_webview_capture_free(engine, &shot); break; }
+ *         host_sleep_ms(1);                       // still rendering
+ *     }
+ */
+typedef struct zts_capture {
+    uint8_t *data;   /* PNG bytes, owned by the caller after `capture_take` returns 0/len>0 */
+    size_t len;      /* 0 == not ready yet */
+    uint32_t width;  /* pixels, parsed from the PNG IHDR (may be 2x on hi-DPI displays) */
+    uint32_t height;
+} zts_capture_t;
+
+int32_t zts_webview_window_capture(zts_webview_engine_t *engine, zts_window_id_t win);
+/* ZTS_WEBVIEW_OK + len == 0 => still rendering; ZTS_WEBVIEW_OK + len > 0 => caller owns `data`. */
+int32_t zts_webview_capture_take(zts_webview_engine_t *engine, zts_window_id_t win, zts_capture_t *out);
+void zts_webview_capture_free(zts_webview_engine_t *engine, zts_capture_t *capture);
+
+/* --- 5. Script Injection, Evaluation, Navigation & DevTools --- */
 int32_t zts_webview_add_init_script(zts_webview_engine_t *engine, zts_window_id_t win, const char *js_source);
 int32_t zts_webview_eval_js(zts_webview_engine_t *engine, zts_window_id_t win, const char *js_source);
 int32_t zts_webview_navigate(zts_webview_engine_t *engine, zts_window_id_t win, const char *url);

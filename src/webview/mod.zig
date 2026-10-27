@@ -16,6 +16,7 @@ pub const types = @import("types.zig");
 pub const pending = @import("pending.zig");
 pub const mock = @import("mock.zig");
 pub const c_api = @import("c_api.zig");
+pub const png = @import("png.zig");
 
 comptime {
     // Force Zig's lazy semantic analyzer to emit all `export fn zts_webview_*` C ABI symbols
@@ -59,6 +60,8 @@ pub const SchemeHandler = types.SchemeHandler;
 pub const MessageHandler = types.MessageHandler;
 pub const CloseHandler = types.CloseHandler;
 pub const WindowConfig = types.WindowConfig;
+pub const Capture = types.Capture;
+pub const CaptureFormat = types.CaptureFormat;
 pub const HeadlessMock = mock.HeadlessMock;
 
 /// Runtime-selectable WebView engine wrapping either the native OS WebView (`LinuxGtkBackend`)
@@ -432,6 +435,32 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Starts an asynchronous PNG screenshot of `win_id`'s current viewport (`M5-04`).
+    ///
+    /// All three native backends capture asynchronously (WebKit snapshot / `WKWebView`
+    /// `takeSnapshotWithConfiguration:` / WebView2 `CapturePreview`), so this only *queues* the work:
+    /// drive the loop with `step(.poll)` and collect the result with `takeCapture()`. Calling it
+    /// again before collection replaces the pending image instead of leaking it.
+    pub fn captureWindow(self: *Engine, win_id: WindowId) WebviewError!void {
+        return switch (self.*) {
+            .headless_mock => |m| m.captureWindow(win_id),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.captureWindow(win_id) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.captureWindow(win_id) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.captureWindow(win_id) else unreachable,
+        };
+    }
+
+    /// Moves a finished screenshot to the caller, or `null` while the backend is still rendering.
+    /// The caller owns the returned `Capture` and must `deinit()` it.
+    pub fn takeCapture(self: *Engine, win_id: WindowId) WebviewError!?Capture {
+        return switch (self.*) {
+            .headless_mock => |m| m.takeCapture(win_id),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.takeCapture(win_id) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.takeCapture(win_id) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.takeCapture(win_id) else unreachable,
+        };
+    }
+
     pub fn openDevtools(self: *Engine, win_id: WindowId) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.openDevtools(win_id),
@@ -445,6 +474,8 @@ pub const Engine = union(enum) {
 test {
     _ = types;
     _ = pending;
+    _ = png;
+    _ = @import("capture_test.zig");
     _ = mock;
     _ = c_api;
     _ = coords;

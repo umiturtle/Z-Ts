@@ -326,3 +326,48 @@ pub extern "c" fn webkit_uri_scheme_response_set_http_headers(
     response: *WebKitURISchemeResponse,
     headers: *SoupMessageHeaders,
 ) void;
+
+// --- Screenshot capture (`M5-04`): `WebKitWebView` snapshot + cairo PNG stream ---
+//
+// `webkit_web_view_get_snapshot()` renders the page offscreen (no X11 screen grab, so it works in
+// Xvfb and never needs a compositor). The result is a `cairo_surface_t*` that we serialise with
+// `cairo_surface_write_to_png_stream()`, keeping the whole path inside libcairo — no GDK pixbuf,
+// no extra package, and identical bytes on every machine.
+pub const cairo_surface_t = opaque {};
+pub const cairo_status_t = c_int;
+pub const CAIRO_STATUS_SUCCESS: cairo_status_t = 0;
+
+/// `WebKitSnapshotRegion` (`WebKitWebView.h`) — visible viewport vs. the whole document.
+pub const WebKitSnapshotRegion = c_int;
+pub const WEBKIT_SNAPSHOT_REGION_VISIBLE: WebKitSnapshotRegion = 0;
+pub const WEBKIT_SNAPSHOT_REGION_FULL_DOCUMENT: WebKitSnapshotRegion = 1;
+
+/// `WebKitSnapshotOptions` bit flags.
+pub const WebKitSnapshotOptions = c_uint;
+pub const WEBKIT_SNAPSHOT_OPTIONS_NONE: WebKitSnapshotOptions = 0;
+pub const WEBKIT_SNAPSHOT_OPTIONS_INCLUDE_SELECTION_HIGHLIGHTING: WebKitSnapshotOptions = 1 << 0;
+pub const WEBKIT_SNAPSHOT_OPTIONS_TRANSPARENT_BACKGROUND: WebKitSnapshotOptions = 1 << 1;
+
+/// `cairo_write_func_t`: append `length` bytes to the caller's buffer; return 0 (`SUCCESS`).
+pub const CairoWriteFunc = *const fn (closure: ?*anyopaque, data: [*]const u8, length: c_uint) callconv(.c) cairo_status_t;
+
+pub extern "c" fn webkit_web_view_get_snapshot(
+    web_view: *WebKitWebView,
+    region: WebKitSnapshotRegion,
+    options: WebKitSnapshotOptions,
+    cancellable: ?*GCancellable,
+    callback: GAsyncReadyCallback,
+    user_data: gpointer,
+) void;
+pub extern "c" fn webkit_web_view_get_snapshot_finish(
+    web_view: *WebKitWebView,
+    result: *GAsyncResult,
+    err: ?*?*GError,
+) ?*cairo_surface_t;
+
+pub extern "c" fn cairo_surface_write_to_png_stream(
+    surface: *cairo_surface_t,
+    write_func: CairoWriteFunc,
+    closure: ?*anyopaque,
+) cairo_status_t;
+pub extern "c" fn cairo_surface_destroy(surface: *cairo_surface_t) void;

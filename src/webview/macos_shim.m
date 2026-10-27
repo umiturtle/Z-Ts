@@ -38,6 +38,8 @@ typedef void (*zts_macos_scheme_cb)(
     unsigned long body_len);
 
 typedef void (*zts_macos_message_cb)(void *userdata, unsigned long long win, const char *json);
+/// Screenshot completion (`M5-04`): `bytes == NULL` means the render failed.
+typedef void (*zts_macos_capture_cb)(void *userdata, unsigned long long win, const void *bytes, unsigned long len);
 typedef void (*zts_macos_close_cb)(void *userdata, unsigned long long win);
 
 @class ZtsBackend;
@@ -1023,5 +1025,49 @@ void zts_macos_window_open_devtools(void *h, unsigned long long ident) {
     if (rec == nil) return;
     if (@available(macOS 13.3, *)) {
         [rec.webview setInspectable:YES];
+    }
+}
+
+#pragma mark - Screenshot capture (`M5-04`)
+
+/// `WKWebView`'s `takeSnapshotWithConfiguration:completionHandler:` renders the page through the
+/// WebContent process — no screen recording permission (unlike `screencapture`), no visible window
+/// required, and no window chrome in the image. The completion handler runs on the main run loop,
+/// i.e. inside `zts_macos_step()`, so the Zig side copies the bytes before returning.
+///
+/// `bytes == NULL` signals a failed render; the Zig backend turns that into `error.PlatformFailure`.
+void zts_macos_window_capture(void *h, unsigned long long ident, void *userdata, zts_macos_capture_cb cb) {
+    ZtsBackend *b = ZtsB(h);
+    if (b == nil || cb == NULL) return;
+
+    @autoreleasepool {
+        ZtsWindow *rec = ZtsWindowFor(b, ident);
+        if (rec == nil || rec.webview == nil) {
+            cb(userdata, ident, NULL, 0);
+            return;
+        }
+
+        WKSnapshotConfiguration *cfg = [WKSnapshotConfiguration new];
+        cfg.afterScreenUpdates = YES;
+
+        [rec.webview takeSnapshotWithConfiguration:cfg
+                                 completionHandler:^(NSImage *image, NSError *error) {
+                                   if (image == nil || error != nil) {
+                                       cb(userdata, ident, NULL, 0);
+                                       return;
+                                   }
+                                   NSData *tiff = [image TIFFRepresentation];
+                                   NSBitmapImageRep *rep =
+                                       tiff != nil ? [[NSBitmapImageRep alloc] initWithData:tiff] : nil;
+                                   NSData *png = rep != nil
+                                       ? [rep representationUsingType:NSBitmapImageFileTypePNG
+                                                          properties:@{}]
+                                       : nil;
+                                   if (png == nil || png.length == 0) {
+                                       cb(userdata, ident, NULL, 0);
+                                       return;
+                                   }
+                                   cb(userdata, ident, png.bytes, (unsigned long)png.length);
+                                 }];
     }
 }

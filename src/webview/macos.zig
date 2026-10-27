@@ -126,6 +126,10 @@ const shim = struct {
     extern fn zts_macos_window_navigate(h: ?*anyopaque, ident: u64, url: [*:0]const u8) void;
     extern fn zts_macos_window_load_html(h: ?*anyopaque, ident: u64, html: [*:0]const u8, base_url: ?[*:0]const u8) void;
     extern fn zts_macos_window_open_devtools(h: ?*anyopaque, ident: u64) void;
+
+    /// Screenshot completion (`M5-04`): `bytes == null` means the render failed.
+    const CaptureCb = *const fn (userdata: ?*anyopaque, win: u64, bytes: ?*const anyopaque, len: usize) callconv(.c) void;
+    extern fn zts_macos_window_capture(h: ?*anyopaque, ident: u64, userdata: ?*anyopaque, cb: CaptureCb) void;
 };
 
 // ---------------------------------------------------------------------------
@@ -157,6 +161,34 @@ const PendingToken = struct {
     }
 };
 
+/// In-flight / finished-but-uncollected `takeSnapshotWithConfiguration:` render (`M5-04`).
+/// Heap-owned because WebKit can deliver the completion handler after the window was closed.
+const SnapshotSlot = struct {
+    backend: *MacOsBackend,
+    win_id: types.WindowId,
+    bytes: ?[]u8 = null,
+    done: bool = false,
+    failed: bool = false,
+    /// Window closed (or superseded) before the completion handler ran: free the result silently.
+    discard: bool = false,
+
+    fn destroy(self: *SnapshotSlot) void {
+        const backend = self.backend;
+        for (backend.snapshots.items, 0..) |candidate, idx| {
+            if (candidate == self) {
+                _ = backend.snapshots.swapRemove(idx);
+                break;
+            }
+        }
+        if (self.bytes) |b| backend.allocator.free(b);
+        backend.allocator.destroy(self);
+    }
+};
+
+fn sameWindow(a: types.WindowId, b: types.WindowId) bool {
+    return a.index == b.index and a.generation == b.generation;
+}
+
 /// Native `NSWindow` frame in Cocoa coordinates (origin = bottom-left, Y grows upwards).
 pub const CocoaFrame = struct {
     x: f64 = 0,
@@ -176,6 +208,9 @@ pub const MacOsBackend = struct {
 
     message_handler: ?types.MessageHandler = null,
     close_handler: ?types.CloseHandler = null,
+
+    /// Screenshot slots WebKit still owes a completion handler for (`M5-04`).
+    snapshots: std.ArrayList(*SnapshotSlot) = .empty,
 
     /// Creates the shared `NSApplication` + `WKWebViewConfiguration` (Dock icon / menu bar enabled).
     pub fn init(allocator: Allocator, io: Io) types.WebviewError!*MacOsBackend {
@@ -232,6 +267,21 @@ pub const MacOsBackend = struct {
             alloc.destroy(slot);
         }
         self.scheme_slots.deinit(alloc);
+
+        // 4. Screenshots: bounded pump so outstanding completion handlers land, then free.
+        var pumps: usize = 0;
+        while (self.snapshots.items.len > 0 and pumps < 1000) : (pumps += 1) {
+            var settled = true;
+            for (self.snapshots.items) |slot| {
+                if (!slot.done and !slot.failed) settled = false;
+            }
+            if (settled) break;
+            _ = shim.zts_macos_step(self.handle, 0);
+        }
+        while (self.snapshots.items.len > 0) {
+            self.snapshots.items[self.snapshots.items.len - 1].destroy();
+        }
+        self.snapshots.deinit(alloc);
 
         shim.zts_macos_backend_free(self.handle);
         alloc.destroy(self);
@@ -512,6 +562,7 @@ pub const MacOsBackend = struct {
         const native = w.native;
 
         _ = self.pending.cancelForWindow(self.allocator, win_id, PendingToken.cancel);
+        self.dropSnapshots(win_id);
         _ = self.windows.release(win_id) catch {};
         if (shim.zts_macos_window_close(self.handle, native) == 0) return error.WindowNotFound;
     }
@@ -519,6 +570,84 @@ pub const MacOsBackend = struct {
     pub fn nativeHandle(self: *MacOsBackend, win_id: types.WindowId) ?*anyopaque {
         const w = self.windows.getPtr(win_id) orelse return null;
         return shim.zts_macos_window_native(self.handle, w.native);
+    }
+
+    // -----------------------------------------------------------------------
+    // Screenshot capture (`M5-04`) — asynchronous, completed by `step(.poll)`
+    // -----------------------------------------------------------------------
+
+    /// Queues `takeSnapshotWithConfiguration:` for the window's visible viewport.
+    pub fn captureWindow(self: *MacOsBackend, win_id: types.WindowId) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+
+        for (self.snapshots.items) |slot| {
+            if (sameWindow(slot.win_id, win_id) and !slot.done) slot.discard = true;
+        }
+
+        const slot = self.allocator.create(SnapshotSlot) catch return error.OutOfMemory;
+        slot.* = .{ .backend = self, .win_id = win_id };
+        self.snapshots.append(self.allocator, slot) catch {
+            self.allocator.destroy(slot);
+            return error.OutOfMemory;
+        };
+
+        shim.zts_macos_window_capture(self.handle, w.native, slot, onCaptureReady);
+    }
+
+    /// Collects a finished render, or `null` while WebKit is still rasterising.
+    pub fn takeCapture(self: *MacOsBackend, win_id: types.WindowId) types.WebviewError!?types.Capture {
+        _ = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+
+        for (self.snapshots.items) |slot| {
+            if (!sameWindow(slot.win_id, win_id) or slot.discard) continue;
+            if (!slot.done and !slot.failed) return null;
+
+            const failed = slot.failed or slot.bytes == null;
+            const owned: ?[]u8 = slot.bytes;
+            slot.bytes = null;
+            slot.destroy();
+            if (failed) return error.PlatformFailure;
+            return try types.Capture.initOwned(self.allocator, owned.?);
+        }
+        return null;
+    }
+
+    fn dropSnapshots(self: *MacOsBackend, win_id: types.WindowId) void {
+        var idx: usize = 0;
+        while (idx < self.snapshots.items.len) {
+            const slot = self.snapshots.items[idx];
+            if (sameWindow(slot.win_id, win_id)) {
+                slot.destroy();
+                continue;
+            }
+            idx += 1;
+        }
+    }
+
+    fn onCaptureReady(userdata: ?*anyopaque, _: u64, bytes: ?*const anyopaque, len: usize) callconv(.c) void {
+        const slot: *SnapshotSlot = @ptrCast(@alignCast(userdata orelse return));
+        const raw = bytes orelse {
+            slot.failed = true;
+            return;
+        };
+        if (len == 0) {
+            slot.failed = true;
+            return;
+        }
+        if (slot.discard) {
+            slot.failed = true;
+            slot.done = true;
+            return;
+        }
+
+        const src: [*]const u8 = @ptrCast(raw);
+        const copy = slot.backend.allocator.dupe(u8, src[0..len]) catch {
+            slot.failed = true;
+            return;
+        };
+        if (slot.bytes) |old| slot.backend.allocator.free(old);
+        slot.bytes = copy;
+        slot.done = true;
     }
 
     /// Overlay embedding (`M3-03`): resize the child `WKWebView` to the host view's bounds.

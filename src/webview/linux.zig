@@ -67,6 +67,37 @@ const OwnedBodyHolder = struct {
     body: types.OwnedBytes,
 };
 
+/// In-flight (or finished, uncollected) `webkit_web_view_get_snapshot()` render (`M5-04`).
+///
+/// The completion callback owns the slot: it either frees it (discarded / failed) or leaves it in
+/// `LinuxGtkBackend.snapshots` with `done = true` for `takeCapture()`. The struct is heap-allocated
+/// because WebKit may deliver the callback after the window has been closed.
+const SnapshotSlot = struct {
+    backend: *LinuxGtkBackend,
+    win_id: types.WindowId,
+    buf: std.ArrayList(u8) = .empty,
+    done: bool = false,
+    failed: bool = false,
+    /// Set when the window was closed (or a newer capture was requested) before completion.
+    discard: bool = false,
+
+    fn destroy(self: *SnapshotSlot) void {
+        const backend = self.backend;
+        for (backend.snapshots.items, 0..) |candidate, idx| {
+            if (candidate == self) {
+                _ = backend.snapshots.swapRemove(idx);
+                break;
+            }
+        }
+        self.buf.deinit(backend.allocator);
+        backend.allocator.destroy(self);
+    }
+};
+
+fn sameWindow(a: types.WindowId, b: types.WindowId) bool {
+    return a.index == b.index and a.generation == b.generation;
+}
+
 fn cancelWebKitRequest(req_ptr: *c.WebKitURISchemeRequest) void {
     const quark = c.g_quark_from_static_string("zts-webview-quark");
     const gerr = c.g_error_new_literal(quark, 1, "Request canceled");
@@ -92,6 +123,10 @@ pub const LinuxGtkBackend = struct {
     message_handler: ?types.MessageHandler = null,
     close_handler: ?types.CloseHandler = null,
     force_software_render: bool = false,
+
+    /// Screenshot slots that WebKit still owes us a callback for, plus finished-but-uncollected
+    /// images. Freed by `deinit()` in every path, so `std.testing.allocator` proves no leak.
+    snapshots: std.ArrayList(*SnapshotSlot) = .empty,
 
     pub fn init(allocator: Allocator, io: Io) types.WebviewError!*LinuxGtkBackend {
         if (c.gtk_init_check(null, null) == 0) {
@@ -143,6 +178,23 @@ pub const LinuxGtkBackend = struct {
         while ((c.g_main_context_iteration(null, 0) != 0 or self.active_streams.load(.acquire) > 0 or self.wakeup_scheduled.load(.acquire)) and spins < 1000) : (spins += 1) {
             _ = c.g_main_context_iteration(null, 0);
         }
+
+        // 4. Screenshots: give WebKit a bounded window to deliver outstanding snapshot callbacks,
+        //    then free whatever is left (the slot is heap-owned, so a late callback cannot dangle
+        //    onto a freed backend field).
+        var snapshot_pumps: usize = 0;
+        while (self.snapshots.items.len > 0 and snapshot_pumps < 1000) : (snapshot_pumps += 1) {
+            var all_settled = true;
+            for (self.snapshots.items) |slot| {
+                if (!slot.done and !slot.failed) all_settled = false;
+            }
+            if (all_settled) break;
+            _ = c.g_main_context_iteration(null, 0);
+        }
+        while (self.snapshots.items.len > 0) {
+            self.snapshots.items[self.snapshots.items.len - 1].destroy();
+        }
+        self.snapshots.deinit(alloc);
 
         for (self.signal_slots.items) |s| alloc.destroy(s);
         self.signal_slots.deinit(alloc);
@@ -632,6 +684,7 @@ pub const LinuxGtkBackend = struct {
 
     pub fn closeWindow(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
         const w_ptr = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        self.dropSnapshots(win_id);
         const top = w_ptr.toplevel;
         const wv = w_ptr.webview;
         const ucm = w_ptr.ucm;
@@ -651,6 +704,115 @@ pub const LinuxGtkBackend = struct {
         // Embedded windows have no `GtkWindow` of their own: hand back the widget the host actually
         // owns, so `gtk_widget_get_parent()` from host code proves the overlay is really mounted.
         return if (w.toplevel) |t| @ptrCast(t) else @ptrCast(w.webview);
+    }
+
+    // -----------------------------------------------------------------------
+    // Screenshot capture (`M5-04`) — asynchronous, completed by `step(.poll)`
+    // -----------------------------------------------------------------------
+
+    /// Queues an offscreen render of the window's visible viewport.
+    ///
+    /// WebKit renders through the network process, so the image is only ready after at least one
+    /// main-context iteration; `takeCapture()` returns `null` until then. A second request for the
+    /// same window while one is in flight supersedes it (the older result is discarded).
+    pub fn captureWindow(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+
+        self.dropSnapshots(win_id);
+        for (self.snapshots.items) |slot| {
+            if (sameWindow(slot.win_id, win_id) and !slot.done) slot.discard = true;
+        }
+
+        const slot = self.allocator.create(SnapshotSlot) catch return error.OutOfMemory;
+        slot.* = .{ .backend = self, .win_id = win_id };
+        self.snapshots.append(self.allocator, slot) catch {
+            self.allocator.destroy(slot);
+            return error.OutOfMemory;
+        };
+
+        c.webkit_web_view_get_snapshot(
+            w.webview,
+            c.WEBKIT_SNAPSHOT_REGION_VISIBLE,
+            c.WEBKIT_SNAPSHOT_OPTIONS_NONE,
+            null,
+            &onSnapshotReady,
+            slot,
+        );
+    }
+
+    /// Collects a finished render, or `null` while WebKit is still rasterising.
+    pub fn takeCapture(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!?types.Capture {
+        _ = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+
+        for (self.snapshots.items) |slot| {
+            if (!sameWindow(slot.win_id, win_id) or slot.discard) continue;
+            if (!slot.done and !slot.failed) return null;
+
+            const failed = slot.failed;
+            const bytes = if (failed) null else (slot.buf.toOwnedSlice(self.allocator) catch {
+                slot.destroy();
+                return error.OutOfMemory;
+            });
+            slot.destroy();
+            if (failed) return error.PlatformFailure;
+            return try types.Capture.initOwned(self.allocator, bytes.?);
+        }
+        return null;
+    }
+
+    fn dropSnapshots(self: *LinuxGtkBackend, win_id: types.WindowId) void {
+        var idx: usize = 0;
+        while (idx < self.snapshots.items.len) {
+            const slot = self.snapshots.items[idx];
+            if (sameWindow(slot.win_id, win_id)) {
+                slot.destroy();
+                continue;
+            }
+            idx += 1;
+        }
+    }
+
+    fn onSnapshotReady(source_object: ?*anyopaque, result: ?*c.GAsyncResult, user_data: ?*anyopaque) callconv(.c) void {
+        const slot: *SnapshotSlot = @ptrCast(@alignCast(user_data orelse return));
+        const res = result orelse {
+            slot.failed = true;
+            return;
+        };
+        // `source_object` is the `WebKitWebView` that started the request (WebKit keeps it alive
+        // until the callback runs), so it can be handed straight back to `..._finish`.
+        const web_view: *c.WebKitWebView = @ptrCast(@alignCast(source_object orelse {
+            slot.failed = true;
+            return;
+        }));
+
+        var gerr: ?*c.GError = null;
+        const surface = c.webkit_web_view_get_snapshot_finish(web_view, res, &gerr);
+        if (gerr) |err| c.g_error_free(err);
+        if (surface == null) {
+            slot.failed = true;
+            return;
+        }
+        defer c.cairo_surface_destroy(surface.?);
+
+        if (slot.discard) {
+            slot.buf.clearRetainingCapacity();
+            slot.failed = true;
+            slot.done = true;
+            return;
+        }
+
+        const status = c.cairo_surface_write_to_png_stream(surface.?, &writeToSlot, slot);
+        if (status != c.CAIRO_STATUS_SUCCESS) {
+            slot.failed = true;
+            return;
+        }
+        slot.done = true;
+    }
+
+    fn writeToSlot(closure: ?*anyopaque, data: [*]const u8, length: c_uint) callconv(.c) c.cairo_status_t {
+        const slot: *SnapshotSlot = @ptrCast(@alignCast(closure orelse return 1));
+        slot.buf.appendSlice(slot.backend.allocator, data[0..length]) catch return 1;
+        return c.CAIRO_STATUS_SUCCESS;
     }
 
     /// Overlay embedding (`M3-03`): resize the child WebView to the host container's client area.

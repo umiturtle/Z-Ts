@@ -41,6 +41,10 @@ const max_body_bytes: usize = 64 * 1024 * 1024;
 const startup_timeout_ms: u32 = 15_000;
 /// Calling convention of every COM method (`winapi` on Windows targets only — see `win32.CC`).
 const CALL = win32.CC;
+
+/// `ole32!CreateStreamOnHGlobal` — the only COM stream factory that needs no HGLOBAL from the
+/// caller. `fDeleteOnRelease = TRUE` lets the release in `CaptureSlot.destroy()` free the memory.
+extern fn CreateStreamOnHGlobal(hglobal: ?*anyopaque, delete_on_release: com.BOOL, stream: *?*com.IStream) callconv(CALL) com.HResult;
 /// `COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL` — **`0`**, not `0xFFFFFFFF` (see `WebView2.h`:
 /// `ALL = 0`, then `DOCUMENT = ALL + 1`, …). Passing `-1` here makes the browser walk an
 /// out-of-range enum and crash the host process on the first `AddWebResourceRequestedFilter`.
@@ -125,7 +129,39 @@ const Deferred = struct {
 // COM event handler objects
 // ---------------------------------------------------------------------------
 
-const HandlerKind = enum(u32) { environment_ready, controller_ready, web_message, web_resource, window_close, noop };
+/// In-flight / finished-but-uncollected `CapturePreview` (`M5-04`).
+///
+/// WebView2 writes the PNG into an `IStream` and calls the handler later, so the slot outlives the
+/// call. It is heap-owned and freed by the completion handler (or by `deinit()` on a closed
+/// window), exactly like the scheme deferrals above.
+const CaptureSlot = struct {
+    backend: *WindowsWebView2Backend,
+    win_id: types.WindowId,
+    stream: *com.IStream,
+    bytes: ?[]u8 = null,
+    done: bool = false,
+    failed: bool = false,
+    discard: bool = false,
+
+    fn destroy(self: *CaptureSlot) void {
+        const backend = self.backend;
+        for (backend.captures.items, 0..) |candidate, idx| {
+            if (candidate == self) {
+                _ = backend.captures.swapRemove(idx);
+                break;
+            }
+        }
+        _ = self.stream.vtable.Release(self.stream);
+        if (self.bytes) |b| backend.allocator.free(b);
+        backend.allocator.destroy(self);
+    }
+};
+
+fn sameWindow(a: types.WindowId, b: types.WindowId) bool {
+    return a.index == b.index and a.generation == b.generation;
+}
+
+const HandlerKind = enum(u32) { environment_ready, controller_ready, web_message, web_resource, window_close, capture_complete, noop };
 
 var trace_state: ?bool = null;
 
@@ -161,6 +197,8 @@ const Handler = extern struct {
     kind: HandlerKind,
     /// `types.WindowId.toU64()` (`0` = backend-wide, e.g. the environment callback).
     ident: u64 = 0,
+    /// Kind-specific payload (`capture_complete` → `*CaptureSlot`); never owned by the handler.
+    aux: ?*anyopaque = null,
 
     fn queryInterface(self: *Handler, riid: *const com.Guid, out: *?*anyopaque) com.HResult {
         const wanted: *const com.Guid = switch (self.kind) {
@@ -169,6 +207,7 @@ const Handler = extern struct {
             .web_message => &com.IID_ICoreWebView2WebMessageReceivedEventHandler,
             .web_resource => &com.IID_ICoreWebView2WebResourceRequestedEventHandler,
             .window_close => &com.IID_ICoreWebView2WindowCloseRequestedEventHandler,
+            .capture_complete => &com.IID_ICoreWebView2CapturePreviewCompletedHandler,
             .noop => &com.IID_IUnknown,
         };
         if (guidEql(riid, &com.IID_IUnknown) or guidEql(riid, wanted)) {
@@ -217,6 +256,7 @@ const ControllerIface = com.ICoreWebView2CreateCoreWebView2ControllerCompletedHa
 const MessageIface = com.ICoreWebView2WebMessageReceivedEventHandler;
 const ResourceIface = com.ICoreWebView2WebResourceRequestedEventHandler;
 const CloseIface = com.ICoreWebView2WindowCloseRequestedEventHandler;
+const CaptureIface = com.ICoreWebView2CapturePreviewCompletedHandler;
 
 fn envInvoke(
     this: *EnvIface,
@@ -265,6 +305,11 @@ fn closeInvoke(
     _ = args;
     const self: *Handler = @ptrCast(@alignCast(this));
     return self.backend.onWindowCloseRequested(self.ident);
+}
+
+fn captureInvoke(this: *CaptureIface, error_code: com.HResult) callconv(CALL) com.HResult {
+    const self: *Handler = @ptrCast(@alignCast(this));
+    return self.backend.onCaptureComplete(self.aux, error_code);
 }
 
 fn noopInvoke(this: *Handler, a: ?*anyopaque, b: ?*anyopaque) callconv(CALL) com.HResult {
@@ -335,6 +380,13 @@ const resource_vtable = ResourceIface.VTable{
     .Invoke = resourceInvoke,
 };
 
+const capture_vtable = CaptureIface.VTable{
+    .QueryInterface = handlerBase(CaptureIface).query,
+    .AddRef = handlerBase(CaptureIface).addRef,
+    .Release = handlerBase(CaptureIface).release,
+    .Invoke = captureInvoke,
+};
+
 const close_vtable = CloseIface.VTable{
     .QueryInterface = handlerBase(CloseIface).query,
     .AddRef = handlerBase(CloseIface).addRef,
@@ -369,6 +421,9 @@ pub const WindowsWebView2Backend = struct {
 
     message_handler: ?types.MessageHandler = null,
     close_handler: ?types.CloseHandler = null,
+
+    /// Screenshot slots (`M5-04`): pending renders and finished images not yet collected.
+    captures: std.ArrayList(*CaptureSlot) = .empty,
 
     quit: bool = false,
     had_windows: bool = false,
@@ -510,6 +565,13 @@ pub const WindowsWebView2Backend = struct {
         self.windows.deinit(self.allocator);
         self.pumpMessages();
 
+        // 3b. Screenshots: any handler that has not fired by now can never be observed, so the
+        //     slot (stream included) is released here instead of leaking until process exit.
+        while (self.captures.items.len > 0) {
+            self.captures.items[self.captures.items.len - 1].destroy();
+        }
+        self.captures.deinit(self.allocator);
+
         for (self.scheme_slots.items) |slot| {
             self.allocator.free(slot.scheme);
             self.allocator.destroy(slot);
@@ -552,6 +614,7 @@ pub const WindowsWebView2Backend = struct {
                 .web_message => &message_vtable,
                 .web_resource => &resource_vtable,
                 .window_close => &close_vtable,
+                .capture_complete => &capture_vtable,
                 .noop => &noop_vtable,
             },
             .backend = self,
@@ -1360,6 +1423,7 @@ pub const WindowsWebView2Backend = struct {
         w.finalized = true;
 
         _ = self.pending.cancelForWindow(self.allocator, w.id, PendingToken.cancel);
+        self.dropCaptures(w.id);
         self.destroyWebView(w);
 
         const id = w.id;
@@ -1380,6 +1444,143 @@ pub const WindowsWebView2Backend = struct {
 
     fn closeByIdent(self: *WindowsWebView2Backend, ident: u64) void {
         if (self.windowByIdent(ident)) |w| self.beginClose(w);
+    }
+
+    // -----------------------------------------------------------------------
+    // Screenshot capture (`M5-04`) — asynchronous, completed by `step(.poll)`
+    // -----------------------------------------------------------------------
+
+    /// Queues `ICoreWebView2::CapturePreview(PNG, stream, handler)`.
+    ///
+    /// WebView2 refuses to capture before the first `ContentLoading`, so the caller must have waited
+    /// for the page (the gallery app polls for `ready` + a load tick). Anything captured earlier
+    /// fails the same way a hidden window does: the handler never fires and `takeCapture()` keeps
+    /// returning `null` until the app's own deadline expires.
+    pub fn captureWindow(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        const wv = w.webview orelse return error.PlatformFailure;
+        if (!w.ready) return error.PlatformFailure;
+
+        for (self.captures.items) |slot| {
+            if (sameWindow(slot.win_id, win_id) and !slot.done) slot.discard = true;
+        }
+
+        var stream: ?*com.IStream = null;
+        if (com.failed(CreateStreamOnHGlobal(null, com.TRUE, &stream)) or stream == null) {
+            return error.PlatformFailure;
+        }
+        const st = stream.?;
+
+        const slot = self.allocator.create(CaptureSlot) catch {
+            _ = st.vtable.Release(st);
+            return error.OutOfMemory;
+        };
+        slot.* = .{ .backend = self, .win_id = win_id, .stream = st };
+        self.captures.append(self.allocator, slot) catch {
+            _ = st.vtable.Release(st);
+            self.allocator.destroy(slot);
+            return error.OutOfMemory;
+        };
+
+        const handler = self.newHandler(.capture_complete, win_id.toU64()) catch {
+            slot.destroy();
+            return error.OutOfMemory;
+        };
+        handler.aux = slot;
+
+        const hr = wv.vtable.CapturePreview(wv, com.COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, st, @ptrCast(handler));
+        if (com.failed(hr)) {
+            trace("CapturePreview failed hr=0x{x}", .{@as(u32, @bitCast(hr))});
+            slot.destroy();
+            return error.PlatformFailure;
+        }
+    }
+
+    /// Collects a finished render, or `null` while WebView2 is still rasterising.
+    pub fn takeCapture(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!?types.Capture {
+        _ = self.windows.get(win_id) orelse return error.WindowNotFound;
+
+        for (self.captures.items) |slot| {
+            if (!sameWindow(slot.win_id, win_id) or slot.discard) continue;
+            if (!slot.done and !slot.failed) return null;
+
+            const failed = slot.failed or slot.bytes == null;
+            const owned: ?[]u8 = slot.bytes;
+            slot.bytes = null;
+            slot.destroy();
+            if (failed) return error.PlatformFailure;
+            return try types.Capture.initOwned(self.allocator, owned.?);
+        }
+        return null;
+    }
+
+    fn dropCaptures(self: *WindowsWebView2Backend, win_id: types.WindowId) void {
+        var idx: usize = 0;
+        while (idx < self.captures.items.len) {
+            const slot = self.captures.items[idx];
+            if (sameWindow(slot.win_id, win_id)) {
+                // A render still in flight keeps its slot alive (the handler owns it); it is
+                // released on completion. A finished one is freed immediately.
+                if (slot.done or slot.failed) {
+                    slot.destroy();
+                } else {
+                    slot.discard = true;
+                    idx += 1;
+                }
+                continue;
+            }
+            idx += 1;
+        }
+    }
+
+    fn onCaptureComplete(self: *WindowsWebView2Backend, aux: ?*anyopaque, hr: com.HResult) com.HResult {
+        const slot: *CaptureSlot = @ptrCast(@alignCast(aux orelse return com.S_OK));
+        if (slot.discard) {
+            slot.destroy();
+            return com.S_OK;
+        }
+        if (com.failed(hr)) {
+            trace("CapturePreview handler failed hr=0x{x}", .{@as(u32, @bitCast(hr))});
+            slot.failed = true;
+            slot.done = true;
+            return com.S_OK;
+        }
+
+        if (self.readStream(slot)) |bytes| {
+            if (slot.bytes) |old| self.allocator.free(old);
+            slot.bytes = bytes;
+            slot.done = true;
+        } else {
+            slot.failed = true;
+            slot.done = true;
+        }
+        return com.S_OK;
+    }
+
+    /// Copies everything the browser wrote into the slot's `IStream` into an owned buffer.
+    fn readStream(self: *WindowsWebView2Backend, slot: *CaptureSlot) ?[]u8 {
+        const st = slot.stream;
+        var size: u64 = 0;
+        if (com.failed(st.vtable.Seek(st, 0, com.STREAM_SEEK_END, &size))) return null;
+        var start: u64 = 0;
+        if (com.failed(st.vtable.Seek(st, 0, com.STREAM_SEEK_SET, &start))) return null;
+        if (size == 0 or size > max_body_bytes) return null;
+
+        const buf = self.allocator.alloc(u8, @intCast(size)) catch return null;
+        var total: usize = 0;
+        while (total < buf.len) {
+            var got: u32 = 0;
+            const chunk: u32 = @intCast(@min(buf.len - total, 1 << 20));
+            const hr = st.vtable.Read(st, buf.ptr + total, chunk, &got);
+            if (com.failed(hr) or got == 0) break;
+            total += got;
+        }
+        if (total == 0) {
+            self.allocator.free(buf);
+            return null;
+        }
+        if (total != buf.len) return self.allocator.realloc(buf, total) catch buf;
+        return buf;
     }
 
     pub fn nativeHandle(self: *WindowsWebView2Backend, win_id: types.WindowId) ?*anyopaque {

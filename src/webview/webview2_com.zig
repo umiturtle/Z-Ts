@@ -251,7 +251,7 @@ pub const ICoreWebView2 = extern struct {
         AddScriptToExecuteOnDocumentCreated: *const fn (this: *ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CALL) HResult,
         RemoveScriptToExecuteOnDocumentCreated: *const fn (this: *ICoreWebView2, id: [*:0]const u16) callconv(CALL) HResult,
         ExecuteScript: *const fn (this: *ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CALL) HResult,
-        CapturePreview: ?*const anyopaque,
+        CapturePreview: *const fn (this: *ICoreWebView2, image_format: i32, stream: ?*IStream, handler: ?*anyopaque) callconv(CALL) HResult,
         Reload: *const fn (this: *ICoreWebView2) callconv(CALL) HResult,
         PostWebMessageAsJson: *const fn (this: *ICoreWebView2, json: [*:0]const u16) callconv(CALL) HResult,
         PostWebMessageAsString: *const fn (this: *ICoreWebView2, message: [*:0]const u16) callconv(CALL) HResult,
@@ -286,6 +286,50 @@ pub const ICoreWebView2 = extern struct {
 };
 
 pub const IID_ICoreWebView2 = guid("76eceacb-0462-4d94-ac83-423a6793775e");
+
+/// `COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT` — `PNG = 0`, `JPEG = 1`.
+pub const COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG: i32 = 0;
+
+/// `IStream` (`objidl.h`), 13 vtable slots. Only `Seek` + `Read` are typed because that is all a
+/// `CapturePreview` buffer needs; the rest stay opaque so the *offsets* stay ABI-exact.
+pub const IStream = extern struct {
+    vtable: *const VTable,
+
+    pub const VTable = extern struct {
+        QueryInterface: *const fn (this: *IStream, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *IStream) callconv(CALL) u32,
+        Release: *const fn (this: *IStream) callconv(CALL) u32,
+        Read: *const fn (this: *IStream, buf: ?*anyopaque, to_read: u32, read: ?*u32) callconv(CALL) HResult,
+        Write: ?*const anyopaque,
+        /// `LARGE_INTEGER` / `ULARGE_INTEGER` are 64-bit values passed by value on x86_64 & arm64.
+        Seek: *const fn (this: *IStream, move: i64, origin: u32, new_pos: ?*u64) callconv(CALL) HResult,
+        SetSize: ?*const anyopaque,
+        CopyTo: ?*const anyopaque,
+        Commit: ?*const anyopaque,
+        Revert: ?*const anyopaque,
+        LockRegion: ?*const anyopaque,
+        UnlockRegion: ?*const anyopaque,
+        Stat: ?*const anyopaque,
+        Clone: ?*const anyopaque,
+    };
+};
+
+pub const STREAM_SEEK_SET: u32 = 0;
+pub const STREAM_SEEK_END: u32 = 2;
+
+/// `ICoreWebView2CapturePreviewCompletedHandler` (4 vtable slots — order is the ABI).
+pub const ICoreWebView2CapturePreviewCompletedHandler = extern struct {
+    vtable: *const VTable,
+
+    pub const VTable = extern struct {
+        QueryInterface: *const fn (this: *ICoreWebView2CapturePreviewCompletedHandler, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2CapturePreviewCompletedHandler) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2CapturePreviewCompletedHandler) callconv(CALL) u32,
+        Invoke: *const fn (this: *ICoreWebView2CapturePreviewCompletedHandler, error_code: HResult) callconv(CALL) HResult,
+    };
+};
+
+pub const IID_ICoreWebView2CapturePreviewCompletedHandler = guid("697e05e9-3d8f-45fa-96f4-8ffe1ededaf5");
 
 /// `ICoreWebView2Settings` (21 vtable slots — order is the ABI).
 pub const ICoreWebView2Settings = extern struct {
@@ -529,12 +573,24 @@ comptime {
     std.debug.assert(@sizeOf(ICoreWebView2WebMessageReceivedEventArgs.VTable) == 6 * @sizeOf(usize));
     std.debug.assert(@sizeOf(ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler.VTable) == 4 * @sizeOf(usize));
     std.debug.assert(@sizeOf(ICoreWebView2CreateCoreWebView2ControllerCompletedHandler.VTable) == 4 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2CapturePreviewCompletedHandler.VTable) == 4 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(IStream.VTable) == 14 * @sizeOf(usize));
     std.debug.assert(@sizeOf(ICoreWebView2WebMessageReceivedEventHandler.VTable) == 4 * @sizeOf(usize));
     std.debug.assert(@sizeOf(ICoreWebView2WebResourceRequestedEventHandler.VTable) == 4 * @sizeOf(usize));
     std.debug.assert(@sizeOf(ICoreWebView2WindowCloseRequestedEventHandler.VTable) == 4 * @sizeOf(usize));
     std.debug.assert(@sizeOf(Guid) == 16);
     std.debug.assert(@sizeOf(Rect) == 16);
     std.debug.assert(@sizeOf(Color) == 4);
+}
+
+test "capture API: PNG format id, handler IID and vtable slot counts are pinned" {
+    try std.testing.expectEqual(@as(i32, 0), COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG);
+    // `{697E05E9-3D8F-45FA-96F4-8FFE1EDEDAF5}` from the WebView2 SDK header.
+    const iid = IID_ICoreWebView2CapturePreviewCompletedHandler;
+    try std.testing.expectEqual(@as(u32, 0x697e05e9), iid.d1);
+    try std.testing.expectEqual(@as(u16, 0x3d8f), iid.d2);
+    try std.testing.expectEqual(@as(u16, 0x45fa), iid.d3);
+    try std.testing.expectEqualSlices(u8, &.{ 0x96, 0xf4, 0x8f, 0xfe, 0x1e, 0xde, 0xda, 0xf5 }, &iid.d4);
 }
 
 test "GUID parser matches the SDK and every IID is 128-bit" {

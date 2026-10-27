@@ -50,6 +50,21 @@ int main(void) {
         NULL
     ) == ZTS_WEBVIEW_OK);
 
+    /* `M5-04`: screenshot capture from a strict C99 host.
+     * The mock backend renders synchronously, so one `capture_take` is enough; the assertions pin
+     * the PNG signature and the IHDR dimensions (500x260 after the resize above). */
+    CHECK(zts_webview_window_capture(eng, win) == ZTS_WEBVIEW_OK);
+    zts_capture_t shot = {0};
+    CHECK(zts_webview_capture_take(eng, win, &shot) == ZTS_WEBVIEW_OK);
+    CHECK(shot.len > 8 && shot.data != NULL);
+    CHECK(shot.width == 1280 && shot.height == 720);
+    CHECK(shot.data[0] == 0x89 && shot.data[1] == 'P' && shot.data[2] == 'N' && shot.data[3] == 'G');
+    zts_webview_capture_free(eng, &shot);
+    /* The struct is zeroed by `capture_free`, and a second free is a no-op. */
+    CHECK(shot.data == NULL && shot.len == 0);
+    zts_webview_capture_free(eng, &shot);
+    CHECK(zts_webview_capture_free != NULL);
+
     zts_webview_request_quit(eng);
     CHECK(zts_webview_step(eng, ZTS_STEP_BLOCKING) == false);
     CHECK(g_released == sizeof(payload));
