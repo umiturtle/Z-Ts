@@ -51,15 +51,15 @@ const patterns = [_]Pattern{
     .{
         .name = "dashboard-dark",
         .theme = "dark",
-        .css_width = 1024,
-        .css_height = 640,
+        .css_width = 1000,
+        .css_height = 620,
         .html = @embedFile("web/dashboard-dark.html"),
     },
     .{
         .name = "typography-cjk",
         .theme = "light",
         .css_width = 860,
-        .css_height = 680,
+        .css_height = 620,
         .html = @embedFile("web/typography-cjk.html"),
         .settle_ms = 900, // plenty of `@font-face`-less CJK shaping work
     },
@@ -90,8 +90,8 @@ const patterns = [_]Pattern{
     .{
         .name = "wide-split",
         .theme = "mixed",
-        .css_width = 1200, // deliberately wider than 1024: proves the window really resized
-        .css_height = 700,
+        .css_width = 1000, // the widest the 1024×674 macOS runner screen allows
+        .css_height = 600,
         .html = @embedFile("web/wide-split.html"),
     },
     .{
@@ -108,6 +108,10 @@ const WindowState = struct {
     id: webview.WindowId,
     pattern: usize,
     messages: usize = 0,
+    /// First `__ztsPostMessage` payload: the page reports its real viewport, which is what the
+    /// capture must match (the OS may clamp a window to the screen, and window chrome is not part
+    /// of the web content).
+    report: ?[]u8 = null,
 };
 
 const Gallery = struct {
@@ -187,10 +191,41 @@ fn onSchemeRequest(userdata: ?*anyopaque, req: webview.types.SchemeRequest) void
 }
 
 fn onMessage(userdata: ?*anyopaque, win: webview.WindowId, message: []const u8) void {
-    _ = message;
     const g: *Gallery = @ptrCast(@alignCast(userdata orelse return));
-    if (g.stateFor(win)) |ws| ws.messages += 1;
+    const ws = g.stateFor(win) orelse return;
+    ws.messages += 1;
+    if (ws.report == null) {
+        ws.report = g.allocator.dupe(u8, message) catch null;
+    }
 }
+
+/// Reads `"key": <number>` out of the page's tiny ready message (no JSON parser needed here).
+fn jsonNumber(msg: []const u8, key: []const u8) ?u32 {
+    var buf: [32]u8 = undefined;
+    const needle = std.fmt.bufPrint(&buf, "\"{s}\":", .{key}) catch return null;
+    const at = std.mem.indexOf(u8, msg, needle) orelse return null;
+    var i = at + needle.len;
+    while (i < msg.len and (msg[i] == ' ' or msg[i] == '\t')) i += 1;
+    var end = i;
+    while (end < msg.len and std.ascii.isDigit(msg[end])) end += 1;
+    if (end == i) return null;
+    return std.fmt.parseInt(u32, msg[i..end], 10) catch null;
+}
+
+/// Injected at `DOCUMENT_START` (after the backends install `window.__ztsPostMessage`), so the
+/// gallery knows exactly when a page finished loading *and* how big its viewport really is.
+const ready_script =
+    \\window.addEventListener('load', function () {
+    \\  try {
+    \\    window.__ztsPostMessage(JSON.stringify({
+    \\      ready: true,
+    \\      w: window.innerWidth || 0,
+    \\      h: window.innerHeight || 0,
+    \\      dpr: window.devicePixelRatio || 1
+    \\    }));
+    \\  } catch (e) { /* older hosts without the alias: the app falls back to a timed wait */ }
+    \\});
+;
 
 // ---------------------------------------------------------------------------
 // Capture loop
@@ -201,6 +236,18 @@ fn pump(g: *Gallery, frames: usize, sleep_ms: i64) void {
         _ = g.engine.step(.poll);
         if (sleep_ms > 0) g.io.sleep(.fromMilliseconds(sleep_ms), .awake) catch {};
     }
+}
+
+/// Drives the loop until the page reports `ready` (or the budget expires).
+fn waitForReady(g: *Gallery, win: webview.WindowId, timeout_ms: i64) bool {
+    var waited: i64 = 0;
+    while (waited < timeout_ms) : (waited += 10) {
+        _ = g.engine.step(.poll);
+        const ws = g.stateFor(win) orelse return false;
+        if (ws.messages > 0) return true;
+        g.io.sleep(.fromMilliseconds(10), .awake) catch {};
+    }
+    return false;
 }
 
 /// Polls until the backend hands back an image (`null` = still rendering).
@@ -244,6 +291,7 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
         const id = try g.engine.createWindow(.{
             .title = "Z-Ts gallery",
             .size = .wh(@floatFromInt(p.css_width), @floatFromInt(p.css_height)),
+            .init_scripts = &.{ready_script},
             .initial_url = null,
             .initial_html = null,
         });
@@ -258,17 +306,37 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
             g.engine.closeWindow(id) catch {};
         }
 
-        // Wait for the document, then an idle window so fonts/layout settle.
+        // 1. Wait until the document fired `load` **and** reported its real viewport. On Windows
+        //    the WebView2 browser process can take seconds to start, so a fixed sleep alone would
+        //    capture a blank surface (the first CI run proved exactly that).
+        const is_mock = std.mem.eql(u8, host, "mock"); // the mock runs no JS: nothing to wait for
+        const ready = if (is_mock) false else waitForReady(g, id, 20_000);
+        // 2. Let late work settle: fonts, `scrollIntoView()` and the fetch round trip.
         pump(g, p.settle_ms / 10, 10);
-        // Let a `load`-time script (scrollIntoView / fetch) finish before asking for pixels.
-        pump(g, 30, 10);
 
         const ws_ptr = g.stateFor(id) orelse return error.WindowStateLost;
         if (p.expects_message and ws_ptr.messages == 0) {
-            // One more grace period: the fetch round trip may still be in flight on a cold start.
-            pump(g, 60, 10);
+            pump(g, 100, 10);
         }
         const message_count = ws_ptr.messages;
+
+        // The capture must line up with the *web content* box, not the requested window size:
+        // macOS clamps windows to the screen and every OS subtracts its title bar.
+        var css_w = p.css_width;
+        var css_h = p.css_height;
+        if (ws_ptr.report) |report| {
+            if (jsonNumber(report, "w")) |w| {
+                if (w >= 64) css_w = w;
+            }
+            if (jsonNumber(report, "h")) |h| {
+                if (h >= 64) css_h = h;
+            }
+        } else if (!is_mock) {
+            std.debug.print("gallery: {s} no ready report (timed wait) — using the requested size\n", .{p.name});
+        }
+        if (!ready and !is_mock) {
+            std.debug.print("gallery: {s} page never signalled `load` within 20s\n", .{p.name});
+        }
 
         var capture = try captureOnce(g, id);
         defer capture.deinit();
