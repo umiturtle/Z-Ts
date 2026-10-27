@@ -57,7 +57,7 @@
   （`WebView2Loader.dll` 非同梱・レジストリから `EmbeddedBrowserWebView.dll` を直接ロード。COM vtable は
   `scripts/gen-webview2-com.py` が `WebView2.h` から生成し 17 IF / 217 スロットを `@sizeOf` で断言。
   E2E は **standalone exe** `tests/webview/windows_e2e.zig` で、WebView2 `155.0.4283.62` 上
-  `OK windows-wv2 checks=… preflights=1 dpr=1 single-exe=1`。）
+  `OK windows-wv2 checks=19 runtime=155.0.4283.62 preflights=1 dpr=1.00 single-exe=1`。）
 
 ### `M3-03`：既存親ウィンドウ埋め込み（Overlay Mode）& C ABI 他言語実証
 - **専有スコープ**: `examples/c_embed/`, `src/webview/embed_test.zig`

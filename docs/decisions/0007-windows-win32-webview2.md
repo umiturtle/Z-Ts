@@ -161,10 +161,10 @@ WebResourceRequested (STA)
 
 | 項目 | 値 |
 |---|---|
-| E2E マーカー | `OK windows-wv2 checks=… runtime=155.0.4283.62 preflights=1 dpr=1 single-exe=1` |
-| スモーク | `OK windows-webview2-smoke single-exe=1 …`（インストール済み `.exe` を直接起動） |
+| E2E マーカー | `OK windows-wv2 checks=19 runtime=155.0.4283.62 preflights=1 dpr=1.00 single-exe=1` |
+| スモーク | `OK windows-webview2-smoke single-exe=1 report={"dpr":1,"w":520,"h":320,"ua":true}`（インストール済み `.exe` を直接起動） |
 | 単一バイナリ | `zig-out/bin/zts_webview2_smoke.exe` 2.5 MB / DLL 0 件（`WebView2Loader.dll` 非同梱） |
-| テスト | `ci-windows` 110/110 + E2E、Linux ホスト `./zigw build test --summary all` 41/41 steps / 35/36 tests（skip 1 = レジストリ読み取り） |
+| テスト | `ci-windows` 43/43 steps・112/112 tests + E2E、Linux ホスト `./zigw build test --summary all` 41/41 steps / 35/36 tests（skip 1 = レジストリ読み取り） |
 | クロスビルド | Linux → `./zigw build -Dtarget=x86_64-windows-gnu` **4/4** |
 
 **得られたもの**

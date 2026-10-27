@@ -1,6 +1,6 @@
 # Task M3-02: Windows ネイティブバックエンド（`Win32` + DLL 不要 Direct `WebView2`）
 
-- **Status**: `done`（`ci-windows` 実機で E2E GREEN。Run `#40473092476` で macOS / Linux / Windows 3/3）
+- **Status**: `done`（Run [`#40474070313`](https://github.com/umiturtle/Z-Ts/actions/runs/40474070313) で 3/3 GREEN）
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/webview/{windows,win32,webview2_com,webview2_loader,windows_util}.zig`, `tests/webview/windows_smoke.zig`, `src/webview/mod.zig`, `build.zig`, `zigw`, `scripts/gen-webview2-com.py`, `.github/workflows/ci.yml`, `docs/tasks/M3-02-windows-webview2.md`, `docs/decisions/0007-*.md`
 - **Upstream Reference**: `vendor/wry/src/webview2/`, [`sumatrapdfreader/sumatrapdf` `ext/webview2/WebView2Loader.cpp`](https://github.com/sumatrapdfreader/sumatrapdf/blob/master/ext/webview2/WebView2Loader.cpp)（MS 純正ローダのクリーンルーム再実装）, `vendor/tao/src/platform_impl/windows/`
@@ -39,8 +39,8 @@
 - [x] Linux からの `./zigw build -Dtarget=x86_64-windows-gnu` クロスコンパイルが単一 `.exe` を出力
       （`zig-out/bin/zts_webview2_smoke.exe` 2.4 MB / DLL 0 件。CI ゲートで常時監視）
 - [x] GitHub Actions `ci-windows` で実ウィンドウ + IPC 往復 + クリーン終了 E2E が通過
-      （`tests/webview/windows_e2e.zig` を **standalone exe** として実行。runtime `155.0.4283.62` /
-      `preflights=1` / `dpr=1` / `single-exe=1`）
+      （`tests/webview/windows_e2e.zig` を **standalone exe** として実行。
+      `OK windows-wv2 checks=19 runtime=155.0.4283.62 preflights=1 dpr=1.00 single-exe=1`）
 
 ---
 
@@ -79,7 +79,8 @@
   4. `findClientDll` が `path` を `dupe` したまま未解放（`SafeAllocator: leaked`）→ `load` で解放。
 - **最終状態**: `./zigw build test --summary all` = **41/41 steps / 35/36 tests（skip 1 = Linux 上の
   レジストリテスト）**、`./zigw quick-test` PASS、`./zigw build -Dtarget=x86_64-windows-gnu` **4/4**、
-  `python3 scripts/check-docs.py` 33 files OK、`ci-windows` は `OK windows-wv2 checks=…` を出力して成功。
+  `python3 scripts/check-docs.py` 33 files OK、`ci-windows` は
+  `OK windows-wv2 checks=19 … preflights=1 dpr=1.00 single-exe=1` を出力して成功（Run `#40474070313`）。
 ---
 
 ## 3. 設計判断・技術メモ・ハマりどころ
