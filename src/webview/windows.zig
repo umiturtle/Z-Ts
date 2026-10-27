@@ -952,8 +952,11 @@ pub const WindowsWebView2Backend = struct {
         .{ .name = "Access-Control-Expose-Headers", .value = "Tauri-Response, Tauri-Error, Content-Type, Content-Length" },
     };
 
+    /// Everything a preflight needs *on top of* `cors_pairs` — never repeat a header that
+    /// `headerBlock` already emits: two `Access-Control-Allow-Origin` values make Chromium reject
+    /// the preflight ("contains multiple values"), so the real request is never sent and the page
+    /// only sees `TypeError: Failed to fetch`.
     const preflight_pairs = [_]types.HeaderPair{
-        .{ .name = "Access-Control-Allow-Origin", .value = "*" },
         .{ .name = "Access-Control-Allow-Methods", .value = "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
         .{ .name = "Access-Control-Allow-Headers", .value = "*" },
         .{ .name = "Access-Control-Allow-Private-Network", .value = "true" },
@@ -1778,4 +1781,22 @@ test "response header lines are LF separated with no trailing terminator" {
     // Exactly two lines, one `\n` in between, nothing at the end: Chromium only sees
     // `Access-Control-Allow-Origin: *` when the block stops at the final byte of the last value.
     try std.testing.expectEqualStrings("Access-Control-Allow-Origin: *\nContent-Type: text/plain", block.items);
+}
+
+test "a preflight block carries exactly one Access-Control-Allow-Origin" {
+    var backend: WindowsWebView2Backend = undefined;
+    backend.allocator = std.testing.allocator;
+
+    var block: std.ArrayList(u8) = .empty;
+    defer block.deinit(std.testing.allocator);
+    try backend.headerBlock(&block, "text/plain", &WindowsWebView2Backend.preflight_pairs, &.{});
+
+    var occurrences: usize = 0;
+    var rest: []const u8 = block.items;
+    while (std.mem.indexOf(u8, rest, "Access-Control-Allow-Origin:")) |at| {
+        occurrences += 1;
+        rest = rest[at + 1 ..];
+    }
+    try std.testing.expectEqual(@as(usize, 1), occurrences);
+    try std.testing.expect(std.mem.indexOf(u8, block.items, "Access-Control-Allow-Methods: GET, POST") != null);
 }
