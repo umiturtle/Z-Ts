@@ -121,6 +121,80 @@ jobs:
             ../../zigw build --summary all
           } 2>&1 | tee -a ci-output.log
 
+      - name: Screenshot gallery — native captures under Xvfb (M5-04)
+        run: |
+          set -o pipefail
+          {
+            ( cd examples/gallery && ../../zigw build test --summary all && ../../zigw build install --summary all )
+            WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
+              xvfb-run -a examples/gallery/zig-out/bin/zts_gallery \
+                --out "$RUNNER_TEMP/shots" --require-native
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 8
+          } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
+
+      - name: Gate on the screenshot markers (M5-04)
+        run: |
+          set -eo pipefail
+          # `--require-native` makes a HeadlessMock fallback fail outright, so a missing marker can
+          # only mean the GTK backend never produced a real image.
+          if ! grep -q "OK gallery host=" ci-output.log; then
+            echo "::error::gallery marker missing — no native screenshot was captured."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK gallery .*" ci-output.log | tail -n 1
+          if ! grep -q "OK screenshots host=" ci-output.log; then
+            echo "::error::pixel-verification marker missing — the PNG gate did not run."
+            exit 1
+          fi
+          grep -o "OK screenshots .*" ci-output.log | tail -n 1
+
+      - name: Browser captures of the Live Preview & SSG builds (M5-04)
+        run: |
+          set -o pipefail
+          {
+            ( cd examples/counter && ../../zigw build --summary all )
+            CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+            if [ -z "$CHROME" ]; then
+              echo "SKIP browser-shots no chrome/chromium on this runner"
+            else
+              echo "browser-shots using $CHROME"
+              mkdir -p "$RUNNER_TEMP/shots"
+              # 1) Static SSG output served like a real static host (file:// would block the wasm fetch).
+              ( cd examples/counter/zig-out/dist && python3 -m http.server 8792 --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > /tmp/zts_ssg_http.pid )
+              # 2) Live Preview (BridgeServer + SSE) on its own port.
+              ( cd examples/counter && ./zig-out/bin/counter-live --port 8791 --host 127.0.0.1 >/tmp/zts_live.log 2>&1 & echo $! > /tmp/zts_live.pid )
+              for _ in $(seq 1 60); do
+                curl -sf -o /dev/null http://127.0.0.1:8791/ && break
+                sleep 0.2
+              done
+              "$CHROME" --headless=new --disable-gpu --no-sandbox --disable-dev-shm-usage --hide-scrollbars \
+                --window-size=900,640 --virtual-time-budget=6000 \
+                --screenshot="$RUNNER_TEMP/shots/live-counter.png" "http://127.0.0.1:8791/"
+              "$CHROME" --headless=new --disable-gpu --no-sandbox --disable-dev-shm-usage --hide-scrollbars \
+                --window-size=900,640 --virtual-time-budget=6000 \
+                --screenshot="$RUNNER_TEMP/shots/ssg-counter.png" "http://127.0.0.1:8792/"
+              kill "$(cat /tmp/zts_live.pid)" 2>/dev/null || true
+              kill "$(cat /tmp/zts_ssg_http.pid)" 2>/dev/null || true
+              sleep 0.3
+              ls -l "$RUNNER_TEMP/shots"
+              test -s "$RUNNER_TEMP/shots/live-counter.png"
+              test -s "$RUNNER_TEMP/shots/ssg-counter.png"
+            fi
+            # Loose PNGs (no manifest entry) still go through structure + non-blank checks.
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots"
+          } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
+          grep -o "OK screenshots .*" ci-output.log | tail -n 1
+
+      - name: Upload screenshots (Linux)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-linux
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Publish captured output to Check Run API for Arena agents
         if: always()
         uses: actions/github-script@v7
@@ -210,6 +284,40 @@ jobs:
             ../../zigw build test --summary all
             ../../zigw build --summary all
           } 2>&1 | tee -a ci-output.log
+
+      - name: Screenshot gallery — native WKWebView captures (M5-04)
+        run: |
+          set -o pipefail
+          {
+            ( cd examples/gallery && ../../zigw build install --summary all )
+            examples/gallery/zig-out/bin/zts_gallery --out "$RUNNER_TEMP/shots" --require-native
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 8
+          } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
+
+      - name: Gate on the screenshot markers (M5-04)
+        run: |
+          set -eo pipefail
+          # A `host=cocoa` marker proves the images came from `WKWebView.takeSnapshot…`, not the mock.
+          grep -q "OK gallery host=cocoa" ci-output.log || {
+            echo "::error::Cocoa gallery marker missing — WKWebView snapshot did not run."
+            tail -n 200 ci-output.log
+            exit 1
+          }
+          grep -o "OK gallery .*" ci-output.log | tail -n 1
+          grep -q "OK screenshots host=cocoa" ci-output.log || {
+            echo "::error::pixel-verification marker missing (cocoa)."
+            exit 1
+          }
+          grep -o "OK screenshots .*" ci-output.log | tail -n 1
+
+      - name: Upload screenshots (macOS)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-macos
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()
@@ -376,6 +484,44 @@ jobs:
             ../../zigw build test --summary all
             ../../zigw build --summary all
           } 2>&1 | tee -a ci-output.log
+
+      - name: Screenshot gallery — native WebView2 captures (M5-04)
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            ( cd examples/gallery && ../../zigw build install --summary all )
+            ZTS_WEBVIEW_TRACE=1 examples/gallery/zig-out/bin/zts_gallery.exe \
+              --out "$RUNNER_TEMP/shots" --require-native
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 8
+          } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
+
+      - name: Gate on the screenshot markers (M5-04)
+        shell: bash
+        run: |
+          set -eo pipefail
+          # `CapturePreview` only fires for a visible controller, so `host=win32` means a real
+          # WebView2 surface rendered the page — not a mock, not a blank stream.
+          grep -q "OK gallery host=win32" ci-output.log || {
+            echo "::error::Win32 gallery marker missing — WebView2 CapturePreview did not run."
+            tail -n 300 ci-output.log
+            exit 1
+          }
+          grep -o "OK gallery .*" ci-output.log | tail -n 1
+          grep -q "OK screenshots host=win32" ci-output.log || {
+            echo "::error::pixel-verification marker missing (win32)."
+            exit 1
+          }
+          grep -o "OK screenshots .*" ci-output.log | tail -n 1
+
+      - name: Upload screenshots (Windows)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()

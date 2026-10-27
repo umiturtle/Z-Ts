@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Z-Ts — scheme round trip</title>
+<style>
+  html,body { margin:0; height:100%; }
+  body { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px;
+         font-family:-apple-system, "Hiragino Sans", "Noto Sans CJK JP", sans-serif;
+         background:#f8fafc; color:#0f172a;
+         /* 中央の 1 ピクセルが下の JS で #123456 に塗り替わる（CI はこの色を検証する）。 */
+       }
+  #swatch { width:100%; height:100%; position:absolute; inset:0; background:#ffffff; z-index:0; }
+  .card { position:relative; z-index:1; background:#fff; border:1px solid #e2e8f0; border-radius:16px;
+          padding:26px 30px; box-shadow:0 20px 50px rgba(15,23,42,.10); text-align:center; max-width:520px; }
+  h1 { font-size:20px; margin:0 0 8px; }
+  p { margin:0; font-size:13px; line-height:1.8; color:#475467; }
+  code { font-family:"SF Mono", Menlo, Consolas, monospace; font-size:12px; background:#f1f5f9;
+         border-radius:6px; padding:2px 6px; }
+  #state { margin-top:14px; font-family:"SF Mono", Menlo, Consolas, monospace; font-size:12px;
+           color:#334155; word-break:break-all; }
+</style>
+</head>
+<body>
+  <div id="swatch"></div>
+  <div class="card">
+    <h1>カスタムスキーム往復</h1>
+    <p><code>fetch('gallery://localhost/api/state')</code> の応答で背景色とこのテキストが変わります。
+       ネイティブ側のハンドラ → JS の順に値が届けば、画面全体が <code>#123456</code> になります。</p>
+    <div id="state">contacting native handler…</div>
+  </div>
+<script>
+  (function () {
+    var state = document.getElementById('state');
+    fetch('gallery://localhost/api/state', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        document.getElementById('swatch').style.background = j.accent;
+        state.textContent = 'accent=' + j.accent + ' ok=' + j.ok;
+        if (window.__ztsPostMessage) window.__ztsPostMessage(JSON.stringify({ ready: true, accent: j.accent }));
+        document.title = 'ready';
+      })
+      .catch(function (e) {
+        state.textContent = 'FAILED: ' + e;
+        document.title = 'failed';
+      });
+  })();
+</script>
+</body>
+</html>

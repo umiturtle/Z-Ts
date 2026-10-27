@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Z-Ts — compact 320x240</title>
+<style>
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body { font-family:-apple-system, "Hiragino Sans", "Noto Sans CJK JP", sans-serif;
+         background:#111827; color:#f9fafb; padding:12px; display:flex; flex-direction:column; gap:8px; }
+  h1 { font-size:14px; margin:0; letter-spacing:.02em; }
+  .grid { flex:1; display:grid; grid-template-columns:repeat(4, 1fr); grid-template-rows:repeat(3, 1fr); gap:6px; }
+  .cell { border-radius:6px; }
+  .c1{background:#ef4444}.c2{background:#f97316}.c3{background:#eab308}.c4{background:#22c55e}
+  .c5{background:#14b8a6}.c6{background:#0ea5e9}.c7{background:#6366f1}.c8{background:#a855f7}
+  .c9{background:#ec4899}.c10{background:#f43f5e}.c11{background:#64748b}.c12{background:#94a3b8}
+  footer { font-size:10px; color:#9ca3af; letter-spacing:.14em; text-transform:uppercase; }
+</style>
+</head>
+<body>
+  <h1>320 × 240 · 縮小ビューポート</h1>
+  <div class="grid">
+    <div class="cell c1"></div><div class="cell c2"></div><div class="cell c3"></div><div class="cell c4"></div>
+    <div class="cell c5"></div><div class="cell c6"></div><div class="cell c7"></div><div class="cell c8"></div>
+    <div class="cell c9"></div><div class="cell c10"></div><div class="cell c11"></div><div class="cell c12"></div>
+  </div>
+  <footer>capture stress · 12 colors</footer>
+</body>
+</html>

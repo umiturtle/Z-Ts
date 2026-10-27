@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Z-Ts — wide split view</title>
+<style>
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body { display:flex; font-family:-apple-system, "Hiragino Sans", "Noto Sans CJK JP", sans-serif;
+         background:#f1f5f9; color:#0f172a; }
+  .rail { width:64px; background:#0f172a; display:flex; flex-direction:column; align-items:center;
+          padding:14px 0; gap:12px; flex:none; }
+  .rail i { width:30px; height:30px; border-radius:9px; background:#1e293b; display:block; }
+  .rail i.on { background:linear-gradient(135deg,#22d3ee,#6366f1); }
+  .list { width:280px; background:#fff; border-right:1px solid #e2e8f0; padding:16px; flex:none; }
+  .list h2 { font-size:13px; margin:0 0 12px; color:#64748b; letter-spacing:.1em; text-transform:uppercase; }
+  .item { display:flex; gap:10px; padding:10px; border-radius:10px; }
+  .item.on { background:#eef2ff; }
+  .item b { font-size:13px; display:block; }
+  .item span { font-size:11px; color:#64748b; }
+  .dot { width:32px; height:32px; border-radius:50%; flex:none; }
+  .main { flex:1; padding:22px 26px; display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .head { display:flex; justify-content:space-between; align-items:flex-end; }
+  .head h1 { margin:0; font-size:22px; }
+  .head p { margin:4px 0 0; font-size:12px; color:#64748b; }
+  .tag { padding:6px 12px; border-radius:8px; background:#dcfce7; color:#166534; font-size:12px; font-weight:600; }
+  .body { display:grid; grid-template-columns:1.6fr 1fr; gap:16px; flex:1; min-height:0; }
+  .pane { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:16px; overflow:hidden; }
+  .pane h3 { margin:0 0 10px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; }
+  .bars { display:flex; align-items:flex-end; gap:10px; height:64%; }
+  .bars div { flex:1; border-radius:6px 6px 0 0; background:linear-gradient(180deg,#818cf8,#4f46e5); }
+  .kv { display:flex; justify-content:space-between; font-size:12px; padding:7px 0; border-bottom:1px solid #f1f5f9; }
+  .kv span { color:#64748b; } .kv b { font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+  <div class="rail"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+  <div class="list">
+    <h2>Sessions</h2>
+    <div class="item on"><div class="dot" style="background:linear-gradient(135deg,#22d3ee,#6366f1)"></div>
+      <div><b>main · 1280×720</b><span>GTK3 / WKWebView / WebView2</span></div></div>
+    <div class="item"><div class="dot" style="background:#f59e0b"></div>
+      <div><b>overlay-embed</b><span>C99 host · 520×380</span></div></div>
+    <div class="item"><div class="dot" style="background:#10b981"></div>
+      <div><b>live-preview</b><span>SSE ストリーム</span></div></div>
+    <div class="item"><div class="dot" style="background:#64748b"></div>
+      <div><b>ssg-static</b><span>dist/ + wasm</span></div></div>
+  </div>
+  <div class="main">
+    <div class="head">
+      <div><h1>1280 × 720 · ワイドレイアウト</h1><p>サイドバー + 2 カラム。横に広いときの折返しと余白を確認します。</p></div>
+      <div class="tag">capture OK</div>
+    </div>
+    <div class="body">
+      <div class="pane">
+        <h3>ビルド時間 (ms)</h3>
+        <div class="bars">
+          <div style="height:38%"></div><div style="height:62%"></div><div style="height:48%"></div>
+          <div style="height:84%"></div><div style="height:56%"></div><div style="height:72%"></div>
+          <div style="height:30%"></div><div style="height:92%"></div>
+        </div>
+      </div>
+      <div class="pane">
+        <h3>ランタイム</h3>
+        <div class="kv"><span>backend</span><b>native</b></div>
+        <div class="kv"><span>websocket</span><b>off</b></div>
+        <div class="kv"><span>rpc</span><b>binary+json</b></div>
+        <div class="kv"><span>leaks</span><b>0 bytes</b></div>
+        <div class="kv"><span>tests</span><b>116 passed</b></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
