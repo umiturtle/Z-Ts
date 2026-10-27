@@ -41,8 +41,10 @@ const max_body_bytes: usize = 64 * 1024 * 1024;
 const startup_timeout_ms: u32 = 15_000;
 /// Calling convention of every COM method (`winapi` on Windows targets only — see `win32.CC`).
 const CALL = win32.CC;
-/// `COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL`.
-const resource_context_all: i32 = -1;
+/// `COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL` — **`0`**, not `0xFFFFFFFF` (see `WebView2.h`:
+/// `ALL = 0`, then `DOCUMENT = ALL + 1`, …). Passing `-1` here makes the browser walk an
+/// out-of-range enum and crash the host process on the first `AddWebResourceRequestedFilter`.
+const resource_context_all: i32 = 0;
 
 // ---------------------------------------------------------------------------
 // Window record
