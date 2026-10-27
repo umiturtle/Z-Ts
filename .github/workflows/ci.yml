@@ -232,33 +232,53 @@ jobs:
           version: 0.17.0
 
       # `windows-latest` ships Edge but NOT the Evergreen WebView2 Runtime (see
-      # Windows2025-Readme.md → Browsers). Without it the native backend degrades to a skip, so the
+      # Windows2025-Readme.md -> Browsers). Without it the native backend degrades to a skip, so the
       # M3-02 gates below would "pass" without ever exercising a real WebView2 controller.
+      # The registry probe is authoritative and mirrors `webview2_loader.zig` exactly
+      # (`EdgeUpdate\Clients\{GUID}` -> `pv`), so the check can never disagree with the backend.
       - name: Install Evergreen WebView2 Runtime (M3-02 prerequisite)
         shell: pwsh
         run: |
-          $paths = @(
-            "$env:ProgramFiles(x86)\Microsoft\EdgeWebView\Application",
-            "$env:ProgramFiles\Microsoft\EdgeWebView\Application"
-          ) | Where-Object { Test-Path $_ }
-          if ($paths.Count -gt 0) {
-            Write-Host "WebView2 runtime already present:"
-            Get-ChildItem $paths | ForEach-Object { Write-Host "  $($_.FullName)" }
-            exit 0
+          $ErrorActionPreference = 'Stop'
+          $log = 'ci-output.log'
+          function Write-Log([string]$msg) {
+            $line = "webview2-install: $msg"
+            Write-Host $line
+            Add-Content -Path $log -Value $line
           }
-          $setup = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebView2Setup.exe'
-          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $setup
-          Start-Process -FilePath $setup -ArgumentList '/silent', '/install' -Wait
-          $installed = @(
-            "$env:ProgramFiles(x86)\Microsoft\EdgeWebView\Application",
-            "$env:ProgramFiles\Microsoft\EdgeWebView\Application"
-          ) | Where-Object { Test-Path $_ }
-          if ($installed.Count -eq 0) {
-            Write-Error 'WebView2 Evergreen runtime installation failed'
-            exit 1
+          $guid = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          function Get-WebView2Version {
+            foreach ($p in @(
+              "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$guid",
+              "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$guid",
+              "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$guid"
+            )) {
+              if (Test-Path $p) {
+                $pv = (Get-ItemProperty -Path $p -Name pv -ErrorAction SilentlyContinue).pv
+                if ($pv -and $pv -ne '0.0.0.0') { return $pv }
+              }
+            }
+            return $null
           }
-          Get-ChildItem $installed | ForEach-Object { Write-Host "installed: $($_.FullName)" }
-
+          try {
+            $version = Get-WebView2Version
+            if (-not $version) {
+              Write-Log 'not installed -> downloading the Evergreen bootstrapper'
+              $setup = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebView2Setup.exe'
+              Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $setup
+              Write-Log "downloaded $setup"
+              Start-Process -FilePath $setup -ArgumentList '/silent', '/install' -Wait
+              Start-Sleep -Seconds 5
+              $version = Get-WebView2Version
+            }
+            if (-not $version) { throw 'registry key still missing after install' }
+            Write-Log "OK version=$version"
+            Get-ChildItem '${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application' -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Log "  $($_.Name)" }
+          } catch {
+            Add-Content -Path $log -Value "webview2-install: FAIL $($_.Exception.Message)"
+            throw
+          }
       - name: Build & test on Windows
         shell: bash
         run: |
@@ -266,14 +286,15 @@ jobs:
           {
             zig version
             zig build test --summary all
-          } 2>&1 | tee ci-output.log
+          } 2>&1 | tee -a ci-output.log
 
       - name: Verify the native Win32 + Direct WebView2 E2E actually ran (M3-02 gate)
         shell: bash
         run: |
           set -euo pipefail
-          # The backend prints `OK windows-wv2 checks=10 ...` only after a real HWND + WebView2
-          # controller served `tauri://` + `ipc://` traffic and a JS/IPC round trip completed.
+          # The backend prints `OK windows-wv2 checks=12 ...` only after a real HWND + WebView2
+          # controller served `tauri://` + `ipc://` traffic (incl. a real CORS preflight) and a
+          # JS/IPC round trip completed; absence means the native backend was skipped or failed.
           if ! grep -q "OK windows-wv2 checks=" ci-output.log; then
             echo "::error::Windows WebView2 E2E marker missing — the native backend was skipped or failed."
             tail -n 200 ci-output.log
