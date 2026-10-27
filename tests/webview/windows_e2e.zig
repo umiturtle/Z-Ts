@@ -16,6 +16,11 @@
 //! `WebResourceRequested` + `ICoreWebView2Deferral` → page JS `fetch('http://ipc.localhost/ping')`
 //! (`application/json` POST ⇒ real CORS preflight) → `OPTIONS` absorbed by the backend → response
 //! completed from a **worker thread** → `postMessage` back into Zig → clean window teardown.
+//!
+//! The page also reports three CORS probes (`probeSame` / `probeGet` / `probePlain`) as
+//! `<status>|acao=<header>|tr=<header>` strings. They separate the layers that broke during `M3-02`
+//! bring-up: header-block delivery (`tr=ok` on a same-origin fetch), response CORS headers
+//! (`200|` on a simple cross-origin GET) and a CORS-safelisted `text/plain` POST.
 
 const std = @import("std");
 const zts_webview = @import("zts_webview");
@@ -265,10 +270,13 @@ pub fn main(init: std.process.Init) !void {
 
     try check(value.bootInjected orelse false, "__ztsPostMessage injected at DOCUMENT_START");
     try check(has(value.probeSame, "tr=ok"), "custom response headers survive the header block");
-    try check(has(value.probeGet, "acao=*"), "CORS headers readable on a cross-origin GET");
-    try check(has(value.probePlain, "acao=*"), "cross-origin POST without a preflight succeeded");
+    try check(has(value.probeGet, "200|"), "cross-origin GET answered without a preflight");
+    try check(has(value.probePlain, "200|"), "cross-origin POST without a preflight succeeded");
     try check(std.mem.eql(u8, value.tauriHdr orelse "", "ok"), "Tauri-Response header exposed through CORS");
-    try check(std.mem.eql(u8, value.cors orelse "", "*"), "Access-Control-Allow-Origin: *");
+    // `Access-Control-Allow-Origin` is **not** a CORS-safelisted response header, so the page
+    // cannot read it back (`cors` stays null even on a successful request) — `Tauri-Response` above
+    // is what proves the response passed the CORS check. Do not assert on `cors`.
+
     try check((value.sum orelse -1) == 42, "JSON body decoded by the page");
     try check(std.mem.eql(u8, value.method orelse "", "POST"), "request method survived the filter");
     try check((value.bodyLen orelse -1) == 8, "request body reached the Zig handler intact");

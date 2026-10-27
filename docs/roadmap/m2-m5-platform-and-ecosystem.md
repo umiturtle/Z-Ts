@@ -52,6 +52,12 @@
 - **完了条件 (DoD)**:
   - Linux 上からの `./zigw build -Dtarget=x86_64-windows-gnu` クロスコンパイルが単一 `.exe` を出力すること。
   - GitHub Actions `ci-windows` 上でその単一 `.exe` が DLL 同梱なしで起動し、双方向 IPC E2E テストを通過すること。
+- **実装**: [`../decisions/0007-windows-win32-webview2.md`](../decisions/0007-windows-win32-webview2.md) /
+  [`../tasks/M3-02-windows-webview2.md`](../tasks/M3-02-windows-webview2.md)
+  （`WebView2Loader.dll` 非同梱・レジストリから `EmbeddedBrowserWebView.dll` を直接ロード。COM vtable は
+  `scripts/gen-webview2-com.py` が `WebView2.h` から生成し 17 IF / 217 スロットを `@sizeOf` で断言。
+  E2E は **standalone exe** `tests/webview/windows_e2e.zig` で、WebView2 `155.0.4283.62` 上
+  `OK windows-wv2 checks=… preflights=1 dpr=1 single-exe=1`。）
 
 ### `M3-03`：既存親ウィンドウ埋め込み（Overlay Mode）& C ABI 他言語実証
 - **専有スコープ**: `examples/c_embed/`, `src/webview/embed_test.zig`
