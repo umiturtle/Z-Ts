@@ -30,6 +30,20 @@ const page =
     \\<script>
     \\(async () => {
     \\  const out = { bootInjected: typeof window.__ztsPostMessage === 'function' };
+    \\  const probe = async (name, url, opts) => {
+    \\    try {
+    \\      const r = await fetch(url, opts);
+    \\      out[name] = r.status + '|acao=' + (r.headers.get('Access-Control-Allow-Origin') || '-') +
+    \\        '|tr=' + (r.headers.get('Tauri-Response') || '-');
+    \\    } catch (e) { out[name] = 'ERR ' + String(e); }
+    \\  };
+    \\  // Same-origin: proves the custom response headers survive WebView2's header-block parser.
+    \\  await probe('probeSame', 'http://tauri.localhost/index.html');
+    \\  // Simple cross-origin GET: no preflight, so only the *response* CORS headers matter.
+    \\  await probe('probeGet', 'http://ipc.localhost/probe-get');
+    \\  // `text/plain` keeps the POST CORS-safelisted: again no preflight.
+    \\  await probe('probePlain', 'http://ipc.localhost/probe-plain',
+    \\    { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{"n":41}' });
     \\  try {
     \\    const r = await fetch('http://ipc.localhost/ping', {
     \\      method: 'POST',
@@ -61,7 +75,8 @@ const Ctx = struct {
     ipc_method: [8]u8 = @splat(0),
     ipc_method_len: usize = 0,
     ipc_body_len: usize = 0,
-    worker: ?std.Thread = null,
+    workers: [8]?std.Thread = @splat(null),
+    worker_count: usize = 0,
 };
 
 fn stage(comptime text: []const u8) void {
@@ -111,9 +126,13 @@ fn ipcWorker(job: *IpcJob) void {
 fn onIpcRequest(userdata: ?*anyopaque, req: zts_webview.SchemeRequest) void {
     const ctx: *Ctx = @ptrCast(@alignCast(userdata.?));
     ctx.ipc_hits += 1;
-    ctx.ipc_method_len = @min(req.method.len, ctx.ipc_method.len);
-    @memcpy(ctx.ipc_method[0..ctx.ipc_method_len], req.method[0..ctx.ipc_method_len]);
-    ctx.ipc_body_len = req.body.len;
+    // Only `/ping` takes part in the assertions; the CORS probes hit other paths so they cannot
+    // overwrite the recorded method/body length.
+    if (std.mem.endsWith(u8, req.uri, "/ping")) {
+        ctx.ipc_method_len = @min(req.method.len, ctx.ipc_method.len);
+        @memcpy(ctx.ipc_method[0..ctx.ipc_method_len], req.method[0..ctx.ipc_method_len]);
+        ctx.ipc_body_len = req.body.len;
+    }
 
     const job = ctx.allocator.create(IpcJob) catch return;
     job.* = .{
@@ -124,10 +143,17 @@ fn onIpcRequest(userdata: ?*anyopaque, req: zts_webview.SchemeRequest) void {
         .method_len = ctx.ipc_method_len,
         .body_len = req.body.len,
     };
-    ctx.worker = std.Thread.spawn(.{}, ipcWorker, .{job}) catch blk: {
-        ipcWorker(job); // no threads available: still validate the IPC path
-        break :blk null;
+    if (ctx.worker_count == ctx.workers.len) {
+        ipcWorker(job); // thread budget exhausted: still validate the IPC path
+        return;
+    }
+    // `error.ThreadQuotaExceeded` and friends: fall back to a synchronous completion.
+    const spawned = std.Thread.spawn(.{}, ipcWorker, .{job}) catch {
+        ipcWorker(job);
+        return;
     };
+    ctx.workers[ctx.worker_count] = spawned;
+    ctx.worker_count += 1;
 }
 
 fn onMessage(userdata: ?*anyopaque, _: zts_webview.WindowId, message: []const u8) void {
@@ -148,9 +174,18 @@ const Report = struct {
     deferral: ?bool = null,
     ua: ?bool = null,
     dpr: ?f64 = null,
+    probeSame: ?[]const u8 = null,
+    probeGet: ?[]const u8 = null,
+    probePlain: ?[]const u8 = null,
 };
 
 var checks_passed: u32 = 0;
+
+/// Marker check for a probe string produced by the page (`"<status>|acao=…|tr=…"`).
+fn has(probe: ?[]const u8, comptime needle: []const u8) bool {
+    const text = probe orelse return false;
+    return std.mem.indexOf(u8, text, needle) != null;
+}
 
 fn check(ok: bool, comptime what: []const u8) !void {
     if (!ok) {
@@ -180,7 +215,11 @@ pub fn main(init: std.process.Init) !void {
 
     var ctx: Ctx = .{ .allocator = allocator, .engine = &engine };
     defer if (ctx.report) |r| allocator.free(r);
-    defer if (ctx.worker) |t| t.join();
+    defer {
+        for (ctx.workers[0..ctx.worker_count]) |entry| {
+            if (entry) |t| t.join();
+        }
+    }
 
     const version = engine.runtimeVersion() orelse "";
     stage("init ok");
@@ -217,18 +256,22 @@ pub fn main(init: std.process.Init) !void {
     defer parsed.deinit();
     const value = parsed.value;
 
+    // Printed before the failure branch so a broken CORS layer is diagnosable from CI logs alone.
+    std.debug.print("e2e: report={s}\n", .{report});
     if (value.err) |e| {
         std.debug.print("e2e: JS error: {s}\n", .{e});
         return error.WebView2JsError;
     }
-    std.debug.print("e2e: report={s}\n", .{report});
 
     try check(value.bootInjected orelse false, "__ztsPostMessage injected at DOCUMENT_START");
+    try check(has(value.probeSame, "tr=ok"), "custom response headers survive the header block");
+    try check(has(value.probeGet, "acao=*"), "CORS headers readable on a cross-origin GET");
+    try check(has(value.probePlain, "acao=*"), "cross-origin POST without a preflight succeeded");
     try check(std.mem.eql(u8, value.tauriHdr orelse "", "ok"), "Tauri-Response header exposed through CORS");
     try check(std.mem.eql(u8, value.cors orelse "", "*"), "Access-Control-Allow-Origin: *");
     try check((value.sum orelse -1) == 42, "JSON body decoded by the page");
     try check(std.mem.eql(u8, value.method orelse "", "POST"), "request method survived the filter");
-    try check((value.bodyLen orelse -1) == 9, "request body reached the Zig handler intact");
+    try check((value.bodyLen orelse -1) == 8, "request body reached the Zig handler intact");
     try check(value.deferral orelse false, "response completed from a worker thread");
     try check(value.ua orelse false, "user agent reports Windows");
     try check((value.dpr orelse 0) >= 1.0, "devicePixelRatio available (DPI aware)");

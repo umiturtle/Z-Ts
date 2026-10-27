@@ -811,11 +811,11 @@ pub const WindowsWebView2Backend = struct {
         const uri = win32.fromWide(scratch, uri_w.?, true) catch return com.S_OK;
 
         const protocol = classifyVirtualOrigin(uri) orelse return com.S_OK;
-        trace("request {s}", .{uri});
 
         var method_w: ?com.PWStr = null;
         if (com.failed(req.vtable.get_Method(req, &method_w)) or method_w == null) return com.S_OK;
         const method = win32.fromWide(scratch, method_w.?, true) catch return com.S_OK;
+        trace("request {s} {s}", .{ method, uri });
 
         // CORS preflight never reaches Zig (same policy as the macOS shim / Tauri's protocol.rs).
         if (std.ascii.eqlIgnoreCase(method, "OPTIONS")) {
@@ -966,10 +966,7 @@ pub const WindowsWebView2Backend = struct {
         name: []const u8,
         value: []const u8,
     ) std.mem.Allocator.Error!void {
-        try out.appendSlice(self.allocator, name);
-        try out.appendSlice(self.allocator, ": ");
-        try out.appendSlice(self.allocator, value);
-        try out.appendSlice(self.allocator, "\r\n");
+        try appendHeaderLine(out, self.allocator, name, value);
     }
 
     /// Serialises the mandatory CORS headers + `Content-Type` + handler-provided headers into the
@@ -1730,6 +1727,26 @@ fn classifyVirtualOrigin(uri: []const u8) ?util.Protocol {
     return util.protocolFromScheme(scheme);
 }
 
+/// Serialises one `name: value` line into the header block handed to
+/// `ICoreWebView2Environment::CreateWebResourceResponse`.
+///
+/// WebView2 parses that string as `name: value` lines separated by a **single `\n`** and expects
+/// **no terminator after the last header** (the shape `wry` emits). A trailing newline makes the
+/// runtime throw the *whole* block away: the response is still delivered, so the page renders, but
+/// `Access-Control-Allow-Origin` / `Tauri-Response` silently disappear and every cross-origin
+/// `fetch` dies with `TypeError: Failed to fetch` (`M3-02`, diagnosed on `ci-windows`).
+fn appendHeaderLine(
+    out: *std.ArrayList(u8),
+    allocator: Allocator,
+    name: []const u8,
+    value: []const u8,
+) std.mem.Allocator.Error!void {
+    if (out.items.len != 0) try out.appendSlice(allocator, "\n");
+    try out.appendSlice(allocator, name);
+    try out.appendSlice(allocator, ": ");
+    try out.appendSlice(allocator, value);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -1749,4 +1766,16 @@ test "styleBits preserves the signed LONG semantics of Get/SetWindowLongPtrW" {
     const bits = WindowsWebView2Backend.styleBits(style);
     try std.testing.expectEqual(@as(isize, -0x7000_0000), bits);
     try std.testing.expectEqual(@as(u32, 0x9000_0000), @as(u32, @bitCast(@as(i32, @truncate(bits)))));
+}
+
+test "response header lines are LF separated with no trailing terminator" {
+    var block: std.ArrayList(u8) = .empty;
+    defer block.deinit(std.testing.allocator);
+
+    try appendHeaderLine(&block, std.testing.allocator, "Access-Control-Allow-Origin", "*");
+    try appendHeaderLine(&block, std.testing.allocator, "Content-Type", "text/plain");
+
+    // Exactly two lines, one `\n` in between, nothing at the end: Chromium only sees
+    // `Access-Control-Allow-Origin: *` when the block stops at the final byte of the last value.
+    try std.testing.expectEqualStrings("Access-Control-Allow-Origin: *\nContent-Type: text/plain", block.items);
 }

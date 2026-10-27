@@ -69,6 +69,7 @@ pub const Runtime = struct {
 /// Locates, loads and resolves the WebView2 runtime. `allocator` backs the returned version string.
 pub fn load(allocator: Allocator) LoadError!Runtime {
     const found = try findClientDll(allocator);
+    defer allocator.free(found.path);
 
     const wide = win32.toWide(allocator, found.path) catch return error.OutOfMemory;
     defer allocator.free(wide);
@@ -93,8 +94,8 @@ pub fn load(allocator: Allocator) LoadError!Runtime {
 }
 
 const Found = struct {
-    /// Owned by the caller (arena-allocated inside `findClientDll`).
-    path: []const u8,
+    /// Caller-owned (`load` frees it once the DLL is mapped).
+    path: []u8,
     version: []u8,
     fixed: bool,
 };
