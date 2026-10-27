@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-"""Generate `src/webview/webview2_com.zig` (COM ABI for WebView2) from Microsoft's `WebView2.h`.
+"""Generate `src/webview/webview2_com.zig` from Microsoft's `WebView2.h` (`M3-02`).
 
-Why generate instead of `@cImport` / `addTranslateC`?
-    `AGENTS.md` §2.3 forbids translating Microsoft's 2.9 MB `WebView2.h` on every cold build
-    (+50 s per Arena chat). The generated file is ~1 kLOC of pure Zig, links in milliseconds and
-    keeps `zts_webview` free of `@cImport` forever.
+Why a generator at all?
 
-Why is `WebView2.h` not vendored?
-    It is a 2.9 MB third-party artifact. Only the *vtable order* is needed, which this script
-    extracts deterministically. Re-run it whenever bumping the WebView2 SDK:
+* The COM vtable **order** is the ABI. Hand-writing 61 slots for `ICoreWebView2` invites
+  off-by-one bugs that only show up as a crash on a Windows runner we cannot attach a debugger to.
+* `WebView2.h` is 2.9 MB / 68,921 lines and `@cImport` is gone in Zig 0.17, so we cannot translate
+  it at build time without paying a large cold-build penalty (see ADR-0001 / ADR-0007).
 
-    ```bash
-    curl -L -o /tmp/WebView2.h \\
-      https://raw.githubusercontent.com/sumatrapdfreader/sumatrapdf/master/ext/webview2/WebView2.h
-    python3 scripts/gen-webview2-com.py /tmp/WebView2.h
-    ```
+So: parse the header once, emit a small auditable Zig file, **commit the output**. Builds stay
+dependency-free (no Python, no SDK); regenerating only happens when the WebView2 SDK is bumped.
 
 Usage:
-    python3 scripts/gen-webview2-com.py <path-to-WebView2.h> [-o src/webview/webview2_com.zig]
+    python3 scripts/gen-webview2-com.py /path/to/WebView2.h [-o src/webview/webview2_com.zig]
+
+`WebView2.h` ships with the WebView2 SDK (NuGet `Microsoft.Web.WebView2`). A copy also lives in
+`sumatrapdfreader/sumatrapdf` under `ext/webview2/WebView2.h`, which is where this script was
+developed against (same MIDL output as the SDK).
+
+Only the *interface field order* is taken from the header: methods we never call stay as erased
+`?*const anyopaque` slots — byte-for-byte the same size, and impossible to call by accident.
 """
 
 from __future__ import annotations
@@ -27,295 +29,351 @@ import re
 import sys
 
 # ---------------------------------------------------------------------------
-# Interfaces that `windows.zig` / `webview2_loader.zig` actually touch.
-# Every method NOT listed here becomes an erased `?*const anyopaque` slot so the
-# vtable keeps its exact COM layout while staying auditable.
+# Interfaces we expose, and the exact Zig signature of the methods we call.
+#
+# `*this` is always the first parameter. Everything not listed becomes a placeholder slot.
 # ---------------------------------------------------------------------------
-
-# iface -> {method: (params_after_this, ret)}
-TYPED: dict[str, dict[str, tuple[str, str]]] = {
+INTERFACES: dict[str, dict[str, str]] = {
     "ICoreWebView2Environment": {
-        "CreateCoreWebView2Controller": ("hwnd: ?*anyopaque, handler: ?*anyopaque", "HResult"),
+        "CreateCoreWebView2Controller": "(this: *ICoreWebView2Environment, parent: ?*anyopaque, handler: ?*anyopaque) callconv(CALL) HResult",
         "CreateWebResourceResponse": (
-            "content: ?*anyopaque, status_code: i32, reason: ?[*:0]const u16, "
-            "headers: ?[*:0]const u16, response: *?*ICoreWebView2WebResourceResponse",
-            "HResult",
+            "(this: *ICoreWebView2Environment, content: ?*anyopaque, status: i32,"
+            " reason: ?[*:0]const u16, headers: ?[*:0]const u16,"
+            " response: *?*ICoreWebView2WebResourceResponse) callconv(CALL) HResult"
         ),
     },
     "ICoreWebView2Controller": {
-        "put_IsVisible": ("visible: i32", "HResult"),
-        "put_Bounds": ("bounds: Rect", "HResult"),
-        "MoveFocus": ("reason: i32", "HResult"),
-        "Close": ("", "HResult"),
-        "get_CoreWebView2": ("out: *?*ICoreWebView2", "HResult"),
+        "put_IsVisible": "(this: *ICoreWebView2Controller, visible: BOOL) callconv(CALL) HResult",
+        "put_Bounds": "(this: *ICoreWebView2Controller, bounds: Rect) callconv(CALL) HResult",
+        "put_ZoomFactor": "(this: *ICoreWebView2Controller, factor: f64) callconv(CALL) HResult",
+        "MoveFocus": "(this: *ICoreWebView2Controller, reason: i32) callconv(CALL) HResult",
+        "put_ParentWindow": "(this: *ICoreWebView2Controller, parent: ?*anyopaque) callconv(CALL) HResult",
+        "NotifyParentWindowPositionChanged": "(this: *ICoreWebView2Controller) callconv(CALL) HResult",
+        "Close": "(this: *ICoreWebView2Controller) callconv(CALL) HResult",
+        "get_CoreWebView2": "(this: *ICoreWebView2Controller, out: *?*ICoreWebView2) callconv(CALL) HResult",
+    },
+    "ICoreWebView2Controller2": {
+        "put_DefaultBackgroundColor": "(this: *ICoreWebView2Controller2, value: Color) callconv(CALL) HResult",
     },
     "ICoreWebView2": {
-        "get_Settings": ("out: *?*ICoreWebView2Settings", "HResult"),
-        "get_Source": ("out: *?PWStr", "HResult"),
-        "Navigate": ("uri: [*:0]const u16", "HResult"),
-        "NavigateToString": ("html: [*:0]const u16", "HResult"),
-        "AddScriptToExecuteOnDocumentCreated": ("script: [*:0]const u16, handler: ?*anyopaque", "HResult"),
-        "ExecuteScript": ("script: [*:0]const u16, handler: ?*anyopaque", "HResult"),
-        "PostWebMessageAsJson": ("msg: [*:0]const u16", "HResult"),
-        "PostWebMessageAsString": ("msg: [*:0]const u16", "HResult"),
-        "add_WebMessageReceived": ("handler: ?*anyopaque, token: *i64", "HResult"),
-        "add_WebResourceRequested": ("handler: ?*anyopaque, token: *i64", "HResult"),
-        "add_WindowCloseRequested": ("handler: ?*anyopaque, token: *i64", "HResult"),
-        "AddWebResourceRequestedFilter": ("uri: [*:0]const u16, resource_context: i32", "HResult"),
-        "OpenDevToolsWindow": ("", "HResult"),
-        "Reload": ("", "HResult"),
-        "Stop": ("", "HResult"),
+        "get_Settings": "(this: *ICoreWebView2, out: *?*ICoreWebView2Settings) callconv(CALL) HResult",
+        "get_Source": "(this: *ICoreWebView2, out: *?PWStr) callconv(CALL) HResult",
+        "Navigate": "(this: *ICoreWebView2, uri: [*:0]const u16) callconv(CALL) HResult",
+        "NavigateToString": "(this: *ICoreWebView2, html: [*:0]const u16) callconv(CALL) HResult",
+        "Reload": "(this: *ICoreWebView2) callconv(CALL) HResult",
+        "Stop": "(this: *ICoreWebView2) callconv(CALL) HResult",
+        "AddScriptToExecuteOnDocumentCreated": "(this: *ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CALL) HResult",
+        "RemoveScriptToExecuteOnDocumentCreated": "(this: *ICoreWebView2, id: [*:0]const u16) callconv(CALL) HResult",
+        "ExecuteScript": "(this: *ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CALL) HResult",
+        "PostWebMessageAsJson": "(this: *ICoreWebView2, json: [*:0]const u16) callconv(CALL) HResult",
+        "PostWebMessageAsString": "(this: *ICoreWebView2, message: [*:0]const u16) callconv(CALL) HResult",
+        "add_WebMessageReceived": "(this: *ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CALL) HResult",
+        "remove_WebMessageReceived": "(this: *ICoreWebView2, token: i64) callconv(CALL) HResult",
+        "add_WebResourceRequested": "(this: *ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CALL) HResult",
+        "remove_WebResourceRequested": "(this: *ICoreWebView2, token: i64) callconv(CALL) HResult",
+        "add_WindowCloseRequested": "(this: *ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CALL) HResult",
+        "remove_WindowCloseRequested": "(this: *ICoreWebView2, token: i64) callconv(CALL) HResult",
+        "AddWebResourceRequestedFilter": "(this: *ICoreWebView2, uri: [*:0]const u16, resource_context: i32) callconv(CALL) HResult",
+        "OpenDevToolsWindow": "(this: *ICoreWebView2) callconv(CALL) HResult",
     },
     "ICoreWebView2Settings": {
-        "put_AreDevToolsEnabled": ("value: i32", "HResult"),
-        "put_IsStatusBarEnabled": ("value: i32", "HResult"),
-        "put_IsScriptEnabled": ("value: i32", "HResult"),
-        "put_IsWebMessageEnabled": ("value: i32", "HResult"),
+        "put_IsScriptEnabled": "(this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult",
+        "put_IsWebMessageEnabled": "(this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult",
+        "put_AreDevToolsEnabled": "(this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult",
+        "put_AreDefaultContextMenusEnabled": "(this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult",
+        "put_IsStatusBarEnabled": "(this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult",
+        "put_AreDefaultScriptDialogsEnabled": "(this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult",
     },
     "ICoreWebView2WebResourceRequest": {
-        "get_Uri": ("out: *?PWStr", "HResult"),
-        "get_Method": ("out: *?PWStr", "HResult"),
-        "get_Content": ("out: *?*anyopaque", "HResult"),
-        "get_Headers": ("out: *?*ICoreWebView2HttpRequestHeaders", "HResult"),
+        "get_Uri": "(this: *ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(CALL) HResult",
+        "get_Method": "(this: *ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(CALL) HResult",
+        "get_Content": "(this: *ICoreWebView2WebResourceRequest, out: *?*anyopaque) callconv(CALL) HResult",
+        "get_Headers": "(this: *ICoreWebView2WebResourceRequest, out: *?*ICoreWebView2HttpRequestHeaders) callconv(CALL) HResult",
     },
     "ICoreWebView2WebResourceResponse": {
-        "put_Content": ("stream: ?*anyopaque", "HResult"),
-        "put_StatusCode": ("status_code: i32", "HResult"),
-        "put_ReasonPhrase": ("reason_phrase: [*:0]const u16", "HResult"),
+        "put_Content": "(this: *ICoreWebView2WebResourceResponse, stream: ?*anyopaque) callconv(CALL) HResult",
+        "put_StatusCode": "(this: *ICoreWebView2WebResourceResponse, status: i32) callconv(CALL) HResult",
+        "put_ReasonPhrase": "(this: *ICoreWebView2WebResourceResponse, reason: [*:0]const u16) callconv(CALL) HResult",
     },
     "ICoreWebView2WebResourceRequestedEventArgs": {
-        "get_Request": ("out: *?*ICoreWebView2WebResourceRequest", "HResult"),
-        "put_Response": ("response: ?*ICoreWebView2WebResourceResponse", "HResult"),
-        "GetDeferral": ("out: *?*ICoreWebView2Deferral", "HResult"),
+        "get_Request": "(this: *ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2WebResourceRequest) callconv(CALL) HResult",
+        "put_Response": "(this: *ICoreWebView2WebResourceRequestedEventArgs, response: ?*ICoreWebView2WebResourceResponse) callconv(CALL) HResult",
+        "GetDeferral": "(this: *ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2Deferral) callconv(CALL) HResult",
     },
     "ICoreWebView2Deferral": {
-        "Complete": ("", "HResult"),
+        "Complete": "(this: *ICoreWebView2Deferral) callconv(CALL) HResult",
     },
     "ICoreWebView2HttpRequestHeaders": {
-        "GetIterator": ("out: *?*ICoreWebView2HttpHeadersCollectionIterator", "HResult"),
+        "GetIterator": "(this: *ICoreWebView2HttpRequestHeaders, out: *?*ICoreWebView2HttpHeadersCollectionIterator) callconv(CALL) HResult",
     },
     "ICoreWebView2HttpHeadersCollectionIterator": {
-        "GetCurrentHeader": ("name: *?PWStr, value: *?PWStr", "HResult"),
-        "get_HasCurrentHeader": ("out: *i32", "HResult"),
-        "MoveNext": ("out: *i32", "HResult"),
+        "GetCurrentHeader": "(this: *ICoreWebView2HttpHeadersCollectionIterator, name: *?PWStr, value: *?PWStr) callconv(CALL) HResult",
+        "get_HasCurrentHeader": "(this: *ICoreWebView2HttpHeadersCollectionIterator, out: *BOOL) callconv(CALL) HResult",
+        "MoveNext": "(this: *ICoreWebView2HttpHeadersCollectionIterator, out: *BOOL) callconv(CALL) HResult",
     },
     "ICoreWebView2WebMessageReceivedEventArgs": {
-        "get_Source": ("out: *?PWStr", "HResult"),
-        "get_WebMessageAsJson": ("out: *?PWStr", "HResult"),
-        "TryGetWebMessageAsString": ("out: *?PWStr", "HResult"),
+        "get_WebMessageAsJson": "(this: *ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CALL) HResult",
+        "TryGetWebMessageAsString": "(this: *ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CALL) HResult",
     },
-    # --- Event handlers: identical shape (IUnknown + Invoke), different payloads -------------
+    # --- event handlers (4 slots each; `Invoke` is the only interesting one) ---
     "ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler": {
-        "Invoke": ("hresult: HResult, result: ?*ICoreWebView2Environment", "HResult"),
+        "Invoke": (
+            "(this: *ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, hr: HResult,"
+            " env: ?*ICoreWebView2Environment) callconv(CALL) HResult"
+        ),
     },
     "ICoreWebView2CreateCoreWebView2ControllerCompletedHandler": {
-        "Invoke": ("hresult: HResult, result: ?*ICoreWebView2Controller", "HResult"),
+        "Invoke": (
+            "(this: *ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, hr: HResult,"
+            " controller: ?*ICoreWebView2Controller) callconv(CALL) HResult"
+        ),
     },
     "ICoreWebView2WebMessageReceivedEventHandler": {
-        "Invoke": ("sender: *ICoreWebView2, args: *ICoreWebView2WebMessageReceivedEventArgs", "HResult"),
+        "Invoke": (
+            "(this: *ICoreWebView2WebMessageReceivedEventHandler, sender: ?*ICoreWebView2,"
+            " args: ?*ICoreWebView2WebMessageReceivedEventArgs) callconv(CALL) HResult"
+        ),
     },
     "ICoreWebView2WebResourceRequestedEventHandler": {
-        "Invoke": ("sender: *ICoreWebView2, args: *ICoreWebView2WebResourceRequestedEventArgs", "HResult"),
+        "Invoke": (
+            "(this: *ICoreWebView2WebResourceRequestedEventHandler, sender: ?*ICoreWebView2,"
+            " args: ?*ICoreWebView2WebResourceRequestedEventArgs) callconv(CALL) HResult"
+        ),
     },
     "ICoreWebView2WindowCloseRequestedEventHandler": {
-        "Invoke": ("sender: *ICoreWebView2, args: ?*anyopaque", "HResult"),
+        "Invoke": (
+            "(this: *ICoreWebView2WindowCloseRequestedEventHandler, sender: ?*ICoreWebView2,"
+            " args: ?*anyopaque) callconv(CALL) HResult"
+        ),
     },
 }
 
+HEADER = r'''//! WebView2 COM interfaces — **GENERATED, DO NOT EDIT** (`src/webview/webview2_com.zig`, `M3-02`).
+//!
+//! Source: Microsoft's `WebView2.h` (MIDL output). Regenerate with:
+//!   `python3 scripts/gen-webview2-com.py /path/to/WebView2.h`
+//!
+//! Only the vtable **field order** is taken from the header — methods `zts_webview` never calls are
+//! erased to `?*const anyopaque` slots, so every struct below is byte-identical to the real COM
+//! layout while staying impossible to call by accident. `comptime` size assertions at the bottom
+//! prove it.
+//!
+//! `callconv(.winapi)` only exists on Windows targets; `CALL` keeps this file analyzable on every
+//! host so the assertions and the GUID test run in all CI jobs (see ADR-0007).
 
-def parse_header(path: str) -> tuple[dict[str, list[str]], dict[str, str]]:
-    src = open(path, encoding="utf-8", errors="replace").read().replace("\r\n", "\n")
+const std = @import("std");
+const builtin = @import("builtin");
 
-    vtables: dict[str, list[str]] = {}
-    for m in re.finditer(r"typedef struct (\w+)Vtbl\s*\n?\s*\{(.*?)\n\s*\} (\w+)Vtbl;", src, re.S):
-        name, body, name2 = m.group(1), m.group(2), m.group(3)
-        if name != name2:
-            continue
-        methods = re.findall(r"STDMETHODCALLTYPE \*(\w+) \)\s*\(", body)
-        if methods:
-            vtables[name] = methods
+/// `winapi` on Windows, the C convention everywhere else (ABI-identical for pointer-only vtables).
+const CALL: std.builtin.CallingConvention = if (builtin.os.tag == .windows) .winapi else .c;
 
-    guids: dict[str, str] = {}
-    for name in TYPED:
-        m = re.search(r'MIDL_INTERFACE\("([0-9A-Fa-f\-]+)"\)\s*\n\s*' + name + r"\s*:", src)
-        if m:
-            guids[name] = m.group(1)
-    return vtables, guids
+pub const HResult = i32;
+pub const S_OK: HResult = 0;
+pub const S_FALSE: HResult = 1;
+pub const E_NOINTERFACE: HResult = @bitCast(@as(u32, 0x80004002));
+pub const E_POINTER: HResult = @bitCast(@as(u32, 0x80004003));
+pub const E_INVALIDARG: HResult = @bitCast(@as(u32, 0x80070057));
+pub const E_FAIL: HResult = @bitCast(@as(u32, 0x80004005));
+pub const E_OUTOFMEMORY: HResult = @bitCast(@as(u32, 0x8007000E));
+pub const REGDB_E_CLASSNOTREG: HResult = @bitCast(@as(u32, 0x80040154));
+
+pub inline fn failed(hr: HResult) bool {
+    return hr < 0;
+}
+
+pub inline fn succeeded(hr: HResult) bool {
+    return hr >= 0;
+}
+
+/// `BOOL`
+pub const BOOL = i32;
+pub const TRUE: BOOL = 1;
+pub const FALSE: BOOL = 0;
+
+/// `LPWSTR` — CoTaskMem-allocated by a COM getter, freed by the caller via `CoTaskMemFree`.
+pub const PWStr = [*:0]u16;
+
+/// `HWND` (opaque here; `win32.zig` owns the real type).
+pub const HWND = ?*anyopaque;
+
+/// Win32 `RECT` (physical pixels, top-left origin — same convention as CSS).
+pub const Rect = extern struct {
+    left: i32 = 0,
+    top: i32 = 0,
+    right: i32 = 0,
+    bottom: i32 = 0,
+};
+
+/// `COREWEBVIEW2_COLOR` (`BYTE A, R, G, B`).
+pub const Color = extern struct {
+    A: u8 = 255,
+    R: u8 = 255,
+    G: u8 = 255,
+    B: u8 = 255,
+};
+
+pub const transparent = Color{ .A = 0, .R = 0, .G = 0, .B = 0 };
+
+/// `GUID` / `IID` / `CLSID`.
+pub const Guid = extern struct {
+    d1: u32,
+    d2: u16,
+    d3: u16,
+    d4: [8]u8,
+};
+
+/// Parses the canonical `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` form at `comptime`.
+pub fn guid(comptime text: []const u8) Guid {
+    std.debug.assert(text.len == 36);
+    return .{
+        .d1 = parseHexInt(u32, text[0..8]),
+        .d2 = parseHexInt(u16, text[9..13]),
+        .d3 = parseHexInt(u16, text[14..18]),
+        .d4 = .{
+            parseHexByte(text[19..21]), parseHexByte(text[21..23]),
+            // index 23 is the fourth '-' and must be skipped.
+            parseHexByte(text[24..26]), parseHexByte(text[26..28]),
+            parseHexByte(text[28..30]), parseHexByte(text[30..32]),
+            parseHexByte(text[32..34]), parseHexByte(text[34..36]),
+        },
+    };
+}
+
+fn parseHexByte(comptime text: []const u8) u8 {
+    return (hexDigit(text[0]) << 4) | hexDigit(text[1]);
+}
+
+fn parseHexInt(comptime T: type, comptime text: []const u8) T {
+    var out: T = 0;
+    inline for (text) |c| {
+        if (c == '-') continue;
+        out = out * 16 + hexDigit(c);
+    }
+    return out;
+}
+
+fn hexDigit(comptime c: u8) u8 {
+    return switch (c) {
+        '0'...'9' => c - '0',
+        'a'...'f' => c - 'a' + 10,
+        'A'...'F' => c - 'A' + 10,
+        else => @compileError("invalid hex digit in GUID literal"),
+    };
+}
+
+pub const IID_IUnknown = guid("00000000-0000-0000-c000-000000000046");
+
+/// Any COM object is `{ vtable }` — used for `QueryInterface` casts.
+pub const IUnknown = extern struct {
+    vtable: *const VTable,
+
+    pub const VTable = extern struct {
+        QueryInterface: *const fn (this: *IUnknown, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *IUnknown) callconv(CALL) u32,
+        Release: *const fn (this: *IUnknown) callconv(CALL) u32,
+    };
+};
+'''
 
 
-def emit(vtables: dict[str, list[str]], guids: dict[str, str]) -> str:
-    out: list[str] = []
-    w = out.append
+def parse_vtables(header: str, name: str) -> list[str]:
+    m = re.search(
+        r"typedef struct " + re.escape(name) + r"Vtbl\s*\{(.*?)\n\s*END_INTERFACE",
+        header,
+        re.S,
+    )
+    if not m:
+        sys.exit(f"error: {name}Vtbl not found in the header")
+    return re.findall(r"DECLSPEC_XFGVIRT\(\s*[\w:]+,\s*(\w+)\s*\)", m.group(1))
 
-    w("//! WebView2 COM interfaces — **GENERATED, DO NOT EDIT** (`M3-02`).")
-    w("//!")
-    w("//! Regenerate with:")
-    w("//! ```bash")
-    w("//! python3 scripts/gen-webview2-com.py /tmp/WebView2.h")
-    w("//! ```")
-    w("//!")
-    w("//! Only the vtable *order* is taken from Microsoft's header; methods that `zts_webview` never")
-    w("//! calls stay as erased `?*const anyopaque` slots, so every struct below is byte-for-byte the")
-    w("//! real COM layout (`comptime` size assertions at the bottom prove it).")
-    w("")
-    w('const std = @import("std");')
-    w('const builtin = @import("builtin");')
-    w("")
-    w("/// `callconv(CC)` only exists for Windows targets, but this file is analyzed on every OS")
-    w("/// (so the slot-count assertions and the GUID test run in all CI jobs). `.c` is ABI-identical")
-    w("/// for these four-pointer vtables on non-Windows hosts.")
-    w("pub const CC: std.builtin.CallingConvention = if (builtin.os.tag == .windows) .winapi else .c;")
-    w("")
-    w("/// `HRESULT` (`long` on Win32).")
-    w("pub const HResult = i32;")
-    w("")
-    w("pub const S_OK: HResult = 0;")
-    w("pub const S_FALSE: HResult = 1;")
-    w("pub const E_NOINTERFACE: HResult = @bitCast(@as(u32, 0x80004002));")
-    w("pub const E_POINTER: HResult = @bitCast(@as(u32, 0x80004003));")
-    w("pub const E_INVALIDARG: HResult = @bitCast(@as(u32, 0x80070057));")
-    w("pub const E_OUTOFMEMORY: HResult = @bitCast(@as(u32, 0x8007000E));")
-    w("pub const E_FAIL: HResult = @bitCast(@as(u32, 0x80004005));")
-    w("pub const E_UNEXPECTED: HResult = @bitCast(@as(u32, 0x8000FFFF));")
-    w("")
-    w("pub inline fn failed(hr: HResult) bool {")
-    w("    return hr < 0;")
-    w("}")
-    w("")
-    w("/// `PWSTR` / `LPWSTR` — CoTaskMem-allocated UTF-16 string owned by the CALLER after a getter.")
-    w("pub const PWStr = [*:0]u16;")
-    w("")
-    w("/// Win32 `RECT` (physical pixels, top-left origin — same convention as CSS).")
-    w("pub const Rect = extern struct {")
-    w("    left: i32 = 0,")
-    w("    top: i32 = 0,")
-    w("    right: i32 = 0,")
-    w("    bottom: i32 = 0,")
-    w("};")
-    w("")
-    w("pub const Guid = extern struct {")
-    w("    d1: u32,")
-    w("    d2: u16,")
-    w("    d3: u16,")
-    w("    d4: [8]u8,")
-    w("};")
-    w("")
-    w("/// Parses a canonical `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` GUID at `comptime`.")
-    w("pub fn guid(comptime text: []const u8) Guid {")
-    w("    std.debug.assert(text.len == 36);")
-    w("    return .{")
-    w("        .d1 = parseU32(text[0..8]),")
-    w("        .d2 = parseU16(text[9..13]),")
-    w("        .d3 = parseU16(text[14..18]),")
-    w("        .d4 = .{")
-    w("            parseByte(text[19..21]), parseByte(text[21..23]),")
-    w("            parseByte(text[24..26]), parseByte(text[26..28]),")
-    w("            parseByte(text[28..30]), parseByte(text[30..32]),")
-    w("            parseByte(text[32..34]), parseByte(text[34..36]),")
-    w("        },")
-    w("    };")
-    w("}")
-    w("")
-    w("fn parseByte(comptime s: []const u8) u8 {")
-    w("    return (hexDigit(s[0]) << 4) | hexDigit(s[1]);")
-    w("}")
-    w("")
-    w("fn hexDigit(comptime c: u8) u8 {")
-    w("    return switch (c) {")
-    w("        '0'...'9' => c - '0',")
-    w("        'a'...'f' => c - 'a' + 10,")
-    w("        'A'...'F' => c - 'A' + 10,")
-    w("        else => @compileError(\"invalid hex digit\"),")
-    w("    };")
-    w("}")
-    w("")
-    w("fn parseU16(comptime s: []const u8) u16 {")
-    w("    var out: u16 = 0;")
-    w("    inline for (s) |c| {")
-    w("        if (c == '-') continue;")
-    w("        out = out * 16 + hexDigit(c);")
-    w("    }")
-    w("    return out;")
-    w("}")
-    w("")
-    w("fn parseU32(comptime s: []const u8) u32 {")
-    w("    var out: u32 = 0;")
-    w("    inline for (s) |c| {")
-    w("        if (c == '-') continue;")
-    w("        out = out * 16 + hexDigit(c);")
-    w("    }")
-    w("    return out;")
-    w("}")
-    w("")
 
-    for name in TYPED:
-        if name not in vtables:
-            sys.exit(f"error: interface {name} not found in the header")
-        methods = vtables[name]
-        typed = TYPED[name]
-        missing = set(typed) - set(methods)
-        if missing:
-            sys.exit(f"error: {name} lacks {sorted(missing)} — header/SDK mismatch?")
-        w(f"pub const {name} = extern struct {{")
-        w("    vtable: *const VTable,")
-        w("")
-        w("    pub const VTable = extern struct {")
-        for idx, m in enumerate(methods):
-            if idx == 0:
-                w(f"        QueryInterface: *const fn (*{name}, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,")
-            elif idx == 1:
-                w(f"        AddRef: *const fn (*{name}) callconv(CC) u32,")
-            elif idx == 2:
-                w(f"        Release: *const fn (*{name}) callconv(CC) u32,")
-            elif m in typed:
-                params, ret = typed[m]
-                w(f"        {m}: *const fn (*{name}{', ' if params else ''}{params}) callconv(CC) {ret},")
+def parse_iid(header: str, name: str) -> str:
+    m = re.search(
+        r'MIDL_INTERFACE\("([0-9a-fA-F-]{36})"\)\s*\n\s*' + re.escape(name) + r"\s*:",
+        header,
+    )
+    if not m:
+        sys.exit(f"error: IID for {name} not found in the header")
+    return m.group(1).lower()
+
+
+def emit(header: str) -> str:
+    out: list[str] = [HEADER]
+
+    for name, typed in INTERFACES.items():
+        slots = parse_vtables(header, name)
+        iid = parse_iid(header, name)
+
+        out.append("")
+        out.append(f"/// `{name}` ({len(slots)} vtable slots — order is the ABI).")
+        out.append(f"pub const {name} = extern struct {{")
+        out.append("    vtable: *const VTable,")
+        out.append("")
+        out.append("    pub const VTable = extern struct {")
+        for slot in slots:
+            if slot == "QueryInterface":
+                out.append(
+                    f"        QueryInterface: *const fn (this: *{name}, riid: *const Guid,"
+                    " out: *?*anyopaque) callconv(CALL) HResult,"
+                )
+            elif slot in ("AddRef", "Release"):
+                out.append(f"        {slot}: *const fn (this: *{name}) callconv(CALL) u32,")
+            elif slot in typed:
+                out.append(f"        {slot}: *const fn {typed[slot]},")
             else:
-                w(f"        {m}: ?*const anyopaque,")
-        w("    };")
-        w("")
-        w("    pub inline fn vt(self: *const " + name + ") *const VTable {")
-        w("        return self.vtable;")
-        w("    }")
-        w("};")
-        w(f"pub const IID_{name} = guid(\"{guids[name]}\");")
-        w("")
+                out.append(f"        {slot}: ?*const anyopaque,")
+        out.append("    };")
+        out.append("};")
+        out.append("")
+        out.append(f'pub const IID_{name} = guid("{iid}");')
 
-    w("// ---------------------------------------------------------------------------")
-    w("// Layout proof: every vtable slot is one pointer wide, in header order.")
-    w("// ---------------------------------------------------------------------------")
-    w("comptime {")
-    for name in TYPED:
-        n = len(vtables[name])
-        w(f"    std.debug.assert(@sizeOf({name}.VTable) == {n} * @sizeOf(*anyopaque));")
-    w("}")
-    w("")
-    w("test \"GUID parsing matches the SDK's IID literals\" {")
-    w("    const c = guid(\"76eceacb-0462-4d94-ac83-423a6793775e\");")
-    w("    try std.testing.expectEqual(@as(u32, 0x76eceacb), c.d1);")
-    w("    try std.testing.expectEqual(@as(u16, 0x0462), c.d2);")
-    w("    try std.testing.expectEqual(@as(u16, 0x4d94), c.d3);")
-    w("    try std.testing.expectEqualSlices(u8, &.{ 0xac, 0x83, 0x42, 0x3a, 0x67, 0x93, 0x77, 0x5e }, &c.d4);")
-    w("    try std.testing.expectEqual(IID_ICoreWebView2.d1, c.d1);")
-    w("}")
-    w("")
-    return "\n".join(out)
+    out.append("")
+    out.append("// ---------------------------------------------------------------------------")
+    out.append("// ABI assertions — the entire point of this file.")
+    out.append("// ---------------------------------------------------------------------------")
+    out.append("comptime {")
+    for name in INTERFACES:
+        n = len(parse_vtables(header, name))
+        out.append(f"    std.debug.assert(@sizeOf({name}.VTable) == {n} * @sizeOf(usize));")
+    out.append("    std.debug.assert(@sizeOf(Guid) == 16);")
+    out.append("    std.debug.assert(@sizeOf(Rect) == 16);")
+    out.append("    std.debug.assert(@sizeOf(Color) == 4);")
+    out.append("}")
+    out.append("")
+    out.append('test "GUID parser matches the SDK and every IID is 128-bit" {')
+    out.append('    const c = guid("76eceacb-0462-4d94-ac83-423a6793775e");')
+    out.append("    try std.testing.expectEqual(@as(u32, 0x76eceacb), c.d1);")
+    out.append("    try std.testing.expectEqual(@as(u16, 0x0462), c.d2);")
+    out.append("    try std.testing.expectEqual(@as(u16, 0x4d94), c.d3);")
+    out.append(
+        "    try std.testing.expectEqualSlices(u8, &.{ 0xac, 0x83, 0x42, 0x3a, 0x67, 0x93, 0x77, 0x5e }, &c.d4);"
+    )
+    out.append("    try std.testing.expectEqual(c.d1, IID_ICoreWebView2.d1);")
+    out.append("    try std.testing.expectEqual(@as(u32, 0x0000_0000), IID_IUnknown.d1);")
+    out.append('    try std.testing.expectEqual(@as(u16, 0x0000), IID_IUnknown.d3);')
+    out.append('    try std.testing.expectEqual(@as(u8, 0xc0), IID_IUnknown.d4[0]);')
+    out.append("}")
+    return "\n".join(out) + "\n"
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("header", help="path to Microsoft's WebView2.h")
+    ap.add_argument("header")
     ap.add_argument("-o", "--out", default="src/webview/webview2_com.zig")
     args = ap.parse_args()
 
-    vtables, guids = parse_header(args.header)
-    missing_guids = [n for n in TYPED if n not in guids]
-    if missing_guids:
-        sys.exit(f"error: missing IIDs for {missing_guids}")
+    with open(args.header, encoding="utf-8", errors="replace") as fh:
+        header = fh.read()
 
+    text = emit(header)
     with open(args.out, "w", encoding="utf-8") as fh:
-        fh.write(emit(vtables, guids))
-    print(f"wrote {args.out} ({len(TYPED)} interfaces)")
+        fh.write(text)
+
+    total = sum(len(parse_vtables(header, n)) for n in INTERFACES)
+    print(
+        f"wrote {args.out}: {len(INTERFACES)} interfaces / {total} vtable slots",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

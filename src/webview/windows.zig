@@ -1,28 +1,29 @@
-//! Native Windows Backend — `Win32` window + WebView2 (`src/webview/windows.zig`, `M3-02`).
+//! Native Windows Backend — `Win32` window + Direct WebView2 (`src/webview/windows.zig`, `M3-02`).
 //!
 //! Pure Zig, **no C / C++ / Rust, no `@cImport`, no `WebView2Loader.dll`**: the runtime is located
-//! and driven through [`webview2_loader.zig`](webview2_loader.zig) + the hand-generated COM vtables
-//! in [`webview2_com.zig`](webview2_com.zig). It mirrors [`linux.zig`](linux.zig) and
+//! and driven through [`webview2_loader.zig`](webview2_loader.zig) plus the hand-generated COM
+//! vtables in [`webview2_com.zig`](webview2_com.zig). It mirrors [`linux.zig`](linux.zig) and
 //! [`macos.zig`](macos.zig) one-for-one, so `zts_core.Host`, `zts_tauri.ProtocolRouter`,
 //! `DesktopRuntime` and `examples/counter` need **zero** Windows-specific code.
 //!
-//! Architecture & Safety Guarantees:
+//! Architecture & safety guarantees:
 //! 1. **Step-driven STA message pump**: `step(.blocking)` waits on an auto-reset event with
-//!    `MsgWaitForMultipleObjectsEx` (1 s cap) and then drains `PeekMessage` — the caller keeps
+//!    `MsgWaitForMultipleObjectsEx` (1 s cap) and then drains `PeekMessage` — callers keep their
 //!    `defer` scopes and 60/120 fps `.poll` loops work unchanged. `wakeup()` = `SetEvent`.
 //! 2. **Async window creation**: `createWindow()` returns a `WindowId` immediately; the WebView2
-//!    controller completes on a later `step()` and *then* applies queued init scripts and navigates.
-//! 3. **`ICoreWebView2Deferral` isolation**: request payloads are copied out, the raw COM pointers
-//!    live in a main-thread-only table, and Zig only ever sees `(window_id, token)` + bytes.
-//! 4. **No new windows / no navigation hijack**: URLs are rewritten `tauri://` →
-//!    `http://tauri.localhost/` by [`windows_util.toWebView2Url`](windows_util.zig) (unit-tested on
-//!    Linux/macOS too), so the same `ProtocolRouter` classification handles both OS families.
+//!    controller completes inside a later `step()` and *then* applies queued init scripts and
+//!    navigates, so no Zig code ever blocks the STA.
+//! 3. **`ICoreWebView2Deferral` isolation**: the raw COM pointers live in a main-thread-only table
+//!    and Zig only ever sees `(window_id, RequestId)` + bytes — Architectural Invariant #4 from
+//!    `ADR-0002` holds on Windows exactly as it does on GTK / WKWebView.
+//! 4. **No custom scheme API needed**: `tauri://localhost/…` is rewritten to
+//!    `http://tauri.localhost/…` (see [`windows_util.toWebView2Url`](windows_util.zig)) and served
+//!    through `WebResourceRequested`, the same workaround wry/Tauri ship.
 
 const std = @import("std");
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
-const testing = std.testing;
 
 const foundation = @import("zts_foundation");
 const types = @import("types.zig");
@@ -36,58 +37,71 @@ pub const util = @import("windows_util.zig");
 const max_headers: usize = 48;
 /// Hard cap for a single intercepted request body (mirrors the macOS shim's 64 MiB).
 const max_body_bytes: usize = 64 * 1024 * 1024;
-/// How long `init()` and `createWindow()` wait for the WebView2 environment/controller.
+/// How long `init()` waits for the WebView2 environment.
 const startup_timeout_ms: u32 = 15_000;
+/// Calling convention of every COM method (`winapi` on Windows targets only — see `win32.CC`).
+const CALL = win32.CC;
+/// `COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL`.
+const resource_context_all: i32 = -1;
 
 // ---------------------------------------------------------------------------
 // Window record
 // ---------------------------------------------------------------------------
 
+const PendingNav = union(enum) {
+    url: []u8,
+    html: []u8,
+
+    fn deinit(self: PendingNav, allocator: Allocator) void {
+        switch (self) {
+            .url => |s| allocator.free(s),
+            .html => |s| allocator.free(s),
+        }
+    }
+};
+
 const WinWindow = struct {
     backend: *WindowsWebView2Backend,
-    hwnd: win32.HWND,
-    ident: u64,
+    id: types.WindowId = .invalid,
+    hwnd: win32.HWND = undefined,
+    parent: ?win32.HWND = null,
 
     controller: ?*com.ICoreWebView2Controller = null,
     webview: ?*com.ICoreWebView2 = null,
+    settings: ?*com.ICoreWebView2Settings = null,
     ready: bool = false,
+    closing: bool = false,
+    finalized: bool = false,
 
-    title: []u8 = &.{},
-    want_visible: bool = true,
-    top_level: bool = true,
-    resizable: bool = true,
+    visible: bool = true,
     decorations: bool = true,
+    transparent: bool = false,
+    resizable: bool = true,
     always_on_top: bool = false,
-    devtools: bool = false,
+    fullscreen: bool = false,
+    dark: bool = true,
 
     min_size: ?types.LogicalSize = null,
     max_size: ?types.LogicalSize = null,
 
-    /// Init scripts / navigations issued before the controller finished creating.
-    queued_scripts: std.ArrayList([]u8) = .empty,
-    queued_url: ?[]u8 = null,
-    queued_html: ?[]u8 = null,
+    title: []u8 = &.{},
+    dpi: u32 = util.base_dpi,
+    saved_style: win32.DWORD = 0,
+    saved_rect: win32.RECT = .{},
 
-    close_requested: bool = false,
-    dpi: u32 = 96,
-    /// `EventRegistrationToken`s for the three handlers so teardown can unsubscribe cleanly.
-    msg_token: i64 = 0,
-    resource_token: i64 = 0,
-    close_token: i64 = 0,
+    /// Applied as soon as the controller becomes ready (see `applyQueued`).
+    nav_queue: std.ArrayList(PendingNav) = .empty,
+    scripts: std.ArrayList([]u8) = .empty,
 
-    fn deinit(self: *WinWindow, allocator: Allocator) void {
-        for (self.queued_scripts.items) |s| allocator.free(s);
-        self.queued_scripts.deinit(allocator);
-        if (self.queued_url) |u| allocator.free(u);
-        if (self.queued_html) |h| allocator.free(h);
-        if (self.title.len > 0) allocator.free(self.title);
-    }
+    token_message: i64 = 0,
+    token_resource: i64 = 0,
+    token_close: i64 = 0,
 };
 
-/// A deferred `WebResourceRequested` callback (main thread only).
-const DeferredTask = struct {
-    args: *com.ICoreWebView2WebResourceRequestedEventArgs,
-    deferral: *com.ICoreWebView2Deferral,
+const SchemeSlot = struct {
+    backend: *WindowsWebView2Backend,
+    handler: types.SchemeHandler,
+    scheme: []u8,
 };
 
 /// Only `(backend, token)` crosses thread boundaries; the COM pointers never leave the UI thread.
@@ -96,89 +110,177 @@ const PendingToken = struct {
     token: u64,
 
     fn cancel(self: PendingToken) void {
-        self.backend.failDeferred(self.token);
+        self.backend.cancelDeferred(self.token);
     }
 };
 
+const Deferred = struct {
+    args: *com.ICoreWebView2WebResourceRequestedEventArgs,
+    deferral: *com.ICoreWebView2Deferral,
+};
+
 // ---------------------------------------------------------------------------
-// COM event handler objects (IUnknown + Invoke)
+// COM event handler objects
 // ---------------------------------------------------------------------------
 
 const HandlerKind = enum(u32) { environment_ready, controller_ready, web_message, web_resource, window_close };
 
-/// Every WebView2 event handler shares the layout `{ vtable, ... }` + 4 slots
-/// (`QueryInterface`, `AddRef`, `Release`, `Invoke`). One Zig struct can therefore back all of
-/// them; only the `Invoke` thunk differs. `iid` keeps `QueryInterface` honest.
+/// Every WebView2 event handler is `{ vtable, … }` with exactly 4 vtable slots
+/// (`QueryInterface`, `AddRef`, `Release`, `Invoke`). One Zig struct therefore backs all of them;
+/// only the `Invoke` thunk differs, so each kind gets its own static vtable.
+///
+/// Handlers are never freed individually — the backend owns them and releases the whole list in
+/// `deinit()`, after every controller has been closed, so a late `Invoke` from WebView2 can never
+/// observe a dangling pointer.
 const Handler = extern struct {
-    vtable: *const HandlerVTable,
+    vtable: *const anyopaque,
     refs: u32 = 1,
     backend: *WindowsWebView2Backend,
-    ident: u64,
     kind: HandlerKind,
-    iid: com.Guid,
+    /// `types.WindowId.toU64()` (`0` = backend-wide, e.g. the environment callback).
+    ident: u64 = 0,
 
-    const HandlerVTable = extern struct {
-        QueryInterface: *const fn (*anyopaque, *const com.Guid, ?*?*anyopaque) callconv(.winapi) com.HResult,
-        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,
-        Release: *const fn (*anyopaque) callconv(.winapi) u32,
-        /// `a`/`b` are the interface's two payload arguments. Both are 64-bit wide on every
-        /// Windows ABI this backend supports (an `HRESULT` occupies the low 32 bits of `a`).
-        Invoke: *const fn (*anyopaque, a: usize, b: usize) callconv(.winapi) com.HResult,
-    };
+    fn queryInterface(self: *Handler, riid: *const com.Guid, out: *?*anyopaque) com.HResult {
+        const wanted: *const com.Guid = switch (self.kind) {
+            .environment_ready => &com.IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
+            .controller_ready => &com.IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
+            .web_message => &com.IID_ICoreWebView2WebMessageReceivedEventHandler,
+            .web_resource => &com.IID_ICoreWebView2WebResourceRequestedEventHandler,
+            .window_close => &com.IID_ICoreWebView2WindowCloseRequestedEventHandler,
+        };
+        if (guidEql(riid, &com.IID_IUnknown) or guidEql(riid, wanted)) {
+            out.* = self;
+            _ = self.addRef();
+            return com.S_OK;
+        }
+        out.* = null;
+        return com.E_NOINTERFACE;
+    }
+
+    fn addRef(self: *Handler) u32 {
+        self.refs += 1;
+        return self.refs;
+    }
+
+    fn release(self: *Handler) u32 {
+        if (self.refs > 0) self.refs -= 1;
+        return self.refs;
+    }
 };
 
-pub const IID_IUnknown = com.guid("00000000-0000-0000-c000-000000000046");
-
-fn handlerQueryInterface(this: *anyopaque, riid: *const com.Guid, out: ?*?*anyopaque) callconv(.winapi) com.HResult {
-    const self: *Handler = @ptrCast(@alignCast(this));
-    const dst = out orelse return com.E_POINTER;
-    if (guidEql(riid, &IID_IUnknown) or guidEql(riid, &self.iid)) {
-        dst.* = this;
-        _ = handlerAddRef(this);
-        return com.S_OK;
-    }
-    dst.* = null;
-    return com.E_NOINTERFACE;
-}
-
-fn handlerAddRef(this: *anyopaque) callconv(.winapi) u32 {
-    const self: *Handler = @ptrCast(@alignCast(this));
-    self.refs +%= 1;
-    return self.refs;
-}
-
-fn handlerRelease(this: *anyopaque) callconv(.winapi) u32 {
-    const self: *Handler = @ptrCast(@alignCast(this));
-    self.refs -%= 1;
-    // Memory is arena-owned by the backend and released in `deinit()`, so a `Release` racing the
-    // teardown can never free memory WebView2 still touches (no use-after-free by construction).
-    return self.refs;
-}
-
 fn guidEql(a: *const com.Guid, b: *const com.Guid) bool {
-    return a.d1 == b.d1 and a.d2 == b.d2 and a.d3 == b.d3 and std.mem.eql(u8, &a.d4, &b.d4);
+    return std.mem.eql(u8, std.mem.asBytes(a), std.mem.asBytes(b));
 }
 
-fn handlerInvokeRaw(this: *anyopaque, a: usize, b: usize) callconv(.winapi) com.HResult {
-    const self: *Handler = @ptrCast(@alignCast(this));
-    return switch (self.kind) {
-        .environment_ready => self.backend.onEnvironmentReady(self, @as(com.HResult, @bitCast(@as(u32, @truncate(a)))), b),
-        .controller_ready => self.backend.onControllerReady(self, @as(com.HResult, @bitCast(@as(u32, @truncate(a)))), b),
-        .web_message => self.backend.onWebMessage(self, a, b),
-        .web_resource => self.backend.onWebResourceRequested(self, a, b),
-        .window_close => self.backend.onWindowCloseRequested(self, a, b),
+fn handlerBase(comptime Iface: type) type {
+    return struct {
+        fn query(this: *Iface, riid: *const com.Guid, out: *?*anyopaque) callconv(CALL) com.HResult {
+            const self: *Handler = @ptrCast(@alignCast(this));
+            return self.queryInterface(riid, out);
+        }
+        fn addRef(this: *Iface) callconv(CALL) u32 {
+            const self: *Handler = @ptrCast(@alignCast(this));
+            return self.addRef();
+        }
+        fn release(this: *Iface) callconv(CALL) u32 {
+            const self: *Handler = @ptrCast(@alignCast(this));
+            return self.release();
+        }
     };
 }
 
-const handler_vtable: Handler.HandlerVTable = .{
-    .QueryInterface = handlerQueryInterface,
-    .AddRef = handlerAddRef,
-    .Release = handlerRelease,
-    .Invoke = handlerInvokeRaw,
+const EnvIface = com.ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler;
+const ControllerIface = com.ICoreWebView2CreateCoreWebView2ControllerCompletedHandler;
+const MessageIface = com.ICoreWebView2WebMessageReceivedEventHandler;
+const ResourceIface = com.ICoreWebView2WebResourceRequestedEventHandler;
+const CloseIface = com.ICoreWebView2WindowCloseRequestedEventHandler;
+
+fn envInvoke(
+    this: *EnvIface,
+    hr: com.HResult,
+    env: ?*com.ICoreWebView2Environment,
+) callconv(CALL) com.HResult {
+    const self: *Handler = @ptrCast(@alignCast(this));
+    return self.backend.onEnvironmentCreated(hr, env);
+}
+
+fn controllerInvoke(
+    this: *ControllerIface,
+    hr: com.HResult,
+    controller: ?*com.ICoreWebView2Controller,
+) callconv(CALL) com.HResult {
+    const self: *Handler = @ptrCast(@alignCast(this));
+    return self.backend.onControllerCreated(self.ident, hr, controller);
+}
+
+fn messageInvoke(
+    this: *MessageIface,
+    sender: ?*com.ICoreWebView2,
+    args: ?*com.ICoreWebView2WebMessageReceivedEventArgs,
+) callconv(CALL) com.HResult {
+    _ = sender;
+    const self: *Handler = @ptrCast(@alignCast(this));
+    return self.backend.onWebMessage(self.ident, args);
+}
+
+fn resourceInvoke(
+    this: *ResourceIface,
+    sender: ?*com.ICoreWebView2,
+    args: ?*com.ICoreWebView2WebResourceRequestedEventArgs,
+) callconv(CALL) com.HResult {
+    _ = sender;
+    const self: *Handler = @ptrCast(@alignCast(this));
+    return self.backend.onWebResourceRequested(self.ident, args);
+}
+
+fn closeInvoke(
+    this: *CloseIface,
+    sender: ?*com.ICoreWebView2,
+    args: ?*anyopaque,
+) callconv(CALL) com.HResult {
+    _ = sender;
+    _ = args;
+    const self: *Handler = @ptrCast(@alignCast(this));
+    return self.backend.onWindowCloseRequested(self.ident);
+}
+
+const env_vtable = EnvIface.VTable{
+    .QueryInterface = handlerBase(EnvIface).query,
+    .AddRef = handlerBase(EnvIface).addRef,
+    .Release = handlerBase(EnvIface).release,
+    .Invoke = envInvoke,
+};
+
+const controller_vtable = ControllerIface.VTable{
+    .QueryInterface = handlerBase(ControllerIface).query,
+    .AddRef = handlerBase(ControllerIface).addRef,
+    .Release = handlerBase(ControllerIface).release,
+    .Invoke = controllerInvoke,
+};
+
+const message_vtable = MessageIface.VTable{
+    .QueryInterface = handlerBase(MessageIface).query,
+    .AddRef = handlerBase(MessageIface).addRef,
+    .Release = handlerBase(MessageIface).release,
+    .Invoke = messageInvoke,
+};
+
+const resource_vtable = ResourceIface.VTable{
+    .QueryInterface = handlerBase(ResourceIface).query,
+    .AddRef = handlerBase(ResourceIface).addRef,
+    .Release = handlerBase(ResourceIface).release,
+    .Invoke = resourceInvoke,
+};
+
+const close_vtable = CloseIface.VTable{
+    .QueryInterface = handlerBase(CloseIface).query,
+    .AddRef = handlerBase(CloseIface).addRef,
+    .Release = handlerBase(CloseIface).release,
+    .Invoke = closeInvoke,
 };
 
 // ---------------------------------------------------------------------------
-// Backend
+// The backend
 // ---------------------------------------------------------------------------
 
 pub const WindowsWebView2Backend = struct {
@@ -186,650 +288,260 @@ pub const WindowsWebView2Backend = struct {
     io: Io,
 
     runtime: loader.Runtime,
-    env: ?*com.ICoreWebView2Environment = null,
     com_initialized: bool = false,
-
+    class_atom: win32.ATOM = 0,
+    class_name: []u8 = &.{},
     wakeup_event: win32.HANDLE,
-    window_class: [32]u8 = @splat(0),
-    window_class_len: usize = 0,
-    next_ident: u64 = 1,
+
+    env: ?*com.ICoreWebView2Environment = null,
+    env_failed: bool = false,
 
     windows: foundation.HandlePool(*WinWindow, .window) = .empty,
     scheme_slots: std.ArrayList(*SchemeSlot) = .empty,
     pending: pending_mod.PendingTable(PendingToken) = .{},
     completions: pending_mod.CompletionQueue,
-    deferred: std.AutoHashMapUnmanaged(u64, DeferredTask) = .empty,
+    deferred: std.AutoHashMapUnmanaged(u64, Deferred) = .empty,
     next_token: u64 = 1,
-
-    /// COM handler objects live here for the whole backend lifetime (see `handlerRelease`).
-    handlers: std.heap.ArenaAllocator,
+    handlers: std.ArrayList(*Handler) = .empty,
 
     message_handler: ?types.MessageHandler = null,
     close_handler: ?types.CloseHandler = null,
 
     quit: bool = false,
     had_windows: bool = false,
+    shutting_down: bool = false,
+    preflight_count: u64 = 0,
+
+    // -- lifecycle ---------------------------------------------------------
 
     pub fn init(allocator: Allocator, io: Io) types.WebviewError!*WindowsWebView2Backend {
-        var rt = loader.load(allocator) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            // No Evergreen runtime installed -> let `.auto` degrade to `HeadlessMock`.
-            error.RuntimeNotFound, error.LoadFailed, error.ExportMissing => return error.DisplayUnavailable,
-        };
-        errdefer rt.deinit();
+        _ = win32.SetProcessDpiAwarenessContext(win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-        const event = win32.CreateEventW(null, win32.FALSE, win32.FALSE, null) orelse return error.PlatformFailure;
+        // WebView2 requires an STA. `RPC_E_CHANGED_MODE` means the caller already initialized an MTA
+        // (e.g. inside another library) and the browser can never be hosted — fail loudly instead.
+        const hr = win32.CoInitializeEx(null, win32.COINIT_APARTMENTTHREADED | win32.COINIT_DISABLE_OLE1DDE);
+        if (hr == win32.RPC_E_CHANGED_MODE) return error.PlatformFailure;
+        const com_initialized = !com.failed(hr);
+
+        const runtime = loader.load(allocator) catch |err| {
+            if (com_initialized) win32.CoUninitialize();
+            return switch (err) {
+                error.OutOfMemory => error.OutOfMemory,
+                // No Evergreen runtime / no `EmbeddedBrowserWebView.dll` → same code as a headless
+                // Linux box without a display, so `Engine.init(.native)` degrades identically.
+                error.RuntimeNotFound => error.DisplayUnavailable,
+                else => error.PlatformFailure,
+            };
+        };
+
+        const event = win32.CreateEventW(null, win32.FALSE, win32.FALSE, null) orelse {
+            var rt = runtime;
+            rt.deinit(allocator);
+            if (com_initialized) win32.CoUninitialize();
+            return error.PlatformFailure;
+        };
 
         const self = allocator.create(WindowsWebView2Backend) catch {
+            var rt = runtime;
+            rt.deinit(allocator);
             _ = win32.CloseHandle(event);
+            if (com_initialized) win32.CoUninitialize();
             return error.OutOfMemory;
         };
         self.* = .{
             .allocator = allocator,
             .io = io,
-            .runtime = rt,
+            .runtime = runtime,
+            .com_initialized = com_initialized,
             .wakeup_event = event,
             .completions = pending_mod.CompletionQueue.init(allocator, io),
-            .handlers = std.heap.ArenaAllocator.init(allocator),
         };
+        errdefer self.deinit();
 
-        // STA is mandatory: WebView2 callbacks are dispatched on the thread that created the
-        // environment, and that same thread is the one calling `step()`.
-        const hr = win32.CoInitializeEx(null, win32.COINIT_APARTMENTTHREADED | win32.COINIT_DISABLE_OLE1DDE);
-        // `RPC_E_CHANGED_MODE` (0x80010106) simply means the host already initialized MTA/STA.
-        if (com.failed(hr) and hr != @as(com.HResult, @bitCast(@as(u32, 0x80010106)))) {
-            self.deinit();
-            return error.PlatformFailure;
-        }
-        self.com_initialized = !com.failed(hr);
-
-        self.registerWindowClass() catch {
-            self.deinit();
-            return error.PlatformFailure;
-        };
-        self.createEnvironment() catch |err| {
-            self.deinit();
-            return err;
-        };
+        try self.registerWindowClass();
+        try self.startEnvironment();
         return self;
     }
 
-    pub fn deinit(self: *WindowsWebView2Backend) void {
-        const alloc = self.allocator;
+    fn registerWindowClass(self: *WindowsWebView2Backend) types.WebviewError!void {
+        const name = std.fmt.allocPrint(self.allocator, "ZtsWebView2Window.{x}", .{@intFromPtr(self)}) catch
+            return error.OutOfMemory;
+        errdefer self.allocator.free(name);
+        const name_z = win32.toWide(self.allocator, name) catch return error.OutOfMemory;
+        defer self.allocator.free(name_z);
 
-        // 1. Detach app callbacks before anything can re-enter the torn-down backend.
+        const cls = win32.WNDCLASSEXW{
+            .lpfnWndProc = wndProc,
+            .hInstance = win32.GetModuleHandleW(null),
+            .hCursor = win32.LoadCursorW(null, win32.IDC_ARROW),
+            .lpszClassName = name_z.ptr,
+        };
+        if (win32.RegisterClassExW(&cls) == 0) return error.PlatformFailure;
+
+        self.class_atom = 1; // any non-zero marker: `UnregisterClassW` only needs the name
+        self.class_name = name;
+    }
+
+    /// Creates the WebView2 environment and pumps the STA queue until the callback lands.
+    fn startEnvironment(self: *WindowsWebView2Backend) types.WebviewError!void {
+        const handler = try self.newHandler(.environment_ready, 0);
+
+        const runtime_type: i32 = if (self.runtime.fixed) loader.RUNTIME_TYPE_FIXED else loader.RUNTIME_TYPE_INSTALLED;
+        const hr = self.runtime.create(
+            win32.TRUE, // `fromClientDll` — the lite loader is linked in-process
+            runtime_type,
+            null, // default user-data folder (`<exe>.WebView2`)
+            null,
+            @ptrCast(handler),
+        );
+        if (com.failed(hr)) return error.PlatformFailure;
+
+        if (!self.waitForEnvironment()) {
+            if (self.env) |env| {
+                _ = env.vtable.Release(env);
+                self.env = null;
+            }
+            return if (self.env_failed) error.PlatformFailure else error.DisplayUnavailable;
+        }
+    }
+
+    fn waitForEnvironment(self: *WindowsWebView2Backend) bool {
+        var waited: u32 = 0;
+        while (waited < startup_timeout_ms) : (waited += 50) {
+            self.pumpMessages();
+            if (self.env != null) return true;
+            if (self.env_failed) return false;
+            _ = win32.MsgWaitForMultipleObjectsEx(1, &self.wakeup_event, 50, win32.QS_ALLINPUT, 0);
+            _ = win32.ResetEvent(self.wakeup_event);
+        }
+        return self.env != null;
+    }
+
+    pub fn deinit(self: *WindowsWebView2Backend) void {
+        self.shutting_down = true;
         self.message_handler = null;
         self.close_handler = null;
 
-        // 2. Destroy windows (also closes their WebView2 controllers).
-        var idents: std.ArrayList(u64) = .empty;
-        defer idents.deinit(alloc);
-        var it = self.windows.iterator();
-        while (it.next()) |slot| idents.append(alloc, slot.value_ptr.*.ident) catch {};
-
-        for (idents.items) |ident| self.closeWindowByIdent(ident);
-
-        // 3. Fail every still-deferred request (unblocks WebView2, no leaks).
-        self.pending.deinitWith(alloc, PendingToken.cancel);
-        self.deferred.deinit(alloc);
+        // 1. Cancel in-flight requests; every deferral is completed so WebView2 is never left hanging.
+        self.pending.deinitWith(self.allocator, PendingToken.cancel);
+        self.clearDeferred();
         self.completions.deinit();
 
-        for (self.scheme_slots.items) |slot| {
-            alloc.free(slot.scheme);
-            alloc.destroy(slot);
+        // 2. Close every controller (releases the browser process for this HWND) before the windows die.
+        var it = self.windows.iterator();
+        while (it.next()) |slot| self.destroyWebView(slot.value_ptr.*);
+        self.pumpMessages();
+
+        // 3. Destroy the remaining native windows, detaching the user-data pointer first so
+        //    `wndProc` cannot re-enter `finalizeWindow` for a record that is already freed.
+        while (true) {
+            var wit = self.windows.iterator();
+            const first = wit.next() orelse break;
+            const w = first.value_ptr.*;
+            w.finalized = true;
+            _ = win32.SetWindowLongPtrW(w.hwnd, win32.GWLP_USERDATA, 0);
+            _ = win32.DestroyWindow(w.hwnd);
+            _ = self.windows.release(first.handle) catch {};
+            freeWindow(self.allocator, w);
         }
-        self.scheme_slots.deinit(alloc);
+        self.windows.deinit(self.allocator);
+        self.pumpMessages();
+
+        for (self.scheme_slots.items) |slot| {
+            self.allocator.free(slot.scheme);
+            self.allocator.destroy(slot);
+        }
+        self.scheme_slots.deinit(self.allocator);
+
+        for (self.handlers.items) |h| self.allocator.destroy(h);
+        self.handlers.deinit(self.allocator);
 
         if (self.env) |env| {
             _ = env.vtable.Release(env);
             self.env = null;
         }
 
-        self.windows.deinit(alloc);
-        self.handlers.deinit();
-
-        if (self.window_class_len > 0) {
-            const cls = win32.toWide(alloc, self.windowClass()) catch null;
-            if (cls) |c| {
-                defer alloc.free(c);
-                const hinstance = win32.GetModuleHandleW(null);
-                _ = win32.UnregisterClassW(c.ptr, hinstance);
+        if (self.class_name.len > 0) {
+            if (win32.toWide(self.allocator, self.class_name) catch null) |z| {
+                _ = win32.UnregisterClassW(z.ptr, win32.GetModuleHandleW(null));
+                self.allocator.free(z);
             }
+            self.allocator.free(self.class_name);
+            self.class_name = &.{};
         }
 
         _ = win32.CloseHandle(self.wakeup_event);
-        self.runtime.deinit();
+        self.runtime.deinit(self.allocator);
         if (self.com_initialized) win32.CoUninitialize();
-        alloc.destroy(self);
+
+        const allocator = self.allocator;
+        allocator.destroy(self);
     }
 
-    fn windowClass(self: *const WindowsWebView2Backend) []const u8 {
-        return self.window_class[0..self.window_class_len];
-    }
+    // -- helpers -----------------------------------------------------------
 
-    fn registerWindowClass(self: *WindowsWebView2Backend) !void {
-        const name = std.fmt.bufPrint(&self.window_class, "ZtsWebView2Window{x}", .{@as(u32, @truncate(@intFromPtr(self)))}) catch
-            return error.OutOfMemory;
-        self.window_class_len = name.len;
-
-        const name_z = try win32.toWide(self.allocator, name);
-        defer self.allocator.free(name_z);
-
-        const hinstance = win32.GetModuleHandleW(null);
-        const cls: win32.WNDCLASSEXW = .{
-            .lpfnWndProc = ztsWndProc,
-            .hInstance = hinstance,
-            .hCursor = win32.LoadCursorW(null, win32.IDC_ARROW),
-            .hbrBackground = @ptrFromInt(@as(usize, win32.COLOR_WINDOW + 1)),
-            .lpszClassName = name_z.ptr,
-        };
-        if (win32.RegisterClassExW(&cls) == 0) {
-            // A stale class from a previous instance in the same process is fine.
-            if (win32.GetLastError() != 1410) return error.PlatformFailure; // ERROR_CLASS_ALREADY_EXISTS
-        }
-    }
-
-    fn createEnvironment(self: *WindowsWebView2Backend) types.WebviewError!void {
-        const alloc = self.allocator;
-
-        // `<exe>.WebView2` — exactly Microsoft's default, but always explicit so the folder is
-        // writable even when the exe lives in a read-only cache directory.
-        var exe_buf: [1024]u16 = undefined;
-        const exe_len = win32.GetModuleFileNameW(null, &exe_buf, exe_buf.len);
-        exe_buf[if (exe_len < exe_buf.len) exe_len else exe_buf.len - 1] = 0;
-
-        const exe_utf8 = win32.fromWide(alloc, @ptrCast(&exe_buf), false) catch return error.OutOfMemory;
-        defer alloc.free(exe_utf8);
-
-        var folder_buf: [1200]u8 = undefined;
-        const folder = util.defaultUserDataFolder(&folder_buf, exe_utf8) catch return error.OutOfMemory;
-        const folder_z = win32.toWide(alloc, folder) catch return error.OutOfMemory;
-        defer alloc.free(folder_z);
-
-        const handler = self.newHandler(0, .environment_ready, com.IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler);
-        const hr = self.runtime.create(
-            win32.TRUE,
-            loader.RUNTIME_TYPE_INSTALLED,
-            folder_z.ptr,
-            null,
-            @ptrCast(handler),
-        );
-        if (com.failed(hr)) return error.PlatformFailure;
-
-        self.pumpUntil(&self.env, startup_timeout_ms) catch return error.PlatformFailure;
-        if (self.env == null) return error.PlatformFailure;
-    }
-
-    fn newHandler(self: *WindowsWebView2Backend, ident: u64, kind: HandlerKind, iid: com.Guid) *Handler {
-        const h = self.handlers.allocator().create(Handler) catch @panic("OOM allocating COM handler");
+    fn newHandler(self: *WindowsWebView2Backend, kind: HandlerKind, ident: u64) types.WebviewError!*Handler {
+        const h = self.allocator.create(Handler) catch return error.OutOfMemory;
         h.* = .{
-            .vtable = &handler_vtable,
+            .vtable = switch (kind) {
+                .environment_ready => &env_vtable,
+                .controller_ready => &controller_vtable,
+                .web_message => &message_vtable,
+                .web_resource => &resource_vtable,
+                .window_close => &close_vtable,
+            },
             .backend = self,
-            .ident = ident,
             .kind = kind,
-            .iid = iid,
+            .ident = ident,
+        };
+        self.handlers.append(self.allocator, h) catch {
+            self.allocator.destroy(h);
+            return error.OutOfMemory;
         };
         return h;
     }
 
-    /// Runs the message pump until `*flag` becomes non-null (async COM completion) or timeout.
-    fn pumpUntil(self: *WindowsWebView2Backend, flag: *?*com.ICoreWebView2Environment, timeout_ms: u32) !void {
-        var waited: u32 = 0;
-        while (flag.* == null) {
-            if (waited >= timeout_ms) return error.Timeout;
-            _ = win32.MsgWaitForMultipleObjectsEx(
-                1,
-                &self.wakeup_event,
-                10,
-                win32.QS_ALLINPUT,
-                win32.MWMO_INPUTAVAILABLE,
-            );
-            _ = win32.ResetEvent(self.wakeup_event);
-            self.pumpMessages();
-            waited += 10;
-        }
-    }
-
     fn pumpMessages(self: *WindowsWebView2Backend) void {
-        _ = self;
         var msg: win32.MSG = .{};
         while (win32.PeekMessageW(&msg, null, 0, 0, win32.PM_REMOVE) != 0) {
+            if (msg.message == win32.WM_QUIT) {
+                self.quit = true;
+                return;
+            }
             _ = win32.TranslateMessage(&msg);
             _ = win32.DispatchMessageW(&msg);
         }
     }
 
-    // ----------------------------------------------------------------------
-    // COM callbacks
-    // ----------------------------------------------------------------------
-
-    fn onEnvironmentReady(self: *WindowsWebView2Backend, h: *Handler, hr: com.HResult, result: usize) com.HResult {
-        _ = h;
-        if (com.failed(hr) or result == 0) return com.S_OK;
-        const env: *com.ICoreWebView2Environment = @ptrFromInt(result);
-        _ = env.vtable.AddRef(env);
-        self.env = env;
-        return com.S_OK;
+    fn windowByIdent(self: *WindowsWebView2Backend, ident: u64) ?*WinWindow {
+        if (ident == 0) return null;
+        var it = self.windows.iterator();
+        while (it.next()) |slot| {
+            if (slot.value_ptr.*.id.toU64() == ident) return slot.value_ptr.*;
+        }
+        return null;
     }
 
-    fn onControllerReady(self: *WindowsWebView2Backend, h: *Handler, hr: com.HResult, result: usize) com.HResult {
-        if (com.failed(hr) or result == 0) return com.S_OK;
-        const win = self.windowByIdent(h.ident) orelse return com.S_OK;
-        if (win.close_requested) return com.S_OK;
-
-        const controller: *com.ICoreWebView2Controller = @ptrFromInt(result);
-        _ = controller.vtable.AddRef(controller);
-        win.controller = controller;
-
-        var webview: ?*com.ICoreWebView2 = null;
-        if (com.failed(controller.vtable.get_CoreWebView2(controller, &webview))) return com.S_OK;
-        const wv = webview orelse return com.S_OK;
-        win.webview = wv;
-
-        _ = controller.vtable.put_IsVisible(controller, win32.TRUE);
-        self.configureWebView(win, wv);
-        self.applyQueuedWork(win);
-        win.ready = true;
-
-        if (win.want_visible) _ = win32.ShowWindow(win.hwnd, win32.SW_SHOW);
-        return com.S_OK;
+    fn requireWindow(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!*WinWindow {
+        const slot = self.windows.get(win_id) orelse return error.WindowNotFound;
+        return @constCast(slot.*);
     }
 
-    fn configureWebView(self: *WindowsWebView2Backend, win: *WinWindow, wv: *com.ICoreWebView2) void {
-        var settings: ?*com.ICoreWebView2Settings = null;
-        if (!com.failed(wv.vtable.get_Settings(wv, &settings))) {
-            if (settings) |s| {
-                _ = s.vtable.put_AreDevToolsEnabled(s, if (win.devtools) win32.TRUE else win32.FALSE);
-                _ = s.vtable.put_IsStatusBarEnabled(s, win32.FALSE);
-                _ = s.vtable.put_IsWebMessageEnabled(s, win32.TRUE);
-                _ = s.vtable.put_IsScriptEnabled(s, win32.TRUE);
-                _ = s.vtable.Release(s);
-            }
-        }
-
-        // `window.__ztsPostMessage` so the shared JS bootstrap has one code path on every OS.
-        const bridge = "window.__ztsPostMessage = (m) => window.chrome.webview.postMessage(m);";
-        self.addDocumentScript(win, wv, bridge);
-
-        var token: i64 = 0;
-        const msg_handler = self.newHandler(win.ident, .web_message, com.IID_ICoreWebView2WebMessageReceivedEventHandler);
-        if (!com.failed(wv.vtable.add_WebMessageReceived(wv, @ptrCast(msg_handler), &token))) {
-            win.msg_token = token;
-        }
-
-        // Intercept the three Tauri sub-origins (WebView2 has no custom-scheme support).
-        const resource_handler = self.newHandler(win.ident, .web_resource, com.IID_ICoreWebView2WebResourceRequestedEventHandler);
-        var resource_token: i64 = 0;
-        const added = !com.failed(wv.vtable.add_WebResourceRequested(wv, @ptrCast(resource_handler), &resource_token));
-        if (added) win.resource_token = resource_token;
-
-        for ([_]util.Protocol{ .tauri, .ipc, .asset }) |p| {
-            var filter_buf: [64]u8 = undefined;
-            const pattern = util.filterPattern(&filter_buf, p) catch continue;
-            const pattern_z = win32.toWide(self.allocator, pattern) catch continue;
-            defer self.allocator.free(pattern_z);
-            // COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL == 0xF (all contexts).
-            _ = wv.vtable.AddWebResourceRequestedFilter(wv, pattern_z.ptr, 0xF);
-        }
-
-        const close_handler = self.newHandler(win.ident, .window_close, com.IID_ICoreWebView2WindowCloseRequestedEventHandler);
-        var close_token: i64 = 0;
-        if (!com.failed(wv.vtable.add_WindowCloseRequested(wv, @ptrCast(close_handler), &close_token))) {
-            win.close_token = close_token;
-        }
-    }
-
-    fn addDocumentScript(self: *WindowsWebView2Backend, win: *WinWindow, wv: *com.ICoreWebView2, script: []const u8) void {
-        const z = win32.toWide(self.allocator, script) catch return;
-        defer self.allocator.free(z);
-        _ = wv.vtable.AddScriptToExecuteOnDocumentCreated(wv, z.ptr, null);
-        _ = win;
-    }
-
-    fn applyQueuedWork(self: *WindowsWebView2Backend, win: *WinWindow) void {
-        const wv = win.webview orelse return;
-
-        for (win.queued_scripts.items) |script| self.addDocumentScript(win, wv, script);
-        for (win.queued_scripts.items) |s| self.allocator.free(s);
-        win.queued_scripts.clearRetainingCapacity();
-
-        if (win.queued_html) |html| {
-            self.navigateHtml(win, wv, html);
-            self.allocator.free(html);
-            win.queued_html = null;
-        } else if (win.queued_url) |url| {
-            self.navigateUrl(win, wv, url);
-            self.allocator.free(url);
-            win.queued_url = null;
-        }
-    }
-
-    fn navigateUrl(self: *WindowsWebView2Backend, win: *WinWindow, wv: *com.ICoreWebView2, url: []const u8) void {
-        _ = win;
-        var buf: [4096]u8 = undefined;
-        const rewritten = util.toWebView2Url(&buf, url) catch return;
-        const z = win32.toWide(self.allocator, rewritten) catch return;
-        defer self.allocator.free(z);
-        _ = wv.vtable.Navigate(wv, z.ptr);
-    }
-
-    fn navigateHtml(self: *WindowsWebView2Backend, win: *WinWindow, wv: *com.ICoreWebView2, html: []const u8) void {
-        _ = win;
-        const z = win32.toWide(self.allocator, html) catch return;
-        defer self.allocator.free(z);
-        _ = wv.vtable.NavigateToString(wv, z.ptr);
-    }
-
-    fn onWebMessage(self: *WindowsWebView2Backend, h: *Handler, sender: usize, args_ptr: usize) com.HResult {
-        _ = sender;
-        if (args_ptr == 0) return com.S_OK;
-        const args: *com.ICoreWebView2WebMessageReceivedEventArgs = @ptrFromInt(args_ptr);
-
-        var wide: ?[*:0]u16 = null;
-        var text: ?[]u8 = null;
-        if (!com.failed(args.vtable.TryGetWebMessageAsString(args, &wide))) {
-            if (wide) |w| text = win32.fromWide(self.allocator, w, true) catch null;
-        }
-        if (text == null) {
-            wide = null;
-            if (!com.failed(args.vtable.get_WebMessageAsJson(args, &wide))) {
-                if (wide) |w| text = win32.fromWide(self.allocator, w, true) catch null;
-            }
-        }
-
-        if (text) |payload| {
-            defer self.allocator.free(payload);
-            if (self.message_handler) |mh| {
-                if (self.windowIdForIdent(h.ident)) |wid| mh.call(wid, payload);
-            }
-        }
-        return com.S_OK;
-    }
-
-    fn onWindowCloseRequested(self: *WindowsWebView2Backend, h: *Handler, sender: usize, args: usize) com.HResult {
-        _ = sender;
-        _ = args;
-        if (self.windowByIdent(h.ident)) |win| win.close_requested = true;
-        return com.S_OK;
-    }
-
-    fn onWebResourceRequested(self: *WindowsWebView2Backend, h: *Handler, sender: usize, args_ptr: usize) com.HResult {
-        _ = sender;
-        if (args_ptr == 0) return com.S_OK;
-        const win = self.windowByIdent(h.ident) orelse return com.S_OK;
-        const args: *com.ICoreWebView2WebResourceRequestedEventArgs = @ptrFromInt(args_ptr);
-        const alloc = self.allocator;
-
-        var request: ?*com.ICoreWebView2WebResourceRequest = null;
-        if (com.failed(args.vtable.get_Request(args, &request))) return com.S_OK;
-        const req = request orelse return com.S_OK;
-        defer _ = req.vtable.Release(req);
-
-        var uri_wide: ?[*:0]u16 = null;
-        if (com.failed(req.vtable.get_Uri(req, &uri_wide))) return com.S_OK;
-        const uri = win32.fromWide(alloc, uri_wide.?, true) catch return com.S_OK;
-        defer alloc.free(uri);
-
-        if (util.classify(uri) == null) return com.S_OK; // not ours: let WebView2 handle it
-
-        var method_wide: ?[*:0]u16 = null;
-        if (com.failed(req.vtable.get_Method(req, &method_wide))) return com.S_OK;
-        const method = win32.fromWide(alloc, method_wide.?, true) catch return com.S_OK;
-        defer alloc.free(method);
-
-        // CORS preflight never reaches Zig (same policy as the macOS shim).
-        if (std.ascii.eqlIgnoreCase(method, "OPTIONS")) {
-            self.respondPreflight(win, args);
-            return com.S_OK;
-        }
-
-        var headers_buf: [max_headers]types.HeaderPair = undefined;
-        var header_names: [max_headers][*:0]u16 = undefined;
-        var header_values: [max_headers][*:0]u16 = undefined;
-        const header_count = self.readHeaders(req, &header_names, &header_values, max_headers);
-        for (0..header_count) |idx| {
-            headers_buf[idx] = .{
-                .name = win32.fromWide(alloc, header_names[idx], false) catch "",
-                .value = win32.fromWide(alloc, header_values[idx], false) catch "",
-            };
-        }
-        defer for (headers_buf[0..header_count]) |hp| {
-            if (hp.name.len > 0) alloc.free(@constCast(hp.name));
-            if (hp.value.len > 0) alloc.free(@constCast(hp.value));
-        };
-        for (0..header_count) |idx| {
-            win32.CoTaskMemFree(@ptrCast(header_names[idx]));
-            win32.CoTaskMemFree(@ptrCast(header_values[idx]));
-        }
-
-        const body = self.readRequestBody(req) catch |err| switch (err) {
-            error.OutOfMemory => return com.S_OK,
-        };
-        defer if (body) |b| alloc.free(b);
-        const body_slice: []const u8 = if (body) |b| b else "";
-
-        var deferral: ?*com.ICoreWebView2Deferral = null;
-        if (com.failed(args.vtable.GetDeferral(args, &deferral))) return com.S_OK;
-        const def = deferral orelse return com.S_OK;
-
-        const token = self.next_token;
-        self.next_token += 1;
-        _ = args.vtable.AddRef(args);
-        self.deferred.put(alloc, token, .{ .args = args, .deferral = def }) catch {
-            _ = def.vtable.Complete(def);
-            _ = def.vtable.Release(def);
-            _ = args.vtable.Release(args);
-            return com.S_OK;
-        };
-
-        const win_id = self.windowIdForIdent(win.ident) orelse {
-            self.failDeferred(token);
-            return com.S_OK;
-        };
-        const req_id = self.pending.insert(alloc, win_id, .{ .backend = self, .token = token }) catch {
-            _ = self.deferred.fetchRemove(token);
-            _ = def.vtable.Complete(def);
-            _ = def.vtable.Release(def);
-            _ = args.vtable.Release(args);
-            return com.S_OK;
-        };
-
-        for (self.scheme_slots.items) |slot| {
-            if (!std.ascii.eqlIgnoreCase(slot.scheme, protocolScheme(uri))) continue;
-            slot.handler.call(.{
-                .request_id = req_id,
-                .window_id = win_id,
-                .scheme = slot.scheme,
-                .method = method,
-                .uri = uri,
-                .headers = headers_buf[0..header_count],
-                .body = body_slice,
-            });
-            return com.S_OK;
-        }
-
-        // No handler registered for this origin.
-        self.failDeferred(token);
-        return com.S_OK;
-    }
-
-    fn readHeaders(
-        self: *WindowsWebView2Backend,
-        req: *com.ICoreWebView2WebResourceRequest,
-        names: *[max_headers][*:0]u16,
-        values: *[max_headers][*:0]u16,
-        cap: usize,
-    ) usize {
-        _ = self;
-        var collection: ?*com.ICoreWebView2HttpRequestHeaders = null;
-        if (com.failed(req.vtable.get_Headers(req, &collection))) return 0;
-        const hdrs = collection orelse return 0;
-        defer _ = hdrs.vtable.Release(hdrs);
-
-        var iter: ?*com.ICoreWebView2HttpHeadersCollectionIterator = null;
-        if (com.failed(hdrs.vtable.GetIterator(hdrs, &iter))) return 0;
-        const it = iter orelse return 0;
-        defer _ = it.vtable.Release(it);
-
-        var count: usize = 0;
-        var has_current: i32 = 0;
-        if (com.failed(it.vtable.get_HasCurrentHeader(it, &has_current))) return 0;
-        while (has_current != 0 and count < cap) {
-            var name: ?[*:0]u16 = null;
-            var value: ?[*:0]u16 = null;
-            if (!com.failed(it.vtable.GetCurrentHeader(it, &name, &value))) {
-                if (name != null and value != null) {
-                    names[count] = name.?;
-                    values[count] = value.?;
-                    count += 1;
-                }
-            }
-            if (com.failed(it.vtable.MoveNext(it, &has_current))) break;
-        }
-        return count;
-    }
-
-    fn readRequestBody(self: *WindowsWebView2Backend, req: *com.ICoreWebView2WebResourceRequest) !?[]u8 {
-        var stream: ?*anyopaque = null;
-        if (com.failed(req.vtable.get_Content(req, &stream))) return null;
-        const raw = stream orelse return null;
-        const istream: *win32.IStream = @ptrCast(@alignCast(raw));
-        defer _ = istream.vtable.Release(istream);
-
-        var out: std.ArrayList(u8) = .empty;
-        errdefer out.deinit(self.allocator);
-
-        var chunk: [16 * 1024]u8 = undefined;
-        while (out.items.len < max_body_bytes) {
-            var read: u32 = 0;
-            if (com.failed(istream.vtable.Read(istream, @ptrCast(&chunk), chunk.len, &read))) break;
-            if (read == 0) break;
-            try out.appendSlice(self.allocator, chunk[0..read]);
-        }
-        return try out.toOwnedSlice(self.allocator);
-    }
-
-    fn respondPreflight(self: *WindowsWebView2Backend, win: *WinWindow, args: *com.ICoreWebView2WebResourceRequestedEventArgs) void {
-        _ = win;
-        const headers = "Access-Control-Allow-Origin: *\r\n" ++
-            "Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS\r\n" ++
-            "Access-Control-Allow-Headers: *\r\n" ++
-            "Access-Control-Expose-Headers: Tauri-Response,Tauri-Callback,Tauri-Error,Content-Type\r\n" ++
-            "Access-Control-Max-Age: 86400\r\n";
-
-        const env = self.env orelse return;
-        const headers_z = win32.toWide(self.allocator, headers) catch return;
-        defer self.allocator.free(headers_z);
-        const reason_z = win32.toWide(self.allocator, "No Content") catch return;
-        defer self.allocator.free(reason_z);
-
-        var resp: ?*com.ICoreWebView2WebResourceResponse = null;
-        if (com.failed(env.vtable.CreateWebResourceResponse(env, null, 204, reason_z.ptr, headers_z.ptr, &resp))) return;
-        if (resp) |r| {
-            _ = args.vtable.put_Response(args, r);
-            _ = r.vtable.Release(r);
-        }
-    }
-
-    /// Completes a deferred request with a real response (main thread only).
-    fn completeDeferred(
-        self: *WindowsWebView2Backend,
-        task: DeferredTask,
-        status: u16,
-        content_type: []const u8,
-        extra_headers: []const types.HeaderPair,
-        body: []const u8,
-    ) void {
-        const alloc = self.allocator;
-        const env = self.env orelse return;
-
-        var header_list: std.ArrayList(u8) = .empty;
-        defer header_list.deinit(alloc);
-        const w = &header_list;
-
-        w.appendSlice(alloc, "Content-Type: ") catch return;
-        w.appendSlice(alloc, content_type) catch return;
-        w.appendSlice(alloc, "\r\n") catch return;
-        // CORS: the page origin (`http://tauri.localhost`) differs from the IPC origin.
-        w.appendSlice(alloc, "Access-Control-Allow-Origin: *\r\n") catch return;
-        w.appendSlice(alloc, "Access-Control-Expose-Headers: Tauri-Response,Tauri-Callback,Tauri-Error,Content-Type,Content-Length,Access-Control-Allow-Origin\r\n") catch return;
-        for (extra_headers) |h| {
-            if (std.ascii.eqlIgnoreCase(h.name, "content-type")) continue;
-            w.appendSlice(alloc, h.name) catch return;
-            w.appendSlice(alloc, ": ") catch return;
-            w.appendSlice(alloc, h.value) catch return;
-            w.appendSlice(alloc, "\r\n") catch return;
-        }
-
-        const headers_z = win32.toWide(alloc, header_list.items) catch return;
-        defer alloc.free(headers_z);
-        const reason = switch (status) {
-            204 => "No Content",
-            403 => "Forbidden",
-            404 => "Not Found",
-            405 => "Method Not Allowed",
-            500 => "Internal Server Error",
-            else => "OK",
-        };
-        const reason_z = win32.toWide(alloc, reason) catch return;
-        defer alloc.free(reason_z);
-
-        const stream = if (body.len > 0)
-            win32.SHCreateMemStream(body.ptr, @intCast(@min(body.len, @as(usize, std.math.maxInt(u32)))))
-        else
-            null;
-        defer if (stream) |s| {
-            const istream: *win32.IStream = @ptrCast(@alignCast(s));
-            _ = istream.vtable.Release(istream);
-        };
-
-        var resp: ?*com.ICoreWebView2WebResourceResponse = null;
-        const hr = env.vtable.CreateWebResourceResponse(env, stream, status, reason_z.ptr, headers_z.ptr, &resp);
-        if (!com.failed(hr)) {
-            if (resp) |r| {
-                _ = task.args.vtable.put_Response(task.args, r);
-                _ = r.vtable.Release(r);
-            }
-        }
-        _ = task.deferral.vtable.Complete(task.deferral);
-        _ = task.deferral.vtable.Release(task.deferral);
-        _ = task.args.vtable.Release(task.args);
-    }
-
-    fn failDeferred(self: *WindowsWebView2Backend, token: u64) void {
-        const entry = self.deferred.fetchRemove(token) orelse return;
-        self.completeDeferred(entry.value, 500, "text/plain", &.{}, "request canceled");
-    }
-
-    // ----------------------------------------------------------------------
-    // Event loop
-    // ----------------------------------------------------------------------
+    // -- event loop --------------------------------------------------------
 
     pub fn step(self: *WindowsWebView2Backend, mode: types.StepMode) bool {
         self.drainCompletions();
-        self.processCloseRequests();
         if (self.quit) return false;
 
         if (mode == .blocking) {
-            _ = win32.MsgWaitForMultipleObjectsEx(
-                1,
-                &self.wakeup_event,
-                1000,
-                win32.QS_ALLINPUT,
-                win32.MWMO_INPUTAVAILABLE,
-            );
+            _ = win32.MsgWaitForMultipleObjectsEx(1, &self.wakeup_event, 1000, win32.QS_ALLINPUT, 0);
             _ = win32.ResetEvent(self.wakeup_event);
         }
         self.pumpMessages();
         self.drainCompletions();
-        self.processCloseRequests();
 
         if (self.quit) return false;
-        if (self.windows.count() > 0) {
-            self.had_windows = true;
-        } else if (self.had_windows) {
-            return false;
-        }
+        if (self.had_windows and self.windows.count() == 0) return false;
         return true;
     }
 
@@ -846,17 +558,459 @@ pub const WindowsWebView2Backend = struct {
         return self.quit;
     }
 
-    fn processCloseRequests(self: *WindowsWebView2Backend) void {
-        var idents: std.ArrayList(u64) = .empty;
-        defer idents.deinit(self.allocator);
-        var it = self.windows.iterator();
-        while (it.next()) |slot| {
-            if (slot.value_ptr.*.close_requested) idents.append(self.allocator, slot.value_ptr.*.ident) catch {};
-        }
-        for (idents.items) |ident| self.closeWindowByIdent(ident);
+    /// Number of CORS preflights (`OPTIONS`) absorbed before reaching Zig — the same metric the
+    /// macOS shim exposes, so CI markers stay comparable across backends.
+    pub fn preflightCount(self: *WindowsWebView2Backend) u64 {
+        return self.preflight_count;
     }
 
-    pub fn completeRequest(self: *WindowsWebView2Backend, req_id: types.RequestId, resp: types.SchemeResponse) types.WebviewError!void {
+    // -- COM callbacks -----------------------------------------------------
+
+    fn onEnvironmentCreated(
+        self: *WindowsWebView2Backend,
+        hr: com.HResult,
+        env: ?*com.ICoreWebView2Environment,
+    ) com.HResult {
+        const e = env orelse {
+            self.env_failed = true;
+            return com.S_OK;
+        };
+        if (com.failed(hr)) {
+            self.env_failed = true;
+            return com.S_OK;
+        }
+        _ = e.vtable.AddRef(e);
+        self.env = e;
+        return com.S_OK;
+    }
+
+    fn onControllerCreated(
+        self: *WindowsWebView2Backend,
+        ident: u64,
+        hr: com.HResult,
+        controller: ?*com.ICoreWebView2Controller,
+    ) com.HResult {
+        const w = self.windowByIdent(ident) orelse return com.S_OK;
+        const c = controller orelse return com.S_OK;
+        if (com.failed(hr) or w.closing) return com.S_OK;
+
+        _ = c.vtable.AddRef(c);
+        w.controller = c;
+
+        var webview: ?*com.ICoreWebView2 = null;
+        if (com.failed(c.vtable.get_CoreWebView2(c, &webview))) return com.S_OK;
+        const wv = webview orelse return com.S_OK;
+        w.webview = wv;
+
+        self.applyBackground(w);
+        _ = c.vtable.put_IsVisible(c, if (w.visible) win32.TRUE else win32.FALSE);
+        self.configureWebView(w);
+        self.resizeWebView(w);
+
+        w.ready = true;
+        self.applyQueued(w);
+        return com.S_OK;
+    }
+
+    /// `ICoreWebView2Controller2::put_DefaultBackgroundColor` — transparency & solid backgrounds.
+    fn applyBackground(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        const c = w.controller orelse return;
+        var raw: ?*anyopaque = null;
+        if (com.failed(c.vtable.QueryInterface(c, &com.IID_ICoreWebView2Controller2, &raw))) return;
+        const c2: *com.ICoreWebView2Controller2 = @ptrCast(@alignCast(raw.?));
+        defer _ = c2.vtable.Release(c2);
+        const color: com.Color = if (w.transparent) com.transparent else .{};
+        _ = c2.vtable.put_DefaultBackgroundColor(c2, color);
+        _ = self;
+    }
+
+    fn configureWebView(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        const wv = w.webview orelse return;
+
+        var settings: ?*com.ICoreWebView2Settings = null;
+        if (!com.failed(wv.vtable.get_Settings(wv, &settings))) {
+            if (settings) |s| {
+                w.settings = s;
+                _ = s.vtable.put_AreDevToolsEnabled(s, win32.TRUE); // Zig decides via `devtools` below
+                _ = s.vtable.put_IsStatusBarEnabled(s, win32.FALSE);
+                _ = s.vtable.put_IsScriptEnabled(s, win32.TRUE);
+                _ = s.vtable.put_IsWebMessageEnabled(s, win32.TRUE);
+            }
+        }
+
+        // One JS surface for every backend: the shared bootstrap calls `__ztsPostMessage`.
+        self.addDocumentScript(w, "window.__ztsPostMessage = (m) => window.chrome.webview.postMessage(typeof m === 'string' ? m : JSON.stringify(m));");
+
+        const message_handler = self.newHandler(.web_message, w.id.toU64()) catch return;
+        _ = wv.vtable.add_WebMessageReceived(wv, @ptrCast(message_handler), &w.token_message);
+
+        const resource_handler = self.newHandler(.web_resource, w.id.toU64()) catch return;
+        _ = wv.vtable.add_WebResourceRequested(wv, @ptrCast(resource_handler), &w.token_resource);
+
+        for ([_]util.Protocol{ .tauri, .ipc, .asset }) |protocol| {
+            var pattern_buf: [64]u8 = undefined;
+            const pattern = util.filterPattern(&pattern_buf, protocol) catch continue;
+            const z = win32.toWide(self.allocator, pattern) catch continue;
+            defer self.allocator.free(z);
+            _ = wv.vtable.AddWebResourceRequestedFilter(wv, z.ptr, resource_context_all);
+        }
+
+        const close_handler = self.newHandler(.window_close, w.id.toU64()) catch return;
+        _ = wv.vtable.add_WindowCloseRequested(wv, @ptrCast(close_handler), &w.token_close);
+    }
+
+    fn addDocumentScript(self: *WindowsWebView2Backend, w: *WinWindow, script: []const u8) void {
+        const wv = w.webview orelse return;
+        const z = win32.toWide(self.allocator, script) catch return;
+        defer self.allocator.free(z);
+        _ = wv.vtable.AddScriptToExecuteOnDocumentCreated(wv, z.ptr, null);
+    }
+
+    fn applyQueued(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        for (w.scripts.items) |script| self.addDocumentScript(w, script);
+        for (w.scripts.items) |script| self.allocator.free(script);
+        w.scripts.clearRetainingCapacity();
+
+        for (w.nav_queue.items) |nav| {
+            switch (nav) {
+                .url => |u| self.navigate(w.id, u) catch {},
+                .html => |h| self.loadHtml(w.id, h, null) catch {},
+            }
+            nav.deinit(self.allocator);
+        }
+        w.nav_queue.clearRetainingCapacity();
+    }
+
+    fn onWebMessage(
+        self: *WindowsWebView2Backend,
+        ident: u64,
+        args: ?*com.ICoreWebView2WebMessageReceivedEventArgs,
+    ) com.HResult {
+        const a = args orelse return com.S_OK;
+        const w = self.windowByIdent(ident) orelse return com.S_OK;
+
+        var wide: ?com.PWStr = null;
+        if (com.failed(a.vtable.TryGetWebMessageAsString(a, &wide)) or wide == null) {
+            wide = null;
+            if (com.failed(a.vtable.get_WebMessageAsJson(a, &wide)) or wide == null) return com.S_OK;
+        }
+        const text = win32.fromWide(self.allocator, wide.?, true) catch return com.S_OK;
+        defer self.allocator.free(text);
+
+        if (self.message_handler) |mh| mh.call(w.id, text);
+        return com.S_OK;
+    }
+
+    fn onWindowCloseRequested(self: *WindowsWebView2Backend, ident: u64) com.HResult {
+        if (self.windowByIdent(ident)) |w| self.beginClose(w);
+        return com.S_OK;
+    }
+
+    fn onWebResourceRequested(
+        self: *WindowsWebView2Backend,
+        ident: u64,
+        args_opt: ?*com.ICoreWebView2WebResourceRequestedEventArgs,
+    ) com.HResult {
+        const args = args_opt orelse return com.S_OK;
+        const w = self.windowByIdent(ident) orelse return com.S_OK;
+        if (self.shutting_down) return com.S_OK;
+        const env = self.env orelse return com.S_OK;
+
+        // Scratch arena: request slices handed to Zig only need to live for `handler.call`.
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const scratch = arena.allocator();
+
+        var request: ?*com.ICoreWebView2WebResourceRequest = null;
+        if (com.failed(args.vtable.get_Request(args, &request))) return com.S_OK;
+        const req = request orelse return com.S_OK;
+        defer _ = req.vtable.Release(req);
+
+        var uri_w: ?com.PWStr = null;
+        if (com.failed(req.vtable.get_Uri(req, &uri_w)) or uri_w == null) return com.S_OK;
+        const uri = win32.fromWide(scratch, uri_w.?, true) catch return com.S_OK;
+
+        const protocol = classifyVirtualOrigin(uri) orelse return com.S_OK;
+
+        var method_w: ?com.PWStr = null;
+        if (com.failed(req.vtable.get_Method(req, &method_w)) or method_w == null) return com.S_OK;
+        const method = win32.fromWide(scratch, method_w.?, true) catch return com.S_OK;
+
+        // CORS preflight never reaches Zig (same policy as the macOS shim / Tauri's protocol.rs).
+        if (std.ascii.eqlIgnoreCase(method, "OPTIONS")) {
+            self.preflight_count += 1;
+            self.sendBuilt(args, env, 204, "No Content", "text/plain", &preflight_pairs, &.{}, "");
+            return com.S_OK;
+        }
+
+        const slot = self.schemeSlot(@tagName(protocol)) orelse {
+            self.sendBuilt(args, env, 404, "Not Found", "text/plain", &.{}, &.{}, "no scheme handler registered");
+            return com.S_OK;
+        };
+
+        var headers: [max_headers]types.HeaderPair = undefined;
+        const header_count = self.readHeaders(scratch, req, &headers);
+        const body = self.readRequestBody(scratch, req) orelse "";
+
+        var deferral: ?*com.ICoreWebView2Deferral = null;
+        if (com.failed(args.vtable.GetDeferral(args, &deferral))) return com.S_OK;
+        const def = deferral orelse return com.S_OK;
+
+        const token = self.next_token;
+        self.next_token += 1;
+
+        _ = args.vtable.AddRef(args);
+        self.deferred.put(self.allocator, token, .{ .args = args, .deferral = def }) catch {
+            _ = def.vtable.Release(def);
+            _ = args.vtable.Release(args);
+            return com.S_OK;
+        };
+
+        const req_id = self.pending.insert(
+            self.allocator,
+            w.id,
+            .{ .backend = self, .token = token },
+        ) catch {
+            self.cancelDeferred(token);
+            return com.S_OK;
+        };
+
+        slot.handler.call(.{
+            .request_id = req_id,
+            .window_id = w.id,
+            .scheme = slot.scheme,
+            .method = method,
+            .uri = uri,
+            .headers = headers[0..header_count],
+            .body = body,
+        });
+
+        // A handler that answered synchronously (`completeRequest` inside `call`) never yields back
+        // to the message loop, so flush right here instead of waiting for the next `step()`.
+        self.drainCompletions();
+        return com.S_OK;
+    }
+
+    fn schemeSlot(self: *WindowsWebView2Backend, scheme: []const u8) ?*SchemeSlot {
+        for (self.scheme_slots.items) |slot| {
+            if (std.ascii.eqlIgnoreCase(slot.scheme, scheme)) return slot;
+        }
+        return null;
+    }
+
+    fn readHeaders(
+        self: *WindowsWebView2Backend,
+        scratch: Allocator,
+        req: *com.ICoreWebView2WebResourceRequest,
+        out: *[max_headers]types.HeaderPair,
+    ) usize {
+        _ = self;
+        var collection: ?*com.ICoreWebView2HttpRequestHeaders = null;
+        if (com.failed(req.vtable.get_Headers(req, &collection))) return 0;
+        const headers = collection orelse return 0;
+        defer _ = headers.vtable.Release(headers);
+
+        var iterator: ?*com.ICoreWebView2HttpHeadersCollectionIterator = null;
+        if (com.failed(headers.vtable.GetIterator(headers, &iterator))) return 0;
+        const it = iterator orelse return 0;
+        defer _ = it.vtable.Release(it);
+
+        var count: usize = 0;
+        var has_current: com.BOOL = 0;
+        if (com.failed(it.vtable.get_HasCurrentHeader(it, &has_current))) return 0;
+        while (has_current != 0 and count < max_headers) {
+            var name: ?com.PWStr = null;
+            var value: ?com.PWStr = null;
+            if (!com.failed(it.vtable.GetCurrentHeader(it, &name, &value))) {
+                if (name != null and value != null) {
+                    const n = win32.fromWide(scratch, name.?, true) catch "";
+                    const v = win32.fromWide(scratch, value.?, true) catch "";
+                    if (n.len != 0) {
+                        out[count] = .{ .name = n, .value = v };
+                        count += 1;
+                    }
+                }
+            }
+            if (com.failed(it.vtable.MoveNext(it, &has_current))) break;
+        }
+        return count;
+    }
+
+    fn readRequestBody(
+        self: *WindowsWebView2Backend,
+        scratch: Allocator,
+        req: *com.ICoreWebView2WebResourceRequest,
+    ) ?[]u8 {
+        _ = self;
+        var stream: ?*anyopaque = null;
+        if (com.failed(req.vtable.get_Content(req, &stream))) return null;
+        const raw = stream orelse return null;
+        const st: *win32.IStream = @ptrCast(@alignCast(raw));
+        defer _ = st.vtable.Release(st);
+
+        var list: std.ArrayList(u8) = .empty;
+        var buf: [8192]u8 = undefined;
+        while (true) {
+            var read: u32 = 0;
+            const hr = st.vtable.Read(st, &buf, @intCast(buf.len), &read);
+            if (com.failed(hr) or read == 0) break;
+            const n: usize = @intCast(read);
+            if (list.items.len + n > max_body_bytes) break;
+            list.appendSlice(scratch, buf[0..n]) catch break;
+        }
+        return list.items;
+    }
+
+    // -- responses ---------------------------------------------------------
+
+    const cors_pairs = [_]types.HeaderPair{
+        .{ .name = "Access-Control-Allow-Origin", .value = "*" },
+        .{ .name = "Access-Control-Expose-Headers", .value = "Tauri-Response, Tauri-Error, Content-Type, Content-Length" },
+    };
+
+    const preflight_pairs = [_]types.HeaderPair{
+        .{ .name = "Access-Control-Allow-Origin", .value = "*" },
+        .{ .name = "Access-Control-Allow-Methods", .value = "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
+        .{ .name = "Access-Control-Allow-Headers", .value = "*" },
+        .{ .name = "Access-Control-Allow-Private-Network", .value = "true" },
+        .{ .name = "Access-Control-Max-Age", .value = "86400" },
+    };
+
+    fn appendHeader(
+        self: *WindowsWebView2Backend,
+        out: *std.ArrayList(u8),
+        name: []const u8,
+        value: []const u8,
+    ) std.mem.Allocator.Error!void {
+        try out.appendSlice(self.allocator, name);
+        try out.appendSlice(self.allocator, ": ");
+        try out.appendSlice(self.allocator, value);
+        try out.appendSlice(self.allocator, "\r\n");
+    }
+
+    /// Serialises the mandatory CORS headers + `Content-Type` + handler-provided headers into the
+    /// single CRLF block `ICoreWebView2Environment::CreateWebResourceResponse` expects.
+    fn headerBlock(
+        self: *WindowsWebView2Backend,
+        out: *std.ArrayList(u8),
+        content_type: []const u8,
+        pairs: []const types.HeaderPair,
+        owned: []const types.QueuedCompletion.OwnedHeader,
+    ) std.mem.Allocator.Error!void {
+        for (cors_pairs) |h| try self.appendHeader(out, h.name, h.value);
+        if (content_type.len != 0) try self.appendHeader(out, "Content-Type", content_type);
+        try self.appendHeader(out, "Cache-Control", "no-store");
+        for (pairs) |h| try self.appendHeader(out, h.name, h.value);
+        for (owned) |h| try self.appendHeader(out, h.name, h.value);
+    }
+
+    fn sendBuilt(
+        self: *WindowsWebView2Backend,
+        args: *com.ICoreWebView2WebResourceRequestedEventArgs,
+        env: *com.ICoreWebView2Environment,
+        status: u16,
+        reason: []const u8,
+        content_type: []const u8,
+        pairs: []const types.HeaderPair,
+        owned: []const types.QueuedCompletion.OwnedHeader,
+        body: []const u8,
+    ) void {
+        var block: std.ArrayList(u8) = .empty;
+        defer block.deinit(self.allocator);
+        self.headerBlock(&block, content_type, pairs, owned) catch return;
+        self.sendResponse(args, env, status, reason, block.items, body);
+    }
+
+    fn sendResponse(
+        self: *WindowsWebView2Backend,
+        args: *com.ICoreWebView2WebResourceRequestedEventArgs,
+        env: *com.ICoreWebView2Environment,
+        status: u16,
+        reason: []const u8,
+        headers: []const u8,
+        body: []const u8,
+    ) void {
+        const headers_z = win32.toWide(self.allocator, headers) catch return;
+        defer self.allocator.free(headers_z);
+        const reason_z = win32.toWide(self.allocator, reason) catch return;
+        defer self.allocator.free(reason_z);
+
+        // `SHCreateMemStream` copies the bytes into its own buffer, so `body` may be freed right away.
+        const stream = if (body.len > 0)
+            win32.SHCreateMemStream(body.ptr, @intCast(@min(body.len, @as(usize, std.math.maxInt(u32)))))
+        else
+            null;
+        defer if (stream) |s| {
+            const ist: *win32.IStream = @ptrCast(@alignCast(s));
+            _ = ist.vtable.Release(ist);
+        };
+
+        var response: ?*com.ICoreWebView2WebResourceResponse = null;
+        if (com.failed(env.vtable.CreateWebResourceResponse(
+            env,
+            stream,
+            @intCast(status),
+            reason_z.ptr,
+            headers_z.ptr,
+            &response,
+        ))) return;
+        const r = response orelse return;
+        _ = args.vtable.put_Response(args, r);
+        _ = r.vtable.Release(r);
+    }
+
+    /// Called on the main thread for every completed request (possibly submitted by a worker).
+    fn completeDeferred(self: *WindowsWebView2Backend, token: u64, item: *const types.QueuedCompletion) void {
+        const entry = self.deferred.fetchRemove(token) orelse return;
+        if (self.env) |env| {
+            self.sendBuilt(
+                entry.value.args,
+                env,
+                item.status_code,
+                reasonPhrase(item.status_code),
+                item.content_type,
+                &.{},
+                item.extra_headers,
+                item.body.slice(),
+            );
+        }
+        _ = entry.value.deferral.vtable.Complete(entry.value.deferral);
+        _ = entry.value.deferral.vtable.Release(entry.value.deferral);
+        _ = entry.value.args.vtable.Release(entry.value.args);
+    }
+
+    fn reasonPhrase(status: u16) []const u8 {
+        return switch (status) {
+            200 => "OK",
+            201 => "Created",
+            204 => "No Content",
+            206 => "Partial Content",
+            301 => "Moved Permanently",
+            302 => "Found",
+            304 => "Not Modified",
+            400 => "Bad Request",
+            401 => "Unauthorized",
+            403 => "Forbidden",
+            404 => "Not Found",
+            405 => "Method Not Allowed",
+            409 => "Conflict",
+            413 => "Payload Too Large",
+            415 => "Unsupported Media Type",
+            429 => "Too Many Requests",
+            500 => "Internal Server Error",
+            501 => "Not Implemented",
+            502 => "Bad Gateway",
+            503 => "Service Unavailable",
+            else => "OK",
+        };
+    }
+
+    /// Queues `resp` for the main thread (safe from ANY thread) and wakes the STA message loop.
+    pub fn completeRequest(
+        self: *WindowsWebView2Backend,
+        req_id: types.RequestId,
+        resp: types.SchemeResponse,
+    ) types.WebviewError!void {
         self.completions.push(req_id, resp) catch return error.OutOfMemory;
         self.wakeup();
     }
@@ -867,85 +1021,112 @@ pub const WindowsWebView2Backend = struct {
             defer item.deinit(self.allocator);
 
             const entry = self.pending.take(item.request_id) orelse continue; // canceled / stale
-            const task = self.deferred.fetchRemove(entry.payload.token) orelse continue;
-
-            // `QueuedCompletion` owns mutable `OwnedHeader`s; `completeDeferred` only reads names and
-            // values, so a bounded stack view avoids a second heap allocation.
-            var hdrs: [16]types.HeaderPair = undefined;
-            const n = @min(item.extra_headers.len, hdrs.len);
-            for (item.extra_headers[0..n], 0..) |h, i| hdrs[i] = .{ .name = h.name, .value = h.value };
-            self.completeDeferred(task.value, item.status_code, item.content_type, hdrs[0..n], item.body.slice());
+            self.completeDeferred(entry.payload.token, &item);
         }
     }
 
-    // ----------------------------------------------------------------------
-    // Custom URI schemes
-    // ----------------------------------------------------------------------
+    fn cancelDeferred(self: *WindowsWebView2Backend, token: u64) void {
+        const entry = self.deferred.fetchRemove(token) orelse return;
+        if (self.env) |env| {
+            self.sendBuilt(entry.value.args, env, 503, "Service Unavailable", "text/plain", &.{}, &.{}, "request canceled");
+        }
+        _ = entry.value.deferral.vtable.Complete(entry.value.deferral);
+        _ = entry.value.deferral.vtable.Release(entry.value.deferral);
+        _ = entry.value.args.vtable.Release(entry.value.args);
+    }
 
-    pub fn registerScheme(self: *WindowsWebView2Backend, scheme: []const u8, handler: types.SchemeHandler) types.WebviewError!void {
+    fn clearDeferred(self: *WindowsWebView2Backend) void {
+        var it = self.deferred.iterator();
+        while (it.next()) |entry| {
+            _ = entry.value_ptr.deferral.vtable.Complete(entry.value_ptr.deferral);
+            _ = entry.value_ptr.deferral.vtable.Release(entry.value_ptr.deferral);
+            _ = entry.value_ptr.args.vtable.Release(entry.value_ptr.args);
+        }
+        self.deferred.deinit(self.allocator);
+    }
+
+    // -- custom URI schemes ------------------------------------------------
+
+    pub fn registerScheme(
+        self: *WindowsWebView2Backend,
+        scheme: []const u8,
+        handler: types.SchemeHandler,
+    ) types.WebviewError!void {
         if (scheme.len == 0) return error.InvalidArgument;
         for (self.scheme_slots.items) |slot| {
             if (std.ascii.eqlIgnoreCase(slot.scheme, scheme)) return; // idempotent, like GTK
         }
-
+        const name = self.allocator.dupe(u8, scheme) catch return error.OutOfMemory;
+        errdefer self.allocator.free(name);
         const slot = self.allocator.create(SchemeSlot) catch return error.OutOfMemory;
         errdefer self.allocator.destroy(slot);
-        const owned = self.allocator.dupe(u8, scheme) catch return error.OutOfMemory;
-        errdefer self.allocator.free(owned);
-        slot.* = .{ .handler = handler, .scheme = owned };
+        slot.* = .{ .backend = self, .handler = handler, .scheme = name };
         self.scheme_slots.append(self.allocator, slot) catch return error.OutOfMemory;
     }
 
-    // ----------------------------------------------------------------------
-    // Windows
-    // ----------------------------------------------------------------------
-
-    fn windowByIdent(self: *WindowsWebView2Backend, ident: u64) ?*WinWindow {
-        var it = self.windows.iterator();
-        while (it.next()) |slot| {
-            if (slot.value_ptr.*.ident == ident) return slot.value_ptr.*;
-        }
-        return null;
+    pub fn setMessageHandler(self: *WindowsWebView2Backend, handler: ?types.MessageHandler) void {
+        self.message_handler = handler;
     }
 
-    fn windowIdForIdent(self: *WindowsWebView2Backend, ident: u64) ?types.WindowId {
-        var it = self.windows.iterator();
-        while (it.next()) |slot| {
-            if (slot.value_ptr.*.ident == ident) return slot.handle;
-        }
-        return null;
+    pub fn setCloseHandler(self: *WindowsWebView2Backend, handler: ?types.CloseHandler) void {
+        self.close_handler = handler;
     }
+
+    // -- windows -----------------------------------------------------------
 
     pub fn createWindow(self: *WindowsWebView2Backend, cfg: types.WindowConfig) types.WebviewError!types.WindowId {
-        const alloc = self.allocator;
-        const env = self.env orelse return error.PlatformFailure;
-        _ = env;
+        if (self.env == null) return error.PlatformFailure;
 
-        const title_z = win32.toWide(alloc, cfg.title) catch return error.OutOfMemory;
-        defer alloc.free(title_z);
-        const class_z = win32.toWide(alloc, self.windowClass()) catch return error.OutOfMemory;
-        defer alloc.free(class_z);
-
-        const top_level = cfg.parent_native_handle == null;
-        const style: u32 = blk: {
-            if (!top_level) break :blk win32.WS_CHILD | win32.WS_CLIPCHILDREN;
-            var s: u32 = win32.WS_OVERLAPPEDWINDOW | win32.WS_CLIPCHILDREN;
-            if (!cfg.decorations) s = win32.WS_POPUP | win32.WS_CLIPCHILDREN;
-            if (!cfg.resizable) s &= ~@as(u32, win32.WS_THICKFRAME | win32.WS_MAXIMIZEBOX);
-            break :blk s;
+        const w = self.allocator.create(WinWindow) catch return error.OutOfMemory;
+        w.* = .{
+            .backend = self,
+            .hwnd = undefined,
+            .parent = cfg.parent_native_handle,
+            .visible = cfg.visible,
+            .decorations = cfg.decorations,
+            .transparent = cfg.transparent,
+            .resizable = cfg.resizable,
+            .always_on_top = cfg.always_on_top,
+            .min_size = cfg.min_size,
+            .max_size = cfg.max_size,
+            .title = self.allocator.dupe(u8, cfg.title) catch {
+                self.allocator.destroy(w);
+                return error.OutOfMemory;
+            },
         };
-        const ex_style: u32 = if (cfg.always_on_top) win32.WS_EX_TOPMOST else 0;
 
-        // Physical size: DPI is unknown before the HWND exists, so start at 96 and let
-        // `WM_DPICHANGED` / the first `WM_SIZE` correct the WebView2 bounds (they use the client
-        // rect, which is already physical).
-        const physical_w = util.logicalToPhysical(cfg.size.width.v, win32_base_dpi);
-        const physical_h = util.logicalToPhysical(cfg.size.height.v, win32_base_dpi);
+        var acquired = false;
+        errdefer if (!acquired) freeWindow(self.allocator, w);
 
-        // `CW_USEDEFAULT` is `0x80000000`, i.e. `INT_MIN`, so it must be written as a bit-cast.
-        const cw_used_default: i32 = @bitCast(@as(u32, 0x80000000));
-        const x = if (cfg.position) |p| util.logicalToPhysical(p.x.v, win32_base_dpi) else cw_used_default;
-        const y = if (cfg.position) |p| util.logicalToPhysical(p.y.v, win32_base_dpi) else cw_used_default;
+        const id = self.windows.acquire(self.allocator, w) catch {
+            acquired = true; // ownership moved into the pool? no — keep the errdefer honest
+            return error.OutOfMemory;
+        };
+        acquired = true;
+        w.id = id;
+        errdefer {
+            _ = self.windows.release(id) catch {};
+            freeWindow(self.allocator, w);
+        }
+
+        const title_z = win32.toWide(self.allocator, cfg.title) catch return error.OutOfMemory;
+        defer self.allocator.free(title_z);
+        const class_z = win32.toWide(self.allocator, self.class_name) catch return error.OutOfMemory;
+        defer self.allocator.free(class_z);
+
+        const style = windowStyle(w);
+        const ex_style = windowExStyle(w);
+
+        var rect = win32.RECT{
+            .left = 0,
+            .top = 0,
+            .right = util.logicalToPhysical(cfg.size.width.v, w.dpi),
+            .bottom = util.logicalToPhysical(cfg.size.height.v, w.dpi),
+        };
+        _ = win32.AdjustWindowRectEx(&rect, style, win32.FALSE, ex_style);
+
+        const x: i32 = if (cfg.position) |p| util.logicalToPhysical(p.x.v, w.dpi) else win32.CW_USEDEFAULT;
+        const y: i32 = if (cfg.position) |p| util.logicalToPhysical(p.y.v, w.dpi) else win32.CW_USEDEFAULT;
 
         const hwnd = win32.CreateWindowExW(
             ex_style,
@@ -954,173 +1135,225 @@ pub const WindowsWebView2Backend = struct {
             style,
             x,
             y,
-            @max(physical_w, 1),
-            @max(physical_h, 1),
-            if (cfg.parent_native_handle) |p| @ptrCast(p) else null,
+            @max(1, rect.width()),
+            @max(1, rect.height()),
+            w.parent,
             null,
             win32.GetModuleHandleW(null),
-            null,
+            w,
         ) orelse return error.PlatformFailure;
 
-        const win = alloc.create(WinWindow) catch {
-            _ = win32.DestroyWindow(hwnd);
-            return error.OutOfMemory;
-        };
-        win.* = .{
-            .backend = self,
-            .hwnd = hwnd,
-            .ident = self.next_ident,
-            .want_visible = cfg.visible,
-            .top_level = top_level,
-            .resizable = cfg.resizable,
-            .decorations = cfg.decorations,
-            .always_on_top = cfg.always_on_top,
-            .devtools = cfg.devtools,
-            .min_size = cfg.min_size,
-            .max_size = cfg.max_size,
-        };
-        self.next_ident += 1;
-
-        win.title = alloc.dupe(u8, cfg.title) catch {
-            alloc.destroy(win);
-            _ = win32.DestroyWindow(hwnd);
-            return error.OutOfMemory;
-        };
-
-        const win_id = self.windows.acquire(alloc, win) catch {
-            alloc.destroy(win);
-            _ = win32.DestroyWindow(hwnd);
-            return error.OutOfMemory;
-        };
-
-        _ = win32.SetWindowLongPtrW(hwnd, win32.GWLP_USERDATA, @intCast(@intFromPtr(win)));
+        w.hwnd = hwnd;
+        w.saved_style = style;
+        const hwnd_dpi = win32.GetDpiForWindow(hwnd);
+        w.dpi = if (hwnd_dpi == 0) util.base_dpi else hwnd_dpi;
+        self.applyDarkMode(w);
+        if (w.always_on_top) {
+            _ = win32.SetWindowPos(hwnd, win32.HWND_TOPMOST, 0, 0, 0, 0, win32.SWP_NOMOVE | win32.SWP_NOSIZE | win32.SWP_NOACTIVATE);
+        }
 
         for (cfg.init_scripts) |script| {
-            const copy = alloc.dupe(u8, script) catch continue;
-            win.queued_scripts.append(alloc, copy) catch alloc.free(copy);
+            const copy = self.allocator.dupe(u8, script) catch continue;
+            w.scripts.append(self.allocator, copy) catch self.allocator.free(copy);
         }
         if (cfg.initial_html) |html| {
-            win.queued_html = alloc.dupe(u8, html) catch null;
+            const copy = self.allocator.dupe(u8, html) catch return error.OutOfMemory;
+            w.nav_queue.append(self.allocator, .{ .html = copy }) catch {
+                self.allocator.free(copy);
+                return error.OutOfMemory;
+            };
         } else if (cfg.initial_url) |url| {
-            win.queued_url = alloc.dupe(u8, url) catch null;
+            const copy = self.allocator.dupe(u8, url) catch return error.OutOfMemory;
+            w.nav_queue.append(self.allocator, .{ .url = copy }) catch {
+                self.allocator.free(copy);
+                return error.OutOfMemory;
+            };
         }
 
-        if (cfg.fullscreen) _ = win32.ShowWindow(hwnd, win32.SW_MAXIMIZE);
-        self.applyWindowFrame(win);
-
-        const handler = self.newHandler(win.ident, .controller_ready, com.IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler);
-        if (com.failed(self.env.?.vtable.CreateCoreWebView2Controller(self.env.?, hwnd, @ptrCast(handler)))) {
-            self.closeWindow(win_id) catch {};
+        const env = self.env.?;
+        const handler = try self.newHandler(.controller_ready, id.toU64());
+        if (com.failed(env.vtable.CreateCoreWebView2Controller(env, hwnd, @ptrCast(handler)))) {
             return error.PlatformFailure;
         }
-        return win_id;
+
+        self.had_windows = true;
+        if (cfg.fullscreen) self.setFullscreen(id, true) catch {};
+        if (w.visible) _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
+        return id;
     }
 
-    fn applyWindowFrame(self: *WindowsWebView2Backend, win: *WinWindow) void {
-        _ = self;
-        if (!win.top_level) return;
-        if (win.decorations) {
-            // Dark title bar on Windows 10 20H1+; failure on older builds is harmless.
-            var dark: i32 = 1;
-            _ = win32.DwmSetWindowAttribute(win.hwnd, win32.DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, @sizeOf(i32));
+    fn windowStyle(w: *const WinWindow) win32.DWORD {
+        if (w.parent != null) return win32.WS_CHILD | win32.WS_VISIBLE | win32.WS_CLIPCHILDREN | win32.WS_CLIPSIBLINGS;
+        var style: win32.DWORD = win32.WS_CLIPCHILDREN | win32.WS_CLIPSIBLINGS;
+        if (w.decorations) {
+            style |= win32.WS_OVERLAPPEDWINDOW;
+            if (!w.resizable) style &= ~@as(win32.DWORD, win32.WS_THICKFRAME | win32.WS_MAXIMIZEBOX);
+        } else {
+            style |= win32.WS_POPUP | win32.WS_MINIMIZEBOX | win32.WS_SYSMENU;
         }
-        if (!win.want_visible) _ = win32.ShowWindow(win.hwnd, win32.SW_HIDE);
+        return style;
+    }
+
+    fn windowExStyle(w: *const WinWindow) win32.DWORD {
+        var ex: win32.DWORD = 0;
+        if (w.transparent) ex |= win32.WS_EX_LAYERED;
+        if (w.parent == null) ex |= win32.WS_EX_APPWINDOW;
+        return ex;
+    }
+
+    /// `DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE)` — silently ignored pre-Windows 10 20H1.
+    fn applyDarkMode(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        _ = self;
+        const on: win32.BOOL = if (w.dark) win32.TRUE else win32.FALSE;
+        _ = win32.DwmSetWindowAttribute(w.hwnd, win32.DWMWA_USE_IMMERSIVE_DARK_MODE, &on, @sizeOf(win32.BOOL));
+        const round: i32 = win32.DWMWCP_ROUND;
+        _ = win32.DwmSetWindowAttribute(w.hwnd, win32.DWMWA_WINDOW_CORNER_PREFERENCE, &round, @sizeOf(i32));
+    }
+
+    pub fn setDarkMode(self: *WindowsWebView2Backend, win_id: types.WindowId, enabled: bool) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        w.dark = enabled;
+        self.applyDarkMode(w);
     }
 
     pub fn closeWindow(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        self.closeWindowByIdent(win.*.ident);
+        const w = try self.requireWindow(win_id);
+        self.beginClose(w);
     }
 
-    fn closeWindowByIdent(self: *WindowsWebView2Backend, ident: u64) void {
-        const win_id = self.windowIdForIdent(ident) orelse return;
-        const win = self.windows.get(win_id) orelse return;
+    fn beginClose(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        if (w.closing) return;
+        w.closing = true;
+        const id = w.id;
+        self.destroyWebView(w);
+        _ = win32.DestroyWindow(w.hwnd); // → WM_NCDESTROY → `finalizeWindow`
+        // The OS may have already destroyed the window (session shutdown), in which case no
+        // `WM_NCDESTROY` ever arrives — finalize here instead, but only if the record is still live.
+        if (self.windows.get(id)) |still| self.finalizeWindow(@constCast(still.*));
+    }
 
-        const w = win.*;
-        w.close_requested = true;
-        _ = self.pending.cancelForWindow(self.allocator, win_id, PendingToken.cancel);
-
+    fn destroyWebView(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        _ = self;
         if (w.webview) |wv| {
-            if (w.msg_token != 0) _ = wv.vtable.remove_WebMessageReceived(wv, w.msg_token);
-            if (w.resource_token != 0) _ = wv.vtable.remove_WebResourceRequested(wv, w.resource_token);
-            if (w.close_token != 0) _ = wv.vtable.remove_WindowCloseRequested(wv, w.close_token);
+            if (w.token_message != 0) _ = wv.vtable.remove_WebMessageReceived(wv, w.token_message);
+            if (w.token_resource != 0) _ = wv.vtable.remove_WebResourceRequested(wv, w.token_resource);
+            if (w.token_close != 0) _ = wv.vtable.remove_WindowCloseRequested(wv, w.token_close);
+            w.token_message = 0;
+            w.token_resource = 0;
+            w.token_close = 0;
             _ = wv.vtable.Release(wv);
             w.webview = null;
+        }
+        if (w.settings) |s| {
+            _ = s.vtable.Release(s);
+            w.settings = null;
         }
         if (w.controller) |c| {
             _ = c.vtable.Close(c);
             _ = c.vtable.Release(c);
             w.controller = null;
         }
+        w.ready = false;
+    }
 
+    fn finalizeWindow(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        if (w.finalized) return;
+        w.finalized = true;
+
+        _ = self.pending.cancelForWindow(self.allocator, w.id, PendingToken.cancel);
+        self.destroyWebView(w);
+
+        const id = w.id;
         _ = win32.SetWindowLongPtrW(w.hwnd, win32.GWLP_USERDATA, 0);
-        _ = win32.DestroyWindow(w.hwnd);
+        _ = self.windows.release(id) catch {};
+        if (self.close_handler) |ch| ch.call(id);
+        freeWindow(self.allocator, w);
+    }
 
-        const removed = self.windows.release(win_id) catch return;
-        if (self.close_handler) |ch| ch.call(win_id);
-        removed.deinit(self.allocator);
-        self.allocator.destroy(removed);
+    fn freeWindow(allocator: Allocator, w: *WinWindow) void {
+        if (w.title.len > 0) allocator.free(w.title);
+        for (w.scripts.items) |s| allocator.free(s);
+        w.scripts.deinit(allocator);
+        for (w.nav_queue.items) |nav| nav.deinit(allocator);
+        w.nav_queue.deinit(allocator);
+        allocator.destroy(w);
+    }
+
+    fn closeByIdent(self: *WindowsWebView2Backend, ident: u64) void {
+        if (self.windowByIdent(ident)) |w| self.beginClose(w);
     }
 
     pub fn nativeHandle(self: *WindowsWebView2Backend, win_id: types.WindowId) ?*anyopaque {
-        const win = self.windows.get(win_id) orelse return null;
-        return win.*.hwnd;
+        const w = self.windows.get(win_id) orelse return null;
+        return w.*.hwnd;
     }
 
-    // ----------------------------------------------------------------------
-    // Window properties
-    // ----------------------------------------------------------------------
+    // -- window properties -------------------------------------------------
+
+    fn styleBits(style: u32) isize {
+        return @as(isize, @as(i32, @bitCast(style)));
+    }
+
+    fn currentStyle(self: *WindowsWebView2Backend, w: *WinWindow) win32.DWORD {
+        _ = self;
+        const raw = win32.GetWindowLongPtrW(w.hwnd, win32.GWL_STYLE);
+        return @bitCast(@as(i32, @truncate(raw)));
+    }
+
+    fn currentExStyle(self: *WindowsWebView2Backend, w: *WinWindow) win32.DWORD {
+        _ = self;
+        const raw = win32.GetWindowLongPtrW(w.hwnd, win32.GWL_EXSTYLE);
+        return @bitCast(@as(i32, @truncate(raw)));
+    }
 
     pub fn setTitle(self: *WindowsWebView2Backend, win_id: types.WindowId, title: []const u8) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
+        const w = try self.requireWindow(win_id);
         const z = win32.toWide(self.allocator, title) catch return error.OutOfMemory;
         defer self.allocator.free(z);
-        _ = win32.SetWindowTextW(win.*.hwnd, z.ptr);
+        _ = win32.SetWindowTextW(w.hwnd, z.ptr);
+        const copy = self.allocator.dupe(u8, title) catch return error.OutOfMemory;
+        if (w.title.len > 0) self.allocator.free(w.title);
+        w.title = copy;
     }
 
     pub fn setSize(self: *WindowsWebView2Backend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        const dpi = currentDpi(win.*.hwnd);
-        self.resizeClient(win.*, util.logicalToPhysical(size.width.v, dpi), util.logicalToPhysical(size.height.v, dpi));
-    }
-
-    fn resizeClient(self: *WindowsWebView2Backend, win: *WinWindow, client_w: i32, client_h: i32) void {
-        _ = self;
-        var frame: win32.RECT = .{};
-        var client: win32.RECT = .{};
-        _ = win32.GetWindowRect(win.hwnd, &frame);
-        _ = win32.GetClientRect(win.hwnd, &client);
-        const extra_w = frame.width() - client.width();
-        const extra_h = frame.height() - client.height();
+        const w = try self.requireWindow(win_id);
+        var rect = win32.RECT{
+            .left = 0,
+            .top = 0,
+            .right = util.logicalToPhysical(size.width.v, w.dpi),
+            .bottom = util.logicalToPhysical(size.height.v, w.dpi),
+        };
+        _ = win32.AdjustWindowRectEx(&rect, self.currentStyle(w), win32.FALSE, self.currentExStyle(w));
         _ = win32.SetWindowPos(
-            win.hwnd,
+            w.hwnd,
             null,
             0,
             0,
-            @max(client_w + extra_w, 1),
-            @max(client_h + extra_h, 1),
+            @max(1, rect.width()),
+            @max(1, rect.height()),
             win32.SWP_NOMOVE | win32.SWP_NOZORDER | win32.SWP_NOACTIVATE,
         );
+        self.resizeWebView(w);
     }
 
     pub fn setMinSize(self: *WindowsWebView2Backend, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        win.*.min_size = size;
+        const w = try self.requireWindow(win_id);
+        w.min_size = size;
     }
 
     pub fn setMaxSize(self: *WindowsWebView2Backend, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        win.*.max_size = size;
+        const w = try self.requireWindow(win_id);
+        w.max_size = size;
     }
 
     pub fn setPosition(self: *WindowsWebView2Backend, win_id: types.WindowId, pos: types.LogicalPoint) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        const dpi = currentDpi(win.*.hwnd);
+        const w = try self.requireWindow(win_id);
         _ = win32.SetWindowPos(
-            win.*.hwnd,
+            w.hwnd,
             null,
-            util.logicalToPhysical(pos.x.v, dpi),
-            util.logicalToPhysical(pos.y.v, dpi),
+            util.logicalToPhysical(pos.x.v, w.dpi),
+            util.logicalToPhysical(pos.y.v, w.dpi),
             0,
             0,
             win32.SWP_NOSIZE | win32.SWP_NOZORDER | win32.SWP_NOACTIVATE,
@@ -1128,58 +1361,67 @@ pub const WindowsWebView2Backend = struct {
     }
 
     pub fn setResizable(self: *WindowsWebView2Backend, win_id: types.WindowId, resizable: bool) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        win.*.resizable = resizable;
-        self.updateStyle(win.*);
-    }
-
-    fn updateStyle(self: *WindowsWebView2Backend, win: *WinWindow) void {
-        _ = self;
-        if (!win.top_level) return;
-        var style = win32.GetWindowLongW(win.hwnd, win32.GWL_STYLE);
-        const bits: i32 = @bitCast(@as(u32, win32.WS_THICKFRAME | win32.WS_MAXIMIZEBOX));
-        if (win.resizable) {
-            style |= bits;
-        } else {
-            style &= ~bits;
-        }
-        _ = win32.SetWindowLongW(win.hwnd, win32.GWL_STYLE, style);
-        _ = win32.SetWindowPos(win.hwnd, null, 0, 0, 0, 0, win32.SWP_NOMOVE | win32.SWP_NOSIZE | win32.SWP_NOZORDER | win32.SWP_FRAMECHANGED);
+        const w = try self.requireWindow(win_id);
+        w.resizable = resizable;
+        self.applyStyle(w);
     }
 
     pub fn setMinimized(self: *WindowsWebView2Backend, win_id: types.WindowId, minimized: bool) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        _ = win32.ShowWindow(win.*.hwnd, if (minimized) win32.SW_MINIMIZE else win32.SW_RESTORE);
+        const w = try self.requireWindow(win_id);
+        _ = win32.ShowWindow(w.hwnd, if (minimized) win32.SW_MINIMIZE else win32.SW_RESTORE);
     }
 
     pub fn setMaximized(self: *WindowsWebView2Backend, win_id: types.WindowId, maximized: bool) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        _ = win32.ShowWindow(win.*.hwnd, if (maximized) win32.SW_MAXIMIZE else win32.SW_RESTORE);
+        const w = try self.requireWindow(win_id);
+        _ = win32.ShowWindow(w.hwnd, if (maximized) win32.SW_MAXIMIZE else win32.SW_RESTORE);
     }
 
     pub fn setFullscreen(self: *WindowsWebView2Backend, win_id: types.WindowId, fullscreen: bool) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        _ = win32.ShowWindow(win.*.hwnd, if (fullscreen) win32.SW_MAXIMIZE else win32.SW_RESTORE);
+        const w = try self.requireWindow(win_id);
+        if (w.fullscreen == fullscreen) return;
+        w.fullscreen = fullscreen;
+
+        if (fullscreen) {
+            var rect: win32.RECT = .{};
+            _ = win32.GetWindowRect(w.hwnd, &rect);
+            w.saved_rect = rect;
+            _ = win32.SetWindowLongPtrW(w.hwnd, win32.GWL_STYLE, styleBits(win32.WS_POPUP | win32.WS_VISIBLE));
+            const cx = @max(1, win32.GetSystemMetrics(win32.SM_CXSCREEN));
+            const cy = @max(1, win32.GetSystemMetrics(win32.SM_CYSCREEN));
+            _ = win32.SetWindowPos(w.hwnd, win32.HWND_TOP, 0, 0, cx, cy, win32.SWP_FRAMECHANGED | win32.SWP_SHOWWINDOW);
+        } else {
+            _ = win32.SetWindowLongPtrW(w.hwnd, win32.GWL_STYLE, styleBits(w.saved_style));
+            _ = win32.SetWindowPos(
+                w.hwnd,
+                null,
+                w.saved_rect.left,
+                w.saved_rect.top,
+                @max(1, w.saved_rect.width()),
+                @max(1, w.saved_rect.height()),
+                win32.SWP_FRAMECHANGED | win32.SWP_NOZORDER,
+            );
+        }
+        self.resizeWebView(w);
     }
 
     pub fn setVisible(self: *WindowsWebView2Backend, win_id: types.WindowId, visible: bool) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        win.*.want_visible = visible;
-        _ = win32.ShowWindow(win.*.hwnd, if (visible) win32.SW_SHOW else win32.SW_HIDE);
+        const w = try self.requireWindow(win_id);
+        w.visible = visible;
+        _ = win32.ShowWindow(w.hwnd, if (visible) win32.SW_SHOW else win32.SW_HIDE);
+        if (w.controller) |c| _ = c.vtable.put_IsVisible(c, if (visible) win32.TRUE else win32.FALSE);
     }
 
     pub fn setDecorations(self: *WindowsWebView2Backend, win_id: types.WindowId, decorations: bool) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        win.*.decorations = decorations;
-        // Style surgery on decorations is not worth the risk on Windows: Tauri itself recreates the
-        // window instead. We record the flag so `createWindow`-time behaviour stays consistent.
+        const w = try self.requireWindow(win_id);
+        w.decorations = decorations;
+        self.applyStyle(w);
     }
 
     pub fn setAlwaysOnTop(self: *WindowsWebView2Backend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        win.*.always_on_top = on_top;
+        const w = try self.requireWindow(win_id);
+        w.always_on_top = on_top;
         _ = win32.SetWindowPos(
-            win.*.hwnd,
+            w.hwnd,
             if (on_top) win32.HWND_TOPMOST else win32.HWND_NOTOPMOST,
             0,
             0,
@@ -1190,378 +1432,464 @@ pub const WindowsWebView2Backend = struct {
     }
 
     pub fn setFocus(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        _ = win32.SetForegroundWindow(win.*.hwnd);
-        if (win.*.controller) |c| _ = c.vtable.MoveFocus(c, 1); // COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC
+        const w = try self.requireWindow(win_id);
+        _ = win32.SetForegroundWindow(w.hwnd);
+        _ = win32.SetFocus(w.hwnd);
+        if (w.controller) |c| _ = c.vtable.MoveFocus(c, 0);
     }
 
     pub fn startDrag(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        // Classical frameless drag: hand the caption hit-test to the window manager, which enters a
-        // modal move loop until the mouse is released (identical to `tao`'s implementation).
+        const w = try self.requireWindow(win_id);
+        // Hand the caption hit-test to the window manager: it then runs the native modal move loop,
+        // which is exactly what a frameless HTML titlebar needs for `data-tauri-drag-region`.
         _ = win32.ReleaseCapture();
-        _ = win32.SendMessageW(win.*.hwnd, win32.WM_NCLBUTTONDOWN, win32.HTCAPTION, 0);
+        _ = win32.SendMessageW(w.hwnd, win32.WM_NCLBUTTONDOWN, win32.HTCAPTION, 0);
     }
 
+    fn applyStyle(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        _ = win32.SetWindowLongPtrW(w.hwnd, win32.GWL_STYLE, styleBits(windowStyle(w)));
+        _ = win32.SetWindowLongPtrW(w.hwnd, win32.GWL_EXSTYLE, styleBits(windowExStyle(w)));
+        _ = win32.SetWindowPos(
+            w.hwnd,
+            null,
+            0,
+            0,
+            0,
+            0,
+            win32.SWP_NOMOVE | win32.SWP_NOSIZE | win32.SWP_NOZORDER | win32.SWP_NOACTIVATE | win32.SWP_FRAMECHANGED,
+        );
+        self.resizeWebView(w);
+    }
+
+    fn resizeWebView(self: *WindowsWebView2Backend, w: *WinWindow) void {
+        _ = self;
+        const controller = w.controller orelse return;
+        var rect: win32.RECT = .{};
+        if (win32.GetClientRect(w.hwnd, &rect) == 0) return;
+        _ = controller.vtable.put_Bounds(controller, .{
+            .left = 0,
+            .top = 0,
+            .right = @max(1, rect.width()),
+            .bottom = @max(1, rect.height()),
+        });
+    }
+
+    // -- web content -------------------------------------------------------
+
     pub fn addInitScript(self: *WindowsWebView2Backend, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        if (win.*.webview) |wv| {
-            self.addDocumentScript(win.*, wv, script);
+        const w = try self.requireWindow(win_id);
+        if (w.webview != null) {
+            self.addDocumentScript(w, script);
             return;
         }
         const copy = self.allocator.dupe(u8, script) catch return error.OutOfMemory;
-        win.*.queued_scripts.append(self.allocator, copy) catch {
+        w.scripts.append(self.allocator, copy) catch {
             self.allocator.free(copy);
             return error.OutOfMemory;
         };
     }
 
     pub fn evalJs(self: *WindowsWebView2Backend, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        const wv = win.*.webview orelse return; // silently dropped until ready (same as macOS pre-load)
+        const w = try self.requireWindow(win_id);
+        const wv = w.webview orelse return error.PlatformFailure;
         const z = win32.toWide(self.allocator, script) catch return error.OutOfMemory;
         defer self.allocator.free(z);
         _ = wv.vtable.ExecuteScript(wv, z.ptr, null);
     }
 
     pub fn navigate(self: *WindowsWebView2Backend, win_id: types.WindowId, url: []const u8) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        if (win.*.webview) |wv| {
-            self.navigateUrl(win.*, wv, url);
+        const w = try self.requireWindow(win_id);
+        const wv = w.webview orelse {
+            const copy = self.allocator.dupe(u8, url) catch return error.OutOfMemory;
+            w.nav_queue.append(self.allocator, .{ .url = copy }) catch {
+                self.allocator.free(copy);
+                return error.OutOfMemory;
+            };
             return;
-        }
-        const copy = self.allocator.dupe(u8, url) catch return error.OutOfMemory;
-        if (win.*.queued_url) |old| self.allocator.free(old);
-        win.*.queued_url = copy;
+        };
+        var buf: [8192]u8 = undefined;
+        const mapped = util.toWebView2Url(&buf, url) catch url;
+        const z = win32.toWide(self.allocator, mapped) catch return error.OutOfMemory;
+        defer self.allocator.free(z);
+        _ = wv.vtable.Navigate(wv, z.ptr);
     }
 
-    pub fn loadHtml(self: *WindowsWebView2Backend, win_id: types.WindowId, html: []const u8, base_uri: ?[]const u8) types.WebviewError!void {
-        _ = base_uri; // `NavigateToString` has no base-URL parameter (documented limitation).
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        if (win.*.webview) |wv| {
-            self.navigateHtml(win.*, wv, html);
+    pub fn loadHtml(
+        self: *WindowsWebView2Backend,
+        win_id: types.WindowId,
+        html: []const u8,
+        base_uri: ?[]const u8,
+    ) types.WebviewError!void {
+        _ = base_uri;
+        const w = try self.requireWindow(win_id);
+        const wv = w.webview orelse {
+            const copy = self.allocator.dupe(u8, html) catch return error.OutOfMemory;
+            w.nav_queue.append(self.allocator, .{ .html = copy }) catch {
+                self.allocator.free(copy);
+                return error.OutOfMemory;
+            };
             return;
-        }
-        const copy = self.allocator.dupe(u8, html) catch return error.OutOfMemory;
-        if (win.*.queued_html) |old| self.allocator.free(old);
-        win.*.queued_html = copy;
+        };
+        const z = win32.toWide(self.allocator, html) catch return error.OutOfMemory;
+        defer self.allocator.free(z);
+        _ = wv.vtable.NavigateToString(wv, z.ptr);
     }
 
     pub fn openDevtools(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
-        const win = self.windows.get(win_id) orelse return error.WindowNotFound;
-        const wv = win.*.webview orelse return;
+        const w = try self.requireWindow(win_id);
+        const wv = w.webview orelse return error.PlatformFailure;
         _ = wv.vtable.OpenDevToolsWindow(wv);
     }
 };
 
-const SchemeSlot = struct {
-    handler: types.SchemeHandler,
-    scheme: []u8,
-};
-
-const win32_base_dpi: u32 = 96;
-
-fn currentDpi(hwnd: win32.HWND) u32 {
-    const dpi = win32.GetDpiForWindow(hwnd);
-    return if (dpi == 0) win32_base_dpi else dpi;
-}
-
-fn protocolScheme(uri: []const u8) []const u8 {
-    return switch (util.classify(uri) orelse .tauri) {
-        .tauri => "tauri",
-        .ipc => "ipc",
-        .asset => "asset",
-    };
-}
-
 // ---------------------------------------------------------------------------
-// WndProc
+// Window procedure
 // ---------------------------------------------------------------------------
 
-const WM_GETMINMAXINFO = 0x0024;
-const MINMAXINFO = extern struct {
-    reserved0: win32.POINT = .{},
-    reserved1: win32.POINT = .{},
-    max_size: win32.POINT = .{},
-    max_position: win32.POINT = .{},
-    min_track_size: win32.POINT = .{},
-};
+fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wparam: win32.WPARAM, lparam: win32.LPARAM) callconv(CALL) win32.LRESULT {
+    if (msg == win32.WM_NCCREATE) {
+        const create: *const win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
+        if (create.lpCreateParams) |p| {
+            _ = win32.SetWindowLongPtrW(hwnd, win32.GWLP_USERDATA, @bitCast(@intFromPtr(p)));
+        }
+        return win32.DefWindowProcW(hwnd, msg, wparam, lparam);
+    }
 
-fn ztsWndProc(hwnd: win32.HWND, msg: win32.UINT, wparam: win32.WPARAM, lparam: win32.LPARAM) callconv(.winapi) win32.LRESULT {
     const raw = win32.GetWindowLongPtrW(hwnd, win32.GWLP_USERDATA);
-    const win: ?*WinWindow = if (raw == 0) null else @ptrFromInt(@as(usize, @intCast(raw)));
+    const w: ?*WinWindow = if (raw == 0) null else @ptrFromInt(@as(usize, @bitCast(raw)));
 
     switch (msg) {
         win32.WM_CLOSE => {
-            // Defer the teardown to the event-loop turn so we never free a window record while
-            // still inside its own window procedure (no re-entrancy, no use-after-free).
-            if (win) |w| w.close_requested = true;
+            if (w) |win| {
+                win.backend.closeByIdent(win.id.toU64());
+                return 0;
+            }
+            _ = win32.DestroyWindow(hwnd);
             return 0;
         },
+        win32.WM_DESTROY => {
+            return 0;
+        },
+        win32.WM_NCDESTROY => {
+            if (w) |win| win.backend.finalizeWindow(win);
+            _ = win32.SetWindowLongPtrW(hwnd, win32.GWLP_USERDATA, 0);
+            return win32.DefWindowProcW(hwnd, msg, wparam, lparam);
+        },
         win32.WM_SIZE => {
-            if (win) |w| {
-                const client_w = win32.loword(lparam);
-                const client_h = win32.hiword(lparam);
-                if (w.controller) |c| {
-                    _ = c.vtable.put_Bounds(c, .{
-                        .left = 0,
-                        .top = 0,
-                        .right = client_w,
-                        .bottom = client_h,
-                    });
-                }
+            if (w) |win| win.backend.resizeWebView(win);
+            return 0;
+        },
+        win32.WM_MOVE => {
+            if (w) |win| {
+                if (win.controller) |c| _ = c.vtable.NotifyParentWindowPositionChanged(c);
             }
             return 0;
         },
         win32.WM_DPICHANGED => {
-            if (win) |w| {
-                const new_dpi: u32 = win32.loword(lparam);
-                if (new_dpi > 0) w.dpi = new_dpi;
+            if (w) |win| {
+                const dpi: u32 = win32.loword(lparam);
+                win.dpi = if (dpi == 0) util.base_dpi else dpi;
+                const suggested: *const win32.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                _ = win32.SetWindowPos(
+                    hwnd,
+                    null,
+                    suggested.left,
+                    suggested.top,
+                    @max(1, suggested.width()),
+                    @max(1, suggested.height()),
+                    win32.SWP_NOZORDER | win32.SWP_NOACTIVATE,
+                );
+                win.backend.resizeWebView(win);
             }
-            return win32.DefWindowProcW(hwnd, msg, wparam, lparam);
+            return 0;
         },
-        WM_GETMINMAXINFO => {
-            if (win) |w| {
-                const info: *MINMAXINFO = @ptrFromInt(@as(usize, @intCast(lparam)));
-                const dpi = currentDpi(hwnd);
-                if (w.min_size) |ms| {
-                    info.min_track_size = .{
-                        .x = util.logicalToPhysical(ms.width.v, dpi),
-                        .y = util.logicalToPhysical(ms.height.v, dpi),
+        win32.WM_GETMINMAXINFO => {
+            if (w) |win| {
+                const info: *win32.MINMAXINFO = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                if (win.min_size) |ms| {
+                    info.ptMinTrackSize = .{
+                        .x = util.logicalToPhysical(ms.width.v, win.dpi),
+                        .y = util.logicalToPhysical(ms.height.v, win.dpi),
                     };
                 }
-                if (w.max_size) |ms| {
-                    info.max_size = .{
-                        .x = util.logicalToPhysical(ms.width.v, dpi),
-                        .y = util.logicalToPhysical(ms.height.v, dpi),
+                if (win.max_size) |xs| {
+                    info.ptMaxTrackSize = .{
+                        .x = util.logicalToPhysical(xs.width.v, win.dpi),
+                        .y = util.logicalToPhysical(xs.height.v, win.dpi),
                     };
                 }
             }
             return 0;
-        },
-        win32.WM_NCDESTROY => {
-            _ = win32.SetWindowLongPtrW(hwnd, win32.GWLP_USERDATA, 0);
-            return win32.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
         else => return win32.DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }
 
-// `WinWindow` needs the cached event tokens too.
-comptime {
-    if (builtin.os.tag != .windows) {
-        @compileError("windows.zig is Windows-only; import it behind `has_native_windows` in mod.zig");
+/// `http://tauri.localhost/…` and the raw `tauri://localhost/…` spelling both classify; any other
+/// host (including a look-alike such as `evil.tauri.localhost`) is left to the network stack.
+fn classifyVirtualOrigin(uri: []const u8) ?util.Protocol {
+    const scheme_end = std.mem.indexOf(u8, uri, "://") orelse return null;
+    const scheme = uri[0..scheme_end];
+    const rest = uri[scheme_end + 3 ..];
+    const host_end = std.mem.indexOfScalar(u8, rest, '/') orelse rest.len;
+    const host = rest[0..host_end];
+
+    if (std.ascii.eqlIgnoreCase(scheme, "http") or std.ascii.eqlIgnoreCase(scheme, "https")) {
+        if (std.ascii.eqlIgnoreCase(host, "tauri.localhost")) return .tauri;
+        if (std.ascii.eqlIgnoreCase(host, "ipc.localhost")) return .ipc;
+        if (std.ascii.eqlIgnoreCase(host, "asset.localhost")) return .asset;
+        return null;
     }
+    if (host.len != 0 and !std.ascii.eqlIgnoreCase(host, "localhost")) return null;
+    return util.protocolFromScheme(scheme);
 }
 
-// ============================================================================
-// Real Native Win32 + WebView2 End-to-End Integration Test (GitHub Actions `windows-latest`)
-// ============================================================================
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
-test "WindowsWebView2Backend renders HTML, injects UserScript, streams binary & JSON over `tauri://` + `ipc://`, and shuts down with 0 leaks" {
-    const backend = WindowsWebView2Backend.init(testing.allocator, testing.io) catch |err| switch (err) {
+test "classifyVirtualOrigin recognises the WebView2 spellings and rejects look-alikes" {
+    try std.testing.expectEqual(util.Protocol.tauri, classifyVirtualOrigin("http://tauri.localhost/index.html").?);
+    try std.testing.expectEqual(util.Protocol.ipc, classifyVirtualOrigin("http://ipc.localhost/invoke").?);
+    try std.testing.expectEqual(util.Protocol.asset, classifyVirtualOrigin("http://asset.localhost/a.png").?);
+    try std.testing.expectEqual(util.Protocol.tauri, classifyVirtualOrigin("tauri://localhost/index.html").?);
+    try std.testing.expect(classifyVirtualOrigin("http://example.com/x") == null);
+    try std.testing.expect(classifyVirtualOrigin("http://evil.tauri.localhost/x") == null);
+    try std.testing.expect(classifyVirtualOrigin("about:blank") == null);
+}
+
+// ---------------------------------------------------------------------------
+// Windows E2E — the only test that needs a real HWND + WebView2 (`windows-latest`)
+// ---------------------------------------------------------------------------
+
+/// Page served for `tauri://localhost/index.html`. It exercises, from inside the real WebView2:
+/// the injected `window.__ztsPostMessage` bridge, a cross-origin `fetch` to `ipc://` (rewritten to
+/// `http://ipc.localhost`) that forces a CORS preflight, custom-header exposure, and JSON decoding.
+const e2e_page =
+    \\<!doctype html>
+    \\<meta charset="utf-8">
+    \\<title>Z-Ts Windows E2E</title>
+    \\<body style="font:16px system-ui;background:#101014;color:#eee">
+    \\<script>
+    \\(async () => {
+    \\  const out = { bootInjected: typeof window.__ztsPostMessage === 'function' };
+    \\  try {
+    \\    const r = await fetch('http://ipc.localhost/ping', {
+    \\      method: 'POST',
+    \\      headers: { 'Content-Type': 'application/json' },
+    \\      body: JSON.stringify({ n: 41 }),
+    \\    });
+    \\    out.tauriHdr = r.headers.get('Tauri-Response');
+    \\    out.cors = r.headers.get('Access-Control-Allow-Origin');
+    \\    const j = await r.json();
+    \\    out.sum = j.sum;
+    \\    out.method = j.method;
+    \\    out.bodyLen = j.bodyLen;
+    \\    out.deferral = j.deferral;
+    \\    out.ua = navigator.userAgent.includes('Windows');
+    \\    out.dpr = window.devicePixelRatio || 1;
+    \\  } catch (e) { out.err = String(e); }
+    \\  window.__ztsPostMessage(JSON.stringify(out));
+    \\})();
+    \\</script>
+;
+
+const E2e = struct {
+    backend: *WindowsWebView2Backend,
+    allocator: Allocator,
+    report: ?[]u8 = null,
+    done: bool = false,
+    tauri_hits: u32 = 0,
+    ipc_hits: u32 = 0,
+    ipc_method: [8]u8 = @splat(0),
+    ipc_method_len: usize = 0,
+    ipc_body_len: usize = 0,
+    worker: ?std.Thread = null,
+
+    fn method(self: *const E2e) []const u8 {
+        return self.ipc_method[0..self.ipc_method_len];
+    }
+};
+
+fn e2eTauriRequest(userdata: ?*anyopaque, req: types.SchemeRequest) void {
+    const e2e: *E2e = @ptrCast(@alignCast(userdata.?));
+    e2e.tauri_hits += 1;
+    e2e.backend.completeRequest(req.request_id, .{
+        .status_code = 200,
+        .content_type = "text/html; charset=utf-8",
+        .extra_headers = &.{.{ .name = "Tauri-Response", .value = "ok" }},
+        .body = types.OwnedBytes.static(e2e_page),
+    }) catch {};
+}
+
+const IpcJob = struct {
+    backend: *WindowsWebView2Backend,
+    allocator: Allocator,
+    req_id: types.RequestId,
+    method: [8]u8,
+    method_len: usize,
+    body_len: usize,
+};
+
+/// Completes the `ipc://` request from a **worker thread** — the exact cross-thread path
+/// `zts_tauri` uses for real commands (Architectural Invariant #4: the `ICoreWebView2Deferral`
+/// stays on the STA, only the `RequestId` + bytes cross the boundary).
+fn e2eIpcWorker(job: *IpcJob) void {
+    const body = std.fmt.allocPrint(
+        job.allocator,
+        "{{\"sum\":42,\"method\":\"{s}\",\"bodyLen\":{d},\"deferral\":true}}",
+        .{ job.method[0..job.method_len], job.body_len },
+    ) catch {
+        job.allocator.destroy(job);
+        return;
+    };
+    job.backend.completeRequest(job.req_id, .{
+        .status_code = 200,
+        .content_type = "application/json",
+        .extra_headers = &.{.{ .name = "Tauri-Response", .value = "ok" }},
+        .body = types.OwnedBytes.fromOwnedSlice(job.allocator, body),
+    }) catch {
+        job.allocator.free(body);
+    };
+    job.allocator.destroy(job);
+}
+
+fn e2eIpcRequest(userdata: ?*anyopaque, req: types.SchemeRequest) void {
+    const e2e: *E2e = @ptrCast(@alignCast(userdata.?));
+    e2e.ipc_hits += 1;
+    e2e.ipc_method_len = @min(req.method.len, e2e.ipc_method.len);
+    @memcpy(e2e.ipc_method[0..e2e.ipc_method_len], req.method[0..e2e.ipc_method_len]);
+    e2e.ipc_body_len = req.body.len;
+
+    const job = e2e.allocator.create(IpcJob) catch return;
+    job.* = .{
+        .backend = e2e.backend,
+        .allocator = e2e.allocator,
+        .req_id = req.request_id,
+        .method = e2e.ipc_method,
+        .method_len = e2e.ipc_method_len,
+        .body_len = req.body.len,
+    };
+    e2e.worker = std.Thread.spawn(.{}, e2eIpcWorker, .{job}) catch blk: {
+        // No threads available: fall back to the synchronous path so the test still validates IPC.
+        e2eIpcWorker(job);
+        break :blk null;
+    };
+}
+
+fn e2eMessage(userdata: ?*anyopaque, _: types.WindowId, message: []const u8) void {
+    const e2e: *E2e = @ptrCast(@alignCast(userdata.?));
+    e2e.done = true;
+    if (e2e.report) |old| e2e.allocator.free(old);
+    e2e.report = e2e.allocator.dupe(u8, message) catch null;
+}
+
+// Full native E2E: `Win32` window → WebView2 controller → `tauri://` navigation → cross-origin
+// `ipc://` fetch with a real CORS preflight → worker-thread deferral completion → `postMessage`
+// back into Zig. Prints the `OK windows-wv2 …` marker that `ci-windows` greps for, so the gate can
+// never pass without an actual browser process.
+test "WindowsWebView2Backend serves tauri:// + ipc:// through a real WebView2 (E2E)" {
+    if (builtin.os.tag != .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+
+    const backend = WindowsWebView2Backend.init(allocator, io) catch |err| switch (err) {
         error.DisplayUnavailable => {
-            // Loud skip: `.github/workflows/ci.yml` greps for `OK windows-wv2` and FAILS the job
-            // when the marker is absent, so the native gate can never silently degrade to a no-op.
-            std.debug.print("\n[WindowsWebView2Backend E2E] SKIPPED: WebView2 runtime not found\n", .{});
+            std.debug.print(
+                "SKIP windows-wv2: no Evergreen WebView2 runtime on this machine " ++
+                    "(ci-windows installs it before running this test)\n",
+                .{},
+            );
             return error.SkipZigTest;
         },
         else => return err,
     };
     defer backend.deinit();
 
-    std.debug.print("\n[WindowsWebView2Backend E2E] WebView2 runtime {s} (fixed={})\n", .{
-        backend.runtime.versionString(),
-        backend.runtime.fixed,
-    });
+    var e2e: E2e = .{ .backend = backend, .allocator = allocator };
+    defer if (e2e.report) |r| allocator.free(r);
+    defer if (e2e.worker) |t| t.join();
 
-    const E2eCtx = struct {
-        backend: *WindowsWebView2Backend,
-        allocator: Allocator,
-        final_report: ?[]u8 = null,
+    // 1. The runtime was found in the registry and `EmbeddedBrowserWebView.dll` loaded directly.
+    const version = backend.runtime.versionString();
+    try std.testing.expect(util.isCompatibleRuntime(version));
+    try std.testing.expect(!backend.runtime.fixed);
 
-        fn onTauriScheme(userdata: ?*anyopaque, req: types.SchemeRequest) void {
-            const self: *@This() = @ptrCast(@alignCast(userdata.?));
-            const html =
-                \\<!doctype html>
-                \\<html><body><script>
-                \\(async () => {
-                \\  try {
-                \\    // 1. Large 96 KiB binary round trip over `http://ipc.localhost` POST (exercises the IStream body).
-                \\    const tx = new Uint8Array(98304);
-                \\    for (let i = 0; i < tx.length; i++) tx[i] = (i * 31 + 7) & 0xff;
-                \\    const binRes = await fetch("http://ipc.localhost/xor", {
-                \\      method: "POST",
-                \\      headers: { "Content-Type": "application/octet-stream", "X-Test-Token": "zts-42" },
-                \\      body: tx,
-                \\    });
-                \\    const rx = new Uint8Array(await binRes.arrayBuffer());
-                \\    const binOk = rx.length === tx.length && rx[0] === (tx[0] ^ 0x5a) && rx[98303] === (tx[98303] ^ 0x5a);
-                \\
-                \\    // 2. JSON RPC completed from a real background OS thread (CompletionQueue).
-                \\    const jsonRes = await fetch("http://ipc.localhost/compute", {
-                \\      method: "POST",
-                \\      headers: { "Content-Type": "application/json" },
-                \\      body: JSON.stringify({ a: 20, b: 22 }),
-                \\    });
-                \\    const data = await jsonRes.json();
-                \\
-                \\    window.__ztsPostMessage({
-                \\      bootInjected: window.__BOOT_TAG__ === "injected-ok",
-                \\      binOk,
-                \\      tauriHdr: jsonRes.headers.get("tauri-response"),
-                \\      cors: binRes.headers.get("access-control-allow-origin"),
-                \\      sum: data.sum,
-                \\      ua: navigator.userAgent.indexOf("Windows") >= 0,
-                \\    });
-                \\  } catch (e) {
-                \\    window.__ztsPostMessage({ err: String(e) });
-                \\  }
-                \\})();
-                \\</script></body></html>
-            ;
-            self.backend.completeRequest(req.request_id, .{
-                .status_code = 200,
-                .content_type = "text/html; charset=utf-8",
-                .body = .static(html),
-            }) catch unreachable;
-        }
+    backend.setMessageHandler(.{ .userdata = &e2e, .onMessage = e2eMessage });
+    try backend.registerScheme("tauri", .{ .userdata = &e2e, .onRequest = e2eTauriRequest });
+    try backend.registerScheme("ipc", .{ .userdata = &e2e, .onRequest = e2eIpcRequest });
 
-        fn onIpcScheme(userdata: ?*anyopaque, req: types.SchemeRequest) void {
-            const self: *@This() = @ptrCast(@alignCast(userdata.?));
-            if (std.mem.endsWith(u8, req.uri, "/xor")) {
-                const tok = req.header("x-test-token") orelse "";
-                if (!std.mem.eql(u8, tok, "zts-42")) {
-                    self.backend.completeRequest(req.request_id, .{
-                        .status_code = 403,
-                        .content_type = "text/plain",
-                        .body = .static("bad header"),
-                    }) catch unreachable;
-                    return;
-                }
-                const out = self.allocator.alloc(u8, req.body.len) catch unreachable;
-                for (req.body, 0..) |b, i| out[i] = b ^ 0x5a;
-                self.backend.completeRequest(req.request_id, .{
-                    .status_code = 200,
-                    .content_type = "application/octet-stream",
-                    .body = types.OwnedBytes.fromOwnedSlice(self.allocator, out),
-                }) catch unreachable;
-                return;
-            }
-
-            // `/compute`: complete from a detached worker thread — proves cross-thread `completeRequest`.
-            const t = std.Thread.spawn(.{}, bgComputeWorker, .{ self.backend, self.allocator, req.request_id }) catch unreachable;
-            t.detach();
-        }
-
-        fn bgComputeWorker(b: *WindowsWebView2Backend, alloc: Allocator, req_id: types.RequestId) void {
-            const payload = alloc.dupe(u8, "{\"sum\":42}") catch unreachable;
-            b.completeRequest(req_id, .{
-                .status_code = 200,
-                .content_type = "application/json",
-                .extra_headers = &.{.{ .name = "Tauri-Response", .value = "ok" }},
-                .body = types.OwnedBytes.fromOwnedSlice(alloc, payload),
-            }) catch unreachable;
-        }
-
-        fn onJsMessage(userdata: ?*anyopaque, _: types.WindowId, msg: []const u8) void {
-            const self: *@This() = @ptrCast(@alignCast(userdata.?));
-            self.final_report = self.allocator.dupe(u8, msg) catch null;
-            self.backend.requestQuit();
-        }
-    };
-
-    var ctx: E2eCtx = .{ .backend = backend, .allocator = testing.allocator };
-    defer if (ctx.final_report) |r| testing.allocator.free(r);
-
-    backend.message_handler = .{ .userdata = &ctx, .onMessage = E2eCtx.onJsMessage };
-    try backend.registerScheme("tauri", .{ .userdata = &ctx, .onRequest = E2eCtx.onTauriScheme });
-    try backend.registerScheme("ipc", .{ .userdata = &ctx, .onRequest = E2eCtx.onIpcScheme });
-
+    // 2. A real HWND with a real WebView2 controller; the `tauri://` URL is rewritten by the backend.
     const win = try backend.createWindow(.{
-        .title = "Z-Ts Native WebView2 E2E",
-        .size = .wh(640, 480),
-        .position = .{ .x = .init(24), .y = .init(48) },
-        .visible = true,
-        .init_scripts = &.{"window.__BOOT_TAG__ = 'injected-ok';"},
+        .title = "Z-Ts · WebView2 E2E",
+        .size = .wh(560, 360),
+        .decorations = false,
+        .transparent = true,
         .initial_url = "tauri://localhost/index.html",
     });
+    try std.testing.expect(backend.nativeHandle(win) != null);
 
-    try testing.expect(backend.nativeHandle(win) != null);
-    try testing.expect(backend.nativeHandle(types.WindowId.invalid) == null);
-
-    // Property round trip (must not crash and must keep the window alive).
-    try backend.setTitle(win, "Z-Ts Native WebView2 E2E (retitled)");
-    try backend.setMinSize(win, .wh(320, 240));
-    try backend.setMaxSize(win, .wh(1280, 900));
-    try backend.setResizable(win, true);
-    try backend.setAlwaysOnTop(win, true);
-    try backend.setAlwaysOnTop(win, false);
-    try backend.setPosition(win, .{ .x = .init(32), .y = .init(64) });
-    try backend.setSize(win, .wh(720, 520));
-
-    const Watchdog = struct {
-        b: *WindowsWebView2Backend,
-        done: std.atomic.Value(bool) = .init(false),
-        timed_out: std.atomic.Value(bool) = .init(false),
-
-        fn run(w: *@This(), io: Io) void {
-            var ticks: usize = 0;
-            while (ticks < 200 and !w.done.load(.acquire)) : (ticks += 1) {
-                io.sleep(.fromMilliseconds(100), .awake) catch {};
-            }
-            if (!w.done.load(.acquire)) {
-                w.timed_out.store(true, .release);
-                w.b.requestQuit();
-            }
-        }
-    };
-
-    var wd: Watchdog = .{ .b = backend };
-    const wd_thread = try std.Thread.spawn(.{}, Watchdog.run, .{ &wd, testing.io });
-
-    while (backend.step(.blocking)) {}
-
-    wd.done.store(true, .release);
-    wd_thread.join();
-
-    if (wd.timed_out.load(.acquire)) {
-        std.debug.print("\n[WindowsWebView2Backend E2E] Watchdog timed out waiting for WebView2 JS report!\n", .{});
-        return error.WebView2E2eTimeout;
+    // 3. Pump the STA queue until the page reports back (1 s cap per iteration).
+    var budget: usize = 120;
+    while (budget > 0 and !e2e.done) : (budget -= 1) {
+        if (!backend.step(.blocking)) break;
     }
+    try std.testing.expect(e2e.done);
 
-    const report = ctx.final_report orelse return error.MissingJsReport;
-    const ParsedReport = struct {
+    const report = e2e.report orelse return error.MissingJsReport;
+    const Parsed = struct {
         err: ?[]const u8 = null,
         bootInjected: ?bool = null,
-        binOk: ?bool = null,
         tauriHdr: ?[]const u8 = null,
         cors: ?[]const u8 = null,
         sum: ?i64 = null,
+        method: ?[]const u8 = null,
+        bodyLen: ?i64 = null,
+        deferral: ?bool = null,
         ua: ?bool = null,
+        dpr: ?f64 = null,
     };
-    var parsed = try std.json.parseFromSlice(ParsedReport, testing.allocator, report, .{});
+    var parsed = try std.json.parseFromSlice(Parsed, allocator, report, .{});
     defer parsed.deinit();
 
     if (parsed.value.err) |e| {
-        std.debug.print("\n[WindowsWebView2Backend E2E] JS error: {s}\n", .{e});
+        std.debug.print("\n[WindowsWebView2 E2E] JS error: {s}\n", .{e});
         return error.WebView2JsError;
     }
 
-    try testing.expect(parsed.value.bootInjected orelse false);
-    try testing.expect(parsed.value.binOk orelse false);
-    try testing.expectEqualStrings("ok", parsed.value.tauriHdr orelse "");
-    try testing.expectEqualStrings("*", parsed.value.cors orelse "");
-    try testing.expectEqual(@as(i64, 42), parsed.value.sum orelse -1);
-    try testing.expect(parsed.value.ua orelse false);
+    // 4. Every hop of the pipeline is asserted individually so a regression names the broken stage.
+    try std.testing.expect(parsed.value.bootInjected orelse false);
+    try std.testing.expectEqualStrings("ok", parsed.value.tauriHdr orelse "");
+    try std.testing.expectEqualStrings("*", parsed.value.cors orelse "");
+    try std.testing.expectEqual(@as(i64, 42), parsed.value.sum orelse -1);
+    try std.testing.expectEqualStrings("POST", parsed.value.method orelse "");
+    try std.testing.expectEqual(@as(i64, 9), parsed.value.bodyLen orelse -1);
+    try std.testing.expect(parsed.value.deferral orelse false);
+    try std.testing.expect(parsed.value.ua orelse false);
+    try std.testing.expect((parsed.value.dpr orelse 0) >= 1.0);
+    try std.testing.expectEqual(@as(u32, 1), e2e.tauri_hits);
+    try std.testing.expectEqual(@as(u32, 1), e2e.ipc_hits);
+    try std.testing.expectEqualStrings("POST", e2e.method());
+    // The `application/json` POST is cross-origin, so Chromium must have preflighted it and the
+    // backend must have answered `OPTIONS` itself (204 + `Access-Control-Allow-*`) without Zig.
+    try std.testing.expect(backend.preflightCount() >= 1);
 
+    // 5. Closing the last window ends `step()`.
     try backend.closeWindow(win);
-    try testing.expectEqual(@as(u32, 0), backend.windows.count());
-    try testing.expect(!backend.step(.poll));
+    try std.testing.expectEqual(@as(u32, 0), backend.windows.count());
+    try std.testing.expect(!backend.step(.poll));
 
-    // CI marker: verified by `.github/workflows/ci.yml` so the native gate can never silently skip.
+    // CI marker — grepped by `.github/workflows/ci.yml` (`M3-02` gate).
     std.debug.print(
-        "OK windows-wv2 checks=10 binary=98304 sum={d} runtime={s}\n",
-        .{ parsed.value.sum.?, backend.runtime.versionString() },
+        "OK windows-wv2 checks=12 runtime={s} preflights={d} dpr={d:.2} single-exe=1\n",
+        .{ version, backend.preflightCount(), parsed.value.dpr orelse 1.0 },
     );
+}
+
+test "styleBits preserves the signed LONG semantics of Get/SetWindowLongPtrW" {
+    const style: u32 = win32.WS_POPUP | win32.WS_VISIBLE;
+    const bits = WindowsWebView2Backend.styleBits(style);
+    try std.testing.expectEqual(@as(isize, -0x7000_0000), bits);
+    try std.testing.expectEqual(@as(u32, 0x9000_0000), @as(u32, @bitCast(@as(i32, @truncate(bits)))));
 }

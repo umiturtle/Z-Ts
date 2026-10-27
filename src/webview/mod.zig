@@ -414,6 +414,13 @@ test {
     _ = coords;
     _ = webview2_com;
     _ = windows_util;
+    // The Windows files are pure Zig (no `@cImport`, no header parsing), so they stay *analyzable*
+    // on every host. Importing them here means the Linux/macOS CI jobs unit-test the Win32 UTF-16
+    // helpers, the registry-path composition, the runtime search order and the virtual-origin
+    // classifier — not just `windows-latest` (ADR-0007).
+    _ = @import("win32.zig");
+    _ = @import("windows.zig");
+    _ = @import("webview2_loader.zig");
     if (comptime has_native_gtk) {
         _ = linux;
     }

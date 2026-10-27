@@ -192,10 +192,13 @@ pub fn build(b: *std.Build) void {
     if (native_windows) {
         // Same import libraries Microsoft's `WebView2Loader.lib` declares — resolved from the
         // Zig 0.17 toolchain's bundled `x86_64-windows-gnu` import libs (no SDK / MSVC needed).
+        // `use_pkg_config = .no` is mandatory: the GitHub-hosted Windows runners have no
+        // `pkg-config` executable, and Zig's default (`.yes`) turns every `kernel32` lookup into a
+        // hard configure error before the linker ever runs.
         for ([_][]const u8{
             "user32", "kernel32", "ole32", "oleaut32", "shlwapi",
             "dwmapi", "advapi32", "gdi32", "shell32",  "comdlg32",
-        }) |lib| webview_mod.linkSystemLibrary(lib, .{});
+        }) |lib| webview_mod.linkSystemLibrary(lib, .{ .use_pkg_config = .no });
     }
 
     // Level 1e: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).

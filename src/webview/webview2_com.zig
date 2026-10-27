@@ -1,40 +1,50 @@
-//! WebView2 COM interfaces — **GENERATED, DO NOT EDIT** (`M3-02`).
+//! WebView2 COM interfaces — **GENERATED, DO NOT EDIT** (`src/webview/webview2_com.zig`, `M3-02`).
 //!
-//! Regenerate with:
-//! ```bash
-//! python3 scripts/gen-webview2-com.py /tmp/WebView2.h
-//! ```
+//! Source: Microsoft's `WebView2.h` (MIDL output). Regenerate with:
+//!   `python3 scripts/gen-webview2-com.py /path/to/WebView2.h`
 //!
-//! Only the vtable *order* is taken from Microsoft's header; methods that `zts_webview` never
-//! calls stay as erased `?*const anyopaque` slots, so every struct below is byte-for-byte the
-//! real COM layout (`comptime` size assertions at the bottom prove it).
+//! Only the vtable **field order** is taken from the header — methods `zts_webview` never calls are
+//! erased to `?*const anyopaque` slots, so every struct below is byte-identical to the real COM
+//! layout while staying impossible to call by accident. `comptime` size assertions at the bottom
+//! prove it.
+//!
+//! `callconv(.winapi)` only exists on Windows targets; `CALL` keeps this file analyzable on every
+//! host so the assertions and the GUID test run in all CI jobs (see ADR-0007).
 
 const std = @import("std");
 const builtin = @import("builtin");
 
-/// `callconv(CC)` only exists for Windows targets, but this file is analyzed on every OS
-/// (so the slot-count assertions and the GUID test run in all CI jobs). `.c` is ABI-identical
-/// for these four-pointer vtables on non-Windows hosts.
-pub const CC: std.builtin.CallingConvention = if (builtin.os.tag == .windows) .winapi else .c;
+/// `winapi` on Windows, the C convention everywhere else (ABI-identical for pointer-only vtables).
+const CALL: std.builtin.CallingConvention = if (builtin.os.tag == .windows) .winapi else .c;
 
-/// `HRESULT` (`long` on Win32).
 pub const HResult = i32;
-
 pub const S_OK: HResult = 0;
 pub const S_FALSE: HResult = 1;
 pub const E_NOINTERFACE: HResult = @bitCast(@as(u32, 0x80004002));
 pub const E_POINTER: HResult = @bitCast(@as(u32, 0x80004003));
 pub const E_INVALIDARG: HResult = @bitCast(@as(u32, 0x80070057));
-pub const E_OUTOFMEMORY: HResult = @bitCast(@as(u32, 0x8007000E));
 pub const E_FAIL: HResult = @bitCast(@as(u32, 0x80004005));
-pub const E_UNEXPECTED: HResult = @bitCast(@as(u32, 0x8000FFFF));
+pub const E_OUTOFMEMORY: HResult = @bitCast(@as(u32, 0x8007000E));
+pub const REGDB_E_CLASSNOTREG: HResult = @bitCast(@as(u32, 0x80040154));
 
 pub inline fn failed(hr: HResult) bool {
     return hr < 0;
 }
 
-/// `PWSTR` / `LPWSTR` — CoTaskMem-allocated UTF-16 string owned by the CALLER after a getter.
+pub inline fn succeeded(hr: HResult) bool {
+    return hr >= 0;
+}
+
+/// `BOOL`
+pub const BOOL = i32;
+pub const TRUE: BOOL = 1;
+pub const FALSE: BOOL = 0;
+
+/// `LPWSTR` — CoTaskMem-allocated by a COM getter, freed by the caller via `CoTaskMemFree`.
 pub const PWStr = [*:0]u16;
+
+/// `HWND` (opaque here; `win32.zig` owns the real type).
+pub const HWND = ?*anyopaque;
 
 /// Win32 `RECT` (physical pixels, top-left origin — same convention as CSS).
 pub const Rect = extern struct {
@@ -44,6 +54,17 @@ pub const Rect = extern struct {
     bottom: i32 = 0,
 };
 
+/// `COREWEBVIEW2_COLOR` (`BYTE A, R, G, B`).
+pub const Color = extern struct {
+    A: u8 = 255,
+    R: u8 = 255,
+    G: u8 = 255,
+    B: u8 = 255,
+};
+
+pub const transparent = Color{ .A = 0, .R = 0, .G = 0, .B = 0 };
+
+/// `GUID` / `IID` / `CLSID`.
 pub const Guid = extern struct {
     d1: u32,
     d2: u16,
@@ -51,25 +72,34 @@ pub const Guid = extern struct {
     d4: [8]u8,
 };
 
-/// Parses a canonical `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` GUID at `comptime`.
+/// Parses the canonical `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` form at `comptime`.
 pub fn guid(comptime text: []const u8) Guid {
     std.debug.assert(text.len == 36);
     return .{
-        .d1 = parseU32(text[0..8]),
-        .d2 = parseU16(text[9..13]),
-        .d3 = parseU16(text[14..18]),
-        // `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`: index 23 is the fourth dash and must be skipped.
+        .d1 = parseHexInt(u32, text[0..8]),
+        .d2 = parseHexInt(u16, text[9..13]),
+        .d3 = parseHexInt(u16, text[14..18]),
         .d4 = .{
-            parseByte(text[19..21]), parseByte(text[21..23]),
-            parseByte(text[24..26]), parseByte(text[26..28]),
-            parseByte(text[28..30]), parseByte(text[30..32]),
-            parseByte(text[32..34]), parseByte(text[34..36]),
+            parseHexByte(text[19..21]), parseHexByte(text[21..23]),
+            // index 23 is the fourth '-' and must be skipped.
+            parseHexByte(text[24..26]), parseHexByte(text[26..28]),
+            parseHexByte(text[28..30]), parseHexByte(text[30..32]),
+            parseHexByte(text[32..34]), parseHexByte(text[34..36]),
         },
     };
 }
 
-fn parseByte(comptime s: []const u8) u8 {
-    return (hexDigit(s[0]) << 4) | hexDigit(s[1]);
+fn parseHexByte(comptime text: []const u8) u8 {
+    return (hexDigit(text[0]) << 4) | hexDigit(text[1]);
+}
+
+fn parseHexInt(comptime T: type, comptime text: []const u8) T {
+    var out: T = 0;
+    inline for (text) |c| {
+        if (c == '-') continue;
+        out = out * 16 + hexDigit(c);
+    }
+    return out;
 }
 
 fn hexDigit(comptime c: u8) u8 {
@@ -77,65 +107,95 @@ fn hexDigit(comptime c: u8) u8 {
         '0'...'9' => c - '0',
         'a'...'f' => c - 'a' + 10,
         'A'...'F' => c - 'A' + 10,
-        else => @compileError("invalid hex digit"),
+        else => @compileError("invalid hex digit in GUID literal"),
     };
 }
 
-fn parseU16(comptime s: []const u8) u16 {
-    var out: u16 = 0;
-    inline for (s) |c| {
-        if (c == '-') continue;
-        out = out * 16 + hexDigit(c);
-    }
-    return out;
-}
+pub const IID_IUnknown = guid("00000000-0000-0000-c000-000000000046");
 
-fn parseU32(comptime s: []const u8) u32 {
-    var out: u32 = 0;
-    inline for (s) |c| {
-        if (c == '-') continue;
-        out = out * 16 + hexDigit(c);
-    }
-    return out;
-}
+/// Any COM object is `{ vtable }` — used for `QueryInterface` casts.
+pub const IUnknown = extern struct {
+    vtable: *const VTable,
 
+    pub const VTable = extern struct {
+        QueryInterface: *const fn (this: *IUnknown, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *IUnknown) callconv(CALL) u32,
+        Release: *const fn (this: *IUnknown) callconv(CALL) u32,
+    };
+};
+
+/// `ICoreWebView2Environment` (8 vtable slots — order is the ABI).
 pub const ICoreWebView2Environment = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2Environment, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2Environment) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2Environment) callconv(CC) u32,
-        CreateCoreWebView2Controller: *const fn (*ICoreWebView2Environment, hwnd: ?*anyopaque, handler: ?*anyopaque) callconv(CC) HResult,
-        CreateWebResourceResponse: *const fn (*ICoreWebView2Environment, content: ?*anyopaque, status_code: i32, reason: ?[*:0]const u16, headers: ?[*:0]const u16, response: *?*ICoreWebView2WebResourceResponse) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2Environment, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2Environment) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2Environment) callconv(CALL) u32,
+        CreateCoreWebView2Controller: *const fn (this: *ICoreWebView2Environment, parent: ?*anyopaque, handler: ?*anyopaque) callconv(CALL) HResult,
+        CreateWebResourceResponse: *const fn (this: *ICoreWebView2Environment, content: ?*anyopaque, status: i32, reason: ?[*:0]const u16, headers: ?[*:0]const u16, response: *?*ICoreWebView2WebResourceResponse) callconv(CALL) HResult,
         get_BrowserVersionString: ?*const anyopaque,
         add_NewBrowserVersionAvailable: ?*const anyopaque,
         remove_NewBrowserVersionAvailable: ?*const anyopaque,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2Environment) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2Environment = guid("b96d755e-0319-4e92-a296-23436f46a1fc");
 
+/// `ICoreWebView2Controller` (26 vtable slots — order is the ABI).
 pub const ICoreWebView2Controller = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2Controller, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2Controller) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2Controller) callconv(CC) u32,
+        QueryInterface: *const fn (this: *ICoreWebView2Controller, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2Controller) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2Controller) callconv(CALL) u32,
         get_IsVisible: ?*const anyopaque,
-        put_IsVisible: *const fn (*ICoreWebView2Controller, visible: i32) callconv(CC) HResult,
+        put_IsVisible: *const fn (this: *ICoreWebView2Controller, visible: BOOL) callconv(CALL) HResult,
         get_Bounds: ?*const anyopaque,
-        put_Bounds: *const fn (*ICoreWebView2Controller, bounds: Rect) callconv(CC) HResult,
+        put_Bounds: *const fn (this: *ICoreWebView2Controller, bounds: Rect) callconv(CALL) HResult,
+        get_ZoomFactor: ?*const anyopaque,
+        put_ZoomFactor: *const fn (this: *ICoreWebView2Controller, factor: f64) callconv(CALL) HResult,
+        add_ZoomFactorChanged: ?*const anyopaque,
+        remove_ZoomFactorChanged: ?*const anyopaque,
+        SetBoundsAndZoomFactor: ?*const anyopaque,
+        MoveFocus: *const fn (this: *ICoreWebView2Controller, reason: i32) callconv(CALL) HResult,
+        add_MoveFocusRequested: ?*const anyopaque,
+        remove_MoveFocusRequested: ?*const anyopaque,
+        add_GotFocus: ?*const anyopaque,
+        remove_GotFocus: ?*const anyopaque,
+        add_LostFocus: ?*const anyopaque,
+        remove_LostFocus: ?*const anyopaque,
+        add_AcceleratorKeyPressed: ?*const anyopaque,
+        remove_AcceleratorKeyPressed: ?*const anyopaque,
+        get_ParentWindow: ?*const anyopaque,
+        put_ParentWindow: *const fn (this: *ICoreWebView2Controller, parent: ?*anyopaque) callconv(CALL) HResult,
+        NotifyParentWindowPositionChanged: *const fn (this: *ICoreWebView2Controller) callconv(CALL) HResult,
+        Close: *const fn (this: *ICoreWebView2Controller) callconv(CALL) HResult,
+        get_CoreWebView2: *const fn (this: *ICoreWebView2Controller, out: *?*ICoreWebView2) callconv(CALL) HResult,
+    };
+};
+
+pub const IID_ICoreWebView2Controller = guid("4d00c0d1-9434-4eb6-8078-8697a560334f");
+
+/// `ICoreWebView2Controller2` (28 vtable slots — order is the ABI).
+pub const ICoreWebView2Controller2 = extern struct {
+    vtable: *const VTable,
+
+    pub const VTable = extern struct {
+        QueryInterface: *const fn (this: *ICoreWebView2Controller2, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2Controller2) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2Controller2) callconv(CALL) u32,
+        get_IsVisible: ?*const anyopaque,
+        put_IsVisible: ?*const anyopaque,
+        get_Bounds: ?*const anyopaque,
+        put_Bounds: ?*const anyopaque,
         get_ZoomFactor: ?*const anyopaque,
         put_ZoomFactor: ?*const anyopaque,
         add_ZoomFactorChanged: ?*const anyopaque,
         remove_ZoomFactorChanged: ?*const anyopaque,
         SetBoundsAndZoomFactor: ?*const anyopaque,
-        MoveFocus: *const fn (*ICoreWebView2Controller, reason: i32) callconv(CC) HResult,
+        MoveFocus: ?*const anyopaque,
         add_MoveFocusRequested: ?*const anyopaque,
         remove_MoveFocusRequested: ?*const anyopaque,
         add_GotFocus: ?*const anyopaque,
@@ -147,27 +207,27 @@ pub const ICoreWebView2Controller = extern struct {
         get_ParentWindow: ?*const anyopaque,
         put_ParentWindow: ?*const anyopaque,
         NotifyParentWindowPositionChanged: ?*const anyopaque,
-        Close: *const fn (*ICoreWebView2Controller) callconv(CC) HResult,
-        get_CoreWebView2: *const fn (*ICoreWebView2Controller, out: *?*ICoreWebView2) callconv(CC) HResult,
+        Close: ?*const anyopaque,
+        get_CoreWebView2: ?*const anyopaque,
+        get_DefaultBackgroundColor: ?*const anyopaque,
+        put_DefaultBackgroundColor: *const fn (this: *ICoreWebView2Controller2, value: Color) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2Controller) *const VTable {
-        return self.vtable;
-    }
 };
-pub const IID_ICoreWebView2Controller = guid("4d00c0d1-9434-4eb6-8078-8697a560334f");
 
+pub const IID_ICoreWebView2Controller2 = guid("c979903e-d4ca-4228-92eb-47ee3fa96eab");
+
+/// `ICoreWebView2` (61 vtable slots — order is the ABI).
 pub const ICoreWebView2 = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2) callconv(CC) u32,
-        get_Settings: *const fn (*ICoreWebView2, out: *?*ICoreWebView2Settings) callconv(CC) HResult,
-        get_Source: *const fn (*ICoreWebView2, out: *?PWStr) callconv(CC) HResult,
-        Navigate: *const fn (*ICoreWebView2, uri: [*:0]const u16) callconv(CC) HResult,
-        NavigateToString: *const fn (*ICoreWebView2, html: [*:0]const u16) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2) callconv(CALL) u32,
+        get_Settings: *const fn (this: *ICoreWebView2, out: *?*ICoreWebView2Settings) callconv(CALL) HResult,
+        get_Source: *const fn (this: *ICoreWebView2, out: *?PWStr) callconv(CALL) HResult,
+        Navigate: *const fn (this: *ICoreWebView2, uri: [*:0]const u16) callconv(CALL) HResult,
+        NavigateToString: *const fn (this: *ICoreWebView2, html: [*:0]const u16) callconv(CALL) HResult,
         add_NavigationStarting: ?*const anyopaque,
         remove_NavigationStarting: ?*const anyopaque,
         add_ContentLoading: ?*const anyopaque,
@@ -188,15 +248,15 @@ pub const ICoreWebView2 = extern struct {
         remove_PermissionRequested: ?*const anyopaque,
         add_ProcessFailed: ?*const anyopaque,
         remove_ProcessFailed: ?*const anyopaque,
-        AddScriptToExecuteOnDocumentCreated: *const fn (*ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CC) HResult,
-        RemoveScriptToExecuteOnDocumentCreated: ?*const anyopaque,
-        ExecuteScript: *const fn (*ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CC) HResult,
+        AddScriptToExecuteOnDocumentCreated: *const fn (this: *ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CALL) HResult,
+        RemoveScriptToExecuteOnDocumentCreated: *const fn (this: *ICoreWebView2, id: [*:0]const u16) callconv(CALL) HResult,
+        ExecuteScript: *const fn (this: *ICoreWebView2, script: [*:0]const u16, handler: ?*anyopaque) callconv(CALL) HResult,
         CapturePreview: ?*const anyopaque,
-        Reload: *const fn (*ICoreWebView2) callconv(CC) HResult,
-        PostWebMessageAsJson: *const fn (*ICoreWebView2, msg: [*:0]const u16) callconv(CC) HResult,
-        PostWebMessageAsString: *const fn (*ICoreWebView2, msg: [*:0]const u16) callconv(CC) HResult,
-        add_WebMessageReceived: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CC) HResult,
-        remove_WebMessageReceived: *const fn (*ICoreWebView2, token: i64) callconv(CC) HResult,
+        Reload: *const fn (this: *ICoreWebView2) callconv(CALL) HResult,
+        PostWebMessageAsJson: *const fn (this: *ICoreWebView2, json: [*:0]const u16) callconv(CALL) HResult,
+        PostWebMessageAsString: *const fn (this: *ICoreWebView2, message: [*:0]const u16) callconv(CALL) HResult,
+        add_WebMessageReceived: *const fn (this: *ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CALL) HResult,
+        remove_WebMessageReceived: *const fn (this: *ICoreWebView2, token: i64) callconv(CALL) HResult,
         CallDevToolsProtocolMethod: ?*const anyopaque,
         get_BrowserProcessId: ?*const anyopaque,
         get_CanGoBack: ?*const anyopaque,
@@ -204,7 +264,7 @@ pub const ICoreWebView2 = extern struct {
         GoBack: ?*const anyopaque,
         GoForward: ?*const anyopaque,
         GetDevToolsProtocolEventReceiver: ?*const anyopaque,
-        Stop: *const fn (*ICoreWebView2) callconv(CC) HResult,
+        Stop: *const fn (this: *ICoreWebView2) callconv(CALL) HResult,
         add_NewWindowRequested: ?*const anyopaque,
         remove_NewWindowRequested: ?*const anyopaque,
         add_DocumentTitleChanged: ?*const anyopaque,
@@ -212,43 +272,41 @@ pub const ICoreWebView2 = extern struct {
         get_DocumentTitle: ?*const anyopaque,
         AddHostObjectToScript: ?*const anyopaque,
         RemoveHostObjectFromScript: ?*const anyopaque,
-        OpenDevToolsWindow: *const fn (*ICoreWebView2) callconv(CC) HResult,
+        OpenDevToolsWindow: *const fn (this: *ICoreWebView2) callconv(CALL) HResult,
         add_ContainsFullScreenElementChanged: ?*const anyopaque,
         remove_ContainsFullScreenElementChanged: ?*const anyopaque,
         get_ContainsFullScreenElement: ?*const anyopaque,
-        add_WebResourceRequested: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CC) HResult,
-        remove_WebResourceRequested: *const fn (*ICoreWebView2, token: i64) callconv(CC) HResult,
-        AddWebResourceRequestedFilter: *const fn (*ICoreWebView2, uri: [*:0]const u16, resource_context: i32) callconv(CC) HResult,
+        add_WebResourceRequested: *const fn (this: *ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CALL) HResult,
+        remove_WebResourceRequested: *const fn (this: *ICoreWebView2, token: i64) callconv(CALL) HResult,
+        AddWebResourceRequestedFilter: *const fn (this: *ICoreWebView2, uri: [*:0]const u16, resource_context: i32) callconv(CALL) HResult,
         RemoveWebResourceRequestedFilter: ?*const anyopaque,
-        add_WindowCloseRequested: *const fn (*ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CC) HResult,
-        remove_WindowCloseRequested: *const fn (*ICoreWebView2, token: i64) callconv(CC) HResult,
+        add_WindowCloseRequested: *const fn (this: *ICoreWebView2, handler: ?*anyopaque, token: *i64) callconv(CALL) HResult,
+        remove_WindowCloseRequested: *const fn (this: *ICoreWebView2, token: i64) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2 = guid("76eceacb-0462-4d94-ac83-423a6793775e");
 
+/// `ICoreWebView2Settings` (21 vtable slots — order is the ABI).
 pub const ICoreWebView2Settings = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2Settings, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2Settings) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2Settings) callconv(CC) u32,
+        QueryInterface: *const fn (this: *ICoreWebView2Settings, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2Settings) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2Settings) callconv(CALL) u32,
         get_IsScriptEnabled: ?*const anyopaque,
-        put_IsScriptEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(CC) HResult,
+        put_IsScriptEnabled: *const fn (this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult,
         get_IsWebMessageEnabled: ?*const anyopaque,
-        put_IsWebMessageEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(CC) HResult,
+        put_IsWebMessageEnabled: *const fn (this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult,
         get_AreDefaultScriptDialogsEnabled: ?*const anyopaque,
-        put_AreDefaultScriptDialogsEnabled: ?*const anyopaque,
+        put_AreDefaultScriptDialogsEnabled: *const fn (this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult,
         get_IsStatusBarEnabled: ?*const anyopaque,
-        put_IsStatusBarEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(CC) HResult,
+        put_IsStatusBarEnabled: *const fn (this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult,
         get_AreDevToolsEnabled: ?*const anyopaque,
-        put_AreDevToolsEnabled: *const fn (*ICoreWebView2Settings, value: i32) callconv(CC) HResult,
+        put_AreDevToolsEnabled: *const fn (this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult,
         get_AreDefaultContextMenusEnabled: ?*const anyopaque,
-        put_AreDefaultContextMenusEnabled: ?*const anyopaque,
+        put_AreDefaultContextMenusEnabled: *const fn (this: *ICoreWebView2Settings, enabled: BOOL) callconv(CALL) HResult,
         get_AreHostObjectsAllowed: ?*const anyopaque,
         put_AreHostObjectsAllowed: ?*const anyopaque,
         get_IsZoomControlEnabled: ?*const anyopaque,
@@ -256,257 +314,237 @@ pub const ICoreWebView2Settings = extern struct {
         get_IsBuiltInErrorPageEnabled: ?*const anyopaque,
         put_IsBuiltInErrorPageEnabled: ?*const anyopaque,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2Settings) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2Settings = guid("e562e4f0-d7fa-43ac-8d71-c05150499f00");
 
+/// `ICoreWebView2WebResourceRequest` (10 vtable slots — order is the ABI).
 pub const ICoreWebView2WebResourceRequest = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebResourceRequest, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2WebResourceRequest) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2WebResourceRequest) callconv(CC) u32,
-        get_Uri: *const fn (*ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2WebResourceRequest, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2WebResourceRequest) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2WebResourceRequest) callconv(CALL) u32,
+        get_Uri: *const fn (this: *ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(CALL) HResult,
         put_Uri: ?*const anyopaque,
-        get_Method: *const fn (*ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(CC) HResult,
+        get_Method: *const fn (this: *ICoreWebView2WebResourceRequest, out: *?PWStr) callconv(CALL) HResult,
         put_Method: ?*const anyopaque,
-        get_Content: *const fn (*ICoreWebView2WebResourceRequest, out: *?*anyopaque) callconv(CC) HResult,
+        get_Content: *const fn (this: *ICoreWebView2WebResourceRequest, out: *?*anyopaque) callconv(CALL) HResult,
         put_Content: ?*const anyopaque,
-        get_Headers: *const fn (*ICoreWebView2WebResourceRequest, out: *?*ICoreWebView2HttpRequestHeaders) callconv(CC) HResult,
+        get_Headers: *const fn (this: *ICoreWebView2WebResourceRequest, out: *?*ICoreWebView2HttpRequestHeaders) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2WebResourceRequest) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2WebResourceRequest = guid("97055cd4-512c-4264-8b5f-e3f446cea6a5");
 
+/// `ICoreWebView2WebResourceResponse` (10 vtable slots — order is the ABI).
 pub const ICoreWebView2WebResourceResponse = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebResourceResponse, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2WebResourceResponse) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2WebResourceResponse) callconv(CC) u32,
+        QueryInterface: *const fn (this: *ICoreWebView2WebResourceResponse, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2WebResourceResponse) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2WebResourceResponse) callconv(CALL) u32,
         get_Content: ?*const anyopaque,
-        put_Content: *const fn (*ICoreWebView2WebResourceResponse, stream: ?*anyopaque) callconv(CC) HResult,
+        put_Content: *const fn (this: *ICoreWebView2WebResourceResponse, stream: ?*anyopaque) callconv(CALL) HResult,
         get_Headers: ?*const anyopaque,
         get_StatusCode: ?*const anyopaque,
-        put_StatusCode: *const fn (*ICoreWebView2WebResourceResponse, status_code: i32) callconv(CC) HResult,
+        put_StatusCode: *const fn (this: *ICoreWebView2WebResourceResponse, status: i32) callconv(CALL) HResult,
         get_ReasonPhrase: ?*const anyopaque,
-        put_ReasonPhrase: *const fn (*ICoreWebView2WebResourceResponse, reason_phrase: [*:0]const u16) callconv(CC) HResult,
+        put_ReasonPhrase: *const fn (this: *ICoreWebView2WebResourceResponse, reason: [*:0]const u16) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2WebResourceResponse) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2WebResourceResponse = guid("aafcc94f-fa27-48fd-97df-830ef75aaec9");
 
+/// `ICoreWebView2WebResourceRequestedEventArgs` (8 vtable slots — order is the ABI).
 pub const ICoreWebView2WebResourceRequestedEventArgs = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2WebResourceRequestedEventArgs) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2WebResourceRequestedEventArgs) callconv(CC) u32,
-        get_Request: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2WebResourceRequest) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2WebResourceRequestedEventArgs, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2WebResourceRequestedEventArgs) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2WebResourceRequestedEventArgs) callconv(CALL) u32,
+        get_Request: *const fn (this: *ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2WebResourceRequest) callconv(CALL) HResult,
         get_Response: ?*const anyopaque,
-        put_Response: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, response: ?*ICoreWebView2WebResourceResponse) callconv(CC) HResult,
-        GetDeferral: *const fn (*ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2Deferral) callconv(CC) HResult,
+        put_Response: *const fn (this: *ICoreWebView2WebResourceRequestedEventArgs, response: ?*ICoreWebView2WebResourceResponse) callconv(CALL) HResult,
+        GetDeferral: *const fn (this: *ICoreWebView2WebResourceRequestedEventArgs, out: *?*ICoreWebView2Deferral) callconv(CALL) HResult,
         get_ResourceContext: ?*const anyopaque,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2WebResourceRequestedEventArgs) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2WebResourceRequestedEventArgs = guid("453e667f-12c7-49d4-be6d-ddbe7956f57a");
 
+/// `ICoreWebView2Deferral` (4 vtable slots — order is the ABI).
 pub const ICoreWebView2Deferral = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2Deferral, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2Deferral) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2Deferral) callconv(CC) u32,
-        Complete: *const fn (*ICoreWebView2Deferral) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2Deferral, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2Deferral) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2Deferral) callconv(CALL) u32,
+        Complete: *const fn (this: *ICoreWebView2Deferral) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2Deferral) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2Deferral = guid("c10e7f7b-b585-46f0-a623-8befbf3e4ee0");
 
+/// `ICoreWebView2HttpRequestHeaders` (9 vtable slots — order is the ABI).
 pub const ICoreWebView2HttpRequestHeaders = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2HttpRequestHeaders, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2HttpRequestHeaders) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2HttpRequestHeaders) callconv(CC) u32,
+        QueryInterface: *const fn (this: *ICoreWebView2HttpRequestHeaders, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2HttpRequestHeaders) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2HttpRequestHeaders) callconv(CALL) u32,
         GetHeader: ?*const anyopaque,
         GetHeaders: ?*const anyopaque,
         Contains: ?*const anyopaque,
         SetHeader: ?*const anyopaque,
         RemoveHeader: ?*const anyopaque,
-        GetIterator: *const fn (*ICoreWebView2HttpRequestHeaders, out: *?*ICoreWebView2HttpHeadersCollectionIterator) callconv(CC) HResult,
+        GetIterator: *const fn (this: *ICoreWebView2HttpRequestHeaders, out: *?*ICoreWebView2HttpHeadersCollectionIterator) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2HttpRequestHeaders) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2HttpRequestHeaders = guid("e86cac0e-5523-465c-b536-8fb9fc8c8c60");
 
+/// `ICoreWebView2HttpHeadersCollectionIterator` (6 vtable slots — order is the ABI).
 pub const ICoreWebView2HttpHeadersCollectionIterator = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2HttpHeadersCollectionIterator) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2HttpHeadersCollectionIterator) callconv(CC) u32,
-        GetCurrentHeader: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, name: *?PWStr, value: *?PWStr) callconv(CC) HResult,
-        get_HasCurrentHeader: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, out: *i32) callconv(CC) HResult,
-        MoveNext: *const fn (*ICoreWebView2HttpHeadersCollectionIterator, out: *i32) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2HttpHeadersCollectionIterator, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2HttpHeadersCollectionIterator) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2HttpHeadersCollectionIterator) callconv(CALL) u32,
+        GetCurrentHeader: *const fn (this: *ICoreWebView2HttpHeadersCollectionIterator, name: *?PWStr, value: *?PWStr) callconv(CALL) HResult,
+        get_HasCurrentHeader: *const fn (this: *ICoreWebView2HttpHeadersCollectionIterator, out: *BOOL) callconv(CALL) HResult,
+        MoveNext: *const fn (this: *ICoreWebView2HttpHeadersCollectionIterator, out: *BOOL) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2HttpHeadersCollectionIterator) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2HttpHeadersCollectionIterator = guid("0702fc30-f43b-47bb-ab52-a42cb552ad9f");
 
+/// `ICoreWebView2WebMessageReceivedEventArgs` (6 vtable slots — order is the ABI).
 pub const ICoreWebView2WebMessageReceivedEventArgs = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2WebMessageReceivedEventArgs) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2WebMessageReceivedEventArgs) callconv(CC) u32,
-        get_Source: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CC) HResult,
-        get_WebMessageAsJson: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CC) HResult,
-        TryGetWebMessageAsString: *const fn (*ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2WebMessageReceivedEventArgs, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2WebMessageReceivedEventArgs) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2WebMessageReceivedEventArgs) callconv(CALL) u32,
+        get_Source: ?*const anyopaque,
+        get_WebMessageAsJson: *const fn (this: *ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CALL) HResult,
+        TryGetWebMessageAsString: *const fn (this: *ICoreWebView2WebMessageReceivedEventArgs, out: *?PWStr) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2WebMessageReceivedEventArgs) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2WebMessageReceivedEventArgs = guid("0f99a40c-e962-4207-9e92-e3d542eff849");
 
+/// `ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler` (4 vtable slots — order is the ABI).
 pub const ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) callconv(CC) u32,
-        Invoke: *const fn (*ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, hresult: HResult, result: ?*ICoreWebView2Environment) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) callconv(CALL) u32,
+        Invoke: *const fn (this: *ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, hr: HResult, env: ?*ICoreWebView2Environment) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler = guid("4e8a3389-c9d8-4bd2-b6b5-124fee6cc14d");
 
+/// `ICoreWebView2CreateCoreWebView2ControllerCompletedHandler` (4 vtable slots — order is the ABI).
 pub const ICoreWebView2CreateCoreWebView2ControllerCompletedHandler = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) callconv(CC) u32,
-        Invoke: *const fn (*ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, hresult: HResult, result: ?*ICoreWebView2Controller) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) callconv(CALL) u32,
+        Invoke: *const fn (this: *ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, hr: HResult, controller: ?*ICoreWebView2Controller) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2CreateCoreWebView2ControllerCompletedHandler) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler = guid("6c4819f3-c9b7-4260-8127-c9f5bde7f68c");
 
+/// `ICoreWebView2WebMessageReceivedEventHandler` (4 vtable slots — order is the ABI).
 pub const ICoreWebView2WebMessageReceivedEventHandler = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebMessageReceivedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2WebMessageReceivedEventHandler) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2WebMessageReceivedEventHandler) callconv(CC) u32,
-        Invoke: *const fn (*ICoreWebView2WebMessageReceivedEventHandler, sender: *ICoreWebView2, args: *ICoreWebView2WebMessageReceivedEventArgs) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2WebMessageReceivedEventHandler, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2WebMessageReceivedEventHandler) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2WebMessageReceivedEventHandler) callconv(CALL) u32,
+        Invoke: *const fn (this: *ICoreWebView2WebMessageReceivedEventHandler, sender: ?*ICoreWebView2, args: ?*ICoreWebView2WebMessageReceivedEventArgs) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2WebMessageReceivedEventHandler) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2WebMessageReceivedEventHandler = guid("57213f19-00e6-49fa-8e07-898ea01ecbd2");
 
+/// `ICoreWebView2WebResourceRequestedEventHandler` (4 vtable slots — order is the ABI).
 pub const ICoreWebView2WebResourceRequestedEventHandler = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WebResourceRequestedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2WebResourceRequestedEventHandler) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2WebResourceRequestedEventHandler) callconv(CC) u32,
-        Invoke: *const fn (*ICoreWebView2WebResourceRequestedEventHandler, sender: *ICoreWebView2, args: *ICoreWebView2WebResourceRequestedEventArgs) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2WebResourceRequestedEventHandler, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2WebResourceRequestedEventHandler) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2WebResourceRequestedEventHandler) callconv(CALL) u32,
+        Invoke: *const fn (this: *ICoreWebView2WebResourceRequestedEventHandler, sender: ?*ICoreWebView2, args: ?*ICoreWebView2WebResourceRequestedEventArgs) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2WebResourceRequestedEventHandler) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2WebResourceRequestedEventHandler = guid("ab00b74c-15f1-4646-80e8-e76341d25d71");
 
+/// `ICoreWebView2WindowCloseRequestedEventHandler` (4 vtable slots — order is the ABI).
 pub const ICoreWebView2WindowCloseRequestedEventHandler = extern struct {
     vtable: *const VTable,
 
     pub const VTable = extern struct {
-        QueryInterface: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler, *const Guid, out: ?*?*anyopaque) callconv(CC) HResult,
-        AddRef: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler) callconv(CC) u32,
-        Release: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler) callconv(CC) u32,
-        Invoke: *const fn (*ICoreWebView2WindowCloseRequestedEventHandler, sender: *ICoreWebView2, args: ?*anyopaque) callconv(CC) HResult,
+        QueryInterface: *const fn (this: *ICoreWebView2WindowCloseRequestedEventHandler, riid: *const Guid, out: *?*anyopaque) callconv(CALL) HResult,
+        AddRef: *const fn (this: *ICoreWebView2WindowCloseRequestedEventHandler) callconv(CALL) u32,
+        Release: *const fn (this: *ICoreWebView2WindowCloseRequestedEventHandler) callconv(CALL) u32,
+        Invoke: *const fn (this: *ICoreWebView2WindowCloseRequestedEventHandler, sender: ?*ICoreWebView2, args: ?*anyopaque) callconv(CALL) HResult,
     };
-
-    pub inline fn vt(self: *const ICoreWebView2WindowCloseRequestedEventHandler) *const VTable {
-        return self.vtable;
-    }
 };
+
 pub const IID_ICoreWebView2WindowCloseRequestedEventHandler = guid("5c19e9e0-092f-486b-affa-ca8231913039");
 
 // ---------------------------------------------------------------------------
-// Layout proof: every vtable slot is one pointer wide, in header order.
+// ABI assertions — the entire point of this file.
 // ---------------------------------------------------------------------------
 comptime {
-    std.debug.assert(@sizeOf(ICoreWebView2Environment.VTable) == 8 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2Controller.VTable) == 26 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2.VTable) == 61 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2Settings.VTable) == 21 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2WebResourceRequest.VTable) == 10 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2WebResourceResponse.VTable) == 10 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2WebResourceRequestedEventArgs.VTable) == 8 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2Deferral.VTable) == 4 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2HttpRequestHeaders.VTable) == 9 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2HttpHeadersCollectionIterator.VTable) == 6 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2WebMessageReceivedEventArgs.VTable) == 6 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler.VTable) == 4 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2CreateCoreWebView2ControllerCompletedHandler.VTable) == 4 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2WebMessageReceivedEventHandler.VTable) == 4 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2WebResourceRequestedEventHandler.VTable) == 4 * @sizeOf(*anyopaque));
-    std.debug.assert(@sizeOf(ICoreWebView2WindowCloseRequestedEventHandler.VTable) == 4 * @sizeOf(*anyopaque));
+    std.debug.assert(@sizeOf(ICoreWebView2Environment.VTable) == 8 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2Controller.VTable) == 26 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2Controller2.VTable) == 28 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2.VTable) == 61 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2Settings.VTable) == 21 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2WebResourceRequest.VTable) == 10 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2WebResourceResponse.VTable) == 10 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2WebResourceRequestedEventArgs.VTable) == 8 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2Deferral.VTable) == 4 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2HttpRequestHeaders.VTable) == 9 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2HttpHeadersCollectionIterator.VTable) == 6 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2WebMessageReceivedEventArgs.VTable) == 6 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler.VTable) == 4 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2CreateCoreWebView2ControllerCompletedHandler.VTable) == 4 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2WebMessageReceivedEventHandler.VTable) == 4 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2WebResourceRequestedEventHandler.VTable) == 4 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(ICoreWebView2WindowCloseRequestedEventHandler.VTable) == 4 * @sizeOf(usize));
+    std.debug.assert(@sizeOf(Guid) == 16);
+    std.debug.assert(@sizeOf(Rect) == 16);
+    std.debug.assert(@sizeOf(Color) == 4);
 }
 
-test "GUID parsing matches the SDK's IID literals" {
+test "GUID parser matches the SDK and every IID is 128-bit" {
     const c = guid("76eceacb-0462-4d94-ac83-423a6793775e");
     try std.testing.expectEqual(@as(u32, 0x76eceacb), c.d1);
     try std.testing.expectEqual(@as(u16, 0x0462), c.d2);
     try std.testing.expectEqual(@as(u16, 0x4d94), c.d3);
     try std.testing.expectEqualSlices(u8, &.{ 0xac, 0x83, 0x42, 0x3a, 0x67, 0x93, 0x77, 0x5e }, &c.d4);
-    try std.testing.expectEqual(IID_ICoreWebView2.d1, c.d1);
+    try std.testing.expectEqual(c.d1, IID_ICoreWebView2.d1);
+    try std.testing.expectEqual(@as(u32, 0x0000_0000), IID_IUnknown.d1);
+    try std.testing.expectEqual(@as(u16, 0x0000), IID_IUnknown.d3);
+    try std.testing.expectEqual(@as(u8, 0xc0), IID_IUnknown.d4[0]);
 }

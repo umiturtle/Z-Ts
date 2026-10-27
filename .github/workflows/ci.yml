@@ -231,6 +231,34 @@ jobs:
         with:
           version: 0.17.0
 
+      # `windows-latest` ships Edge but NOT the Evergreen WebView2 Runtime (see
+      # Windows2025-Readme.md → Browsers). Without it the native backend degrades to a skip, so the
+      # M3-02 gates below would "pass" without ever exercising a real WebView2 controller.
+      - name: Install Evergreen WebView2 Runtime (M3-02 prerequisite)
+        shell: pwsh
+        run: |
+          $paths = @(
+            "$env:ProgramFiles(x86)\Microsoft\EdgeWebView\Application",
+            "$env:ProgramFiles\Microsoft\EdgeWebView\Application"
+          ) | Where-Object { Test-Path $_ }
+          if ($paths.Count -gt 0) {
+            Write-Host "WebView2 runtime already present:"
+            Get-ChildItem $paths | ForEach-Object { Write-Host "  $($_.FullName)" }
+            exit 0
+          }
+          $setup = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebView2Setup.exe'
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $setup
+          Start-Process -FilePath $setup -ArgumentList '/silent', '/install' -Wait
+          $installed = @(
+            "$env:ProgramFiles(x86)\Microsoft\EdgeWebView\Application",
+            "$env:ProgramFiles\Microsoft\EdgeWebView\Application"
+          ) | Where-Object { Test-Path $_ }
+          if ($installed.Count -eq 0) {
+            Write-Error 'WebView2 Evergreen runtime installation failed'
+            exit 1
+          }
+          Get-ChildItem $installed | ForEach-Object { Write-Host "installed: $($_.FullName)" }
+
       - name: Build & test on Windows
         shell: bash
         run: |
