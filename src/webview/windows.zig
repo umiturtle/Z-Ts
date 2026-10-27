@@ -123,7 +123,27 @@ const Deferred = struct {
 // COM event handler objects
 // ---------------------------------------------------------------------------
 
-const HandlerKind = enum(u32) { environment_ready, controller_ready, web_message, web_resource, window_close };
+const HandlerKind = enum(u32) { environment_ready, controller_ready, web_message, web_resource, window_close, noop };
+
+var trace_state: ?bool = null;
+
+/// `ZTS_WEBVIEW_TRACE=1` turns on the COM-stage trace below. It is the only practical way to debug
+/// a silent crash inside WebView2 on a CI runner (no debugger attach, no local Windows machine).
+fn traceOn() bool {
+    if (comptime builtin.os.tag != .windows) return false;
+    if (trace_state) |v| return v;
+    const name = std.unicode.utf8ToUtf16LeStringLiteral("ZTS_WEBVIEW_TRACE");
+    var buf: [4]u16 = undefined;
+    const on = win32.GetEnvironmentVariableW(name, &buf, buf.len) > 0;
+    trace_state = on;
+    return on;
+}
+
+fn trace(comptime fmt: []const u8, args: anytype) void {
+    if (comptime builtin.os.tag != .windows) return;
+    if (!traceOn()) return;
+    std.debug.print("zts.windows: " ++ fmt ++ "\n", args);
+}
 
 /// Every WebView2 event handler is `{ vtable, … }` with exactly 4 vtable slots
 /// (`QueryInterface`, `AddRef`, `Release`, `Invoke`). One Zig struct therefore backs all of them;
@@ -147,6 +167,7 @@ const Handler = extern struct {
             .web_message => &com.IID_ICoreWebView2WebMessageReceivedEventHandler,
             .web_resource => &com.IID_ICoreWebView2WebResourceRequestedEventHandler,
             .window_close => &com.IID_ICoreWebView2WindowCloseRequestedEventHandler,
+            .noop => &com.IID_IUnknown,
         };
         if (guidEql(riid, &com.IID_IUnknown) or guidEql(riid, wanted)) {
             out.* = self;
@@ -243,6 +264,46 @@ fn closeInvoke(
     const self: *Handler = @ptrCast(@alignCast(this));
     return self.backend.onWindowCloseRequested(self.ident);
 }
+
+fn noopInvoke(this: *Handler, a: ?*anyopaque, b: ?*anyopaque) callconv(CALL) com.HResult {
+    _ = this;
+    _ = a;
+    _ = b;
+    return com.S_OK;
+}
+
+/// Generic 4-slot vtable used for callbacks whose result Zig never inspects
+/// (`AddScriptToExecuteOnDocumentCreated`, `ExecuteScript`). Passing `null` instead makes some
+/// WebView2 builds unhappy, and a real object keeps every call site uniform.
+const noop_vtable = extern struct {
+    QueryInterface: *const fn (*Handler, *const com.Guid, *?*anyopaque) callconv(CALL) com.HResult,
+    AddRef: *const fn (*Handler) callconv(CALL) u32,
+    Release: *const fn (*Handler) callconv(CALL) u32,
+    Invoke: *const fn (*Handler, ?*anyopaque, ?*anyopaque) callconv(CALL) com.HResult,
+}{
+    .QueryInterface = struct {
+        fn f(this: *Handler, riid: *const com.Guid, out: *?*anyopaque) callconv(CALL) com.HResult {
+            if (guidEql(riid, &com.IID_IUnknown)) {
+                out.* = this;
+                _ = this.addRef();
+                return com.S_OK;
+            }
+            out.* = null;
+            return com.E_NOINTERFACE;
+        }
+    }.f,
+    .AddRef = struct {
+        fn f(this: *Handler) callconv(CALL) u32 {
+            return this.addRef();
+        }
+    }.f,
+    .Release = struct {
+        fn f(this: *Handler) callconv(CALL) u32 {
+            return this.release();
+        }
+    }.f,
+    .Invoke = noopInvoke,
+};
 
 const env_vtable = EnvIface.VTable{
     .QueryInterface = handlerBase(EnvIface).query,
@@ -489,6 +550,7 @@ pub const WindowsWebView2Backend = struct {
                 .web_message => &message_vtable,
                 .web_resource => &resource_vtable,
                 .window_close => &close_vtable,
+                .noop => &noop_vtable,
             },
             .backend = self,
             .kind = kind,
@@ -593,6 +655,7 @@ pub const WindowsWebView2Backend = struct {
         const w = self.windowByIdent(ident) orelse return com.S_OK;
         const c = controller orelse return com.S_OK;
         if (com.failed(hr) or w.closing) return com.S_OK;
+        trace("controller created hr={d}", .{hr});
 
         _ = c.vtable.AddRef(c);
         w.controller = c;
@@ -601,14 +664,20 @@ pub const WindowsWebView2Backend = struct {
         if (com.failed(c.vtable.get_CoreWebView2(c, &webview))) return com.S_OK;
         const wv = webview orelse return com.S_OK;
         w.webview = wv;
+        trace("get_CoreWebView2 ok", .{});
 
         self.applyBackground(w);
+        trace("background applied", .{});
         _ = c.vtable.put_IsVisible(c, if (w.visible) win32.TRUE else win32.FALSE);
+        trace("visible applied", .{});
         self.configureWebView(w);
+        trace("webview configured", .{});
         self.resizeWebView(w);
+        trace("bounds applied", .{});
 
         w.ready = true;
         self.applyQueued(w);
+        trace("queued navigation applied", .{});
         return com.S_OK;
     }
 
@@ -637,33 +706,42 @@ pub const WindowsWebView2Backend = struct {
                 _ = s.vtable.put_IsWebMessageEnabled(s, win32.TRUE);
             }
         }
+        trace("settings applied", .{});
 
         // One JS surface for every backend: the shared bootstrap calls `__ztsPostMessage`.
         self.addDocumentScript(w, "window.__ztsPostMessage = (m) => window.chrome.webview.postMessage(typeof m === 'string' ? m : JSON.stringify(m));");
 
         const message_handler = self.newHandler(.web_message, w.id.toU64()) catch return;
-        _ = wv.vtable.add_WebMessageReceived(wv, @ptrCast(message_handler), &w.token_message);
+        const message_hr = wv.vtable.add_WebMessageReceived(wv, @ptrCast(message_handler), &w.token_message);
+        trace("add_WebMessageReceived hr={d} token={d}", .{ message_hr, w.token_message });
 
         const resource_handler = self.newHandler(.web_resource, w.id.toU64()) catch return;
-        _ = wv.vtable.add_WebResourceRequested(wv, @ptrCast(resource_handler), &w.token_resource);
+        const resource_hr = wv.vtable.add_WebResourceRequested(wv, @ptrCast(resource_handler), &w.token_resource);
+        trace("add_WebResourceRequested hr={d} token={d}", .{ resource_hr, w.token_resource });
 
         for ([_]util.Protocol{ .tauri, .ipc, .asset }) |protocol| {
             var pattern_buf: [64]u8 = undefined;
             const pattern = util.filterPattern(&pattern_buf, protocol) catch continue;
             const z = win32.toWide(self.allocator, pattern) catch continue;
             defer self.allocator.free(z);
-            _ = wv.vtable.AddWebResourceRequestedFilter(wv, z.ptr, resource_context_all);
+            const filter_hr = wv.vtable.AddWebResourceRequestedFilter(wv, z.ptr, resource_context_all);
+            trace("AddWebResourceRequestedFilter {s} hr={d}", .{ pattern, filter_hr });
         }
 
         const close_handler = self.newHandler(.window_close, w.id.toU64()) catch return;
-        _ = wv.vtable.add_WindowCloseRequested(wv, @ptrCast(close_handler), &w.token_close);
+        const close_hr = wv.vtable.add_WindowCloseRequested(wv, @ptrCast(close_handler), &w.token_close);
+        trace("add_WindowCloseRequested hr={d}", .{close_hr});
     }
 
     fn addDocumentScript(self: *WindowsWebView2Backend, w: *WinWindow, script: []const u8) void {
         const wv = w.webview orelse return;
         const z = win32.toWide(self.allocator, script) catch return;
         defer self.allocator.free(z);
-        _ = wv.vtable.AddScriptToExecuteOnDocumentCreated(wv, z.ptr, null);
+        // A real (no-op) completion object rather than `null`: some WebView2 builds dereference the
+        // handler unconditionally on the document-created path.
+        const handler = self.newHandler(.noop, w.id.toU64()) catch return;
+        const hr = wv.vtable.AddScriptToExecuteOnDocumentCreated(wv, z.ptr, @ptrCast(handler));
+        trace("AddScriptToExecuteOnDocumentCreated hr={d} len={d}", .{ hr, script.len });
     }
 
     fn applyQueued(self: *WindowsWebView2Backend, w: *WinWindow) void {
@@ -731,6 +809,7 @@ pub const WindowsWebView2Backend = struct {
         const uri = win32.fromWide(scratch, uri_w.?, true) catch return com.S_OK;
 
         const protocol = classifyVirtualOrigin(uri) orelse return com.S_OK;
+        trace("request {s}", .{uri});
 
         var method_w: ?com.PWStr = null;
         if (com.failed(req.vtable.get_Method(req, &method_w)) or method_w == null) return com.S_OK;
@@ -755,6 +834,7 @@ pub const WindowsWebView2Backend = struct {
         var deferral: ?*com.ICoreWebView2Deferral = null;
         if (com.failed(args.vtable.GetDeferral(args, &deferral))) return com.S_OK;
         const def = deferral orelse return com.S_OK;
+        trace("deferral acquired", .{});
 
         const token = self.next_token;
         self.next_token += 1;
@@ -785,9 +865,11 @@ pub const WindowsWebView2Backend = struct {
             .body = body,
         });
 
+        trace("handler dispatched", .{});
         // A handler that answered synchronously (`completeRequest` inside `call`) never yields back
         // to the message loop, so flush right here instead of waiting for the next `step()`.
         self.drainCompletions();
+        trace("completion drained", .{});
         return com.S_OK;
     }
 
@@ -945,6 +1027,7 @@ pub const WindowsWebView2Backend = struct {
             _ = ist.vtable.Release(ist);
         };
 
+        trace("CreateWebResourceResponse status={d} body={d}", .{ status, body.len });
         var response: ?*com.ICoreWebView2WebResourceResponse = null;
         if (com.failed(env.vtable.CreateWebResourceResponse(
             env,
@@ -955,8 +1038,9 @@ pub const WindowsWebView2Backend = struct {
             &response,
         ))) return;
         const r = response orelse return;
-        _ = args.vtable.put_Response(args, r);
+        const put_hr = args.vtable.put_Response(args, r);
         _ = r.vtable.Release(r);
+        trace("put_Response hr={d}", .{put_hr});
     }
 
     /// Called on the main thread for every completed request (possibly submitted by a worker).

@@ -203,7 +203,10 @@ pub fn main(init: std.process.Init) !void {
     try check(engine.nativeHandle(win) != null, "real HWND created");
 
     var budget: usize = 120;
+    var iterations: usize = 0;
     while (budget > 0 and !ctx.done) : (budget -= 1) {
+        iterations += 1;
+        if (iterations % 10 == 0) std.debug.print("e2e: step {d}\n", .{iterations});
         if (!engine.step(.blocking)) break;
     }
     stage("loop finished");

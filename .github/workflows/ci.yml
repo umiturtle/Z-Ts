@@ -285,7 +285,9 @@ jobs:
           set -o pipefail
           {
             zig version
-            zig build test --summary all
+            # `ZTS_WEBVIEW_TRACE=1` prints every COM stage (`zts.windows: …`) so a silent crash
+            # inside WebView2 on a headless runner still leaves a readable trail in the log.
+            ZTS_WEBVIEW_TRACE=1 zig build test --summary all
           } 2>&1 | tee -a ci-output.log
 
       - name: Verify the native Win32 + Direct WebView2 E2E actually ran (M3-02 gate)
