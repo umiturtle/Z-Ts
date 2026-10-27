@@ -1,6 +1,6 @@
 # Task M5-04: CI テスト項目の拡張 & 3-OS スクリーンショット回帰ギャラリー
 
-- **Status**: `in_progress`（実装完了・修正後の 3 OS CI 最終確認待ち）
+- **Status**: `done`（3 OS CI グリーン: Run `#40526416028`）
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/webview/{types,mod,mock,linux,macos,macos_shim.m,windows,webview2_com,c_api,png}.zig`, `include/zts_webview.h`, `examples/gallery/`, `scripts/verify-screenshots.mjs`, `build.zig`, `.github/workflows/ci.yml`, `docs/tasks/M5-04-ci-screenshot-matrix.md`, `docs/decisions/0009-*.md`, `docs/architecture/zts-webview-backends.md`, `docs/environment/github-actions.md`, `docs/INDEX.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`
 - **Upstream Reference**: `vendor/wry/src/webview2/mod.rs`（`CapturePreview` 相当の扱いがないことの確認）, `vendor/tao/`, WebKit2GTK `WebKitWebView.h`（`webkit_web_view_get_snapshot`）, `WKWebView.takeSnapshotWithConfiguration:completionHandler:`, `ICoreWebView2::CapturePreview`
@@ -41,8 +41,12 @@
   - 既存バックエンド調査: `linux.zig`（`GtkWidget*` 直持ち）、`macos_shim.m`（C コールバック + `WKWebView`）、`windows.zig`（`Handler` 共用 vtable + `CapturePreview` スロットは既に予約済み）、`webview2_com.zig`（`ICoreWebView2CapturePreviewCompletedHandler` 未定義）
   - 環境確認: `cairo 1.16.0` / `webkit2gtk-4.1 2.50.6` が利用可能、Zig 0.17 に `std.hash.Crc32` あり
 - **作業中・直前の状態**:
-  - **完了**。3 OS の CI Run `#40514152272` で macOS がグリーン、Windows の 2 件の失敗
-    （白紙 PNG / `gallery://` 未対応）を修正して再実行待ち。最終確認は次回 Run の結果で行う。
+  - **完了**。Run `#40526416028` で 3 OS すべてグリーン:
+    - Linux `OK gallery host=gtk3 patterns=8 captured=8` / `OK screenshots host=gtk3 … loose=0`
+      / `OK browser-shots captured=2/2` / `OK screenshots host=gtk3 … loose=2`
+    - macOS `OK gallery host=cocoa patterns=8 captured=8` / `OK screenshots host=cocoa … loose=0`
+    - Windows `OK gallery host=win32 patterns=8 captured=8` / `OK screenshots host=win32 … loose=0`
+    - `error(SafeAllocator)` のリーク出力 0 件（ready report はウィンドウ破棄時に free する）
 - **完了したこと（実装）**:
   - `src/webview/png.zig`（IHDR 解析 + 最小エンコーダ + CRC32）、`types.zig` に `Capture`
   - `mock.zig`: capture → take の状態機械（二重 take / 未知ウィンドウ / close 後）
@@ -64,6 +68,11 @@
      カードに隠れた。→ 要求サイズ縮小 + ページ申告の実ビューポートで撮影 + カードを下端寄せ。
   3. Windows: `gallery://` は WebView2 が解釈できず真っ白（`messages=0`）。
      → スキームを `tauri` にし、ページは相対 URL `fetch('/api/state')` を使う。
+  4. Linux: Live Preview の SSE が `--virtual-time-budget` の仮想時間を止め、Chrome が終了せず
+     ジョブが 26 分以上ハング（Run `#40519060481`）。→ Live は budget 無しで `load` 直後に撮影、
+     撮影は `timeout 90` でラップ、3 ジョブに `timeout-minutes: 45` を設定。
+  5. ギャラリーが `WindowState.report` を解放せず 8 件リークしていた（`DebugAllocator` は
+     リークを報告するが exit code は 0 のまま）。→ ウィンドウ破棄時に free するよう修正。
 
 ---
 

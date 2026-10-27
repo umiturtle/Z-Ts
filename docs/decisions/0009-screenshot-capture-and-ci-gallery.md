@@ -154,6 +154,21 @@ runner の画面は 1024×674 しかないため、1200×700 を要求しても 
 ギャラリーだけの特例ではない。`pathOf()` は `tauri://localhost/x` と
 `http://tauri.localhost/x` の両方を受け付ける（単体テストで固定）。
 
+### 4.4 ギャラリー自身が ready report をリークしていた
+
+`WindowState.report`（ページ申告の `{ready,w,h,dpr}`）を `dupe` したままウィンドウを閉じており、
+`DebugAllocator` が 8 件（1 パターン 1 件）のリークを毎回出力していた。**リークを報告しても
+プロセスは exit 0** なので、マーカーゲートでは検出できない。ウィンドウ破棄時に
+`free` するよう修正し、Run `#40526416028` のログで `error(SafeAllocator)` が 0 件であることを確認した。
+
+### 4.5 browser 撮影は SSE で永久に終わらない
+
+Linux の追加ステップで Live Preview を `--virtual-time-budget=6000` で撮っていたが、
+EventSource（SSE）の接続が開いている間は仮想時間が進まず、Chrome が終了しないまま
+ジョブが 26 分ハングした（Run `#40519060481`）。→ Live は budget を付けず `load` 直後に撮影、
+撮影全体を `timeout 90` でラップし、`SKIP browser-shot <name>` を明示、3 ジョブに
+`timeout-minutes: 45` を設定した。
+
 ## 5. 却下した代替案
 
 | 案 | 却下理由 |
