@@ -185,5 +185,8 @@ test "embedding: a real GtkBox host mounts the WebView as its expanding child an
         try testing.expect(gtkb.gtk_widget_get_parent(box) == host_window);
 
         try backend.closeWindow(toplevel);
+
+        // CI gates on this marker, so a silently skipped GTK mount can never look like a pass.
+        std.debug.print("OK embed-gtk structural=1 toplevel-refused=1 frames={d}\n", .{frames});
     }
 }

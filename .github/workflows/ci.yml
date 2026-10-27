@@ -84,6 +84,12 @@ jobs:
             exit 1
           fi
           grep -o "OK c-embed .*" ci-output.log | tail -n 1
+          # The GTK unit-level contract test (real GtkBox, Xvfb) must have really run too.
+          if ! grep -q "OK embed-gtk structural=1" ci-output.log; then
+            echo "::error::GTK embed contract test marker missing — it was skipped (no display?) or failed."
+            exit 1
+          fi
+          grep -o "OK embed-gtk .*" ci-output.log | tail -n 1
 
       - name: Cross-compile the Windows Win32 + Direct WebView2 backend from Linux (M3-02 gate)
         run: |

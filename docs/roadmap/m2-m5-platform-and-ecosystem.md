@@ -64,6 +64,12 @@
 - **内容**:
   - 既存の `GtkWidget*` / `NSView*` / `HWND` を親として渡し、外部イベントループから毎フレーム `zts_webview_poll()` するだけで動く組み込みモードの検証。
   - 純粋な C コード（`examples/c_embed/main.c`）から `#include "zts_webview.h"` + `libzts_webview` をリンクして動作するサンプルテスト。
+- **実装**: [`../decisions/0008-overlay-embedding-and-c-abi.md`](../decisions/0008-overlay-embedding-and-c-abi.md) /
+  [`../architecture/zts-webview-backends.md`](../architecture/zts-webview-backends.md) /
+  [`../tasks/M3-03-overlay-embed-c-abi.md`](../tasks/M3-03-overlay-embed-c-abi.md)
+  （`zts_webview_poll` + `zts_webview_window_fit_parent` を C ABI に追加。`WindowConfig.size` は埋め込み時に
+  無視され、3 バックエンドとも **親のクライアント領域** を埋める。Run `#40503143705` で 3/3 GREEN、
+  `OK c-embed host=gtk3|cocoa|win32 checks=9 structural=1 child=520x380 pong=1`。）
 
 ---
 
