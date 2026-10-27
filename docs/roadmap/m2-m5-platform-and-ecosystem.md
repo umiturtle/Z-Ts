@@ -108,3 +108,15 @@
      - ④ ウィンドウ初回描画までの起動時間（Cold Startup Time）
      - ⑤ アイドル時および負荷時の RSS メモリ使用量
      - ⑥ IPC レイテンシ（小 JSON 10,000 往復）& バイナリスループット（64MB Raw 転送）
+
+### `M5-04`（追加タスク）：CI テスト項目の拡張 & 3-OS スクリーンショット回帰ギャラリー
+- **専有スコープ**: `src/webview/{types,mod,mock,linux,macos,macos_shim.m,windows,webview2_com,c_api,png}.zig`, `include/zts_webview.h`, `examples/gallery/`, `scripts/verify-screenshots.mjs`, `.github/workflows/ci.yml`
+- **タスクファイル**: [`../tasks/M5-04-ci-screenshot-matrix.md`](../tasks/M5-04-ci-screenshot-matrix.md) / **設計判断**: [`../decisions/0009-screenshot-capture-and-ci-gallery.md`](../decisions/0009-screenshot-capture-and-ci-gallery.md)
+- **内容**:
+  1. `zts_webview` に poll 駆動のスクリーンショット API（`captureWindow` / `takeCapture`、PNG 固定）を追加。GTK は `webkit_web_view_get_snapshot`、Cocoa は `takeSnapshotWithConfiguration:`、WebView2 は `CapturePreview`、Mock は決定的な合成 PNG。
+  2. C ABI に `zts_webview_window_capture` / `zts_webview_capture_take` / `zts_webview_capture_free` と `zts_capture_t` を追加（所有権は呼び出し側へ移動）。
+  3. `examples/gallery` が 8 パターン（light / dark / CJK / scroll / JS 往復 / HiDPI / wide / compact）を撮り、`manifest.json`（実ビューポート・バイト数・メッセージ数・SHA-256）を書く。
+  4. `scripts/verify-screenshots.mjs` が依存ゼロで PNG を展開し、寸法・非空白（ユニーク色数 / 輝度レンジ）・テーマ別平均輝度・中心画素・manifest 整合を検証。`index.html` のコンタクトシートも生成。
+  5. CI 3 OS に「gallery 実行 → マーカーゲート → artifact 保存（`screenshots-<os>`）」を追加。Linux はさらに Live Preview（`counter-live`）と SSG `dist/` を headless Chrome で撮影。
+- **完了条件（DoD）**: 3 OS の CI で `OK gallery host=<gtk3|cocoa|win32> patterns=8 captured=8` と `OK screenshots …` が出ること。`--require-native` により mock フォールバックは失敗扱い。
+

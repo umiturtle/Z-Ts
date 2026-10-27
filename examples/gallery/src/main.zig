@@ -22,7 +22,11 @@ const Io = std.Io;
 const webview = @import("zts_webview");
 const foundation = @import("zts_foundation");
 
-const scheme_name = "gallery";
+/// The custom scheme the gallery serves itself from. WebView2 has no custom-scheme API, so
+/// `windows.zig` maps `tauri://localhost/x` onto `http://tauri.localhost/x`; registering the
+/// gallery under `tauri` is what makes the *same* URL work on macOS, GTK and Windows. Every
+/// other scheme name navigates nowhere on Windows (a blank surface, proven by CI run #40514152272).
+const scheme_name = "tauri";
 
 /// One screenshot scenario. `theme` is what the CI verifier asserts about the decoded pixels:
 /// `light` → mean luminance > 170, `dark` → < 90, `mixed` → no constraint.
@@ -131,11 +135,13 @@ const Gallery = struct {
 var gallery_ptr: ?*Gallery = null;
 
 // ---------------------------------------------------------------------------
-// Custom scheme handler: `gallery://localhost/<pattern>` and `.../api/state`
+// Custom scheme handler: `tauri://localhost/<pattern>` and `.../api/state` (served by WebView2
+// as `http://tauri.localhost/...`).
 // ---------------------------------------------------------------------------
 
 fn pathOf(uri: []const u8) []const u8 {
-    // `gallery://localhost/name?query` — everything after the authority, minus the query/fragment.
+    // `tauri://localhost/name?query` (or `http://tauri.localhost/name?query` on Windows) —
+    // everything after the authority, minus the query/fragment.
     const marker = "://";
     const after_scheme = if (std.mem.indexOf(u8, uri, marker)) |i| uri[i + marker.len ..] else uri;
     const slash = std.mem.indexOfScalar(u8, after_scheme, '/') orelse return "/";
@@ -506,9 +512,12 @@ test "gallery: scheme routing maps URLs to patterns and serves the JSON endpoint
     try testing.expectEqual(@as(?usize, 0), patternForPath("/index.html"));
     try testing.expectEqual(@as(?usize, 1), patternForPath("/dashboard-dark"));
     try testing.expectEqual(@as(?usize, null), patternForPath("/nope"));
-    try testing.expectEqualStrings("/js-roundtrip", pathOf("gallery://localhost/js-roundtrip"));
-    try testing.expectEqualStrings("/api/state", pathOf("gallery://localhost/api/state?x=1"));
-    try testing.expectEqualStrings("/", pathOf("gallery://localhost"));
+    try testing.expectEqualStrings("/js-roundtrip", pathOf("tauri://localhost/js-roundtrip"));
+    try testing.expectEqualStrings("/api/state", pathOf("tauri://localhost/api/state?x=1"));
+    try testing.expectEqualStrings("/", pathOf("tauri://localhost"));
+    // WebView2 rewrites the custom scheme to a virtual `http://` origin; the router must agree.
+    try testing.expectEqualStrings("/hero-light", pathOf("http://tauri.localhost/hero-light"));
+    try testing.expectEqualStrings("/api/state", pathOf("http://tauri.localhost/api/state"));
 }
 
 test "gallery: SHA-256 helper produces lowercase hex of the right length" {

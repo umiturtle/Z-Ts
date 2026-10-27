@@ -26,14 +26,14 @@
   <div id="swatch"></div>
   <div class="card">
     <h1>カスタムスキーム往復</h1>
-    <p><code>fetch('gallery://localhost/api/state')</code> の応答で背景色とこのテキストが変わります。
+    <p><code>fetch('/api/state')</code>（実体は <code>tauri://localhost/api/state</code>）の応答で背景色とこのテキストが変わります。
        ネイティブ側のハンドラ → JS の順に値が届けば、画面全体が <code>#123456</code> になります。</p>
     <div id="state">contacting native handler…</div>
   </div>
 <script>
   (function () {
     var state = document.getElementById('state');
-    fetch('gallery://localhost/api/state', { cache: 'no-store' })
+    fetch('/api/state', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
         document.getElementById('swatch').style.background = j.accent;

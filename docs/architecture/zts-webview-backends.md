@@ -44,6 +44,12 @@ DOM:
 
 - `addInitScript` / `evalJs` / `navigate` / `loadHtml` / `openDevtools`
 
+キャプチャ（`M5-04`）:
+
+- `captureWindow(win)` — 非同期撮影を**開始**するだけ（この時点で画像は無い）
+- `takeCapture(win) ?Capture` — 未完了なら `null`（= まだ描画中）。完了時は
+  `Capture{ bytes, width, height }` を返し、**所有権は呼び出し側へ移動**する（`deinit()` は呼び出し側）
+
 ---
 
 ## 2. Overlay 埋め込み契約（`M3-03`）
@@ -111,9 +117,38 @@ WebView2 は `tauri://` を解釈できないため、Windows だけ `http://tau
 3 OS すべてで同じ HTML が動く。**相対 URL（`fetch('/ping')`）は全バックエンドで同一オリジン**
 になるので、CORS を考えずに済む（クロスオリジンになるのは `ipc://` を明示したときだけ）。
 
+> **アプリが独自スキームを名乗ってはいけない**。WebView2 が写像するのは `tauri` / `ipc` /
+> `asset` の 3 つだけで、それ以外（例: `myapp://`）は **Windows でナビゲーション自体が失敗** し、
+> 真っ白なウィンドウになる（`M5-04` の CI で実測）。`examples/gallery` もこの理由で
+> `tauri://localhost/<pattern>` を使い、ページ側は相対 URL で `fetch('/api/state')` する。
+
 ---
 
-## 4. テスト戦略
+## 4. スクリーンショット取得（`M5-04`）
+
+`captureWindow` → `step(.poll)` の繰り返し → `takeCapture` の 3 段。**どのバックエンドも
+「Web コンテンツの CSS 画素」を PNG で返す**（ウィンドウ装飾は含まない）ので、OS をまたいだ
+寸法の意味が揃う。設計判断の理由は [`../decisions/0009-screenshot-capture-and-ci-gallery.md`](../decisions/0009-screenshot-capture-and-ci-gallery.md)。
+
+| バックエンド | 実装 | 完了通知 | ハマりどころ |
+|---|---|---|---|
+| Linux GTK | `webkit_web_view_get_snapshot` → `cairo_surface_write_to_png` | `GAsyncReadyCallback` | 返る `cairo_surface_t*` は呼び出し側が destroy する。`usleep` は不可（`g_usleep`） |
+| macOS | `takeSnapshotWithConfiguration:completionHandler:` → `NSBitmapImageRep` | Objective-C ブロック | 要求サイズのウィンドウは画面にクランプされる（下記） |
+| Windows | `ICoreWebView2::CapturePreview(PNG, IStream*, handler)` + `SHCreateMemStream` | `Invoke(HRESULT)` | `ContentLoading` 前・`IsVisible(FALSE)` では **S_OK のままハンドラが来ない** |
+| Mock | 決定的な合成 PNG（`png.zig` のエンコーダ） | 即時 | JS を実行しないので「ページ申告の準備完了」は永久に来ない |
+
+**撮影は『要求サイズ』ではなく『ページが申告した実ビューポート』で行う。** macOS の runner は
+1024×674 の画面しかなく、1200×700 を要求しても 1024×645 にクランプされる。実寸は
+`innerWidth` / `innerHeight` / `devicePixelRatio` を `load` 時に `__ztsPostMessage` で
+申告させ、manifest にもその値を書く。
+
+**準備完了の待ち方**: `DOCUMENT_START` の init script が `load` で
+`{ready,w,h,dpr}` を送る。ギャラリーは最大 20 秒・10ms 刻みの `step(.poll)` で待ち、
+届かなくても撮る（が、届かないこと自体を CI のマーカーで検出できるようにする）。
+
+---
+
+## 5. テスト戦略
 
 | 層 | どこで走るか |
 |---|---|
@@ -122,6 +157,9 @@ WebView2 は `tauri://` を解釈できないため、Windows だけ `http://tau
 | macOS E2E（`OK macos-wk checks=10 …`） | macOS CI |
 | Windows E2E（`OK windows-wv2 checks=19 …`） | Windows CI（Evergreen 導入後） |
 | C ABI 純 C ホスト（`OK c-embed host=…`） | 3 OS CI |
+| スクショ・ギャラリー 8 パターン（`OK gallery host=… patterns=8 captured=8`） | 3 OS CI（`examples/gallery`） |
+| PNG 機械検証（`OK screenshots host=… patterns=8 loose=N`） | 3 OS CI（`scripts/verify-screenshots.mjs`） |
+| Live Preview / SSG `dist/` のブラウザ描画（`OK screenshots … loose=2`） | Linux CI（Xvfb + headless Chrome） |
 | クロスコンパイル（単一 `.exe`） | Linux CI（`-Dtarget=x86_64-windows-gnu`） |
 
 **マーカーが無い = 失敗**。ヘッドレス環境でのスキップは終了コード 0 のまま `SKIP …` を出し、
