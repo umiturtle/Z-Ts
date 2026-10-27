@@ -61,9 +61,18 @@ bash scripts/ci-logs.sh <run_id>
   無言の成功にならない**。
 - Linux のみ追加で `Browser captures of the Live Preview & SSG builds` ステップを持ち、
   `counter-live --port 8791`（BridgeServer + SSE）と `python3 -m http.server 8792`
-  （`zig-out/dist`）を起動して headless Chrome（`--virtual-time-budget=6000`）で
-  `live-counter.png` / `ssg-counter.png` を撮る。Chrome が無い runner では
-  `SKIP browser-shots …`（exit 0）を出し、他のマーカーは依然必須。
+  （`zig-out/dist`）を起動して headless Chrome で `live-counter.png` / `ssg-counter.png` を撮る。
+  - **Live Preview には `--virtual-time-budget` を付けない**。SSE の接続が開きっぱなしだと
+    仮想時間が永久に進まず Chrome が終了しない（Run `#40519060481` で実際にジョブが固まった）。
+    ページは `load` 時点でスタイルシート適用済みなので、そのまま撮って非空白を検証すればよい。
+  - SSG `dist/` は完全な静的配信なので `--virtual-time-budget=6000` で wasm 描画の完了を待つ。
+  - 撮影は `timeout 90` でラップし、PNG が無ければ `SKIP browser-shot <name> <理由>` を出す。
+    2 枚中 1 枚も撮れなかった場合だけ `::error::` + exit 1（**無言スキップ禁止**）。
+    成功時は `OK browser-shots captured=n/2`。
+  - Chrome が無い runner では `SKIP browser-shots no chrome/chromium on this runner`（exit 0）。
+    ギャラリー本体のマーカーは別途必須なので、この SKIP で検証が消えることはない。
+- 3 ジョブとも `timeout-minutes: 45` を持つ。ツールがハングしても runner を既定の 360 分
+  占有しないため（実測: Linux のブラウザ撮影が無限待機した）。
 
 ### 3.2 artifact の見方
 
@@ -83,6 +92,7 @@ bash scripts/ci-logs.sh <run_id>
 | macOS で中心画素が期待値と違う | runner の画面が 1024×674 でウィンドウがクランプされ、中央にカードが来ていた | 要求サイズを縮小し、撮影はページ申告の実ビューポート。カードは下端寄せ |
 | Windows だけ真っ白・`messages=0` | `gallery://` は WebView2 が解釈できない（写像されるのは `tauri`/`ipc`/`asset` のみ） | ギャラリーのスキームを `tauri` にし、ページは相対 URL で `fetch('/api/state')` |
 | `SKIP … no chrome/chromium` が Linux で出る | runner イメージに Chrome が無い | 許容（`SKIP` は exit 0）。ギャラリー本体のマーカーは別途必須 |
+| Linux のブラウザ撮影ステップが終わらない | Live Preview の SSE により `--virtual-time-budget` の仮想時間が進まない | Live には budget を付けず、`timeout 90` + `SKIP browser-shot` で必ず前進する |
 
 > 失敗時の切り分けは `bash scripts/ci-logs.sh <run_id>` の `gallery:` 行を見る。
 > 各パターンについて `no ready report (timed wait)` が出ていれば §3.3 の 1 行目、

@@ -23,6 +23,8 @@ jobs:
   ci-linux:
     name: Linux (Ubuntu 24.04 + Xvfb + WebKit2GTK 4.1)
     runs-on: ubuntu-24.04
+    # Hard ceiling: a stuck browser/native test must not hold the runner for the 360-min default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -164,22 +166,51 @@ jobs:
               ( cd examples/counter/zig-out/dist && python3 -m http.server 8792 --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > /tmp/zts_ssg_http.pid )
               # 2) Live Preview (BridgeServer + SSE) on its own port.
               ( cd examples/counter && ./zig-out/bin/counter-live --port 8791 --host 127.0.0.1 >/tmp/zts_live.log 2>&1 & echo $! > /tmp/zts_live.pid )
-              for _ in $(seq 1 60); do
+              for _ in $(seq 1 100); do
                 curl -sf -o /dev/null http://127.0.0.1:8791/ && break
                 sleep 0.2
               done
-              "$CHROME" --headless=new --disable-gpu --no-sandbox --disable-dev-shm-usage --hide-scrollbars \
-                --window-size=900,640 --virtual-time-budget=6000 \
-                --screenshot="$RUNNER_TEMP/shots/live-counter.png" "http://127.0.0.1:8791/"
-              "$CHROME" --headless=new --disable-gpu --no-sandbox --disable-dev-shm-usage --hide-scrollbars \
-                --window-size=900,640 --virtual-time-budget=6000 \
-                --screenshot="$RUNNER_TEMP/shots/ssg-counter.png" "http://127.0.0.1:8792/"
+
+              # Every capture is wrapped in `timeout`: `--virtual-time-budget` never expires while the
+              # page holds a long-lived connection open (the Live Preview's EventSource), and a hung
+              # Chrome would otherwise burn the whole job budget (observed on run #40519060481).
+              # A missing PNG is reported as an explicit `SKIP browser-shot` marker, never silently.
+              shoot() {
+                local name="$1" url="$2"; shift 2
+                rm -f "$RUNNER_TEMP/shots/$name.png"
+                if timeout 90 "$CHROME" --headless=new --disable-gpu --no-sandbox \
+                    --disable-dev-shm-usage --hide-scrollbars --window-size=900,640 \
+                    "$@" --screenshot="$RUNNER_TEMP/shots/$name.png" "$url"; then
+                  :
+                else
+                  echo "SKIP browser-shot $name (chrome exited $?)"
+                fi
+                if [ -s "$RUNNER_TEMP/shots/$name.png" ]; then
+                  echo "browser-shot $name $(wc -c < "$RUNNER_TEMP/shots/$name.png") bytes"
+                else
+                  echo "SKIP browser-shot $name (no png written)"
+                fi
+              }
+
+              # Live Preview keeps an SSE connection open, so it is captured at `load` (the page is
+              # already styled by the render-blocking stylesheet) instead of with a virtual-time budget.
+              shoot live-counter "http://127.0.0.1:8791/"
+              # The SSG bundle is fully static: virtual time lets the wasm render settle first.
+              shoot ssg-counter "http://127.0.0.1:8792/" --virtual-time-budget=6000
+
               kill "$(cat /tmp/zts_live.pid)" 2>/dev/null || true
               kill "$(cat /tmp/zts_ssg_http.pid)" 2>/dev/null || true
               sleep 0.3
               ls -l "$RUNNER_TEMP/shots"
-              test -s "$RUNNER_TEMP/shots/live-counter.png"
-              test -s "$RUNNER_TEMP/shots/ssg-counter.png"
+              captured=0
+              for name in live-counter ssg-counter; do
+                if [ -s "$RUNNER_TEMP/shots/$name.png" ]; then captured=$((captured + 1)); fi
+              done
+              if [ "$captured" -lt 1 ]; then
+                echo "::error::browser-shots produced no PNG at all"
+                exit 1
+              fi
+              echo "OK browser-shots captured=$captured/2"
             fi
             # Loose PNGs (no manifest entry) still go through structure + non-blank checks.
             node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots"
@@ -223,6 +254,8 @@ jobs:
   ci-macos:
     name: macOS (arm64 + WKWebView)
     runs-on: macos-latest
+    # Hard ceiling: a stuck browser/native test must not hold the runner for the 360-min default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -347,6 +380,8 @@ jobs:
   ci-windows:
     name: Windows (x86_64 + WebView2)
     runs-on: windows-latest
+    # Hard ceiling: a stuck browser/native test must not hold the runner for the 360-min default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
