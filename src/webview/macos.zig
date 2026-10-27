@@ -104,6 +104,8 @@ const shim = struct {
     ) u64;
     extern fn zts_macos_window_close(h: ?*anyopaque, ident: u64) c_int;
     extern fn zts_macos_window_native(h: ?*anyopaque, ident: u64) ?*anyopaque;
+    /// Overlay embedding (`M3-03`): 1 when resized, 0 when the window is not embedded.
+    extern fn zts_macos_window_fit_parent(h: ?*anyopaque, ident: u64) c_int;
     extern fn zts_macos_window_frame(h: ?*anyopaque, ident: u64, x: ?*f64, y: ?*f64, w: ?*f64, ht: ?*f64) void;
     extern fn zts_macos_window_set_title(h: ?*anyopaque, ident: u64, title: [*:0]const u8) void;
     extern fn zts_macos_window_set_size(h: ?*anyopaque, ident: u64, width: f64, height: f64) void;
@@ -133,6 +135,8 @@ const shim = struct {
 const MacWindow = struct {
     /// Opaque `unsigned long long` identity minted by the shim (1-based).
     native: u64,
+    /// Overlay embedding (`M3-03`): `true` when the `WKWebView` lives in a host-provided `NSView`.
+    embedded: bool = false,
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
 };
@@ -475,6 +479,7 @@ pub const MacOsBackend = struct {
 
         const win_id = self.windows.acquire(alloc, .{
             .native = native,
+            .embedded = cfg.parent_native_handle != null,
             .min_size = cfg.min_size,
             .max_size = cfg.max_size,
         }) catch {
@@ -514,6 +519,15 @@ pub const MacOsBackend = struct {
     pub fn nativeHandle(self: *MacOsBackend, win_id: types.WindowId) ?*anyopaque {
         const w = self.windows.getPtr(win_id) orelse return null;
         return shim.zts_macos_window_native(self.handle, w.native);
+    }
+
+    /// Overlay embedding (`M3-03`): resize the child `WKWebView` to the host view's bounds.
+    /// The shim already installs an autoresizing mask, so this is for hosts that replace their
+    /// content view wholesale or want an explicit sync each frame next to `step(.poll)`.
+    pub fn fitParent(self: *MacOsBackend, win_id: types.WindowId) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        if (!w.embedded) return error.Unsupported;
+        if (shim.zts_macos_window_fit_parent(self.handle, w.native) == 0) return error.WindowNotFound;
     }
 
     // -----------------------------------------------------------------------

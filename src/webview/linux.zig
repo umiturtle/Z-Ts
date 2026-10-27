@@ -26,6 +26,8 @@ const body_chunk_size: usize = 64 * 1024;
 
 const LinuxWindow = struct {
     toplevel: ?*c.GtkWidget, // `null` when embedded inside external `parent_native_handle`
+    /// Host container we were embedded into (`M3-03`); `null` for toplevel windows.
+    parent: ?*c.GtkWidget = null,
     webview: *c.WebKitWebView,
     ucm: *c.WebKitUserContentManager,
     min_size: ?types.LogicalSize,
@@ -513,8 +515,14 @@ pub const LinuxGtkBackend = struct {
         }
 
         var toplevel: ?*c.GtkWidget = null;
+        var host_parent: ?*c.GtkWidget = null;
         if (cfg.parent_native_handle) |parent_ptr| {
             const container: *c.GtkContainer = @ptrCast(parent_ptr);
+            host_parent = @ptrCast(parent_ptr);
+            // `gtk_container_add` on a `GtkBox` packs with `expand = TRUE`, but a plain container
+            // (`GtkWindow`, `GtkFixed`, …) needs the expand flags to follow a host resize.
+            c.gtk_widget_set_hexpand(@ptrCast(wv), 1);
+            c.gtk_widget_set_vexpand(@ptrCast(wv), 1);
             c.gtk_container_add(container, @ptrCast(wv));
         } else {
             const win_widget = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
@@ -555,6 +563,7 @@ pub const LinuxGtkBackend = struct {
 
         const win_id = self.windows.acquire(self.allocator, .{
             .toplevel = toplevel,
+            .parent = host_parent,
             .webview = wv,
             .ucm = ucm,
             .min_size = cfg.min_size,
@@ -639,7 +648,24 @@ pub const LinuxGtkBackend = struct {
 
     pub fn nativeHandle(self: *LinuxGtkBackend, win_id: types.WindowId) ?*anyopaque {
         const w = self.windows.getPtr(win_id) orelse return null;
+        // Embedded windows have no `GtkWindow` of their own: hand back the widget the host actually
+        // owns, so `gtk_widget_get_parent()` from host code proves the overlay is really mounted.
         return if (w.toplevel) |t| @ptrCast(t) else @ptrCast(w.webview);
+    }
+
+    /// Overlay embedding (`M3-03`): resize the child WebView to the host container's client area.
+    ///
+    /// A `GtkBox` already re-packs expanding children on resize, but hosts that use a fixed/overlay
+    /// container (`GtkFixed`, `GtkOverlay`, a raw `GtkContainer`) need this explicit sync — and a
+    /// host that resizes in its own loop can call it once per frame next to `step(.poll)`.
+    pub fn fitParent(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        const parent = w.parent orelse return error.Unsupported;
+        const width = c.gtk_widget_get_allocated_width(parent);
+        const height = c.gtk_widget_get_allocated_height(parent);
+        if (width <= 0 or height <= 0) return error.Unsupported;
+        c.gtk_widget_set_size_request(@ptrCast(w.webview), width, height);
+        c.gtk_widget_queue_resize(parent);
     }
 
     fn requireGtkWindow(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!*c.GtkWindow {

@@ -215,6 +215,16 @@ pub export fn zts_webview_step(handle_opt: ?*CEngineHandle, mode_raw: u32) callc
     return h.engine.step(mode);
 }
 
+/// Host-loop convenience wrapper around `zts_webview_step(engine, ZTS_STEP_POLL)` (`M3-03`).
+///
+/// Embedding hosts (SDL3 / GLFW / GTK / Win32 `WM_TIMER` …) call this once per frame from *their*
+/// own loop: it pumps one non-blocking engine iteration and returns `false` once the engine has
+/// quit or its last window is gone.
+pub export fn zts_webview_poll(handle_opt: ?*CEngineHandle) callconv(.c) bool {
+    const h = handle_opt orelse return false;
+    return h.engine.step(.poll);
+}
+
 pub export fn zts_webview_wakeup(handle_opt: ?*CEngineHandle) callconv(.c) void {
     if (handle_opt) |h| h.engine.wakeup();
 }
@@ -356,6 +366,15 @@ pub export fn zts_webview_window_native_handle(h_opt: ?*CEngineHandle, win: u64)
     const h = h_opt orelse return null;
     const id = winFromU64(win) orelse return null;
     return h.engine.nativeHandle(id);
+}
+
+/// Resizes an **embedded** window to fill its host container's client area (`M3-03`).
+/// Toplevel windows return `ZTS_WEBVIEW_ERR_UNSUPPORTED`.
+pub export fn zts_webview_window_fit_parent(h_opt: ?*CEngineHandle, win: u64) callconv(.c) i32 {
+    const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
+    const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
+    h.engine.fitParent(id) catch |err| return statusFromError(err);
+    return ZTS_WEBVIEW_OK;
 }
 
 pub export fn zts_webview_window_set_title(h_opt: ?*CEngineHandle, win: u64, title: ?[*:0]const u8) callconv(.c) i32 {

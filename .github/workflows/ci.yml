@@ -71,6 +71,20 @@ jobs:
               xvfb-run -a ./zigw build test -Dgtk=true -Doptimize=ReleaseFast --summary all
           } 2>&1 | tee ci-output.log
 
+      - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
+        run: |
+          set -eo pipefail
+          # `zig build test` builds and executes `examples/c_embed` (a pure C99 host that owns its
+          # own GtkWindow/GtkBox and drives Z-Ts through `zts_webview_poll`). The marker only appears
+          # when the WebView was really mounted inside the host container and the fetch round trip
+          # completed, so a headless skip cannot pass this gate.
+          if ! grep -q "OK c-embed" ci-output.log; then
+            echo "::error::C overlay embedding marker missing — examples/c_embed was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK c-embed .*" ci-output.log | tail -n 1
+
       - name: Cross-compile the Windows Win32 + Direct WebView2 backend from Linux (M3-02 gate)
         run: |
           set -o pipefail
@@ -168,6 +182,19 @@ jobs:
             exit 1
           fi
           grep -o "OK macos-wk .*" ci-output.log | tail -n 1
+
+      - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
+        run: |
+          set -eo pipefail
+          # `examples/c_embed` is a plain C99 host: `NSWindow` + `contentView` created through the
+          # Objective-C runtime, then Z-Ts mounts its WKWebView inside it and the host drives the
+          # loop with `zts_webview_poll`.
+          if ! grep -q "OK c-embed host=cocoa" ci-output.log; then
+            echo "::error::C overlay embedding marker missing on macOS — examples/c_embed was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK c-embed .*" ci-output.log | tail -n 1
 
       - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
         run: |
@@ -303,6 +330,20 @@ jobs:
             exit 1
           fi
           grep -o "OK windows-wv2 .*" ci-output.log | tail -n 1
+
+      - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
+        shell: bash
+        run: |
+          set -eo pipefail
+          # `examples/c_embed` creates its own Win32 host window + child "dock area" in plain C99,
+          # then Z-Ts mounts the WebView2 child HWND inside it and the host drives the loop with
+          # `zts_webview_poll`. `GetParent(child) == host area` is asserted from the host side.
+          if ! grep -q "OK c-embed host=win32" ci-output.log; then
+            echo "::error::C overlay embedding marker missing on Windows — examples/c_embed was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK c-embed .*" ci-output.log | tail -n 1
 
       - name: Build & run the single-`.exe` WebView2 deployment smoke (M3-02 gate)
         shell: bash

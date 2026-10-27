@@ -73,6 +73,8 @@ typedef void (*zts_macos_close_cb)(void *userdata, unsigned long long win);
 @property (nonatomic, strong) ZtsWindowDelegate *delegate;
 @property (nonatomic, assign) unsigned long long ident;
 @property (nonatomic, assign) BOOL closed;
+/// Host view this web view was embedded into (`M3-03`); `nil` for regular toplevel windows.
+@property (nonatomic, weak) NSView *parentView;
 @property (nonatomic, assign) BOOL has_min;
 @property (nonatomic, assign) BOOL has_max;
 @property (nonatomic, assign) double min_w;
@@ -745,7 +747,11 @@ unsigned long long zts_macos_window_new(
 
         if (parent_nsview != NULL) {
             NSView *parent = (__bridge NSView *)parent_nsview;
+            // Overlay mode (`M3-03`): fill the host view instead of the requested size. The
+            // autoresizing mask keeps it glued to the host on every host resize.
+            webview.frame = parent.bounds;
             [parent addSubview:webview];
+            rec.parentView = parent;
         } else {
             win.contentView = webview;
             if (fullscreen) {
@@ -820,7 +826,21 @@ void zts_macos_window_frame(void *h, unsigned long long ident, double *out_x, do
 void *zts_macos_window_native(void *h, unsigned long long ident) {
     ZtsWindow *rec = ZtsWindowFor(ZtsB(h), ident);
     if (rec == nil) return NULL;
+    // Embedded windows live in the HOST's `NSView` tree and own no `NSWindow` — hand back the
+    // `WKWebView` itself so host code can prove placement with `[view superview]` (`M3-03`).
+    if (rec.parentView != nil) return (__bridge void *)rec.webview;
     return (__bridge void *)rec.window;
+}
+
+/// Overlay embedding (`M3-03`): resize the child WebView to the host view's bounds.
+/// Returns 1 on success, 0 when the window is not embedded (or no longer alive).
+int zts_macos_window_fit_parent(void *h, unsigned long long ident) {
+    ZtsWindow *rec = ZtsWindowFor(ZtsB(h), ident);
+    if (rec == nil || rec.parentView == nil) return 0;
+    @autoreleasepool {
+        rec.webview.frame = rec.parentView.bounds;
+        return 1;
+    }
 }
 
 void zts_macos_window_set_title(void *h, unsigned long long ident, const char *title) {

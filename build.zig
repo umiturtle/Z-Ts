@@ -161,6 +161,7 @@ pub fn build(b: *std.Build) void {
 
     // Level 1d: `zts_webview` — Standalone minimal native WebView (`GTK3 + WebKit2GTK 4.1`),
     // `HeadlessMock`, and flat C ABI (`include/zts_webview.h`). Zero JSON / RPC / Tauri coupling!
+    const native_linux_gtk = is_linux and enable_gtk;
     const native_macos = is_macos and enable_macos;
     const native_windows = is_windows and enable_windows;
     const webview_mod = b.addModule("zts_webview", .{
@@ -200,6 +201,27 @@ pub fn build(b: *std.Build) void {
             "dwmapi", "advapi32", "gdi32", "shell32",  "comdlg32",
         }) |lib| webview_mod.linkSystemLibrary(lib, .{ .use_pkg_config = .no });
     }
+
+    // A static archive does not propagate the OS libraries its objects need, so every *consumer* of
+    // `libzts_webview` (the strict C99 ABI check and `examples/c_embed`) declares them itself.
+    const linkWebviewNativeDeps = struct {
+        fn apply(mod: *std.Build.Module, b_inner: *std.Build, linux: bool, macos: bool, windows: bool) void {
+            if (linux) {
+                for ([_][]const u8{ "gtk+-3.0", "webkit2gtk-4.1", "libsoup-3.0", "javascriptcoregtk-4.1" }) |lib|
+                    mod.linkSystemLibrary(lib, .{});
+            }
+            if (macos) {
+                mod.linkFramework("Cocoa", .{});
+                mod.linkFramework("WebKit", .{});
+                mod.linkFramework("Foundation", .{});
+            }
+            if (windows) {
+                for ([_][]const u8{ "user32", "kernel32", "ole32", "oleaut32", "shlwapi", "dwmapi", "advapi32", "gdi32", "shell32", "comdlg32" }) |lib|
+                    mod.linkSystemLibrary(lib, .{ .use_pkg_config = .no });
+            }
+            _ = b_inner;
+        }
+    }.apply;
 
     // Level 1e: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).
     const core_mod = b.addModule("zts_core", .{
@@ -407,17 +429,35 @@ pub fn build(b: *std.Build) void {
         .root_module = webview_mod,
     });
     c_abi_mod.linkLibrary(c_abi_lib);
-    if (native_macos) {
-        // A static archive does not propagate the frameworks its objects need, so the strict C99
-        // ABI consumer declares them itself (`M3-01`).
-        c_abi_mod.linkFramework("Cocoa", .{});
-        c_abi_mod.linkFramework("WebKit", .{});
-        c_abi_mod.linkFramework("Foundation", .{});
-    }
+    linkWebviewNativeDeps(c_abi_mod, b, native_linux_gtk, native_macos, native_windows);
     const c_abi_exe = b.addExecutable(.{
         .name = "verify_webview_c_abi",
         .root_module = c_abi_mod,
     });
+
+    // `M3-03`: a **pure C99** host that owns its own window + event loop and mounts `zts_webview`
+    // as an overlay child. Only built where a native backend exists (it opens a real window).
+    var c_embed_run: ?*std.Build.Step.Run = null;
+    if (native_linux_gtk or native_macos or native_windows) {
+        const c_embed_mod = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        c_embed_mod.addIncludePath(b.path("include"));
+        c_embed_mod.addCSourceFile(.{
+            .file = b.path("examples/c_embed/main.c"),
+            .flags = &.{ "-std=c99", "-Wall", "-Wextra", "-Werror" },
+        });
+        c_embed_mod.linkLibrary(c_abi_lib);
+        linkWebviewNativeDeps(c_embed_mod, b, native_linux_gtk, native_macos, native_windows);
+        const c_embed_exe = b.addExecutable(.{
+            .name = "zts_c_embed",
+            .root_module = c_embed_mod,
+        });
+        b.installArtifact(c_embed_exe);
+        c_embed_run = b.addRunArtifact(c_embed_exe);
+    }
 
     // Declared outside the Windows block so the `test` step can depend on it conditionally.
     var windows_e2e_run: ?*std.Build.Step.Run = null;
@@ -518,4 +558,5 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_wasm_e2e.step);
     // Native Windows E2E (`M3-02`): real HWND + WebView2 round trip, `OK windows-wv2 …` marker.
     if (windows_e2e_run) |run_e2e| test_step.dependOn(&run_e2e.step);
+    if (c_embed_run) |run_embed| test_step.dependOn(&run_embed.step);
 }

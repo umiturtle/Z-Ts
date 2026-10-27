@@ -258,6 +258,18 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Resizes an **embedded** window (`WindowConfig.parent_native_handle != null`) to fill its
+    /// host container's client area (`M3-03`). Toplevel windows return `error.Unsupported`; hosts
+    /// driving their own loop can call this once per frame next to `step(.poll)`.
+    pub fn fitParent(self: *Engine, win_id: WindowId) WebviewError!void {
+        return switch (self.*) {
+            .headless_mock => |m| m.fitParent(win_id),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.fitParent(win_id) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.fitParent(win_id) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.fitParent(win_id) else unreachable,
+        };
+    }
+
     pub fn setTitle(self: *Engine, win_id: WindowId, title: []const u8) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setTitle(win_id, title),
@@ -436,6 +448,7 @@ test {
     _ = mock;
     _ = c_api;
     _ = coords;
+    _ = @import("embed_test.zig");
     _ = webview2_com;
     _ = windows_util;
     // The Windows files are pure Zig (no `@cImport`, no header parsing), so they stay *analyzable*

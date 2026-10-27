@@ -62,6 +62,8 @@ pub const MockWindow = struct {
     devtools_open: bool,
     background_color: ?types.Color,
     parent_native_handle: ?*anyopaque,
+    /// Number of `fitParent()` calls that targeted this window (`M3-03` embedding contract).
+    fit_count: usize = 0,
     current_url: []u8,
     last_html: ?[]u8 = null,
     init_scripts: std.ArrayList([]u8) = .empty,
@@ -352,6 +354,15 @@ pub const HeadlessMock = struct {
 
     pub fn setSize(self: *HeadlessMock, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         (try self.requireWin(win_id)).size = size;
+    }
+
+    /// Overlay embedding (`M3-03`): a mock has no real parent to measure, so it only records the
+    /// request — the *contract* (embedded windows support it, toplevel windows do not) is what the
+    /// cross-platform unit tests assert.
+    pub fn fitParent(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {
+        const w = try self.requireWin(win_id);
+        if (w.parent_native_handle == null) return error.Unsupported;
+        w.fit_count += 1;
     }
 
     pub fn setMinSize(self: *HeadlessMock, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {

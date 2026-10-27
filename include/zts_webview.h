@@ -8,6 +8,14 @@
  * - Window & DOM creation/mutation functions run on the main UI thread (or enqueue automatically).
  * - `zts_webview_wakeup`, `zts_webview_request_quit`, and `zts_webview_complete_request` are
  *   100% thread-safe and lock-free/wait-free from ANY worker thread.
+ *
+ * Embedding (Overlay) Contract (`M3-03`):
+ * - Pass an existing container as `zts_window_desc_t.parent_native_handle` and the WebView becomes
+ *   a child of it: `GtkContainer*` (GTK3), `NSView*` (AppKit), `HWND` (Win32).
+ * - The child fills the host's client area; call `zts_webview_window_fit_parent()` after a host
+ *   resize, or let the native layout do it (expanding GtkBox / autoresizing NSView / WS_CHILD).
+ * - Drive everything from *your* loop with `zts_webview_poll()`; closing the embedded window never
+ *   destroys the host container.
  */
 
 #ifndef ZTS_WEBVIEW_H
@@ -120,6 +128,8 @@ typedef struct zts_window_desc {
 int32_t zts_webview_engine_create(uint32_t backend, zts_webview_engine_t **out_engine);
 void zts_webview_engine_destroy(zts_webview_engine_t *engine);
 bool zts_webview_step(zts_webview_engine_t *engine, uint32_t mode);
+/* Non-blocking single iteration for hosts that own the loop (`== zts_webview_step(engine, ZTS_STEP_POLL)`). */
+bool zts_webview_poll(zts_webview_engine_t *engine);
 void zts_webview_wakeup(zts_webview_engine_t *engine);
 void zts_webview_request_quit(zts_webview_engine_t *engine);
 
@@ -164,6 +174,8 @@ int32_t zts_webview_window_create(
 );
 
 int32_t zts_webview_window_close(zts_webview_engine_t *engine, zts_window_id_t win);
+/* Resizes an embedded window to fill its host container. Toplevel windows: ZTS_WEBVIEW_ERR_UNSUPPORTED. */
+int32_t zts_webview_window_fit_parent(zts_webview_engine_t *engine, zts_window_id_t win);
 void *zts_webview_window_native_handle(zts_webview_engine_t *engine, zts_window_id_t win);
 int32_t zts_webview_window_set_title(zts_webview_engine_t *engine, zts_window_id_t win, const char *title);
 int32_t zts_webview_window_set_size(zts_webview_engine_t *engine, zts_window_id_t win, double width, double height);

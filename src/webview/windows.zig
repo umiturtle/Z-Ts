@@ -1211,8 +1211,21 @@ pub const WindowsWebView2Backend = struct {
         };
         _ = win32.AdjustWindowRectEx(&rect, style, win32.FALSE, ex_style);
 
-        const x: i32 = if (cfg.position) |p| util.logicalToPhysical(p.x.v, w.dpi) else win32.CW_USEDEFAULT;
-        const y: i32 = if (cfg.position) |p| util.logicalToPhysical(p.y.v, w.dpi) else win32.CW_USEDEFAULT;
+        var x: i32 = if (cfg.position) |p| util.logicalToPhysical(p.x.v, w.dpi) else win32.CW_USEDEFAULT;
+        var y: i32 = if (cfg.position) |p| util.logicalToPhysical(p.y.v, w.dpi) else win32.CW_USEDEFAULT;
+
+        // Overlay embedding (`M3-03`): a `WS_CHILD` window is positioned inside its parent's client
+        // area, so the requested size means nothing — fill the host instead (toplevel windows keep
+        // the normal `AdjustWindowRectEx` outer size).
+        if (w.parent) |parent| {
+            var client: win32.RECT = .{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
+            if (win32.GetClientRect(parent, &client) != 0 and client.right > 0 and client.bottom > 0) {
+                rect.right = client.right;
+                rect.bottom = client.bottom;
+            }
+            x = 0;
+            y = 0;
+        }
 
         const hwnd = win32.CreateWindowExW(
             ex_style,
@@ -1372,6 +1385,32 @@ pub const WindowsWebView2Backend = struct {
     pub fn nativeHandle(self: *WindowsWebView2Backend, win_id: types.WindowId) ?*anyopaque {
         const w = self.windows.get(win_id) orelse return null;
         return w.*.hwnd;
+    }
+
+    /// Overlay embedding (`M3-03`): resize the child HWND to fill the host's client area.
+    /// `PUT/SetWindowPos` on a `WS_CHILD` window is the Win32 equivalent of
+    /// `gtk_widget_set_size_request` / `[NSView setFrame:]` in the other two backends.
+    pub fn fitParent(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        const parent = w.*.parent orelse return error.Unsupported;
+        var client: win32.RECT = .{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
+        if (win32.GetClientRect(parent, &client) == 0) return error.PlatformFailure;
+        var bounds: win32.RECT = .{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
+        if (win32.GetWindowRect(w.*.hwnd, &bounds) == 0) return error.PlatformFailure;
+        const width = @max(1, client.right - client.left);
+        const height = @max(1, client.bottom - client.top);
+        // `GetWindowRect` is in *screen* coordinates, so only the extent is comparable with the
+        // parent-relative client rect.
+        if (bounds.width() == width and bounds.height() == height) return;
+        if (win32.SetWindowPos(
+            w.*.hwnd,
+            null,
+            0,
+            0,
+            width,
+            height,
+            win32.SWP_NOZORDER | win32.SWP_NOACTIVATE,
+        ) == 0) return error.PlatformFailure;
     }
 
     // -- window properties -------------------------------------------------
