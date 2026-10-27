@@ -308,6 +308,10 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
 
         try g.windows.append(g.allocator, .{ .id = id, .pattern = idx });
         defer {
+            // The ready report is owned by the window state, so releasing the window releases it.
+            if (g.stateFor(id)) |state| {
+                if (state.report) |report| g.allocator.free(report);
+            }
             _ = g.windows.pop();
             g.engine.closeWindow(id) catch {};
         }
