@@ -40,7 +40,7 @@
 #endif
 
 #define EXIT_SKIP 0 /* see the header comment: the CI gate greps for `OK c-embed`, not for status 0 */
-#define MAX_FRAMES 6000
+#define MAX_FRAMES 12000 /* x the 1 ms frame budget below = 12 s worst case */
 
 /* ------------------------------------------------------------------------- */
 /* Host window + container (the "existing application" we embed into)         */
@@ -189,11 +189,27 @@ static void host_post_engine(host_t *h) {
 #endif
 }
 
+/* A real host runs at some frame rate; without a budget this loop spins through its whole frame
+ * allowance in a few milliseconds and returns before WebKit/WebKit2 has even started its web
+ * process (that is exactly how the first CI run of this example failed on GTK and Cocoa). */
+static void host_frame_wait(void) {
+#if defined(ZTS_HOST_GTK)
+    g_usleep(1000); /* glib, always present next to GTK; no <unistd.h> in strict C99 */
+#elif defined(ZTS_HOST_WIN32)
+    Sleep(1);
+#elif defined(ZTS_HOST_COCOA)
+    /* `+[NSThread sleepForTimeInterval:]` keeps this file free of POSIX feature-test macros. */
+    ((void (*)(id, SEL, double))objc_msgSend)((id)objc_getClass("NSThread"),
+                                             sel_registerName("sleepForTimeInterval:"), 0.001);
+#endif
+}
+
 static void host_pump(host_t *h) {
 #if defined(ZTS_HOST_GTK)
     (void)h;
     /* One non-blocking iteration of *our* GTK loop; `zts_webview_poll` pumps the same context. */
     gtk_main_iteration_do(FALSE);
+    host_frame_wait();
 #elif defined(ZTS_HOST_WIN32)
     (void)h;
     {
@@ -202,12 +218,13 @@ static void host_pump(host_t *h) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
-        Sleep(1); /* a frame budget, exactly like a 1000 fps host */
+        host_frame_wait();
     }
 #elif defined(ZTS_HOST_COCOA)
     /* AppKit is pumped by `zts_webview_poll` itself (the same NSApp loop), so the host only has to
      * yield this frame. A game engine would swap this line for its own present call. */
     (void)h;
+    host_frame_wait();
 #endif
 }
 
