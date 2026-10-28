@@ -95,6 +95,30 @@ const probeLine = (host, layout) => {
   return `  ${host} probe: ${JSON.stringify(rest)} [${engine}]`;
 };
 
+/** Coarse 12×8 map of where the differing pixels are (percent of that cell), for diagnosis. */
+const diffMap = (a, pa, b, pb) => {
+  const cols = 12;
+  const rows = 8;
+  const cell = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  const total = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  const w = pa.ihdr.width;
+  const h = pa.ihdr.height;
+  for (let y = 0; y < h; y += 1) {
+    const ry = Math.min(rows - 1, Math.floor((y * rows) / h));
+    for (let x = 0; x < w; x += 1) {
+      const cx = Math.min(cols - 1, Math.floor((x * cols) / w));
+      total[ry][cx] += 1;
+      const [r1, g1, b1] = rgbAt(a, pa, x, y);
+      const [r2, g2, b2] = rgbAt(b, pb, x, y);
+      if (Math.max(Math.abs(r1 - r2), Math.abs(g1 - g2), Math.abs(b1 - b2)) > 3) cell[ry][cx] += 1;
+    }
+  }
+  const lines = cell.map((row, y) =>
+    `    row${y}: ` + row.map((v, x) => `${((v / Math.max(1, total[y][x])) * 100).toFixed(0).padStart(3)}%`).join(' '),
+  );
+  return '  differing pixels by region (12 cols × 8 rows):\n' + lines.join('\n');
+};
+
 /** Full per-box dump (names, sizes, line counts) for a failing pattern. */
 const dumpBoxes = (hostA, la, lb) => {
   const rows = la.boxes.map((box, i) => {
@@ -234,7 +258,8 @@ for (const pattern of reference.manifest.patterns) {
     if (diff.diffRatio > maxDiff || diff.meanAbsDiff > maxMad) {
       reject(
         `${pattern.name}: pixels differ (${(diff.diffRatio * 100).toFixed(1)}% > ${(maxDiff * 100).toFixed(1)}% ` +
-          `or MAD ${diff.meanAbsDiff.toFixed(2)} > ${maxMad}) worst at ${diff.worst}`,
+          `or MAD ${diff.meanAbsDiff.toFixed(2)} > ${maxMad}) worst at ${diff.worst}\n` +
+          diffMap(decodedA, parsedA, decodedB, parsedB),
       );
     }
 
