@@ -15,6 +15,7 @@
 | [`architecture/zts-webview-backends.md`](architecture/zts-webview-backends.md) | `zts_webview` 4 バックエンドの共通契約・Overlay 埋め込み・C ABI・スクリーンショット取得・テスト戦略 | サブシステム設計（WebView 全般） |
 | [`architecture/screenshot-parity.md`](architecture/screenshot-parity.md) | 3 OS で「同じ表示」を保証する仕組み（同梱フォント・レイアウト指紋・画素許容差・9 フレームワーク） | サブシステム設計（CI 回帰） |
 | [`architecture/tauri-fs-plugin.md`](architecture/tauri-fs-plugin.md) | スコープ付きファイルシステム `plugin:fs`（正規化 → リンク解決 → 包含判定・全コマンド表・エラーコード） | サブシステム設計（FS 利用時） |
+| [`architecture/tauri-menu-tray.md`](architecture/tauri-menu-tray.md) | ネイティブメニュー & システムトレイ `plugin:menu` / `plugin:tray`（平板スナップショット・22+12 コマンド・アクセラレータ） | サブシステム設計（メニュー/トレイ利用時） |
 | [`architecture/tauri-dialog-clipboard.md`](architecture/tauri-dialog-clipboard.md) | OS ダイアログ & クリップボード `plugin:dialog` / `plugin:clipboard-manager`（vtable + ネイティブ分離・untagged 戻り値・3 OS 対応表） | サブシステム設計（ダイアログ/クリップボード利用時） |
 | `architecture/<module>.md` | 各サブシステム詳細設計（例: `config.md`, `ipc.md`, `acl.md`, `window-linux.md`） | モジュール単位で完全独立 |
 | [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
@@ -22,7 +23,7 @@
 | [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
 | [`tasks/TEMPLATE.md`](tasks/TEMPLATE.md) | 1タスク＝1ファイルの作業計画＆記憶チェックポイント標準テンプレート | テンプレート |
 | `tasks/<ID>-<slug>.md` | 個別タスクの進捗・設計メモ・次の1手（例: [`tasks/M0-01-bootstrap.md`](tasks/M0-01-bootstrap.md)） | **担当ブランチ専有（競合ゼロ）** |
-| `decisions/<NNNN>-<slug>.md` | アーキテクチャ意思決定記録（ADR）（[`0001`](decisions/0001-zig-017-and-sharded-agent-workflow.md), [`0002`](decisions/0002-hybrid-architecture-proposal.md), … , [`0009`](decisions/0009-screenshot-capture-and-ci-gallery.md), [`0010`](decisions/0010-cross-os-pixel-parity.md), [`0011`](decisions/0011-scoped-fs-plugin.md), [`0012`](decisions/0012-dialog-and-clipboard-backends.md)） | **新規ファイル追加のみ（競合ゼロ）** |
+| `decisions/<NNNN>-<slug>.md` | アーキテクチャ意思決定記録（ADR）（[`0001`](decisions/0001-zig-017-and-sharded-agent-workflow.md), [`0002`](decisions/0002-hybrid-architecture-proposal.md), … , [`0009`](decisions/0009-screenshot-capture-and-ci-gallery.md), [`0010`](decisions/0010-cross-os-pixel-parity.md), [`0011`](decisions/0011-scoped-fs-plugin.md), [`0012`](decisions/0012-dialog-and-clipboard-backends.md), [`0013`](decisions/0013-menu-and-tray-backends.md)） | **新規ファイル追加のみ（競合ゼロ）** |
 | [`../examples/counter/README.md`](../examples/counter/README.md) | ショーケースサンプル（1 プロジェクト → デスクトップ / Live Preview / 静的 SSG の 3 成果物） | 実装サンプル（追記のみ） |
 | [`../examples/c_embed/README.md`](../examples/c_embed/README.md) | 純粋な C99 ホストから既存ウィンドウへ Overlay 埋め込み（`M3-03`） | 実装サンプル（追記のみ） |
 | [`../examples/gallery/README.md`](../examples/gallery/README.md) | スクリーンショット回帰ギャラリー（17 パターン → PNG + `manifest.json`、CI が 3 OS で実行し相互比較）（`M5-04`/`M5-05`） | 実装サンプル（追記のみ） |

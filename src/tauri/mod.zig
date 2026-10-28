@@ -22,9 +22,11 @@ pub const dialog = @import("dialog/mod.zig");
 pub const event = @import("event.zig");
 pub const fs = @import("fs/mod.zig");
 pub const js_bootstrap = @import("js_bootstrap.zig");
+pub const menu = @import("menu/mod.zig");
 pub const path = @import("path.zig");
 pub const protocol = @import("protocol.zig");
 pub const resources = @import("resources.zig");
+pub const tray = @import("tray/mod.zig");
 pub const window = @import("window.zig");
 
 pub const AppConfig = app.AppConfig;
@@ -35,6 +37,8 @@ pub const Channel = channel.Channel;
 pub const ChannelError = channel.ChannelError;
 pub const EventBus = event.EventBus;
 pub const FsState = fs.FsState;
+pub const MenuState = menu.MenuState;
+pub const TrayState = tray.TrayState;
 pub const FsScope = fs.Scope;
 pub const EventTarget = event.EventTarget;
 pub const HeaderPair = protocol.HeaderPair;
@@ -123,8 +127,10 @@ test {
     _ = event;
     _ = fs;
     _ = js_bootstrap;
+    _ = menu;
     _ = path;
     _ = protocol;
     _ = resources;
+    _ = tray;
     _ = window;
 }

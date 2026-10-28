@@ -37,6 +37,8 @@ pub const win32 = @import("native_win32.zig");
 
 pub const dialog = @import("dialog/mod.zig");
 pub const clipboard = @import("clipboard/mod.zig");
+pub const menu = @import("../tauri/menu/mod.zig");
+pub const tray = @import("../tauri/tray/mod.zig");
 
 pub const is_gtk = (builtin.os.tag == .linux) and native_options.enable_gtk;
 pub const is_macos = (builtin.os.tag == .macos) and native_options.enable_macos;
@@ -70,6 +72,20 @@ pub fn clipboardBackend() clipboard.Backend {
     return clipboard_impl.backend();
 }
 
+/// Menu / tray backends.
+///
+/// `M4-03` currently ships the toolkit-independent layer only: `plugin:menu` / `plugin:tray` are
+/// fully wire-compatible and fully unit-tested against their `Mock` backends, while the native
+/// renderers (GTK `GtkMenuBar` / `GtkStatusIcon`, AppKit `NSMenu` / `NSStatusItem`,
+/// Win32 `HMENU` / `Shell_NotifyIconW`) are selected here once compiled in.
+pub fn menuBackend() menu.Backend {
+    return .{ .vtable = &menu.StubBackend.vtable };
+}
+
+pub fn trayBackend() tray.Backend {
+    return .{ .vtable = &tray.StubBackend.vtable };
+}
+
 /// Human-readable description of the selected backends (surfaced in `OK`/`SKIP` diagnostics).
 pub fn describe() []const u8 {
     if (is_gtk) return "gtk3";
@@ -85,6 +101,8 @@ test {
     _ = dialog_impl;
     _ = clipboard_impl;
     _ = win32;
+    _ = menu;
+    _ = tray;
     // Shared NUL-termination helper (no OS dependency, so its tests run everywhere).
     _ = @import("native_cstr.zig");
 }
