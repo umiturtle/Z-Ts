@@ -770,6 +770,22 @@ const ready_script =
     \\    var fontOk = bootOk && facesLoaded >= 4 && metricsOk && (!paintable || paintOk);
     \\    probe.canvas = canvasMetrics;
     \\    probe.metrics_source = paintable ? 'canvas+paint' : 'canvas';
+    \\    // 画面幅をはみ出している要素を列挙する（`doc_w` が OS 間でずれた時の原因特定用）。
+    \\    try {
+    \\      var wide = [];
+    \\      var all = document.querySelectorAll('*');
+    \\      for (var wi = 0; wi < all.length && wide.length < 8; wi++) {
+    \\        var wr = all[wi].getBoundingClientRect();
+    \\        if (wr.right > 745) {
+    \\          var wn = all[wi].tagName.toLowerCase();
+    \\          var wc = all[wi].getAttribute('class');
+    \\          if (wc) wn += '.' + wc.replace(/^\s+|\s+$/g, '').split(/\s+/).join('.');
+    \\          wide.push(wn + '@' + Math.round(wr.right) + 'w' + Math.round(wr.width));
+    \\        }
+    \\      }
+    \\      probe.doc = document.documentElement.scrollWidth + 'x' + document.documentElement.scrollHeight;
+    \\      probe.wide = wide.join(' ');
+    \\    } catch (e) { probe.wide = String(e); }
     \\    probe.faces = faceList.length;
     \\    probe.face_detail = faceList.join(' ');
     \\    probe.paint = paint;

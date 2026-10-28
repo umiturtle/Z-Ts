@@ -128,7 +128,7 @@ function probeSummary(entry) {
     `source=${probe.metrics_source} paint_ok=${probe.paint_ok} off="${probe.metrics_off ?? ''}" ` +
     `canvas=[${canvas}] dom=sans0:${probe.sans0}/700:${probe.sans0b}/serif:${probe.serif0}/` +
     `mono:${probe.mono0}/cjk:${probe.cjk}/generic:${probe.generic0}/ch44:${probe.ch44} paint=[${paint}] ` +
-    `faces=${probe.faces} boot="${probe.boot}" fontfetch=${fetchInfo}`
+    `faces=${probe.faces} doc=${probe.doc} wide="${probe.wide ?? ''}" boot="${probe.boot}" fontfetch=${fetchInfo}`
   );
 }
 

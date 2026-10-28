@@ -231,7 +231,12 @@ for (const pattern of reference.manifest.patterns) {
     }
     const docDelta = Math.max(Math.abs(la.doc_w - lb.doc_w), Math.abs(la.doc_h - lb.doc_h));
     if (docDelta > layoutTolerance) {
-      reject(`${pattern.name}: document size differs by ${docDelta}px (${la.doc_w}x${la.doc_h} vs ${lb.doc_w}x${lb.doc_h})`);
+      reject(
+        `${pattern.name}: document size differs by ${docDelta}px (${la.doc_w}x${la.doc_h} vs ${lb.doc_w}x${lb.doc_h})\n` +
+          probeLine(reference.manifest.host, la) +
+          '\n' +
+          probeLine(other.manifest.host, lb),
+      );
       continue;
     }
 
