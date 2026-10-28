@@ -697,57 +697,69 @@ const ready_script =
     \\      };
     \\    } catch (e) { paint = { error: String(e) }; }
     \\
-    \\    // 判定は「同梱 woff2 の送り幅どおりに組まれているか」。advances は
-    \\    //   ZTSSans 400 '0' = 555/1000em → 8.88px @16px、700 = 590 → 9.44px、
-    \\    //   ZTSSerif 400 = 557 → 8.91px、ZTSMono 400 = 600 → 9.60px、CJK = 1em/字 → 96px。
-    \\    // フォールバック書体（Liberation / Segoe / Helvetica / DejaVu）でこの 5 値は揃わない。
+    \\    // ここからが本題: 「同梱 woff2 が実際に描かれているか」。
     \\    //
-    \\    // 測るのは **canvas の measureText**。WebKitGTK（GTK 4.1）は `getBoundingClientRect()`
-    \\    // の幅を整数 px に丸めて返すため（8.88 → 9, 9.44 → 9）、DOM 計測では 400 と 700 が
-    \\    // 区別できず、丸めだけでゲートが落ちる。measureText は両エンジンとも小数で返す。
+    \\    // **送り幅の厳密比較はゲートにできない。** WebKitGTK はどちらも整数に丸めて返すため
+    \\    // （canvas measureText でも 8.88 → 9、9.44 → 9）、400 と 700 が区別できず、丸めだけで
+    \\    // 落ちる。代わりに 3 つの「壊れたら必ず崩れる」性質を見る:
+    \\    //   (a) `document.fonts` に同梱 4 面が loaded で載っている（名前と状態）
+    \\    //   (b) 同梱書体 vs 総称ファミリの canvas 画素比較が **すべて非ゼロ**
+    \\    //       （フォールバックしていると両者が同一書体になり 0 になる。実際 ci13 の Linux は
+    \\    //         sans:0 sansCjk:0 serif:0 mono:0 で、これが「フォント未適用」の指紋だった）
+    \\    //   (c) 構造の健全性: ZTSMono は等幅（'i' と '0' が同じ幅）、CJK は 1 文字 ≈ 16px。
+    \\    //       (c) は「豆腐や 0 幅でない」ことの確認で、書体の同一性は (b) が担保する。
     \\    var measureText = function (family, weight, text) {
     \\      try {
     \\        var c = document.createElement('canvas').getContext('2d');
     \\        if (!c) return null;
     \\        c.font = (weight || 400) + ' 16px "' + family + '"';
-    \\        return Math.round(c.measureText(text).width * 100) / 100;
+    \\        return c.measureText(text).width;
     \\      } catch (e) { return null; }
     \\    };
-    \\    var expected = { sans0: 8.88, sans0b: 9.44, serif0: 8.91, mono0: 9.6, cjk: 96 };
+    \\    var round2 = function (v) { return typeof v === 'number' ? Math.round(v * 100) / 100 : v; };
     \\    var canvasMetrics = {
-    \\      sans0: measureText('ZTSSans', 400, '0'),
-    \\      sans0b: measureText('ZTSSans', 700, '0'),
-    \\      serif0: measureText('ZTSSerif', 400, '0'),
-    \\      mono0: measureText('ZTSMono', 400, '0'),
-    \\      cjk: measureText('ZTSSans', 400, 'デスクトップ')
+    \\      sans0: round2(measureText('ZTSSans', 400, '0')),
+    \\      sans0b: round2(measureText('ZTSSans', 700, '0')),
+    \\      serif0: round2(measureText('ZTSSerif', 400, '0')),
+    \\      mono0: round2(measureText('ZTSMono', 400, '0')),
+    \\      monoI: round2(measureText('ZTSMono', 400, 'i')),
+    \\      cjk: round2(measureText('ZTSSans', 400, 'デスクトップ'))
     \\    };
-    \\    // canvas が使えない環境では DOM 計測に退避する（整数に丸められていても通るように、
-    \\    // 「実値」と「丸め値」のどちらかに一致すれば良い）。
-    \\    var canvasOk = Object.keys(expected).every(function (k) {
-    \\      return typeof canvasMetrics[k] === 'number';
-    \\    });
-    \\    var source = canvasOk ? canvasMetrics : probe;
+    \\    // 参考値（同梱 woff2 の advances から計算した理論値）。丸めのある環境では一致しないので
+    \\    // 失敗条件には使わず、`metrics_off` としてログに残す。
+    \\    var expected = { sans0: 8.88, sans0b: 9.44, serif0: 8.91, mono0: 9.6, cjk: 96 };
     \\    var off = [];
     \\    Object.keys(expected).forEach(function (k) {
-    \\      var want = expected[k];
-    \\      var got = source[k];
-    \\      var ok = typeof got === 'number' &&
-    \\        (Math.abs(got - want) <= 0.15 || (!canvasOk && Math.abs(got - Math.round(want)) <= 0.15));
-    \\      if (!ok) off.push(k + '=' + got + '≠' + want);
+    \\      var got = canvasMetrics[k];
+    \\      if (typeof got !== 'number' || Math.abs(got - expected[k]) > 0.15) {
+    \\        off.push(k + '=' + got + '≠' + expected[k]);
+    \\      }
     \\    });
-    \\    var metricsOk = off.length === 0;
+    \\
+    \\    var paintValues = [paint.sans, paint.sansCjk, paint.serif, paint.mono];
+    \\    var paintable = paintValues.every(function (r) { return typeof r === 'number' && r >= 0; });
+    \\    var paintOk = paintable && paintValues.every(function (r) { return r > 0.005; });
+    \\    var monoOk = typeof canvasMetrics.mono0 !== 'number' || typeof canvasMetrics.monoI !== 'number' ||
+    \\      Math.abs(canvasMetrics.mono0 - canvasMetrics.monoI) <= 1.5;
+    \\    var cjkOk = typeof canvasMetrics.cjk !== 'number' ||
+    \\      (canvasMetrics.cjk >= 6 * 15.5 && canvasMetrics.cjk <= 6 * 16.5);
+    \\    var metricsOk = monoOk && cjkOk;
     \\    var parityState = window.__ztsParity || {};
     \\    var bootOk = !!(parityState.api || parityState.css);
     \\    var checkOk = false;
     \\    try {
     \\      checkOk = document.fonts.check('16px ZTSSans') && document.fonts.check('16px ZTSMono');
     \\    } catch (e) { checkOk = false; }
-    \\    var fontOk = bootOk && facesLoaded >= 4 && metricsOk;
+    \\    // canvas が使えない環境（paint が測れない）では (a)+(c) だけに頼る。
+    \\    var fontOk = bootOk && facesLoaded >= 4 && metricsOk && (!paintable || paintOk);
     \\    probe.canvas = canvasMetrics;
-    \\    probe.metrics_source = canvasOk ? 'canvas' : 'dom';
+    \\    probe.metrics_source = paintable ? 'canvas+paint' : 'canvas';
     \\    probe.faces = faceList.length;
     \\    probe.face_detail = faceList.join(' ');
     \\    probe.paint = paint;
+    \\    probe.paint_ok = paintable ? paintOk : null;
+    \\    probe.mono_ok = monoOk;
+    \\    probe.cjk_ok = cjkOk;
     \\    probe.fonts_status = (document.fonts && document.fonts.status) || '?';
     \\    probe.check_ok = checkOk;
     \\    probe.metrics_ok = metricsOk;

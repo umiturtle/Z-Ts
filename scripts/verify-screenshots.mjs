@@ -125,10 +125,10 @@ function probeSummary(entry) {
   const canvas = probe.canvas ? Object.entries(probe.canvas).map(([k, v]) => `${k}:${v}`).join(',') : '?';
   const fetchInfo = entry.font_fetch ? entry.font_fetch : '(no fontfetch message)';
   return (
-    `source=${probe.metrics_source} off="${probe.metrics_off ?? ''}" canvas=[${canvas}] ` +
-    `dom=sans0:${probe.sans0}/700:${probe.sans0b}/serif:${probe.serif0}/mono:${probe.mono0}/` +
-    `cjk:${probe.cjk}/generic:${probe.generic0} paint=[${paint}] faces=${probe.faces} ` +
-    `boot="${probe.boot}" fontfetch=${fetchInfo}`
+    `source=${probe.metrics_source} paint_ok=${probe.paint_ok} off="${probe.metrics_off ?? ''}" ` +
+    `canvas=[${canvas}] dom=sans0:${probe.sans0}/700:${probe.sans0b}/serif:${probe.serif0}/` +
+    `mono:${probe.mono0}/cjk:${probe.cjk}/generic:${probe.generic0} paint=[${paint}] ` +
+    `faces=${probe.faces} boot="${probe.boot}" fontfetch=${fetchInfo}`
   );
 }
 

@@ -58,12 +58,14 @@ examples/gallery (Zig)                         scripts/                      .gi
 
 - `boxes` は `body / .shell / .head / .card / .counter / .value / .features / h1… / button …` の
   最大 40 要素の `getBoundingClientRect()` を **1px に丸めた** もの。
-- `font_ok` は「同梱 woff2 の送り幅どおりに組まれているか」。16px で
-  `ZTSSans` 400 の `0` = 8.88px / 700 = 9.44px / `ZTSSerif` = 8.91px / `ZTSMono` = 9.60px、
-  CJK（1em/字）6 文字 = 96px の 5 値が ±0.15px で揃い、**かつ** `document.fonts` に 4 面以上が
-  `loaded` で載っていることを要求する。測るのは **canvas の `measureText`**。WebKitGTK は
-  `getBoundingClientRect()` の幅を整数 px に丸めて返すため（8.88 → 9）、DOM 計測では 400 と 700 が
-  区別できず、丸めだけでゲートが落ちる。canvas が無い環境だけ DOM 計測（丸め許容）へ退避する。`document.fonts.check()` は WebKit では未適用でも `true` を
+- `font_ok` は「同梱 woff2 が実際に描かれているか」。**送り幅の厳密比較はゲートにしない** —
+  WebKitGTK は `getBoundingClientRect()` も canvas `measureText()` も整数 px に丸めて返すため
+  （8.88 → 9、9.44 → 9）、400 と 700 が区別できず、丸めだけで落ちてしまう。代わりに次を要求する:
+  1. `window.__ztsParity` が `api` か `css` を立てている（ブートストラップが動いた）
+  2. `document.fonts` に 4 面が `loaded` で載っている
+  3. **同梱書体 vs 総称ファミリ**の canvas 画素比較が 4 本とも非ゼロ（フォールバックしていると
+     両者が同一書体になり 0 になる。実際「フォント未適用」のときは `sans:0 sansCjk:0 …` だった）
+  4. 構造の健全性: `ZTSMono` が等幅（`i` と `0` が同じ幅）、CJK が 1 文字 ≈ 16px（豆腐・0 幅でない）`document.fonts.check()` は WebKit では未適用でも `true` を
   返すので判定には使わない（診断値としてのみ送出）。ファミリ名に空白を入れないのは、minify で
   `"ZTS Sans"` の引用符が落ちて無効名になるのを避けるため。
 - `probe` は切り分け用。DOM で測った送り幅（`sans0` / `sans0b` / `serif0` / `mono0` / `cjk` /
