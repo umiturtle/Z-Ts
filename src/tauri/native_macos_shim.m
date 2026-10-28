@@ -40,9 +40,13 @@ static NSArray *zts_types_from_extensions(const char *ext_csv) {
     NSString *trimmed = [ext stringByTrimmingCharactersInSet:
                                  [NSCharacterSet whitespaceCharacterSet]];
     if ([trimmed length] == 0 || [trimmed isEqualToString:@"*"]) continue;
-    UTType *type = [UTType typeWithFilenameExtension:trimmed];
-    if (type == nil || ![type isDeclared]) continue;
-    [types addObject:type];
+    // `UTType` needs macOS 11; older deployment targets simply get no filter (never an all-invalid
+    // panel, which AppKit refuses to show).
+    if (@available(macOS 11.0, *)) {
+      UTType *type = [UTType typeWithFilenameExtension:trimmed];
+      if (type == nil || ![type isDeclared]) continue;
+      [types addObject:type];
+    }
   }
   return [types count] > 0 ? types : nil;
 }

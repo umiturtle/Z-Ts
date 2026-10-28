@@ -2,6 +2,7 @@
 //! `../native_macos_shim.m`. The shim returns JSON so no AppKit object ever crosses the boundary.
 
 const std = @import("std");
+const cstr = @import("../native_cstr.zig");
 const Allocator = std.mem.Allocator;
 
 const dialog = @import("mod.zig");
@@ -42,7 +43,7 @@ fn extensionsCsv(allocator: Allocator, filters: []const dialog.DialogFilter) ![:
             first = false;
         }
     }
-    return allocator.dupeZ(u8, aw.written());
+    return cstr.allocZ(allocator, aw.written());
 }
 
 fn parsePaths(allocator: Allocator, raw: [*:0]const u8) Error!dialog.Selection {
@@ -85,10 +86,10 @@ fn run(
     multiple: bool,
     can_create_directories: bool,
 ) Error!dialog.Selection {
-    const title_z: ?[:0]u8 = if (title) |t| if (t.len > 0) allocator.dupeZ(u8, t) catch return error.OutOfMemory else null else null;
+    const title_z: ?[:0]u8 = if (title) |t| if (t.len > 0) cstr.allocZ(allocator, t) catch return error.OutOfMemory else null else null;
     defer if (title_z) |z| allocator.free(z);
 
-    const path_z: ?[:0]u8 = if (default_path) |p| if (p.len > 0) allocator.dupeZ(u8, p) catch return error.OutOfMemory else null else null;
+    const path_z: ?[:0]u8 = if (default_path) |p| if (p.len > 0) cstr.allocZ(allocator, p) catch return error.OutOfMemory else null else null;
     defer if (path_z) |z| allocator.free(z);
 
     const ext_z: ?[:0]u8 = if (filters.len > 0) extensionsCsv(allocator, filters) catch return error.OutOfMemory else null;
@@ -131,10 +132,10 @@ fn saveImpl(_: ?*anyopaque, allocator: Allocator, options: dialog.SaveDialogOpti
 }
 
 fn messageImpl(_: ?*anyopaque, allocator: Allocator, request: dialog.MessageRequest) Error![]const u8 {
-    const title_z: ?[:0]u8 = if (request.title) |t| if (t.len > 0) allocator.dupeZ(u8, t) catch return error.OutOfMemory else null else null;
+    const title_z: ?[:0]u8 = if (request.title) |t| if (t.len > 0) cstr.allocZ(allocator, t) catch return error.OutOfMemory else null else null;
     defer if (title_z) |z| allocator.free(z);
 
-    const msg_z = allocator.dupeZ(u8, request.message) catch return error.OutOfMemory;
+    const msg_z = cstr.allocZ(allocator, request.message) catch return error.OutOfMemory;
     defer allocator.free(msg_z);
 
     var labels_buf: [3]dialog.Button = undefined;
@@ -149,7 +150,7 @@ fn messageImpl(_: ?*anyopaque, allocator: Allocator, request: dialog.MessageRequ
         if (std.mem.indexOfScalar(u8, btn.label, '\n') != null) return error.Failed;
         joined.writer.writeAll(btn.label) catch return error.OutOfMemory;
     }
-    const labels_z = allocator.dupeZ(u8, joined.written()) catch return error.OutOfMemory;
+    const labels_z = cstr.allocZ(allocator, joined.written()) catch return error.OutOfMemory;
     defer allocator.free(labels_z);
 
     const kind: c_int = switch (request.kind) {

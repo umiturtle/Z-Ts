@@ -1,6 +1,7 @@
 //! macOS native clipboard (`NSPasteboard`) via the Flat C ABI shim.
 
 const std = @import("std");
+const cstr = @import("../native_cstr.zig");
 const Allocator = std.mem.Allocator;
 
 const clipboard = @import("mod.zig");
@@ -28,7 +29,7 @@ fn readTextImpl(_: ?*anyopaque, allocator: Allocator) Error![]const u8 {
 }
 
 fn writeTextImpl(_: ?*anyopaque, text: []const u8) Error!void {
-    const z = std.heap.c_allocator.dupeZ(u8, text) catch return error.OutOfMemory;
+    const z = cstr.allocZ(std.heap.c_allocator, text) catch return error.OutOfMemory;
     defer std.heap.c_allocator.free(z);
     if (zts_native_clipboard_write_text(z.ptr) != 0) return error.Failed;
 }
@@ -39,9 +40,9 @@ fn readHtmlImpl(_: ?*anyopaque, allocator: Allocator) Error![]const u8 {
 
 fn writeHtmlImpl(_: ?*anyopaque, html: []const u8, alt_text: ?[]const u8) Error!void {
     const alloc = std.heap.c_allocator;
-    const html_z = alloc.dupeZ(u8, html) catch return error.OutOfMemory;
+    const html_z = cstr.allocZ(alloc, html) catch return error.OutOfMemory;
     defer alloc.free(html_z);
-    const alt_z = if (alt_text) |alt| alloc.dupeZ(u8, alt) catch return error.OutOfMemory else null;
+    const alt_z = if (alt_text) |alt| cstr.allocZ(alloc, alt) catch return error.OutOfMemory else null;
     defer if (alt_z) |z| alloc.free(z);
 
     if (zts_native_clipboard_write_html(html_z.ptr, if (alt_z) |z| z.ptr else null) != 0) return error.Failed;
@@ -52,7 +53,7 @@ fn clearImpl(_: ?*anyopaque) Error!void {
 }
 
 fn writeSecretImpl(_: ?*anyopaque, text: []const u8) Error!void {
-    const z = std.heap.c_allocator.dupeZ(u8, text) catch return error.OutOfMemory;
+    const z = cstr.allocZ(std.heap.c_allocator, text) catch return error.OutOfMemory;
     defer std.heap.c_allocator.free(z);
     if (zts_native_clipboard_write_secret(z.ptr) != 0) return error.Failed;
 }

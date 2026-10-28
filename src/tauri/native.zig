@@ -85,6 +85,8 @@ test {
     _ = dialog_impl;
     _ = clipboard_impl;
     _ = win32;
+    // Shared NUL-termination helper (no OS dependency, so its tests run everywhere).
+    _ = @import("native_cstr.zig");
 }
 
 test "the active backend for this target is reported and constructible" {

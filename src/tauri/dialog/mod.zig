@@ -24,6 +24,7 @@ const core = @import("zts_foundation");
 const rpc = @import("zts_rpc");
 
 const fs = @import("../fs/mod.zig");
+const path = @import("../path.zig");
 
 pub const DialogError = error{
     /// No usable native backend (headless session, GTK unavailable, ...).
@@ -497,7 +498,7 @@ const Fixture = struct {
         self.mock = Mock.init(testing.allocator);
 
         // Only `<tmp>/allowed` is in scope: a pick from `<tmp>/picked` must be granted by the dialog.
-        const allowed_root = try std.fmt.allocPrint(testing.allocator, "{s}/allowed", .{self.root});
+        const allowed_root = try path.joinWithStyle(testing.allocator, path.PathStyle.current(), &.{ self.root, "allowed" });
         defer testing.allocator.free(allowed_root);
         self.scope = try fs.Scope.initCanonical(testing.allocator, testing.io, @import("../path.zig").PathStyle.current(), &.{
             .{ .path = allowed_root },
@@ -534,7 +535,24 @@ const Fixture = struct {
     }
 
     fn absPath(self: *Fixture, scratch: Allocator, sub: []const u8) ![]const u8 {
-        return std.fmt.allocPrint(scratch, "{s}/{s}", .{ self.root, sub });
+        return path.joinWithStyle(scratch, path.PathStyle.current(), &.{ self.root, sub });
+    }
+
+    /// Serializes `{"path": <p>}` (plus optional leading `extra` members) with the path properly
+    /// JSON-escaped: Windows separators are `\\`, which would otherwise produce invalid JSON (or be
+    /// read back as an escape sequence) when interpolated naively.
+    fn pathPayload(buf: []u8, p: []const u8, extra: []const u8) ![]const u8 {
+        var fbs = std.Io.Writer.fixed(buf);
+        const w = &fbs;
+        try w.writeByte('{');
+        if (extra.len > 0) {
+            try w.writeAll(extra);
+            try w.writeByte(',');
+        }
+        try w.writeAll("\"path\":");
+        try core.html_escape.writeJsonString(w, p, false);
+        try w.writeByte('}');
+        return w.buffered();
     }
 
     const Response = struct {
@@ -691,8 +709,8 @@ test "dialog picks are granted to the FS scope, so plugin:fs can read what the u
 
     // Before the pick the path is out of scope...
     {
-        var payload_buf: [512]u8 = undefined;
-        const payload = try std.fmt.bufPrint(&payload_buf, "{{\"path\":\"{s}\"}}", .{picked});
+        var payload_buf: [1024]u8 = undefined;
+        const payload = try Fixture.pathPayload(&payload_buf, picked, "");
         var r = try f.invoke("plugin:fs|read_text_file", payload);
         defer r.deinit();
         try r.expectCode("OutOfScope");
@@ -708,8 +726,8 @@ test "dialog picks are granted to the FS scope, so plugin:fs can read what the u
 
     // ...and now the same call succeeds.
     {
-        var payload_buf: [512]u8 = undefined;
-        const payload = try std.fmt.bufPrint(&payload_buf, "{{\"path\":\"{s}\"}}", .{picked});
+        var payload_buf: [1024]u8 = undefined;
+        const payload = try Fixture.pathPayload(&payload_buf, picked, "");
         var r = try f.invoke("plugin:fs|read_text_file", payload);
         defer r.deinit();
         try r.expectOk();
@@ -735,11 +753,23 @@ test "plugin:dialog|save writes through the granted path" {
     try testing.expectEqual(@as(usize, 1), f.mock.save_calls);
     try testing.expectEqualStrings("out.txt", f.mock.last_save.?.default_path.?);
 
-    var payload_buf: [512]u8 = undefined;
-    const payload = try std.fmt.bufPrint(&payload_buf, "{{\"path\":\"{s}\",\"data\":\"written\"}}", .{target});
+    var payload_buf: [1024]u8 = undefined;
+    const payload = try Fixture.pathPayload(&payload_buf, target, "\"data\":\"written\"");
     var r = try f.invoke("plugin:fs|write_text_file", payload);
     defer r.deinit();
     try r.expectOk();
+}
+
+test "Fixture.pathPayload escapes Windows separators so plugin:fs parses the payload" {
+    // A Windows path is full of `\`, which must be escaped or the JSON is rejected with
+    // `SyntaxError` before the FS layer ever sees it (this bit the first M4-01 CI run).
+    const win_path = "C:\\Users\\runner\\AppData\\Local\\Temp\\picked.txt";
+    var buf: [256]u8 = undefined;
+    const payload = try Fixture.pathPayload(&buf, win_path, "");
+    try testing.expectEqualStrings(
+        "{\"path\":\"C:\\\\Users\\\\runner\\\\AppData\\\\Local\\\\Temp\\\\picked.txt\"}",
+        payload,
+    );
 }
 
 test "plugin:clipboard-manager round-trips text and html through the RPC layer" {

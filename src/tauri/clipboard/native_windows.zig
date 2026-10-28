@@ -5,6 +5,7 @@
 //! `CanIncludeInClipboardHistory = 0` formats so Windows 10+ clipboard history skips the payload.
 
 const std = @import("std");
+const cstr = @import("../native_cstr.zig");
 const Allocator = std.mem.Allocator;
 
 const clipboard = @import("mod.zig");
@@ -33,6 +34,7 @@ extern "c" fn GlobalAlloc(flags: u32, bytes: usize) HANDLE;
 extern "c" fn GlobalLock(mem: HANDLE) ?*anyopaque;
 extern "c" fn GlobalUnlock(mem: HANDLE) BOOL;
 extern "c" fn GlobalFree(mem: HANDLE) HANDLE;
+extern "c" fn Sleep(milliseconds: u32) void;
 
 const OpenError = error{Unavailable};
 
@@ -41,7 +43,7 @@ fn open(retries: usize) OpenError!void {
     var attempt: usize = 0;
     while (attempt <= retries) : (attempt += 1) {
         if (OpenClipboard(null) != 0) return;
-        std.Thread.sleep(5 * std.time.ns_per_ms);
+        Sleep(5);
     }
     return error.Unavailable;
 }
@@ -91,7 +93,7 @@ fn writeTextImpl(_: ?*anyopaque, text: []const u8) Error!void {
 
 fn readHtmlImpl(_: ?*anyopaque, allocator: Allocator) Error![]const u8 {
     const alloc = std.heap.c_allocator;
-    const name_z = alloc.dupeZ(u8, "HTML Format") catch return error.OutOfMemory;
+    const name_z = cstr.allocZ(alloc, "HTML Format") catch return error.OutOfMemory;
     defer alloc.free(name_z);
     var wide_name: [64:0]u16 = undefined;
     for (name_z, 0..) |c, i| wide_name[i] = c;
@@ -143,7 +145,7 @@ fn writeHtmlImpl(_: ?*anyopaque, html: []const u8, alt_text: ?[]const u8) Error!
 
     const body = final.written();
 
-    const name_z = alloc.dupeZ(u8, "HTML Format") catch return error.OutOfMemory;
+    const name_z = cstr.allocZ(alloc, "HTML Format") catch return error.OutOfMemory;
     defer alloc.free(name_z);
     var wide_name: [64:0]u16 = undefined;
     for (name_z, 0..) |c, i| wide_name[i] = c;
@@ -185,7 +187,7 @@ fn setExclusionFormats(allocator: Allocator) Error!void {
     bytes[0] = 0;
 
     for ([_][]const u8{ EXCLUDE_MONITOR_TARGET, CAN_INCLUDE_HISTORY }) |name| {
-        const name_z = alloc.dupeZ(u8, name) catch return error.OutOfMemory;
+        const name_z = cstr.allocZ(alloc, name) catch return error.OutOfMemory;
         defer alloc.free(name_z);
         var wide: [80:0]u16 = undefined;
         for (name_z, 0..) |c, i| wide[i] = c;

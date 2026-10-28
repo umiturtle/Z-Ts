@@ -5,6 +5,7 @@
 //! Signatures were verified against GTK 3.24 (`gtk+-3.0`).
 
 const std = @import("std");
+const cstr = @import("native_cstr.zig");
 const Allocator = std.mem.Allocator;
 
 pub const gboolean = c_int;
@@ -125,9 +126,7 @@ pub fn clipboard() *GtkClipboard {
 
 /// Converts a slice to a NUL-terminated buffer allocated from `allocator` (caller frees).
 pub fn toZ(allocator: Allocator, s: []const u8) ![:0]u8 {
-    const buf = try allocator.allocSentinel(u8, s.len, 0);
-    @memcpy(buf[0..s.len], s);
-    return buf;
+    return cstr.allocZ(allocator, s);
 }
 
 /// Copies an owned `gchar*` into `allocator` and releases it with `g_free`.

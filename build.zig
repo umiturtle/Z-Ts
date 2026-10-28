@@ -286,6 +286,9 @@ pub fn build(b: *std.Build) void {
         });
         tauri_native_mod.linkFramework("Cocoa", .{});
         tauri_native_mod.linkFramework("Foundation", .{});
+        // `native_macos_shim.m` maps filter extensions to UTIs (`UTType`), not the deprecated
+        // LaunchServices APIs.
+        tauri_native_mod.linkFramework("UniformTypeIdentifiers", .{});
     }
     if (native_windows) {
         for ([_][]const u8{
