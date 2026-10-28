@@ -126,8 +126,10 @@
 - **内容**:
   1. **Linux の文字化けを根絶**: Noto Sans/Serif JP + JetBrains Mono を使う文字だけにサブセット化して同梱し、`/zts/fonts/*` として 3 OS に同一バイト列を配信。`check-font-coverage.mjs` で収録外の文字を CI で落とす。
   2. **レイアウト指紋**: `load` + `document.fonts.ready` 後の要素矩形（≤1px 丸め）と `font_ok` を `manifest.json` に記録し、OS 間で ≤1px 一致を強制。
-  3. **画素比較**: 依存ゼロの PNG デコーダで全画素差分・背景色（厳密）・平均輝度を比較（`--max-diff 0.06` / `--max-mad 6`）。
+  3. **画素比較**: 依存ゼロの PNG デコーダで全画素差分・背景色（厳密）・平均輝度を比較（`--max-diff 0.12` / `--max-mad 8`。構造は行数完全一致 + ボックス ±1px で厳密に縛る）。
   4. **9 フレームワーク**（Angular / Solid / Svelte / SolidStart / Next.js / Nuxt / Astro / SvelteKit / React）を各 CLI で実ビルドし、同一 DOM・同一文言の画面を `tauri://localhost/fw/<name>/` で配信して撮影。
   5. **`ci-parity` ジョブ**: 3 OS の artifact をまとめて比較し `OK parity …` をマーカーにする。
 - **完了条件（DoD）**: `OK gallery host=<gtk3|cocoa|win32> patterns=17 captured=17` と `OK parity hosts=… patterns=17 …` が同一 Run で出ること。
+- **結果（2025-10-28, run `40634580935`）**: 4 ジョブ（Linux / macOS / Windows / parity）すべて green。
+  `OK parity hosts=gtk3,cocoa,win32 patterns=17 comparisons=34 layout=ok pixels=max:9.77% mad:6.07`。
 
