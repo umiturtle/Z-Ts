@@ -1,10 +1,10 @@
 # Task M4-01: ダイアログ & クリップボードプラグイン（`src/tauri/{dialog,clipboard}/`）
 
-- **Status**: `in_progress`（実装・テストは 3 OS で green、CI 待ち）
+- **Status**: `done`（CI run `40691812369` で 4 ジョブすべて green）
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/tauri/dialog/`, `src/tauri/clipboard/`, `src/tauri/{native,native_gtk,native_win32}.zig`, `src/tauri/native_macos_shim.m`, `build.zig`, 本ファイル, `docs/architecture/tauri-dialog-clipboard.md`, `docs/decisions/0012-dialog-and-clipboard-backends.md`, `docs/INDEX.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`
 - **Upstream Reference**: `@tauri-apps/plugin-dialog` v2（`plugins/dialog/src/{commands,models}.rs` / `guest-js/index.ts`）、`@tauri-apps/plugin-clipboard-manager` v2（`plugins/clipboard-manager/src/commands.rs` / `guest-js/index.ts`）
-- **Next Step**: 3 OS CI を回して green を確認 → ステータスを `done` に更新。
+- **Next Step**: なし。次は `M4-03`（メニュー & トレイ）または `M4-04`（config import / ACL）。
 
 ---
 
@@ -21,7 +21,7 @@
 - [x] 未使用時 0 バイト（`Backend` vtable を差し替えなければ native 層はリンクされない）
 - [x] 3 OS（Linux GTK3 / macOS AppKit / Windows COM）で同一 wire 挙動
 - [x] `./zigw quick-test` / `./zigw build test` / `./zigw build test -Dgtk=true` / `./zigw fmt --check` / `python3 scripts/check-docs.py` のパス
-- [ ] 3 OS CI グリーン
+- [x] 3 OS CI グリーン（`40691812369`: Linux / macOS / Windows / parity すべて success）
 
 ---
 
@@ -45,9 +45,21 @@
     - `dialog/native_windows.zig`（手書き COM vtable + `MessageBoxW`）/ `clipboard/native_windows.zig`（Win32 clipboard）。
     - `native_win32.zig` … OS 非依存の純関数（`FILEOPENDIALOGOPTIONS` ビット・フィルタレコード・UTF-16 変換・`MessageBox` ボタン/アイコン対応表）を **全 OS でコンパイル & テスト**。
 - **最終状態**:
-  - `./zigw quick-test` … `40 passed; 2 skipped; 0 failed.` / `All 28 tests passed.`
-  - `./zigw build test -Dgtk=true` … `46/46 steps succeeded; 28/30 tests passed (2 skipped)`（GTK 実機テストは `DISPLAY` 不在で skip）。
-  - `./zigw build test -Dgtk=false` … `44/44 steps succeeded; 80/82 tests passed (2 skipped)`。
+  - `./zigw quick-test` … `All 29 / 3 / 4 / 7 tests passed.`
+  - `./zigw build test -Dgtk=true` … `46/46 steps succeeded; 78/80 tests passed (2 skipped)`（GTK 実機テストは `DISPLAY` 不在で skip）。
+  - `./zigw build test -Dgtk=false` … `44/44 steps succeeded`。
+  - Linux 側は `zts_tauri` スイート 31 件 + `zts_tauri_native` スイート（GTK 実機 2 件は `DISPLAY` 有無で skip）。
+  - CI run `40691812369` = **4 ジョブすべて green**、parity は
+    `OK parity hosts=gtk3,cocoa,win32 patterns=17 comparisons=34 layout=ok pixels=max:9.77% mad:6.07`（回帰なし）。
+- **初回 CI run `40690192094` で踏んだこと（修正済み・再発防止）**:
+  - macOS: `Allocator.dupeZ` が 0.17 に無い → `src/tauri/native_cstr.zig` の `allocZ`
+    （`allocSentinel` + `@memcpy`）へ集約。`native_gtk.toZ` もこれに委譲。
+  - Windows: `std.Thread.sleep` が 0.17 に無い → Win32 clipboard のリトライは `kernel32.Sleep` に。
+  - macOS シム: 拡張子 → UTI は非推奨の `UTTypeCreatePreferredIdentifierForTag` ではなく
+    `UTType typeWithFilenameExtension`（macOS 11 未満は `@available` でフィルタ無しに縮退）。
+    `build.zig` に `-framework UniformTypeIdentifiers` を追加。
+  - Windows テスト 2 件が `SyntaxError` / `.err`: テストが `C:\...` を JSON に素で埋めていた。
+    → `Fixture.pathPayload`（`core.html_escape.writeJsonString`）と `path.joinWithStyle` に統一。
 - **ハマりどころ（次に触る人向け）**:
   - GTK の `gboolean` は `c_int`。`if (!gtk_clipboard_set_with_data(...))` はコンパイルできない → `== 0` で判定。
   - `gtk_message_dialog_set_title` は **GTK3 に存在しない**（GTK4 のみ）→ `gtk_window_set_title(@ptrCast(widget), ...)`。
