@@ -25,6 +25,60 @@ pub const GtkClipboard = opaque {};
 pub const GtkSelectionData = opaque {};
 pub const GSList = opaque {};
 
+// `M4-03`: menu / tray widgets.
+pub const GtkMenuBar = opaque {};
+pub const GtkMenu = opaque {};
+pub const GtkMenuShell = opaque {};
+pub const GtkMenuItem = opaque {};
+pub const GtkCheckMenuItem = opaque {};
+pub const GtkBox = opaque {};
+pub const GtkContainer = opaque {};
+pub const GtkAccelGroup = opaque {};
+pub const GtkStatusIcon = opaque {};
+pub const GtkBin = opaque {};
+
+/// `GList` (the menu / container child list; same three-field layout as `GSList` plus `prev`).
+pub const GList = extern struct {
+    data: ?*anyopaque,
+    next: ?*GList,
+    prev: ?*GList,
+};
+
+/// `GTypeInstance` view of a widget, used to identify it (`G_OBJECT_TYPE` → `g_type_name`)
+/// without the C type-check macros.
+pub const GTypeInstance = extern struct {
+    g_class: ?*GTypeClass,
+
+    pub const GTypeClass = extern struct {
+        g_type: usize,
+    };
+
+    /// The GType name (`"GtkBox"`, `"GtkMenuBar"`, …) or `null` for a non-GObject pointer.
+    pub fn typeName(self: *const GTypeInstance) ?[*:0]const u8 {
+        const class = self.g_class orelse return null;
+        if (class.g_type == 0) return null;
+        return g_type_name(class.g_type);
+    }
+};
+
+pub const GdkRectangle = extern struct {
+    x: c_int = 0,
+    y: c_int = 0,
+    width: c_int = 0,
+    height: c_int = 0,
+};
+
+// GtkOrientation
+pub const GTK_ORIENTATION_HORIZONTAL: c_int = 0;
+pub const GTK_ORIENTATION_VERTICAL: c_int = 1;
+
+// GtkAccelFlags
+pub const GTK_ACCEL_VISIBLE: guint = 1;
+
+// GdkGravity
+pub const GDK_GRAVITY_NORTH_WEST: c_int = 1;
+pub const GDK_GRAVITY_SOUTH_WEST: c_int = 7;
+
 pub const GtkTargetEntry = extern struct {
     target: [*:0]u8,
     flags: guint,
@@ -105,6 +159,84 @@ pub extern "c" fn gtk_clipboard_set_with_data(
 ) gboolean;
 pub extern "c" fn gtk_clipboard_store(clipboard: *GtkClipboard) void;
 
+// ------------------------------------------------------------------ menus (M4-03)
+
+pub const GTK_WINDOW_TOPLEVEL: c_int = 0;
+
+pub extern "c" fn gtk_window_new(window_type: c_int) *GtkWidget;
+pub extern "c" fn gtk_box_new(orientation: c_int, spacing: gint) *GtkWidget;
+pub extern "c" fn gtk_window_set_default_size(window: *GtkWindow, width: gint, height: gint) void;
+pub extern "c" fn gtk_menu_bar_new() *GtkWidget;
+pub extern "c" fn gtk_menu_new() *GtkWidget;
+pub extern "c" fn gtk_menu_item_new() *GtkWidget;
+pub extern "c" fn gtk_menu_item_new_with_mnemonic(label: [*:0]const u8) *GtkWidget;
+pub extern "c" fn gtk_check_menu_item_new_with_mnemonic(label: [*:0]const u8) *GtkWidget;
+pub extern "c" fn gtk_separator_menu_item_new() *GtkWidget;
+pub extern "c" fn gtk_menu_item_set_submenu(item: *GtkMenuItem, submenu: *GtkWidget) void;
+pub extern "c" fn gtk_menu_item_get_submenu(item: *GtkMenuItem) ?*GtkWidget;
+pub extern "c" fn gtk_menu_item_get_label(item: *GtkMenuItem) ?[*:0]u8;
+pub extern "c" fn gtk_menu_shell_append(shell: *GtkMenuShell, child: *GtkWidget) void;
+pub extern "c" fn gtk_check_menu_item_get_active(item: *GtkCheckMenuItem) gboolean;
+pub extern "c" fn gtk_check_menu_item_set_active(item: *GtkCheckMenuItem, active: gboolean) void;
+pub extern "c" fn gtk_widget_set_sensitive(widget: *GtkWidget, sensitive: gboolean) void;
+pub extern "c" fn gtk_widget_get_sensitive(widget: *GtkWidget) gboolean;
+pub extern "c" fn gtk_widget_set_visible(widget: *GtkWidget, visible: gboolean) void;
+pub extern "c" fn gtk_widget_show_all(widget: *GtkWidget) void;
+pub extern "c" fn gtk_widget_get_parent(widget: *GtkWidget) ?*GtkWidget;
+pub extern "c" fn gtk_bin_get_child(bin: *GtkBin) ?*GtkWidget;
+pub extern "c" fn gtk_container_get_children(container: *GtkContainer) ?*GList;
+pub extern "c" fn gtk_container_add(container: *GtkContainer, widget: *GtkWidget) void;
+pub extern "c" fn gtk_box_pack_start(box: *GtkBox, child: *GtkWidget, expand: gboolean, fill: gboolean, padding: guint) void;
+pub extern "c" fn gtk_box_reorder_child(box: *GtkBox, child: *GtkWidget, position: gint) void;
+pub extern "c" fn gtk_accel_group_new() *GtkAccelGroup;
+pub extern "c" fn gtk_window_add_accel_group(window: *GtkWindow, group: *GtkAccelGroup) void;
+pub extern "c" fn gtk_accelerator_parse(accelerator: [*:0]const u8, key: ?*guint, mods: ?*c_int) gboolean;
+pub extern "c" fn gtk_widget_add_accelerator(
+    widget: *GtkWidget,
+    accel_signal: [*:0]const u8,
+    group: *GtkAccelGroup,
+    key: guint,
+    mods: c_int,
+    flags: guint,
+) void;
+pub extern "c" fn gtk_menu_popup_at_pointer(menu: *GtkMenu, trigger_event: ?*anyopaque) void;
+pub extern "c" fn gtk_menu_popup_at_rect(
+    menu: *GtkMenu,
+    rect_window: ?*anyopaque,
+    rect: *const GdkRectangle,
+    rect_anchor: c_int,
+    menu_anchor: c_int,
+    trigger_event: ?*anyopaque,
+) void;
+pub extern "c" fn gtk_menu_popdown(menu: *GtkMenu) void;
+pub extern "c" fn gtk_container_remove(container: *GtkContainer, widget: *GtkWidget) void;
+pub extern "c" fn gtk_widget_get_window(widget: *GtkWidget) ?*anyopaque;
+pub extern "c" fn g_signal_connect_data(
+    instance: *anyopaque,
+    detailed_signal: [*:0]const u8,
+    c_handler: ?*const anyopaque,
+    data: ?*anyopaque,
+    destroy_data: ?*const fn (?*anyopaque, ?*anyopaque) callconv(.c) void,
+    connect_flags: c_int,
+) c_ulong;
+pub extern "c" fn g_object_ref(obj: *anyopaque) *anyopaque;
+pub extern "c" fn g_signal_emit_by_name(instance: *anyopaque, detailed_signal: [*:0]const u8, ...) void;
+pub extern "c" fn g_type_name(gtype: usize) [*:0]const u8;
+pub extern "c" fn g_list_free(list: *GList) void;
+pub extern "c" fn g_list_length(list: ?*GList) guint;
+pub extern "c" fn g_object_unref(obj: ?*anyopaque) void;
+
+// ------------------------------------------------------------------ tray (M4-03)
+
+pub extern "c" fn gtk_status_icon_new_from_icon_name(name: [*:0]const u8) ?*GtkStatusIcon;
+pub extern "c" fn gtk_status_icon_new_from_file(filename: [*:0]const u8) ?*GtkStatusIcon;
+pub extern "c" fn gtk_status_icon_set_from_icon_name(icon: *GtkStatusIcon, name: [*:0]const u8) void;
+pub extern "c" fn gtk_status_icon_set_from_file(icon: *GtkStatusIcon, filename: [*:0]const u8) void;
+pub extern "c" fn gtk_status_icon_set_tooltip_text(icon: *GtkStatusIcon, text: [*:0]const u8) void;
+pub extern "c" fn gtk_status_icon_set_title(icon: *GtkStatusIcon, title: [*:0]const u8) void;
+pub extern "c" fn gtk_status_icon_set_visible(icon: *GtkStatusIcon, visible: gboolean) void;
+pub extern "c" fn gtk_status_icon_get_visible(icon: *GtkStatusIcon) gboolean;
+
 var gtk_ready: ?bool = null;
 
 /// Initializes GTK once. Returns `false` when there is no display (headless CI without Xvfb).
@@ -142,4 +274,68 @@ test "gtk bindings compile without a display" {
     const available = isAvailable();
     if (!available) return error.SkipZigTest;
     _ = clipboard();
+}
+
+/// Layout of a GTK menu-item tree, as a test / host can inspect it. Mirrors the information a user
+/// sees, so a native menu can be asserted from the GTK side without synthesising clicks.
+pub const MenuItemInfo = struct {
+    pub const Kind = enum { menu_bar, menu, item, check_item, separator, other };
+
+    kind: Kind,
+    label: ?[]const u8,
+    sensitive: bool,
+    active: bool,
+    children: usize,
+};
+
+/// Identifies `widget` (`GtkMenuBar` / `GtkMenu` / `GtkMenuItem` / `GtkCheckMenuItem` / …).
+pub fn widgetKind(widget: *GtkWidget) MenuItemInfo.Kind {
+    const instance: *GTypeInstance = @ptrCast(@alignCast(widget));
+    const name = instance.typeName() orelse return .other;
+    const span = std.mem.span(name);
+    if (std.mem.eql(u8, span, "GtkMenuBar")) return .menu_bar;
+    if (std.mem.eql(u8, span, "GtkMenu")) return .menu;
+    if (std.mem.eql(u8, span, "GtkCheckMenuItem")) return .check_item;
+    if (std.mem.eql(u8, span, "GtkSeparatorMenuItem")) return .separator;
+    if (std.mem.eql(u8, span, "GtkMenuItem")) return .item;
+    return .other;
+}
+
+/// Reads back one menu node (label / sensitivity / check state / child count).
+pub fn describeMenuItem(allocator: Allocator, widget: *GtkWidget) !MenuItemInfo {
+    const kind = widgetKind(widget);
+    var label: ?[]const u8 = null;
+    if (kind == .item or kind == .check_item) {
+        if (gtk_menu_item_get_label(@ptrCast(widget))) |raw| {
+            label = try fromGtkAlloc(allocator, raw);
+        }
+    }
+    const list = gtk_container_get_children(@ptrCast(widget));
+    defer if (list) |l| g_list_free(l);
+    return .{
+        .kind = kind,
+        .label = label,
+        .sensitive = gtk_widget_get_sensitive(widget) != 0,
+        .active = kind == .check_item and gtk_check_menu_item_get_active(@ptrCast(widget)) != 0,
+        .children = if (kind == .menu_bar or kind == .menu) g_list_length(list) else 0,
+    };
+}
+
+/// N-th child of a `GtkMenuShell` / `GtkBox` (`g_list_nth_data` without the extra binding).
+pub fn nthChild(container: *GtkWidget, n: usize) ?*GtkWidget {
+    var list = gtk_container_get_children(@ptrCast(container));
+    defer if (list) |l| g_list_free(l);
+    var i: usize = 0;
+    while (list) |node| : (i += 1) {
+        if (i == n) return @ptrCast(@alignCast(node.data orelse return null));
+        list = node.next;
+    }
+    return null;
+}
+
+/// Number of children of a container widget.
+pub fn childCount(widget: *GtkWidget) usize {
+    const list = gtk_container_get_children(@ptrCast(widget));
+    defer if (list) |l| g_list_free(l);
+    return g_list_length(list);
 }

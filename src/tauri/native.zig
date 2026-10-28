@@ -72,18 +72,43 @@ pub fn clipboardBackend() clipboard.Backend {
     return clipboard_impl.backend();
 }
 
-/// Menu / tray backends.
-///
-/// `M4-03` currently ships the toolkit-independent layer only: `plugin:menu` / `plugin:tray` are
-/// fully wire-compatible and fully unit-tested against their `Mock` backends, while the native
-/// renderers (GTK `GtkMenuBar` / `GtkStatusIcon`, AppKit `NSMenu` / `NSStatusItem`,
-/// Win32 `HMENU` / `Shell_NotifyIconW`) are selected here once compiled in.
+const menu_impl = if (is_gtk)
+    @import("menu/native_gtk.zig")
+else
+    @import("menu/native_stub.zig");
+
+const tray_impl = if (is_gtk)
+    @import("tray/native_gtk.zig")
+else
+    @import("tray/native_stub.zig");
+
+/// The menu backend compiled for this target.
 pub fn menuBackend() menu.Backend {
-    return .{ .vtable = &menu.StubBackend.vtable };
+    return menu_impl.backend();
 }
 
+/// The tray backend compiled for this target.
 pub fn trayBackend() tray.Backend {
-    return .{ .vtable = &tray.StubBackend.vtable };
+    return tray_impl.backend();
+}
+
+/// Registers a toplevel window with the native menu backend.
+///
+/// GTK has no application menu bar: the menu is a widget packed into each window, so the host must
+/// hand over every toplevel (`handle` = `GtkWindow`). Backends with a real global menu (Cocoa,
+/// Win32) ignore this. Returns `false` when the backend does not need window registration.
+pub fn registerMenuWindow(label: []const u8, handle: ?*anyopaque) bool {
+    if (comptime @hasDecl(menu_impl, "registerWindow")) {
+        const widget: *@import("native_gtk.zig").GtkWidget = @ptrCast(@alignCast(handle orelse return false));
+        menu_impl.registerWindow(label, widget) catch return false;
+        return true;
+    }
+    return false;
+}
+
+/// Forgets a window registered with `registerMenuWindow` (call before destroying it).
+pub fn unregisterMenuWindow(label: []const u8) void {
+    if (comptime @hasDecl(menu_impl, "unregisterWindow")) menu_impl.unregisterWindow(label);
 }
 
 /// Human-readable description of the selected backends (surfaced in `OK`/`SKIP` diagnostics).
@@ -103,6 +128,8 @@ test {
     _ = win32;
     _ = menu;
     _ = tray;
+    _ = menu_impl;
+    _ = tray_impl;
     // Shared NUL-termination helper (no OS dependency, so its tests run everywhere).
     _ = @import("native_cstr.zig");
 }

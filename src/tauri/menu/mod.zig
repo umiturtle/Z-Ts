@@ -57,6 +57,11 @@ pub const MenuError = error{
     NotFound,
     /// A `Predefined` item was created without the required `item` option.
     MissingPredefinedItem,
+    /// A flattened snapshot skips a nesting level (only a `.submenu` may open one).
+    InvalidMenuDepth,
+    /// The native toolkit cannot host a menu in the requested place (e.g. a GTK window whose
+    /// child is not a `GtkBox`).
+    Unsupported,
     /// The `accelerator` string could not be parsed.
     InvalidAccelerator,
     OutOfMemory,
