@@ -140,6 +140,9 @@ FAIL parity fw-react: layout differs by 5px at box #3 (tolerance 1px)
 - `line-height` は**整数 px**（小数の倍率は使わない）
 - `letter-spacing` は **px**（`em` は丸め誤差を生む）
 - 幅の制約は **px**（`ch` は `0` の送り幅依存で、エンジン差が増幅される）
+- ヘッダのように**同じ文字列を OS がわずかに違う幅で測る**ブロックは、`width` を固定して
+  `overflow:hidden` を付ける（幅が固定なので箱は全 OS 一致、はみ出しは `scrollWidth` を
+  押し広げない）。文字そのものは画素比較で検証される
 - `font-family` に**システムフォントを混ぜない**（`hidpi-ruler` が `-apple-system` を
   使っていて macOS/Linux で別書体になっていた）
 

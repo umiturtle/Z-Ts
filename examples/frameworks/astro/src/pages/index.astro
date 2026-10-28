@@ -20,7 +20,10 @@ body { font-family:ZTSSans; font-size:15px; line-height:24px; color:#0f172a; bac
 .brand { display:flex; align-items:center; gap:12px; flex:0 0 auto; }
 /* The inner block must not shrink either: a 4px wider text run on WebKitGTK used to
    shrink it and change the width of every header line. */
-.brand > div { flex:0 0 auto; }
+/* Fixed width + overflow:hidden: the box geometry is identical on every OS even though WebKitGTK
+   measures the same string a few pixels narrower, and the hidden overflow keeps scrollWidth
+   at 760 (a visible nowrap overflow used to widen the document by 6px on GTK). */
+.brand > div { flex:0 0 auto; width:300px; overflow:hidden; }
 .logo { width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg,#6366f1,#22d3ee);
   color:#fff; font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; }
 .title { font-size:19px; font-weight:700; letter-spacing:-.01em; white-space:nowrap; }
