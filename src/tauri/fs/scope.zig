@@ -396,7 +396,12 @@ test "Scope.resolveAlloc: rejects `..` traversal out of the root" {
     try testing.expect(std.mem.endsWith(u8, inside, "file.txt"));
 
     try testing.expectError(error.OutOfScope, scope.resolveAlloc(io, testing.allocator, "../../etc/passwd", root_path));
-    try testing.expectError(error.OutOfScope, scope.resolveAlloc(io, testing.allocator, "/etc/passwd", root_path));
+    // An absolute path that is definitely outside the temporary directory on this OS.
+    const outside_abs = if (path.PathStyle.current() == .windows)
+        "C:\\Windows\\System32\\drivers\\etc\\hosts"
+    else
+        "/etc/passwd";
+    try testing.expectError(error.OutOfScope, scope.resolveAlloc(io, testing.allocator, outside_abs, root_path));
     try testing.expectError(error.InvalidPath, scope.resolveAlloc(io, testing.allocator, "", root_path));
 }
 
@@ -462,6 +467,8 @@ test "Scope.resolveAlloc: symlink that stays inside the root is allowed and cano
 
     const resolved = try scope.resolveAlloc(io, testing.allocator, "alias/data.txt", root_path);
     defer testing.allocator.free(resolved);
-    try testing.expect(std.mem.endsWith(u8, resolved, "real/data.txt"));
-    try testing.expectEqual(@as(usize, root_len + "/real/data.txt".len), resolved.len);
+    // Compare against the separator-correct expectation (`/` on POSIX, `\` on Windows).
+    const expected = try path.joinWithStyle(testing.allocator, path.PathStyle.current(), &.{ root_path, "real", "data.txt" });
+    defer testing.allocator.free(expected);
+    try testing.expectEqualStrings(expected, resolved);
 }

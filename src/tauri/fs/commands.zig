@@ -818,7 +818,15 @@ test "plugin:fs denies `..` traversal, out-of-scope absolute paths, and symlink 
         try r.expectCode("OutOfScope");
     }
     {
-        var r = try f.invoke("plugin:fs|write_text_file", "{\"path\":\"/tmp/zts-escape.txt\",\"data\":\"x\"}");
+        // An absolute path outside the scope on every OS (`/tmp` is not absolute on Windows).
+        // Forward slashes keep the JSON payload escape-free; Windows accepts them as separators.
+        const outside = if (path.PathStyle.current() == .windows)
+            "C:/Windows/zts-escape.txt"
+        else
+            "/tmp/zts-escape.txt";
+        var payload_buf: [256]u8 = undefined;
+        const payload = try std.fmt.bufPrint(&payload_buf, "{{\"path\":\"{s}\",\"data\":\"x\"}}", .{outside});
+        var r = try f.invoke("plugin:fs|write_text_file", payload);
         defer r.deinit();
         try r.expectCode("OutOfScope");
     }
