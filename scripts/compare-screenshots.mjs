@@ -229,6 +229,20 @@ for (const pattern of reference.manifest.patterns) {
       );
       continue;
     }
+    // No page may overflow horizontally: `scrollWidth` must equal the CSS viewport width. This
+    // is the invariant that caught a SvelteKit page whose `<style>` block had been scoped and
+    // stripped of its `html,body` rule (it silently fell back to UA defaults).
+    for (const [layout, host] of [[la, reference.manifest.host], [lb, other.manifest.host]]) {
+      if (typeof layout.doc_w === 'number' && layout.doc_w !== pattern.css_width) {
+        reject(
+          `${pattern.name}: ${host} document is ${layout.doc_w}px wide but the viewport is ` +
+            `${pattern.css_width}px — something overflows horizontally ` +
+            `(wide: ${layout.probe && layout.probe.wide ? layout.probe.wide : '?'})`,
+        );
+        break;
+      }
+    }
+    if (problems.some((p) => p.startsWith(`${pattern.name}:`))) continue;
     const docDelta = Math.max(Math.abs(la.doc_w - lb.doc_w), Math.abs(la.doc_h - lb.doc_h));
     if (docDelta > layoutTolerance) {
       reject(

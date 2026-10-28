@@ -225,7 +225,8 @@ render(() => <App />, document.getElementById('root'));
       write(join(dir, 'svelte.config.js'), `export default { compilerOptions: { hydratable: false } };\n`);
       write(join(dir, 'index.html'), HTML_SHELL('<div id="root"></div>', '<script type="module" src="/src/main.js"></script>'));
       write(join(dir, 'src/App.svelte'), svelteBody('Svelte', '5.57'));
-      write(join(dir, 'src/main.js'), `import { mount } from 'svelte';\nimport App from './App.svelte';\nmount(App, { target: document.getElementById('root') });\n`);
+      write(join(dir, 'src/app.css'), APP_CSS);
+      write(join(dir, 'src/main.js'), `import { mount } from 'svelte';\nimport './app.css';\nimport App from './App.svelte';\nmount(App, { target: document.getElementById('root') });\n`);
     },
     build: ['npm', ['install', '--no-audit', '--no-fund'], 'npm', ['run', 'build']],
     dist: 'dist',
@@ -467,6 +468,10 @@ export default defineConfig({
       write(join(dir, 'src/routes/+layout.js'), `export const prerender = true;\nexport const ssr = true;\n`);
       write(join(dir, 'src/routes/+page.js'), `export const prerender = true;\nexport const ssr = true;\n`);
       write(join(dir, 'src/routes/+page.svelte'), svelteKitBody('SvelteKit', '3.1'));
+      // Global stylesheet: Svelte scopes a component's `<style>` and silently drops element
+      // selectors (`html`, `body`, `*`), which left the page on UA defaults (8px body margin,
+      // fallback font) and made its header boxes differ per OS.
+      write(join(dir, 'src/app.css'), APP_CSS);
     },
     build: ['npm', ['install', '--no-audit', '--no-fund'], 'npm', ['run', 'build']],
     dist: 'build',
@@ -648,15 +653,13 @@ function svelteBody(label, version) {
     </div>
   </section>
 </div>
-
-<style>${APP_CSS}</style>
 `;
 }
 
 function svelteKitBody(label, version) {
   return svelteBody(label, version).replace(
     "import { onMount } from 'svelte';\n  onMount(() => {",
-    "import { onMount } from 'svelte';\n  onMount(() => {\n    if (typeof document === 'undefined') return;",
+    "import '../app.css';\n  import { onMount } from 'svelte';\n  onMount(() => {\n    if (typeof document === 'undefined') return;",
   );
 }
 
