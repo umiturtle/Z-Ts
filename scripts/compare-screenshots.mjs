@@ -237,7 +237,8 @@ for (const pattern of reference.manifest.patterns) {
         reject(
           `${pattern.name}: ${host} document is ${layout.doc_w}px wide but the viewport is ` +
             `${pattern.css_width}px — something overflows horizontally ` +
-            `(wide: ${layout.probe && layout.probe.wide ? layout.probe.wide : '?'})`,
+            `(wide: ${layout.probe && layout.probe.wide ? layout.probe.wide : '?'})\n` +
+            dumpBoxes(host, layout, layout),
         );
         break;
       }
