@@ -590,6 +590,8 @@ pub const MenuState = struct {
         var ch = self.channels.iterator();
         while (ch.next()) |entry| self.allocator.free(entry.key_ptr.*);
         self.channels.deinit(self.allocator);
+        var wm = self.window_menus.iterator();
+        while (wm.next()) |entry| self.allocator.free(entry.key_ptr.*);
         self.window_menus.deinit(self.allocator);
     }
 
@@ -624,10 +626,12 @@ pub const MenuState = struct {
         if (self.app_menu == node) self.app_menu = null;
         var it = self.window_menus.iterator();
         while (it.next()) |entry| {
-            if (entry.value_ptr.* == node) {
-                self.window_menus.removeByPtr(entry.key_ptr);
-                return;
-            }
+            if (entry.value_ptr.* != node) continue;
+            // `removeByPtr` cannot hand the key back, so remove by key and free it here.
+            const key = entry.key_ptr.*;
+            _ = self.window_menus.remove(key);
+            self.allocator.free(key);
+            return;
         }
     }
 
@@ -1034,10 +1038,14 @@ pub const Commands = struct {
 
     pub fn set_as_app_menu(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53 }) MenuError!?struct { u53, []const u8 } {
         const node = state.lookup(args.rid, .Menu) orelse return error.BadResourceId;
+        // Upstream returns the menu that was replaced (`Option<(ResourceId, MenuId)>`), not the new
+        // one, so the frontend can restore it.
+        const previous = state.app_menu;
         state.app_menu = node;
         state.syncActivator();
         try state.backend.applyAppMenu(.{ .entries = try state.snapshotOf(ctx.scratch, node) });
-        return .{ args.rid, node.id };
+        if (previous) |prev| return .{ prev.rid, prev.id };
+        return null;
     }
 
     pub fn set_as_window_menu(ctx: *rpc.Ctx, state: *MenuState, args: struct {
@@ -1046,12 +1054,14 @@ pub const Commands = struct {
     }) MenuError!?struct { u53, []const u8 } {
         const node = state.lookup(args.rid, .Menu) orelse return error.BadResourceId;
         const label = args.window orelse "";
+        const previous = state.window_menus.get(label);
         const key = state.allocator.dupe(u8, label) catch return error.OutOfMemory;
         errdefer state.allocator.free(key);
         if (try state.window_menus.fetchPut(state.allocator, key, node)) |old| state.allocator.free(old.key);
         state.syncActivator();
         try state.backend.applyWindowMenu(args.window, .{ .entries = try state.snapshotOf(ctx.scratch, node) });
-        return .{ args.rid, node.id };
+        if (previous) |prev| return .{ prev.rid, prev.id };
+        return null;
     }
 
     pub fn text(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53, kind: ItemKind }) MenuError![]const u8 {

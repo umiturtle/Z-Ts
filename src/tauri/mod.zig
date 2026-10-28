@@ -61,10 +61,15 @@ pub const CorePluginsSchema = rpc.Schema(.{
     .tauri_path = path.Commands,
     .tauri_app = app.Commands,
     .tauri_resources = resources.Commands,
+    // `M4-03`: `plugin:menu|*` / `plugin:tray|*` live in the same `withCorePlugins` bundle, exactly
+    // like upstream `tauri`, so `@tauri-apps/api/menu` & `/tray` work without extra wiring.
+    .tauri_menu = menu.Commands,
+    .tauri_tray = tray.Commands,
 });
 
 /// Merges a user's application `rpc.Schema(...)` (or `.{ .ns = Cmds }` struct literal)
-/// with all 5 Tauri v2 core plugins in one line.
+/// with all 7 Tauri v2 core plugins (`window`, `event`, `path`, `app`, `resources`, `menu`, `tray`)
+/// in one line.
 pub fn withCorePlugins(comptime app_schema_or_specs: anytype) type {
     if (@TypeOf(app_schema_or_specs) == type) {
         return rpc.merge(.{ app_schema_or_specs, CorePluginsSchema });
@@ -79,6 +84,11 @@ pub const CorePluginStates = struct {
     paths: PathState,
     app_state: AppState,
     resources: ResourceTable,
+    /// `M4-03`: `plugin:menu`. Starts on the `Stub` backend; `withMenuBackend` swaps in a native
+    /// one (`native.menuBackend()`) or a `Mock` for tests.
+    menu_state: MenuState,
+    /// `M4-03`: `plugin:tray` (needs `menu_state` for the attached menus).
+    tray_state: TrayState,
 
     /// Heap-allocated bundle because internal cross-references (`events.window_labels -> &self.windows`)
     /// require a stable memory address.
@@ -99,15 +109,36 @@ pub const CorePluginStates = struct {
             .paths = effective_paths,
             .app_state = AppState.init(io, app_cfg),
             .resources = ResourceTable.init(allocator, io),
+            // `self` is heap-allocated, so `&self.resources` / `&self.menu_state` stay valid for
+            // the whole lifetime of the bundle.
+            .menu_state = MenuState.init(allocator, io, &self.resources),
+            .tray_state = undefined, // patched right below: it needs `&self.menu_state`
         };
+        self.tray_state = TrayState.init(allocator, io, &self.resources, &self.menu_state);
         self.events.window_labels = lookupWindowLabel;
         self.events.window_labels_ctx = &self.windows;
         return self;
     }
 
+    /// Swaps in a native `plugin:menu` backend (e.g. `native.menuBackend()`).
+    pub fn withMenuBackend(self: *CorePluginStates, backend: menu.Backend) *CorePluginStates {
+        self.menu_state = self.menu_state.withBackend(backend);
+        return self;
+    }
+
+    /// Swaps in a native `plugin:tray` backend (e.g. `native.trayBackend()`).
+    pub fn withTrayBackend(self: *CorePluginStates, backend: tray.Backend) *CorePluginStates {
+        self.tray_state = self.tray_state.withBackend(backend);
+        return self;
+    }
+
     pub fn destroy(self: *CorePluginStates) void {
         const alloc = self.windows.allocator;
+        // Menu nodes are owned by `resources`; closing the table detaches them from `menu_state`
+        // first, so the bookkeeping maps must be freed afterwards.
         self.resources.deinit();
+        self.menu_state.deinit();
+        self.tray_state.deinit();
         self.events.deinit();
         self.windows.deinit();
         alloc.destroy(self);

@@ -192,6 +192,8 @@ pub fn App(comptime runtime: RuntimeMode) type {
                     .tauri_path = &plugins.paths,
                     .tauri_app = &plugins.app_state,
                     .tauri_resources = &plugins.resources,
+                    .tauri_menu = &plugins.menu_state,
+                    .tauri_tray = &plugins.tray_state,
                 });
             }
         };
