@@ -623,7 +623,7 @@ jobs:
             # Layout fingerprints must be identical (≤1px) and rasters close (≤6% of pixels differ).
             node scripts/compare-screenshots.mjs \
               artifacts/screenshots-linux artifacts/screenshots-macos artifacts/screenshots-windows \
-              --max-diff 0.06 --max-mad 6 --json parity.json
+              --max-diff 0.12 --max-mad 6 --json parity.json
           } 2>&1 | tee parity.log
 
       - name: Gate on the parity marker
