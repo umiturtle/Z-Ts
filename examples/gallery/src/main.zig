@@ -281,6 +281,12 @@ fn onSchemeRequest(userdata: ?*anyopaque, req: webview.types.SchemeRequest) void
         }
     }
 
+    // Absolute asset URLs from a published build (`/assets/…`, `/_next/static/…`).
+    if (fw_alias(path)) |asset| {
+        serveBytes(g, req, asset.bytes, asset.content_type);
+        return;
+    }
+
     // Bundled fonts: the *same* bytes on every OS, which is what makes the rasters comparable.
     if (fontFor(path)) |asset| {
         const owned = foundation.OwnedBytes.dupe(g.allocator, asset.bytes) catch {
@@ -425,6 +431,24 @@ fn fw_asset(path: []const u8) ?*const fw.Asset {
     const wanted = std.fmt.bufPrint(&buf, "/{s}", .{path}) catch return null;
     for (&fw.assets) |*asset| {
         if (std.mem.eql(u8, asset.path, wanted)) return asset;
+    }
+    return null;
+}
+
+/// Bundlers emit **absolute** asset URLs (`/assets/index-abc.js`, `/_next/static/…`, `/_nuxt/…`).
+/// A page served from `/fw/<name>/index.html` would then request those at the *document root*, so
+/// the handler also answers `/<path>` when some published build has a file with that suffix.
+/// Hashed file names make collisions across the 9 builds practically impossible.
+fn fw_alias(path: []const u8) ?*const fw.Asset {
+    if (std.mem.eql(u8, path, "/")) return null;
+    for (&fw.assets) |*asset| {
+        if (asset.path.len <= path.len) continue;
+        const cut = asset.path.len - path.len;
+        if (!std.mem.endsWith(u8, asset.path, path)) continue;
+        // `path` always starts with '/', so `cut` must land on a separator: that keeps
+        // `/app.js` from matching `…/myapp.js`.
+        if (asset.path[cut] != '/') continue;
+        return asset;
     }
     return null;
 }
@@ -878,6 +902,36 @@ test "gallery: scheme routing maps URLs to patterns and serves the JSON endpoint
     // WebView2 rewrites the custom scheme to a virtual `http://` origin; the router must agree.
     try testing.expectEqualStrings("/hero-light", pathOf("http://tauri.localhost/hero-light"));
     try testing.expectEqualStrings("/api/state", pathOf("http://tauri.localhost/api/state"));
+}
+
+test "gallery: bundled framework builds are addressable by route and by absolute asset URL" {
+    const testing = std.testing;
+    // Every framework pattern resolves to its own index.html ...
+    for (patterns) |p| {
+        if (p.route.len == 0) continue;
+        var buf: [128]u8 = undefined;
+        const route = try std.fmt.bufPrint(&buf, "/{s}", .{p.route});
+        const asset = fw_asset(route[1..]) orelse return error.MissingAsset;
+        try testing.expect(std.mem.endsWith(u8, asset.path, "/index.html"));
+        try testing.expectEqualStrings("text/html; charset=utf-8", asset.content_type);
+        // ... and `tauri://localhost/fw/<name>` (no file name) maps to the same pattern.
+        try testing.expect(patternForPath(route[0 .. route.len - "index.html".len]) != null);
+    }
+
+    // Absolute URLs emitted by bundlers fall back to a suffix match.
+    var found_js = false;
+    for (&fw.assets) |*asset| {
+        if (!std.mem.endsWith(u8, asset.path, ".js")) continue;
+        const slash = std.mem.lastIndexOfScalar(u8, asset.path, '/') orelse continue;
+        const tail = asset.path[slash..];
+        const hit = fw_alias(tail) orelse return error.MissingAlias;
+        try testing.expect(std.mem.endsWith(u8, hit.path, tail));
+        found_js = true;
+    }
+    try testing.expect(found_js);
+    // Paths that are not part of a build stay unhandled (so `/api/state` keeps working).
+    try testing.expectEqual(@as(?*const fw.Asset, null), fw_alias("/api/state"));
+    try testing.expectEqual(@as(?*const fw.Asset, null), fw_alias("/"));
 }
 
 test "gallery: SHA-256 helper produces lowercase hex of the right length" {

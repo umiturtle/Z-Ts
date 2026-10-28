@@ -801,7 +801,7 @@ function writeAssetTable() {
   walk(root);
   const rows = files.map((file) => {
     const rel = relative(join(ROOT, 'examples', 'gallery', 'src'), file).split(sep).join('/');
-    const url = '/' + relative(root, file).split(sep).join('/');
+    const url = '/fw/' + relative(root, file).split(sep).join('/');
     const mime = CONTENT_TYPES[extname(file)] ?? 'application/octet-stream';
     return `    .{ .path = "${url}", .content_type = "${mime}", .bytes = @embedFile("${rel}") },`;
   });
@@ -812,7 +812,15 @@ function writeAssetTable() {
 
 // ---------------------------------------------------------------- main
 
-const requested = process.argv.slice(2);
+const requested = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+
+// `--table-only` regenerates `src/fw_assets.zig` from what is already on disk (no npm, no builds).
+if (process.argv.includes('--table-only')) {
+  const tableSize = writeAssetTable();
+  console.log(`asset table: examples/gallery/src/fw_assets.zig (${tableSize} files)`);
+  process.exit(0);
+}
+
 const names = requested.length ? requested : Object.keys(APPS);
 let failed = [];
 
