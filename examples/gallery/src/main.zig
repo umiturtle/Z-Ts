@@ -697,17 +697,43 @@ const ready_script =
     \\      };
     \\    } catch (e) { paint = { error: String(e) }; }
     \\
-    \\    // 判定は「同梱 woff2 の送り幅どおりに並んでいるか」。advances は
+    \\    // 判定は「同梱 woff2 の送り幅どおりに組まれているか」。advances は
     \\    //   ZTSSans 400 '0' = 555/1000em → 8.88px @16px、700 = 590 → 9.44px、
     \\    //   ZTSSerif 400 = 557 → 8.91px、ZTSMono 400 = 600 → 9.60px、CJK = 1em/字 → 96px。
-    \\    // フォールバック書体（Liberation / Segoe / Helvetica）でこの 5 値が揃うことはまず無い。
+    \\    // フォールバック書体（Liberation / Segoe / Helvetica / DejaVu）でこの 5 値は揃わない。
+    \\    //
+    \\    // 測るのは **canvas の measureText**。WebKitGTK（GTK 4.1）は `getBoundingClientRect()`
+    \\    // の幅を整数 px に丸めて返すため（8.88 → 9, 9.44 → 9）、DOM 計測では 400 と 700 が
+    \\    // 区別できず、丸めだけでゲートが落ちる。measureText は両エンジンとも小数で返す。
+    \\    var measureText = function (family, weight, text) {
+    \\      try {
+    \\        var c = document.createElement('canvas').getContext('2d');
+    \\        if (!c) return null;
+    \\        c.font = (weight || 400) + ' 16px "' + family + '"';
+    \\        return Math.round(c.measureText(text).width * 100) / 100;
+    \\      } catch (e) { return null; }
+    \\    };
     \\    var expected = { sans0: 8.88, sans0b: 9.44, serif0: 8.91, mono0: 9.6, cjk: 96 };
+    \\    var canvasMetrics = {
+    \\      sans0: measureText('ZTSSans', 400, '0'),
+    \\      sans0b: measureText('ZTSSans', 700, '0'),
+    \\      serif0: measureText('ZTSSerif', 400, '0'),
+    \\      mono0: measureText('ZTSMono', 400, '0'),
+    \\      cjk: measureText('ZTSSans', 400, 'デスクトップ')
+    \\    };
+    \\    // canvas が使えない環境では DOM 計測に退避する（整数に丸められていても通るように、
+    \\    // 「実値」と「丸め値」のどちらかに一致すれば良い）。
+    \\    var canvasOk = Object.keys(expected).every(function (k) {
+    \\      return typeof canvasMetrics[k] === 'number';
+    \\    });
+    \\    var source = canvasOk ? canvasMetrics : probe;
     \\    var off = [];
     \\    Object.keys(expected).forEach(function (k) {
-    \\      var got = probe[k];
-    \\      if (typeof got !== 'number' || Math.abs(got - expected[k]) > 0.15) {
-    \\        off.push(k + '=' + got + '≠' + expected[k]);
-    \\      }
+    \\      var want = expected[k];
+    \\      var got = source[k];
+    \\      var ok = typeof got === 'number' &&
+    \\        (Math.abs(got - want) <= 0.15 || (!canvasOk && Math.abs(got - Math.round(want)) <= 0.15));
+    \\      if (!ok) off.push(k + '=' + got + '≠' + want);
     \\    });
     \\    var metricsOk = off.length === 0;
     \\    var parityState = window.__ztsParity || {};
@@ -717,6 +743,8 @@ const ready_script =
     \\      checkOk = document.fonts.check('16px ZTSSans') && document.fonts.check('16px ZTSMono');
     \\    } catch (e) { checkOk = false; }
     \\    var fontOk = bootOk && facesLoaded >= 4 && metricsOk;
+    \\    probe.canvas = canvasMetrics;
+    \\    probe.metrics_source = canvasOk ? 'canvas' : 'dom';
     \\    probe.faces = faceList.length;
     \\    probe.face_detail = faceList.join(' ');
     \\    probe.paint = paint;

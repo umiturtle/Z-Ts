@@ -58,10 +58,12 @@ examples/gallery (Zig)                         scripts/                      .gi
 
 - `boxes` は `body / .shell / .head / .card / .counter / .value / .features / h1… / button …` の
   最大 40 要素の `getBoundingClientRect()` を **1px に丸めた** もの。
-- `font_ok` は「同梱 woff2 の送り幅どおりに組まれているか」。DOM で 16px の `0` を測り、
-  `ZTSSans` 400 = 8.88px / 700 = 9.44px / `ZTSSerif` = 8.91px / `ZTSMono` = 9.60px、
+- `font_ok` は「同梱 woff2 の送り幅どおりに組まれているか」。16px で
+  `ZTSSans` 400 の `0` = 8.88px / 700 = 9.44px / `ZTSSerif` = 8.91px / `ZTSMono` = 9.60px、
   CJK（1em/字）6 文字 = 96px の 5 値が ±0.15px で揃い、**かつ** `document.fonts` に 4 面以上が
-  `loaded` で載っていることを要求する。`document.fonts.check()` は WebKit では未適用でも `true` を
+  `loaded` で載っていることを要求する。測るのは **canvas の `measureText`**。WebKitGTK は
+  `getBoundingClientRect()` の幅を整数 px に丸めて返すため（8.88 → 9）、DOM 計測では 400 と 700 が
+  区別できず、丸めだけでゲートが落ちる。canvas が無い環境だけ DOM 計測（丸め許容）へ退避する。`document.fonts.check()` は WebKit では未適用でも `true` を
   返すので判定には使わない（診断値としてのみ送出）。ファミリ名に空白を入れないのは、minify で
   `"ZTS Sans"` の引用符が落ちて無効名になるのを避けるため。
 - `probe` は切り分け用。DOM で測った送り幅（`sans0` / `sans0b` / `serif0` / `mono0` / `cjk` /

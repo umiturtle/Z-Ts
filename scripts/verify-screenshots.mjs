@@ -122,11 +122,13 @@ function probeSummary(entry) {
   const probe = layout.probe;
   if (!probe) return 'probe=(none)';
   const paint = probe.paint ? Object.entries(probe.paint).map(([k, v]) => `${k}:${v}`).join(',') : '?';
+  const canvas = probe.canvas ? Object.entries(probe.canvas).map(([k, v]) => `${k}:${v}`).join(',') : '?';
   const fetchInfo = entry.font_fetch ? entry.font_fetch : '(no fontfetch message)';
   return (
-    `sans0=${probe.sans0} sans0b=${probe.sans0b} serif0=${probe.serif0} mono0=${probe.mono0} ` +
-    `cjk=${probe.cjk} generic0=${probe.generic0} ch44=${probe.ch44} size=${probe.size} ` +
-    `paint=[${paint}] faces="${probe.faces}" status=${probe.status} fontfetch=${fetchInfo}`
+    `source=${probe.metrics_source} off="${probe.metrics_off ?? ''}" canvas=[${canvas}] ` +
+    `dom=sans0:${probe.sans0}/700:${probe.sans0b}/serif:${probe.serif0}/mono:${probe.mono0}/` +
+    `cjk:${probe.cjk}/generic:${probe.generic0} paint=[${paint}] faces=${probe.faces} ` +
+    `boot="${probe.boot}" fontfetch=${fetchInfo}`
   );
 }
 
