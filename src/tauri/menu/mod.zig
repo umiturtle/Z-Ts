@@ -507,6 +507,17 @@ pub const Node = struct {
 // Backend vtable
 // ============================================================================
 
+/// Receiver for menu-item activations. A native backend renders items once and then calls
+/// `call(ctx, MenuId)` on every click; the core forwards that `MenuId` into the item's
+/// `Channel<string>` (upstream `MenuChannels`). `Mock` stores it so the whole click → IPC path is
+/// exercisable without a toolkit.
+pub const Activator = struct {
+    ctx: ?*anyopaque = null,
+    call: *const fn (ctx: ?*anyopaque, id: []const u8) void = noop,
+
+    fn noop(_: ?*anyopaque, _: []const u8) void {}
+};
+
 pub const Backend = struct {
     ctx: ?*anyopaque = null,
     vtable: *const VTable,
@@ -518,6 +529,8 @@ pub const Backend = struct {
         apply_window_menu: *const fn (ctx: ?*anyopaque, window: ?[]const u8, snapshot: Snapshot) MenuError!void,
         /// Shows `snapshot` as a context menu at `at` (`null` = current mouse position).
         popup: *const fn (ctx: ?*anyopaque, window: ?[]const u8, snapshot: Snapshot, at: ?Position) MenuError!void,
+        /// Registers the activation receiver (called by `MenuState` before every apply).
+        set_activator: *const fn (ctx: ?*anyopaque, activator: Activator) void,
     };
 
     pub fn applyAppMenu(self: Backend, snapshot: Snapshot) MenuError!void {
@@ -528,6 +541,9 @@ pub const Backend = struct {
     }
     pub fn popup(self: Backend, window: ?[]const u8, snapshot: Snapshot, at: ?Position) MenuError!void {
         return self.vtable.popup(self.ctx, window, snapshot, at);
+    }
+    pub fn setActivator(self: Backend, activator: Activator) void {
+        self.vtable.set_activator(self.ctx, activator);
     }
 };
 
@@ -614,8 +630,20 @@ pub const MenuState = struct {
         return flatten(scratch, root) catch error.OutOfMemory;
     }
 
+    /// Points the backend's activation receiver at this state. Called before every backend call so
+    /// `withBackend` keeps working no matter when the host attaches the native backend.
+    fn syncActivator(self: *MenuState) void {
+        self.backend.setActivator(.{ .ctx = self, .call = activatorThunk });
+    }
+
+    fn activatorThunk(ctx: ?*anyopaque, id: []const u8) void {
+        const self: *MenuState = @ptrCast(@alignCast(ctx orelse return));
+        self.activate(self.allocator, id);
+    }
+
     /// Re-pushes every attached menu to the backend after a mutation.
     pub fn refresh(self: *MenuState, scratch: Allocator) MenuError!void {
+        self.syncActivator();
         if (self.app_menu) |root| {
             try self.backend.applyAppMenu(.{ .entries = try self.snapshotOf(scratch, root) });
         }
@@ -713,7 +741,9 @@ pub const StubBackend = struct {
         .apply_app_menu = unavailableApp,
         .apply_window_menu = unavailableWindow,
         .popup = unavailablePopup,
+        .set_activator = ignoreActivator,
     };
+    fn ignoreActivator(_: ?*anyopaque, _: Activator) void {}
     fn unavailableApp(_: ?*anyopaque, _: Snapshot) MenuError!void {
         return error.Unavailable;
     }
@@ -735,6 +765,7 @@ pub const Mock = struct {
     window_menus: std.StringHashMapUnmanaged([]Entry) = .empty,
     popups: std.ArrayListUnmanaged(Popup) = .empty,
     apply_count: usize = 0,
+    activator: ?Activator = null,
 
     pub const Popup = struct {
         window: ?[]const u8,
@@ -769,7 +800,18 @@ pub const Mock = struct {
         .apply_app_menu = applyApp,
         .apply_window_menu = applyWindow,
         .popup = popup,
+        .set_activator = setActivator,
     };
+
+    fn setActivator(ctx: ?*anyopaque, activator: Activator) void {
+        const self: *Mock = @ptrCast(@alignCast(ctx.?));
+        self.activator = activator;
+    }
+
+    /// Simulates a click on the item whose `MenuId` is `id`.
+    pub fn click(self: *Mock, id: []const u8) void {
+        if (self.activator) |activator| activator.call(activator.ctx, id);
+    }
 
     fn applyApp(ctx: ?*anyopaque, snapshot: Snapshot) MenuError!void {
         const self: *Mock = @ptrCast(@alignCast(ctx.?));
@@ -817,12 +859,6 @@ pub const Mock = struct {
             allocator.free(entry.text);
         }
         allocator.free(entries);
-    }
-
-    /// Simulates the user picking `id` in the native menu (native backends do the same).
-    pub fn activate(self: *Mock, state: *MenuState, scratch: Allocator, id: []const u8) void {
-        _ = self;
-        state.activate(scratch, id);
     }
 };
 
@@ -987,12 +1023,14 @@ pub const Commands = struct {
         const node = try nodeOf(state, args.rid, args.kind);
         const at = if (args.at.value) |value| Position.fromJsonValue(value) else null;
         const entries = try state.snapshotOf(ctx.scratch, node);
+        state.syncActivator();
         return state.backend.popup(args.window, .{ .entries = entries }, at);
     }
 
     pub fn set_as_app_menu(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53 }) MenuError!?struct { u53, []const u8 } {
         const node = state.lookup(args.rid, .Menu) orelse return error.BadResourceId;
         state.app_menu = node;
+        state.syncActivator();
         try state.backend.applyAppMenu(.{ .entries = try state.snapshotOf(ctx.scratch, node) });
         return .{ args.rid, node.id };
     }
@@ -1006,6 +1044,7 @@ pub const Commands = struct {
         const key = state.allocator.dupe(u8, label) catch return error.OutOfMemory;
         errdefer state.allocator.free(key);
         if (try state.window_menus.fetchPut(state.allocator, key, node)) |old| state.allocator.free(old.key);
+        state.syncActivator();
         try state.backend.applyWindowMenu(args.window, .{ .entries = try state.snapshotOf(ctx.scratch, node) });
         return .{ args.rid, node.id };
     }
@@ -1446,10 +1485,10 @@ test "plugin:menu activation is delivered through Channel<string>, popup records
     defer testing.allocator.free(set_as);
     try f.ok("plugin:menu|set_as_app_menu", set_as);
 
-    // A native backend reports an activation; the channel receives the `MenuId` string.
-    var scratch = std.heap.ArenaAllocator.init(testing.allocator);
-    defer scratch.deinit();
-    f.mock.activate(&f.state, scratch.allocator(), "reset");
+    // `MenuState` installed itself as the activation receiver before applying, so a backend that
+    // reports a click (here via `Mock.click`) lands in the item's `Channel<string>`.
+    try testing.expect(f.mock.activator != null);
+    f.mock.click("reset");
     try testing.expectEqual(@as(usize, 1), f.host.eval_log.items.len);
     try testing.expectEqualStrings(
         "window.__TAURI_INTERNALS__.runCallback(4242,{\"index\":0,\"message\":\"reset\"});",

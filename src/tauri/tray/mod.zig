@@ -126,6 +126,15 @@ pub const TrayEvent = struct {
 // Backend vtable
 // ============================================================================
 
+/// Receiver for tray interactions (click / double-click / hover). The native backend reports the
+/// raw `TrayEvent`; the core forwards it into the tray's `Channel<TrayEvent>`.
+pub const Emitter = struct {
+    ctx: ?*anyopaque = null,
+    emit: *const fn (ctx: ?*anyopaque, event: TrayEvent) void = noop,
+
+    fn noop(_: ?*anyopaque, _: TrayEvent) void {}
+};
+
 pub const Backend = struct {
     ctx: ?*anyopaque = null,
     vtable: *const VTable,
@@ -139,6 +148,8 @@ pub const Backend = struct {
         remove: *const fn (ctx: ?*anyopaque, id: []const u8) TrayError!void,
         /// Shows / hides the icon without touching the rest of the tray state.
         set_visible: *const fn (ctx: ?*anyopaque, id: []const u8, visible: bool) TrayError!void,
+        /// Registers the interaction receiver (called by `TrayState` before every apply).
+        set_emitter: *const fn (ctx: ?*anyopaque, emitter: Emitter) void,
     };
 
     pub fn create(self: Backend, id: []const u8, options: TrayIconOptions, snapshot: ?menu.Snapshot) TrayError!void {
@@ -153,6 +164,9 @@ pub const Backend = struct {
     pub fn setVisible(self: Backend, id: []const u8, visible: bool) TrayError!void {
         return self.vtable.set_visible(self.ctx, id, visible);
     }
+    pub fn setEmitter(self: Backend, emitter: Emitter) void {
+        self.vtable.set_emitter(self.ctx, emitter);
+    }
 };
 
 /// Fallback backend, identical in spirit to `menu.StubBackend`.
@@ -162,7 +176,9 @@ pub const StubBackend = struct {
         .update = unavailable,
         .remove = unavailableRemove,
         .set_visible = unavailableVisible,
+        .set_emitter = ignoreEmitter,
     };
+    fn ignoreEmitter(_: ?*anyopaque, _: Emitter) void {}
     fn unavailable(_: ?*anyopaque, _: []const u8, _: TrayIconOptions, _: ?menu.Snapshot) TrayError!void {
         return error.Unavailable;
     }
@@ -307,8 +323,19 @@ pub const TrayState = struct {
         entry.channel.send(call_ctx.host, call_ctx.window_id, scratch, event) catch {};
     }
 
+    /// Points the backend's interaction receiver at this state (before every apply).
+    fn syncEmitter(self: *TrayState) void {
+        self.backend.setEmitter(.{ .ctx = self, .emit = emitterThunk });
+    }
+
+    fn emitterThunk(ctx: ?*anyopaque, event: TrayEvent) void {
+        const self: *TrayState = @ptrCast(@alignCast(ctx orelse return));
+        self.emit(self.allocator, event);
+    }
+
     /// Re-pushes every tray menu after a `plugin:menu` mutation.
     pub fn refreshMenus(self: *TrayState, scratch: Allocator) TrayError!void {
+        self.syncEmitter();
         var it = self.trays.iterator();
         while (it.next()) |entry| {
             if (!entry.value_ptr.options.has_menu) continue;
@@ -337,6 +364,7 @@ pub const Mock = struct {
 
     allocator: Allocator,
     calls: std.ArrayListUnmanaged(Call) = .empty,
+    emitter: ?Emitter = null,
 
     pub fn init(allocator: Allocator) Mock {
         return .{ .allocator = allocator };
@@ -367,7 +395,18 @@ pub const Mock = struct {
         .update = update,
         .remove = remove,
         .set_visible = setVisible,
+        .set_emitter = setEmitter,
     };
+
+    fn setEmitter(ctx: ?*anyopaque, emitter: Emitter) void {
+        const self: *Mock = @ptrCast(@alignCast(ctx.?));
+        self.emitter = emitter;
+    }
+
+    /// Simulates a user interaction with tray `id` (native backends do the same).
+    pub fn interact(self: *Mock, event: TrayEvent) void {
+        if (self.emitter) |emitter| emitter.emit(emitter.ctx, event);
+    }
 
     fn create(ctx: ?*anyopaque, id: []const u8, options: TrayIconOptions, snapshot: ?menu.Snapshot) TrayError!void {
         return record(ctx, .create, id, options, snapshot);
@@ -457,6 +496,7 @@ pub const Commands = struct {
 
         const record = state.trays.getPtr(id).?;
         const snapshot = try state.menuSnapshot(ctx.scratch, record);
+        state.syncEmitter();
         try state.backend.create(id, record.options.toOptions(), snapshot);
 
         if (args.handler) |handler| {
@@ -494,6 +534,7 @@ pub const Commands = struct {
             options.deinit(state.allocator);
         } else return error.NotFound;
         if (state.channels.fetchRemove(args.id)) |entry| state.allocator.free(entry.key);
+        state.syncEmitter();
         try state.backend.remove(args.id);
     }
 
@@ -514,6 +555,7 @@ pub const Commands = struct {
         const record = state.trays.getPtr(id) orelse return error.BadResourceId;
         try apply(record, state.allocator, mutation);
         const snapshot = try state.menuSnapshot(ctx.scratch, record);
+        state.syncEmitter();
         try state.backend.update(id, record.options.toOptions(), snapshot);
     }
 
@@ -597,6 +639,7 @@ pub const Commands = struct {
         _ = ctx;
         const id = try idOf(state, args.rid);
         if (state.trays.getPtr(id)) |record| record.visible = args.visible;
+        state.syncEmitter();
         try state.backend.setVisible(id, args.visible);
     }
 
@@ -828,4 +871,26 @@ test "plugin:tray setters update the owned options and re-push the menu snapshot
         defer resp.deinit();
         try testing.expectEqual(core.IpcStatus.err, resp.status);
     }
+}
+
+test "plugin:tray forwards native interactions into the tray's Channel<TrayEvent>" {
+    var f = try Fixture.create();
+    defer f.destroy();
+
+    const created = try f.body(
+        "plugin:tray|new",
+        "{\"options\":{\"id\":\"main\",\"tooltip\":\"Z-Ts\"},\"handler\":\"__CHANNEL__:7777\"}",
+    );
+    defer testing.allocator.free(created);
+
+    // `TrayState` installed itself as the interaction receiver before creating the icon, so a
+    // backend that reports a click (here via `Mock.interact`) lands in `Channel<TrayEvent>`.
+    try testing.expect(f.mock.emitter != null);
+    f.mock.interact(TrayEvent.click("main", 10, 20, "Left", "Up"));
+
+    try testing.expectEqual(@as(usize, 1), f.host.eval_log.items.len);
+    const script = f.host.eval_log.items[0];
+    try testing.expect(std.mem.indexOf(u8, script, "runCallback(7777,") != null);
+    try testing.expect(std.mem.indexOf(u8, script, "\"type\":\"Click\"") != null);
+    try testing.expect(std.mem.indexOf(u8, script, "\"position\":{\"x\":10") != null);
 }
