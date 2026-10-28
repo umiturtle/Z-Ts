@@ -110,6 +110,26 @@ if (requireCounts > 0 && manifest.patterns.length < requireCounts) {
 }
 
 const parseCount = 0;
+/** Compact one-line view of the layout fingerprint's font probe (for logs and failures). */
+function probeSummary(entry) {
+  if (!entry.layout) return 'layout=(none)';
+  let layout;
+  try {
+    layout = JSON.parse(entry.layout);
+  } catch (err) {
+    return `layout=(unreadable: ${err.message})`;
+  }
+  const probe = layout.probe;
+  if (!probe) return 'probe=(none)';
+  const paint = probe.paint ? Object.entries(probe.paint).map(([k, v]) => `${k}:${v}`).join(',') : '?';
+  const fetchInfo = entry.font_fetch ? entry.font_fetch : '(no fontfetch message)';
+  return (
+    `sans0=${probe.sans0} sans0b=${probe.sans0b} serif0=${probe.serif0} mono0=${probe.mono0} ` +
+    `cjk=${probe.cjk} generic0=${probe.generic0} ch44=${probe.ch44} size=${probe.size} ` +
+    `paint=[${paint}] faces="${probe.faces}" status=${probe.status} fontfetch=${fetchInfo}`
+  );
+}
+
 let checked = 0;
 const lines = [];
 
@@ -166,7 +186,9 @@ for (const entry of manifest.patterns) {
   // the 3-OS comparison has nothing to compare.
   if (!isMock) {
     if (entry.font_ok !== true) {
-      fail(`${entry.name}: bundled ZTS fonts did not load (font_ok=false) — Linux would render tofu`);
+      // Print the whole probe: "font_ok=false" alone has cost several CI round trips because it
+      // does not say *which* part failed (fetch / face state / paint diff).
+      fail(`${entry.name}: bundled ZTS fonts are not the ones being painted (font_ok=false) ${probeSummary(entry)}`);
     }
     if (!entry.layout) fail(`${entry.name}: no layout fingerprint (page never measured itself)`);
     // The page fetches the woff2 itself: a WebKit custom-scheme/CORS refusal shows up here even
@@ -186,6 +208,9 @@ for (const entry of manifest.patterns) {
   }
 
   checked += 1;
+  // Keep the font probe in the log for every native capture: when a later step disagrees about
+  // layout, this is the evidence that says *why* (fallback face vs. the real woff2).
+  if (!isMock) lines.push(`      font: ${probeSummary(entry)}`);
   lines.push(
     `  ${entry.name.padEnd(16)} ${String(width).padStart(5)}x${String(height).padEnd(5)} ` +
       `scale=${scale}x unique=${String(s.unique).padStart(5)} ` +

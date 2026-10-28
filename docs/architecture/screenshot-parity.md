@@ -62,8 +62,11 @@ examples/gallery (Zig)                         scripts/                      .gi
   canvas に描いて画素を比べ、差が 2% 未満なら *フォールバックした* と判定する（`document.fonts.check()`
   は WebKit では未適用でも `true` を返すため、単独では根拠にならない）。ファミリ名に空白を入れないのは、
   minify で `"ZTS Sans"` の引用符が落ちて無効名になるのを避けるため。
-- `probe` は切り分け用（`sans0` / `sans0b` / `cjk` / `ch44` / `paint` / `faces`）。OS 間で箱がずれたとき、
+- `probe` は切り分け用。DOM で測った送り幅（`sans0` / `sans0b` / `serif0` / `mono0` / `cjk` /
+  `generic0` / `ch44` / `size`）と、canvas の画素比較（`paint`）、`document.fonts` の各面の状態
+  （`faces`）、`check_ok` / `face_ok` / `paint_ok` を持つ。OS 間で箱がずれたとき、
   「フォントが当たっていない」のか「同じフォントでも送り幅が違う」のかを 1 回で判別できる。
+  `verify-screenshots.mjs` は全ネイティブ撮影についてこの行をログに出す。
 - ページは `fetch('/zts/fonts/zts-sans-400.woff2')` も試し、`{"app":"fontfetch"}` を投稿する。
   `verify-screenshots.mjs` はこれが失敗した時点で落ちる（カスタムスキーム経由の取得失敗は
   レイアウトがフォールバック書体のまま進むので、`font_ok` だけでは見逃すことがある）。

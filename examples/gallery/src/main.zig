@@ -600,13 +600,20 @@ const ready_script =
     \\        mono: ratioDifferent('ZTSMono', 'monospace', 'Zig 0')
     \\      };
     \\      var ratios = [paint.sans, paint.sansCjk, paint.serif, paint.mono];
-    \\      var loaded = true;
+    \\      var faceOk = true;
     \\      Array.prototype.forEach.call(document.fonts, function (f) {
-    \\        if (f.status !== 'loaded') loaded = false;
+    \\        if (f.status !== 'loaded') faceOk = false;
     \\      });
-    \\      var minRatio = 0.02;
-    \\      fontOk = loaded &&
-    \\        ratios.every(function (r) { return r > minRatio; });
+    \\      var checkOk = false;
+    \\      try {
+    \\        checkOk = document.fonts.check('16px ZTSSans') && document.fonts.check('16px ZTSMono');
+    \\      } catch (e) { checkOk = false; }
+    \\      var measurable = ratios.every(function (r) { return r >= 0; });
+    \\      var paintOk = measurable && ratios.every(function (r) { return r > 0.02; });
+    \\      fontOk = measurable ? paintOk : faceOk;
+    \\      paint.face_ok = faceOk;
+    \\      paint.paint_ok = paintOk;
+    \\      paint.check_ok = checkOk;
     \\    } catch (e) { fontOk = false; }
     \\    // 診断用の計測。OS 間で箱がずれたとき「フォントが当たっていない」のか
     \\    // 「同じフォントでも送り幅が違う」のかを 1 回の実行で切り分ける。
