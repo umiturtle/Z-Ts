@@ -31,6 +31,7 @@ zts_tauri_native                      Mock（テスト用・全 OS 共通）
 | `clipboard/mod.zig` | `zts_tauri` | `Backend` vtable 6 関数、`Mock`、`ClipboardState`、`Commands` |
 | `native.zig` | `zts_tauri_native` | ターゲット別バックエンド選択（`dialogBackend()` / `clipboardBackend()` / `describe()`） |
 | `native_gtk.zig` | `zts_tauri_native` | GTK3 / GDK3 / GLib の Pure Zig バインディング（`@cImport` 不使用）。`toZ` / `fromGtkAlloc` も提供 |
+| `native_cstr.zig` | `zts_tauri_native` | NUL 終端コピー `allocZ`（Zig 0.17 で `Allocator.dupeZ` が削除されたため）。全 OS でテスト |
 | `native_win32.zig` | `zts_tauri_native` | **OS 非依存の純関数**（`FILEOPENDIALOGOPTIONS` ビット、フィルタレコード、UTF-16 変換、`MessageBox` 対応表）。全 OS でコンパイル＆テスト |
 | `dialog/native_gtk.zig` | `zts_tauri_native` | `GtkFileChooserNative` + `GtkMessageDialog`（`GSList` ミラー） |
 | `dialog/native_macos.zig` | `zts_tauri_native` | C ABI シムの JSON を `std.json` でパース |
