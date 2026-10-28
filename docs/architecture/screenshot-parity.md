@@ -58,15 +58,23 @@ examples/gallery (Zig)                         scripts/                      .gi
 
 - `boxes` は `body / .shell / .head / .card / .counter / .value / .features / h1… / button …` の
   最大 40 要素の `getBoundingClientRect()` を **1px に丸めた** もの。
-- `font_ok` は「同梱フォントが実際に描かれているか」。同じ文字を `ZTSSans` と `sans-serif` で
-  canvas に描いて画素を比べ、差が 2% 未満なら *フォールバックした* と判定する（`document.fonts.check()`
-  は WebKit では未適用でも `true` を返すため、単独では根拠にならない）。ファミリ名に空白を入れないのは、
-  minify で `"ZTS Sans"` の引用符が落ちて無効名になるのを避けるため。
+- `font_ok` は「同梱 woff2 の送り幅どおりに組まれているか」。DOM で 16px の `0` を測り、
+  `ZTSSans` 400 = 8.88px / 700 = 9.44px / `ZTSSerif` = 8.91px / `ZTSMono` = 9.60px、
+  CJK（1em/字）6 文字 = 96px の 5 値が ±0.15px で揃い、**かつ** `document.fonts` に 4 面以上が
+  `loaded` で載っていることを要求する。`document.fonts.check()` は WebKit では未適用でも `true` を
+  返すので判定には使わない（診断値としてのみ送出）。ファミリ名に空白を入れないのは、minify で
+  `"ZTS Sans"` の引用符が落ちて無効名になるのを避けるため。
 - `probe` は切り分け用。DOM で測った送り幅（`sans0` / `sans0b` / `serif0` / `mono0` / `cjk` /
   `generic0` / `ch44` / `size`）と、canvas の画素比較（`paint`）、`document.fonts` の各面の状態
   （`faces`）、`check_ok` / `face_ok` / `paint_ok` を持つ。OS 間で箱がずれたとき、
   「フォントが当たっていない」のか「同じフォントでも送り幅が違う」のかを 1 回で判別できる。
   `verify-screenshots.mjs` は全ネイティブ撮影についてこの行をログに出す。
+- フォントの**唯一の供給元**は `parity_script`（`DOCUMENT_START` に `init_scripts` の先頭で注入）。
+  ページ側は `font-family: ZTSSans` と書くだけで `@font-face` を持たないため、この注入が抜けると
+  全ページが「その OS のシステムフォント」で描かれ、Linux だけ豆腐になる。`FontFace` API を優先し、
+  document-start で `<head>` が無い場合に備えて `MutationObserver` で挿入をやり直す。
+  回帰防止として `main.zig` のユニットテストが「`init_scripts` が 2 本」「4 本の woff2 すべてが
+  スクリプト内の URL と一致」を検査する。
 - ページは `fetch('/zts/fonts/zts-sans-400.woff2')` も試し、`{"app":"fontfetch"}` を投稿する。
   `verify-screenshots.mjs` はこれが失敗した時点で落ちる（カスタムスキーム経由の取得失敗は
   レイアウトがフォールバック書体のまま進むので、`font_ok` だけでは見逃すことがある）。

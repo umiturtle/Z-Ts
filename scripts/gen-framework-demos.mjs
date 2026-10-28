@@ -786,6 +786,9 @@ function publish(name, distDir) {
       }
       const rel = relative(distDir, from);
       if (rel.startsWith('..')) continue;
+      // Never publish dot-directories (`.vite/manifest.json` is build bookkeeping, and a stale
+      // copy of it once ended up `@embedFile`d into the gallery).
+      if (rel.split(sep).some((part) => part.startsWith('.'))) continue;
       if (!CONTENT_TYPES[extname(rel)]) continue;  // drop source maps of chunks we never serve
       const to = join(target, rel);
       ensureDir(dirname(to));

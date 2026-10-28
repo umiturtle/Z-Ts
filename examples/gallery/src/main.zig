@@ -486,34 +486,88 @@ fn fontFor(path: []const u8) ?*const FontAsset {
     return null;
 }
 
-/// Injected at `DOCUMENT_START`, before any page CSS is parsed:
-///  - `@font-face` を 4 本（ZTS Sans 400/700・Serif・Mono）。ページが自前で宣言していても害は無い。
+/// Injected at `DOCUMENT_START`, before any page CSS is parsed. **This is only place the bundled
+/// fonts come from** — the demo pages deliberately name `ZTSSans` / `ZTSSerif` / `ZTSMono` and never
+/// declare `@font-face` themselves, so if this script is not installed every page silently falls back
+/// to the system font and the 3-OS comparison degenerates into "each OS looks different".
+///
+///  - `@font-face` を 4 本（ZTS Sans 400/700・Serif・Mono）。`FontFace` API を優先し、無い環境だけ
+///    CSS にフォールバックする（document-start では `<head>` がまだ存在しないため、CSS を
+///    `document.head` に挿すだけでは **何も起きない**）。
 ///  - スクロールバーを隠す（GTK はオーバーレイ、Windows はクラシック、macOS は自動非表示と
 ///    3 OS で幅が違い、そのぶん本文の折り返し位置が変わってしまう）。
 ///  - 合成・ヒンティング依存の差を減らす（`font-synthesis: none` / `text-size-adjust: none`）。
 const parity_script =
     \\(function () {
-    \\  try {
-    \\    var css = [
-    \\      '@font-face{font-family:ZTSSans;font-style:normal;font-weight:400;font-display:block;' +
-    \\        'src:url("/zts/fonts/zts-sans-400.woff2") format("woff2")}',
-    \\      '@font-face{font-family:ZTSSans;font-style:normal;font-weight:700;font-display:block;' +
-    \\        'src:url("/zts/fonts/zts-sans-700.woff2") format("woff2")}',
-    \\      '@font-face{font-family:ZTSSerif;font-style:normal;font-weight:400;font-display:block;' +
-    \\        'src:url("/zts/fonts/zts-serif-400.woff2") format("woff2")}',
-    \\      '@font-face{font-family:ZTSMono;font-style:normal;font-weight:400;font-display:block;' +
-    \\        'src:url("/zts/fonts/zts-mono-400.woff2") format("woff2")}',
-    \\      'html{scrollbar-width:none;-webkit-text-size-adjust:100%;}',
-    \\      '::-webkit-scrollbar{width:0;height:0;}',
-    \\      'body{font-synthesis:none;}'
-    \\    ].join('\n');
-    \\    var style = document.createElement('style');
-    \\    style.setAttribute('data-zts', 'parity');
-    \\    style.textContent = css;
-    \\    (document.head || document.documentElement).appendChild(style);
-    \\  } catch (e) { /* nothing to do: the page's own fonts still apply */ }
+    \\  // 4 面ぶんのメタ情報: [family, weight, style, URL]。
+    \\  var FACES = [
+    \\    ['ZTSSans', '400', 'normal', '/zts/fonts/zts-sans-400.woff2'],
+    \\    ['ZTSSans', '700', 'normal', '/zts/fonts/zts-sans-700.woff2'],
+    \\    ['ZTSSerif', '400', 'normal', '/zts/fonts/zts-serif-400.woff2'],
+    \\    ['ZTSMono', '400', 'normal', '/zts/fonts/zts-mono-400.woff2']
+    \\  ];
+    \\  var state = { api: false, css: false, faces: 0, errors: [] };
+    \\  window.__ztsParity = state;
+    \\  var faceCss = FACES.map(function (f) {
+    \\    return '@font-face{font-family:' + f[0] + ';font-style:' + f[2] + ';font-weight:' + f[1] +
+    \\      ';font-display:block;src:url("' + f[3] + '") format("woff2")}';
+    \\  });
+    \\  var parityCss = [
+    \\    'html{scrollbar-width:none;-webkit-text-size-adjust:100%;}',
+    \\    '::-webkit-scrollbar{width:0;height:0;}',
+    \\    'body{font-synthesis:none;}'
+    \\  ];
+    \\
+    \\  // (1) FontFace API。document-start（`<head>` すら無い時点）でも効く唯一の方法。
+    \\  var useApi = !!(window.FontFace && document.fonts && document.fonts.add);
+    \\  state.api = useApi;
+    \\  var loads = [];
+    \\  if (useApi) {
+    \\    FACES.forEach(function (f) {
+    \\      try {
+    \\        var face = new FontFace(f[0], 'url("' + f[3] + '")', { style: f[2], weight: f[1] });
+    \\        loads.push(face.load().then(function (loaded) {
+    \\          try { document.fonts.add(loaded); state.faces += 1; } catch (e) { state.errors.push('add ' + f[0] + ': ' + e); }
+    \\          return loaded;
+    \\        }, function (err) {
+    \\          state.errors.push(f[0] + '/' + f[1] + ': ' + (err && err.message ? err.message : err));
+    \\        }));
+    \\      } catch (e) { state.errors.push('new FontFace ' + f[0] + ': ' + e); }
+    \\    });
+    \\  }
+    \\  window.__ztsFontsReady = window.Promise
+    \\    ? Promise.all(loads).then(function () { return state.faces; })
+    \\    : null;
+    \\
+    \\  // (2) CSS 側（フォールバックの @font-face と、パリティ用のルール）。
+    \\  var css = (useApi ? [] : faceCss).concat(parityCss).join('\n');
+    \\  var install = function () {
+    \\    try {
+    \\      var parent = document.head || document.documentElement;
+    \\      if (!parent) return false; // document-start: まだ <html> すら無い
+    \\      var style = document.createElement('style');
+    \\      style.setAttribute('data-zts', 'parity');
+    \\      style.textContent = css;
+    \\      parent.appendChild(style);
+    \\      state.css = true;
+    \\      return true;
+    \\    } catch (e) { state.errors.push('css: ' + e); return false; }
+    \\  };
+    \\  if (!install()) {
+    \\    // <head> が現れた瞬間に入れ直す（この 1 段が無いとスタイルが永久に効かない）。
+    \\    try {
+    \\      var observer = new MutationObserver(function () { if (install()) observer.disconnect(); });
+    \\      observer.observe(document, { childList: true, subtree: true });
+    \\    } catch (e) {
+    \\      document.addEventListener('DOMContentLoaded', install);
+    \\    }
+    \\  }
     \\})();
 ;
+
+/// Every window gets both scripts, in this order: the font/CSS bootstrap must register the faces
+/// before the measurer runs, otherwise the first measurement races the font load.
+const init_scripts = [_][]const u8{ parity_script, ready_script };
 
 /// Injected at `DOCUMENT_START` (after the backends install `window.__ztsPostMessage`), so the
 /// gallery knows exactly when a page finished loading *and* how big its viewport really is.
@@ -565,10 +619,52 @@ const ready_script =
     \\      if (cl) nm += '.' + cl.replace(/^\s+|\s+$/g, '').split(/\s+/).join('.');
     \\      names.push(nm);
     \\    }
-    \\    // 「フォントが読み込めた」ではなく「同梱フォントが実際に描かれている」を確かめる。
-    \\    // `document.fonts.check()` はエンジンによって当てにならない（WebKit は未適用でも true を
-    \\    // 返す）ので、同じ文字をフォールバック書体で描いた canvas と画素比較する。
-    \\    var paint = {};
+    \\
+    \\    var round2 = function (v) { return Math.round(v * 100) / 100; };
+    \\    // 送り幅は DOM で測る（canvas の measureText はレイアウトと食い違うことがある）。
+    \\    var widthOf = function (family, weight, text) {
+    \\      var el = document.createElement('span');
+    \\      el.style.cssText = 'position:absolute;left:-9999px;top:0;white-space:pre;font-size:16px;' +
+    \\                        'font-weight:' + (weight || 400) + ';font-family:' + family;
+    \\      el.textContent = text;
+    \\      document.body.appendChild(el);
+    \\      var w = el.getBoundingClientRect().width;
+    \\      document.body.removeChild(el);
+    \\      return round2(w);
+    \\    };
+    \\    var probe = { error: null };
+    \\    try {
+    \\      var chEl = document.createElement('div');
+    \\      chEl.style.cssText = 'position:absolute;left:-9999px;top:0;width:44ch;' +
+    \\                           'font-size:16px;font-family:ZTSSans';
+    \\      document.body.appendChild(chEl);
+    \\      var chWidth = chEl.getBoundingClientRect().width;
+    \\      document.body.removeChild(chEl);
+    \\      probe = {
+    \\        sans0: widthOf('ZTSSans', 400, '0'),
+    \\        sans0b: widthOf('ZTSSans', 700, '0'),
+    \\        serif0: widthOf('ZTSSerif', 400, '0'),
+    \\        mono0: widthOf('ZTSMono', 400, '0'),
+    \\        cjk: widthOf('ZTSSans', 400, 'デスクトップ'),
+    \\        generic0: widthOf('sans-serif', 400, '0'),
+    \\        ch44: round2(chWidth),
+    \\        dpr: round2(window.devicePixelRatio || 1),
+    \\        ua: navigator.userAgent
+    \\      };
+    \\    } catch (e) { probe = { error: String(e) }; }
+    \\
+    \\    // FontFaceSet は length も添字も持たない（Set 風）ので forEach で集める。
+    \\    var faceList = [];
+    \\    var facesLoaded = 0;
+    \\    try {
+    \\      document.fonts.forEach(function (f) {
+    \\        faceList.push(f.family.replace(/["']/g, '') + '/' + f.weight + '/' + f.status);
+    \\        if (f.status === 'loaded') facesLoaded += 1;
+    \\      });
+    \\    } catch (e) { faceList.push('!forEach: ' + e); }
+    \\
+    \\    // canvas 実描画の比較。WebKit では `document.fonts.check()` が未適用でも true を返すので、
+    \\    // 「同梱書体 vs 総称ファミリ」を塗り比べた差分率も併せて取る（判定の主軸は送り幅のほう）。
     \\    var raster = function (family, text, px) {
     \\      var c = document.createElement('canvas');
     \\      c.width = 240;
@@ -591,7 +687,7 @@ const ready_script =
     \\      for (var i = 0; i < a.length; i += 4) if (a[i] !== b[i]) n++;
     \\      return Math.round((n / (a.length / 4)) * 1000) / 1000;
     \\    };
-    \\    var fontOk = false;
+    \\    var paint = {};
     \\    try {
     \\      paint = {
     \\        sans: ratioDifferent('ZTSSans', 'sans-serif', 'Zig 0'),
@@ -599,70 +695,38 @@ const ready_script =
     \\        serif: ratioDifferent('ZTSSerif', 'serif', 'Zig 0'),
     \\        mono: ratioDifferent('ZTSMono', 'monospace', 'Zig 0')
     \\      };
-    \\      var ratios = [paint.sans, paint.sansCjk, paint.serif, paint.mono];
-    \\      var faceOk = true;
-    \\      Array.prototype.forEach.call(document.fonts, function (f) {
-    \\        if (f.status !== 'loaded') faceOk = false;
-    \\      });
-    \\      var checkOk = false;
-    \\      try {
-    \\        checkOk = document.fonts.check('16px ZTSSans') && document.fonts.check('16px ZTSMono');
-    \\      } catch (e) { checkOk = false; }
-    \\      var measurable = ratios.every(function (r) { return r >= 0; });
-    \\      var paintOk = measurable && ratios.every(function (r) { return r > 0.02; });
-    \\      fontOk = measurable ? paintOk : faceOk;
-    \\      paint.face_ok = faceOk;
-    \\      paint.paint_ok = paintOk;
-    \\      paint.check_ok = checkOk;
-    \\    } catch (e) { fontOk = false; }
-    \\    // 診断用の計測。OS 間で箱がずれたとき「フォントが当たっていない」のか
-    \\    // 「同じフォントでも送り幅が違う」のかを 1 回の実行で切り分ける。
-    \\    // canvas の measureText はレイアウトと食い違うことがあるので DOM で測る。
-    \\    var probe = {};
+    \\    } catch (e) { paint = { error: String(e) }; }
+    \\
+    \\    // 判定は「同梱 woff2 の送り幅どおりに並んでいるか」。advances は
+    \\    //   ZTSSans 400 '0' = 555/1000em → 8.88px @16px、700 = 590 → 9.44px、
+    \\    //   ZTSSerif 400 = 557 → 8.91px、ZTSMono 400 = 600 → 9.60px、CJK = 1em/字 → 96px。
+    \\    // フォールバック書体（Liberation / Segoe / Helvetica）でこの 5 値が揃うことはまず無い。
+    \\    var expected = { sans0: 8.88, sans0b: 9.44, serif0: 8.91, mono0: 9.6, cjk: 96 };
+    \\    var off = [];
+    \\    Object.keys(expected).forEach(function (k) {
+    \\      var got = probe[k];
+    \\      if (typeof got !== 'number' || Math.abs(got - expected[k]) > 0.15) {
+    \\        off.push(k + '=' + got + '≠' + expected[k]);
+    \\      }
+    \\    });
+    \\    var metricsOk = off.length === 0;
+    \\    var parityState = window.__ztsParity || {};
+    \\    var bootOk = !!(parityState.api || parityState.css);
+    \\    var checkOk = false;
     \\    try {
-    \\      var round2 = function (v) { return Math.round(v * 100) / 100; };
-    \\      var widthOf = function (family, weight, text, size) {
-    \\        var s = document.createElement('span');
-    \\        s.style.cssText = 'position:absolute;left:-9999px;top:0;white-space:pre;' +
-    \\                          'font-size:' + (size || 16) + 'px;font-weight:' + (weight || 400) +
-    \\                          ';font-family:' + family;
-    \\        s.textContent = text;
-    \\        document.body.appendChild(s);
-    \\        var w = s.getBoundingClientRect().width;
-    \\        var fs = getComputedStyle(s).fontSize;
-    \\        document.body.removeChild(s);
-    \\        return [round2(w), fs];
-    \\      };
-    \\      var sans0 = widthOf('ZTSSans', 400, '0');
-    \\      var sans0b = widthOf('ZTSSans', 700, '0');
-    \\      var cjk = widthOf('ZTSSans', 400, 'デスクトップ');
-    \\      var generic = widthOf('sans-serif', 400, '0');
-    \\      var serif0 = widthOf('ZTSSerif', 400, '0');
-    \\      var mono0 = widthOf('ZTSMono', 400, '0');
-    \\      var chEl = document.createElement('div');
-    \\      chEl.style.cssText = 'position:absolute;left:-9999px;top:0;width:44ch;' +
-    \\                           'font-size:16px;font-family:ZTSSans';
-    \\      document.body.appendChild(chEl);
-    \\      var chWidth = chEl.getBoundingClientRect().width;
-    \\      document.body.removeChild(chEl);
-    \\      probe = {
-    \\        sans0: sans0[0],
-    \\        sans0b: sans0b[0],
-    \\        cjk: cjk[0],
-    \\        generic0: generic[0],
-    \\        serif0: serif0[0],
-    \\        mono0: mono0[0],
-    \\        ch44: round2(chWidth),
-    \\        size: sans0[1],
-    \\        paint: paint,
-    \\        status: document.fonts.status,
-    \\        faces: Array.prototype.map.call(document.fonts, function (f) {
-    \\          return f.family + '/' + f.weight + '/' + f.status;
-    \\        }).join(' '),
-    \\        dpr: round2(window.devicePixelRatio || 1),
-    \\        ua: navigator.userAgent
-    \\      };
-    \\    } catch (e) { probe = { error: String(e) }; }
+    \\      checkOk = document.fonts.check('16px ZTSSans') && document.fonts.check('16px ZTSMono');
+    \\    } catch (e) { checkOk = false; }
+    \\    var fontOk = bootOk && facesLoaded >= 4 && metricsOk;
+    \\    probe.faces = faceList.length;
+    \\    probe.face_detail = faceList.join(' ');
+    \\    probe.paint = paint;
+    \\    probe.fonts_status = (document.fonts && document.fonts.status) || '?';
+    \\    probe.check_ok = checkOk;
+    \\    probe.metrics_ok = metricsOk;
+    \\    probe.metrics_off = off.join(' ');
+    \\    probe.boot = (parityState.api ? 'api' : '') + (parityState.css ? '+css' : '') +
+    \\      (parityState.errors && parityState.errors.length ? ' errors=' + parityState.errors.join('|') : '') +
+    \\      (parityState.faces !== undefined ? ' faces=' + parityState.faces : '');
     \\    post({
     \\      app: 'layout',
     \\      boxes: boxes,
@@ -690,8 +754,12 @@ const ready_script =
     \\    };
     \\    if (ready && ready.then) ready.then(next); else next();
     \\  };
+    \\  var boot = window.__ztsFontsReady;
     \\  if (loads.length > 0 && window.Promise) {
-    \\    Promise.all(loads).then(afterFonts, afterFonts);
+    \\    var chain = boot ? Promise.all(loads.concat([boot])) : Promise.all(loads);
+    \\    chain.then(afterFonts, afterFonts);
+    \\  } else if (boot && boot.then) {
+    \\    boot.then(afterFonts, afterFonts);
     \\  } else {
     \\    afterFonts();
     \\  }
@@ -793,7 +861,7 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
         const id = try g.engine.createWindow(.{
             .title = "Z-Ts gallery",
             .size = .wh(@floatFromInt(p.css_width), @floatFromInt(p.css_height)),
-            .init_scripts = &.{ready_script},
+            .init_scripts = &init_scripts,
             .initial_url = null,
             .initial_html = null,
         });
@@ -1078,6 +1146,31 @@ test "gallery: bundled framework builds are addressable by route and by absolute
     // Paths that are not part of a build stay unhandled (so `/api/state` keeps working).
     try testing.expectEqual(@as(?*const fw.Asset, null), fw_alias("/api/state"));
     try testing.expectEqual(@as(?*const fw.Asset, null), fw_alias("/"));
+}
+
+test "gallery: the injected scripts actually install the bundled fonts" {
+    // Regression guard for `M5-05`: `parity_script` once existed but was never added to
+    // `init_scripts`, so no page ever saw an `@font-face` rule. Linux then rendered with
+    // whatever font the container had (often none → tofu) while macOS/Windows used their own
+    // system fonts, which is exactly the "Linux only looks broken" bug this task is about.
+    try std.testing.expectEqual(@as(usize, 2), init_scripts.len);
+    try std.testing.expectEqual(parity_script, init_scripts[0]);
+    try std.testing.expectEqual(ready_script, init_scripts[1]);
+
+    // Every embedded woff2 must be referenced by the injected bootstrap: a path typo or a
+    // font that is served but never declared is invisible until a screenshot turns into tofu.
+    for (&font_assets) |*asset| {
+        try std.testing.expect(std.mem.indexOf(u8, parity_script, asset.path) != null);
+        try std.testing.expect(fontFor(asset.path) != null);
+    }
+    // The families the demo pages name must be exactly the ones the bootstrap declares.
+    for ([_][]const u8{ "ZTSSans", "ZTSSerif", "ZTSMono" }) |family| {
+        try std.testing.expect(std.mem.indexOf(u8, parity_script, family) != null);
+    }
+    // The measurer must wait for the faces and gate on real metrics.
+    try std.testing.expect(std.mem.indexOf(u8, ready_script, "__ztsFontsReady") != null);
+    try std.testing.expect(std.mem.indexOf(u8, ready_script, "sans0b") != null);
+    try std.testing.expect(std.mem.indexOf(u8, ready_script, "\"font_ok\":") == null);
 }
 
 test "gallery: SHA-256 helper produces lowercase hex of the right length" {

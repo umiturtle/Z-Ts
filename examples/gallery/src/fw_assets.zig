@@ -57,7 +57,6 @@ pub const assets = [_]Asset{
     .{ .path = "/fw/solidstart/_build/assets/entry-client-PAnUz1rv.js", .content_type = "text/javascript; charset=utf-8", .bytes = @embedFile("web/fw/solidstart/_build/assets/entry-client-PAnUz1rv.js") },
     .{ .path = "/fw/solidstart/_build/assets/index-BHhS8Mnq.js", .content_type = "text/javascript; charset=utf-8", .bytes = @embedFile("web/fw/solidstart/_build/assets/index-BHhS8Mnq.js") },
     .{ .path = "/fw/solidstart/_build/assets/web-BEVCKNcw.js", .content_type = "text/javascript; charset=utf-8", .bytes = @embedFile("web/fw/solidstart/_build/assets/web-BEVCKNcw.js") },
-    .{ .path = "/fw/solidstart/.vite/manifest.json", .content_type = "application/json", .bytes = @embedFile("web/fw/solidstart/.vite/manifest.json") },
     .{ .path = "/fw/solidstart/index.html", .content_type = "text/html; charset=utf-8", .bytes = @embedFile("web/fw/solidstart/index.html") },
     .{ .path = "/fw/svelte/assets/index-BNx2-2_G.js", .content_type = "text/javascript; charset=utf-8", .bytes = @embedFile("web/fw/svelte/assets/index-BNx2-2_G.js") },
     .{ .path = "/fw/svelte/assets/style-D7QhfQG7.css", .content_type = "text/css; charset=utf-8", .bytes = @embedFile("web/fw/svelte/assets/style-D7QhfQG7.css") },
