@@ -619,6 +619,8 @@ const ready_script =
     \\              'h1,h2,h3,p,ul,li,button,footer,.badge,.title,.sub,.brand,.logo,.tag';
     \\    var boxes = [];
     \\    var names = [];
+    \\    var chars = [];
+    \\    var lines = [];
     \\    var nodes = document.querySelectorAll(sel);
     \\    for (var i = 0; i < nodes.length && i < 40; i++) {
     \\      var r = nodes[i].getBoundingClientRect();
@@ -628,6 +630,10 @@ const ready_script =
     \\      var cl = nodes[i].getAttribute('class');
     \\      if (cl) nm += '.' + cl.replace(/^\s+|\s+$/g, '').split(/\s+/).join('.');
     \\      names.push(nm);
+    \\      // 文字数と行数を送る: 幅は GTK の整数丸めで ±0.5px/文字までずれるので、
+    \\      // 比較側は `文字数` から許容差を出し、`行数` は **完全一致** を要求する。
+    \\      chars.push((nodes[i].textContent || '').replace(/\s+/g, '').length);
+    \\      lines.push(nodes[i].getClientRects().length);
     \\    }
     \\
     \\    var round2 = function (v) { return Math.round(v * 100) / 100; };
@@ -781,6 +787,8 @@ const ready_script =
     \\      app: 'layout',
     \\      boxes: boxes,
     \\      names: names,
+    \\      chars: chars,
+    \\      lines: lines,
     \\      doc_w: document.documentElement.scrollWidth,
     \\      doc_h: document.documentElement.scrollHeight,
     \\      font_ok: fontOk,

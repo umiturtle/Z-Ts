@@ -11,8 +11,12 @@
   h1 { font:600 13px ZTSSans, sans-serif; margin:0 0 4px; letter-spacing:0.52px; }
   .row { display:flex; gap:24px; font-size:12px; color:#374151; margin-bottom:12px; }
   .row b { color:#111827; }
-  .ruler { height:26px; background:repeating-linear-gradient(90deg,#111827 0 1px,transparent 1px 10px); }
-  .ruler.thin { height:16px; background:repeating-linear-gradient(90deg,#6b7280 0 1px,transparent 1px 5px); }
+  /* 目盛りは実要素で描く。`repeating-linear-gradient` の 1px 線はエンジンごとに
+     AA の乗り方が違い、画素比較で 7% の差になっていた（位置は同じでも色が違う）。 */
+  .ruler { display:flex; height:26px; align-items:stretch; }
+  .ruler.thin { display:flex; height:16px; align-items:stretch; }
+  .ruler i { width:1px; flex:0 0 1px; background:#111827; }
+  .ruler.thin i { background:#6b7280; }
   .bands { display:flex; margin-top:14px; height:56px; }
   .bands div { flex:1; }
   .grid { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; margin-top:16px; }
@@ -29,9 +33,9 @@
     <div>screen <b id="screen">–</b></div>
     <div>src <b>1px 定規 (10px 間隔)</b></div>
   </div>
-  <div class="ruler"></div>
+  <div class="ruler" id="ruler"></div>
   <div style="height:6px"></div>
-  <div class="ruler thin"></div>
+  <div class="ruler thin" id="ruler-thin"></div>
   <div class="bands">
     <div style="background:#ef4444"></div><div style="background:#f97316"></div>
     <div style="background:#eab308"></div><div style="background:#22c55e"></div>
@@ -47,6 +51,23 @@
     キャプチャ PNG のピクセル幅 = <code>innerWidth × devicePixelRatio</code> になります。
   </div>
 <script>
+  // 目盛りを実要素で生成（10px 間隔 / 5px 間隔）。整数座標なので 3 OS で同じ画素になる。
+  (function () {
+    var build = function (id, step) {
+      var host = document.getElementById(id);
+      var width = host.clientWidth || 520;
+      var count = Math.floor(width / step);
+      var frag = document.createDocumentFragment();
+      for (var i = 0; i < count; i++) {
+        var tick = document.createElement('i');
+        tick.style.marginRight = (step - 1) + 'px';
+        frag.appendChild(tick);
+      }
+      host.appendChild(frag);
+    };
+    build('ruler', 10);
+    build('ruler-thin', 5);
+  })();
   document.getElementById('dpr').textContent = String(window.devicePixelRatio || 1);
   document.getElementById('inner').textContent = window.innerWidth + '×' + window.innerHeight;
   document.getElementById('screen').textContent = screen.width + '×' + screen.height;

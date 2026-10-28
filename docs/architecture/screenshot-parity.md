@@ -53,7 +53,9 @@ examples/gallery (Zig)                         scripts/                      .gi
 以下を `__ztsPostMessage` へ送る。
 
 ```json
-{"app":"layout","boxes":[[x,y,w,h], …],"doc_w":900,"doc_h":600,"font_ok":true}
+{"app":"layout","boxes":[[x,y,w,h], …],"names":["body","p.lead", …],
+ "chars":[0,132, …],"lines":[1,2, …],"doc_w":900,"doc_h":600,"font_ok":true,
+ "probe":{…}}
 ```
 
 - `boxes` は `body / .shell / .head / .card / .counter / .value / .features / h1… / button …` の
@@ -90,13 +92,21 @@ examples/gallery (Zig)                         scripts/                      .gi
 |---|---|
 | パターン集合 | 3 OS で完全一致（欠けは即失敗） |
 | 画素寸法 | 一致必須（`css_width × scale`） |
-| ボックス | 各成分の差 ≤ `--layout-tolerance`（既定 1px） |
+| ボックス | 各成分の差 ≤ `--layout-tolerance`（既定 1px）＋ 0.5px × 文字数（上限 8px） |
+| 行数（折返し） | **完全一致**（`lines` = 各要素の line box 数） |
 | ドキュメントサイズ | 差 ≤ 1px |
-| `font_ok` | すべて `true` |
+| `font_ok` | すべて `true`（同梱フォントが実際に描かれている） |
 | 背景色 (1,1) | 各成分の差 ≤ `--bg-tolerance`（既定 4/255） |
 | 平均輝度 | 差 ≤ 2.0 |
 | 画素差分率 | ≤ `--max-diff`（既定 0.06） |
 | 平均絶対差 (MAD) | ≤ `--max-mad`（既定 6.0） |
+
+**なぜ「完全一致」ではなく「1px + 文字数依存」なのか**: WebKitGTK は cairo/FreeType のメトリクス
+ヒンティングを有効にしており、**グリフ送り幅を整数 px に丸める**（8.88px の `0` が 9px）。
+CoreText（macOS）と DirectWrite（Windows）は小数のまま。この差は 1 文字あたり最大 0.5px なので、
+文字数ぶんの余裕を持たせる。代わりに **行数は完全一致**を要求するので、折返し・行送りの
+リグレッションは 1px の話に埋もれずに検出される。フォントヒンティングを fontconfig で切っても
+WebKitGTK は webfont のヒントスタイルを自前で上書きするため効かない（`ci.yml` で試行済み）。
 
 失敗例:
 

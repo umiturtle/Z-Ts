@@ -45,6 +45,12 @@ const flag = (name, fallback) => {
   return Number.isFinite(v) ? v : fallback;
 };
 const maxDiff = flag('--max-diff', 0.06);
+// GTK/WebKitGTK quantises glyph advances to whole pixels (a 8.88px advance is laid out as 9px),
+// while CoreText and DirectWrite keep the fractions. The error is bounded by 0.5px per glyph, so
+// a text-driven box may legitimately be `0.5 × characters` off. Line-break counts are compared
+// separately and exactly, which is what actually catches a wrapping regression.
+const GLYPH_TOLERANCE = 0.5;
+const GLYPH_TOLERANCE_MAX = 8;
 const maxMad = flag('--max-mad', 6);
 const layoutTolerance = flag('--layout-tolerance', 1);
 const jsonIdx = args.indexOf('--json');
@@ -128,13 +134,36 @@ for (const pattern of reference.manifest.patterns) {
       reject(`${pattern.name}: ${la.boxes.length} boxes vs ${lb.boxes.length} — DOM differs between OSes`);
       continue;
     }
+    // The number of line boxes per element must match exactly: that is the wrapping contract, and
+    // it is immune to sub-pixel advance differences.
+    if (la.lines && lb.lines) {
+      if (la.lines.length !== lb.lines.length) {
+        reject(`${pattern.name}: line signature has ${la.lines.length} entries vs ${lb.lines.length}`);
+        continue;
+      }
+      const wrapAt = la.lines.findIndex((n, i) => n !== lb.lines[i]);
+      if (wrapAt !== -1) {
+        reject(
+          `${pattern.name}: text wraps differently at box #${wrapAt}` +
+            `${la.names && la.names[wrapAt] ? ` (${la.names[wrapAt]})` : ''}: ` +
+            `${la.lines[wrapAt]} line(s) on ${reference.manifest.host} vs ${lb.lines[wrapAt]} on ${other.manifest.host}`,
+        );
+        continue;
+      }
+    }
+    // Box geometry: ±1px for the layout we control, plus WebKitGTK's per-glyph quantisation
+    // (≤0.5px per character) for boxes whose size comes from text.
     let maxDelta = 0;
+    let maxSlack = 0;
     let badBox = -1;
     for (let i = 0; i < la.boxes.length; i += 1) {
+      const glyphs = la.chars && la.chars[i] ? la.chars[i] : 0;
+      const slack = layoutTolerance + Math.min(GLYPH_TOLERANCE_MAX, Math.ceil(GLYPH_TOLERANCE * glyphs));
       for (let k = 0; k < 4; k += 1) {
         const delta = Math.abs(la.boxes[i][k] - lb.boxes[i][k]);
-        if (delta > maxDelta) {
+        if (delta > slack && delta - slack > maxDelta - maxSlack) {
           maxDelta = delta;
+          maxSlack = slack;
           badBox = i;
         }
       }
@@ -147,11 +176,11 @@ for (const pattern of reference.manifest.patterns) {
       );
       continue;
     }
-    if (maxDelta > layoutTolerance) {
+    if (badBox !== -1) {
       const label = la.names && la.names[badBox] ? ` (${la.names[badBox]})` : '';
       reject(
         `${pattern.name}: layout differs by ${maxDelta}px at box #${badBox}${label} ` +
-          `(tolerance ${layoutTolerance}px)\n  ${reference.manifest.host}: ${JSON.stringify(la.boxes[badBox])}\n  ${other.manifest.host}: ${JSON.stringify(lb.boxes[badBox])}\n` +
+          `(allowed ${maxSlack}px = ${layoutTolerance}px base + 0.5px per glyph)\n  ${reference.manifest.host}: ${JSON.stringify(la.boxes[badBox])}\n  ${other.manifest.host}: ${JSON.stringify(lb.boxes[badBox])}\n` +
           probeLine(reference.manifest.host, la) +
           '\n' +
           probeLine(other.manifest.host, lb),
