@@ -68,6 +68,9 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
 - `letter-spacing` は **px**（`em` は丸めを生む）
 - 幅の制約は **px**（`ch` は `0` の送り幅依存でエンジン差が増幅される）
 - `font-family` に**システムフォントを混ぜない**（`ZTSSans` / `ZTSSerif` / `ZTSMono` のみ）
+- HTML/CSS/JS の**コメントも** `check-font-coverage.mjs` の対象（同梱フォントの文字集合で
+  書く）。新しい漢字を含む日本語コメントを足すと CI が落ちるので、英語で書くか
+  `python3 scripts/build-fonts.py` でサブセットを作り直す
 - ギャラリーは `parity_script` で `text-rendering: geometricPrecision` を全要素に強制する
   （これが無いと WebKitGTK が送り幅を整数に丸め、44 文字で 5px ずれる）
 

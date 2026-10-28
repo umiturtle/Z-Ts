@@ -11,8 +11,8 @@
   h1 { font:600 13px ZTSSans, sans-serif; margin:0 0 4px; letter-spacing:0.52px; }
   .row { display:flex; gap:24px; font-size:12px; color:#374151; margin-bottom:12px; }
   .row b { color:#111827; }
-  /* 目盛りは実要素で描く。`repeating-linear-gradient` の 1px 線はエンジンごとに
-     AA の乗り方が違い、画素比較で 7% の差になっていた（位置は同じでも色が違う）。 */
+  /* Tick marks are real elements: the 1px lines of a `repeating-linear-gradient` are
+     anti-aliased differently per engine (7% pixel diff even at identical positions). */
   .ruler { display:flex; height:26px; align-items:stretch; }
   .ruler.thin { display:flex; height:16px; align-items:stretch; }
   .ruler i { width:1px; flex:0 0 1px; background:#111827; }
@@ -51,7 +51,8 @@
     キャプチャ PNG のピクセル幅 = <code>innerWidth × devicePixelRatio</code> になります。
   </div>
 <script>
-  // 目盛りを実要素で生成（10px 間隔 / 5px 間隔）。整数座標なので 3 OS で同じ画素になる。
+  // Build the ticks as real elements (10px / 5px spacing). Integer positions, so every OS
+  // rasterises them identically.
   (function () {
     var build = function (id, step) {
       var host = document.getElementById(id);
