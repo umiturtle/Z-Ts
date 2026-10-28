@@ -530,21 +530,59 @@ const ready_script =
     \\    var sel = 'body,.shell,.head,.card,.counter,.value,.features,.features>li,.meta,' +
     \\              'h1,h2,h3,p,ul,li,button,footer,.badge,.title,.sub,.brand,.logo,.tag';
     \\    var boxes = [];
+    \\    var names = [];
     \\    var nodes = document.querySelectorAll(sel);
     \\    for (var i = 0; i < nodes.length && i < 40; i++) {
     \\      var r = nodes[i].getBoundingClientRect();
     \\      boxes.push([Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]);
+    \\      // 箱番号だけだと原因が分からないので、`tag.class` も一緒に送る。
+    \\      var nm = nodes[i].tagName.toLowerCase();
+    \\      var cl = nodes[i].getAttribute('class');
+    \\      if (cl) nm += '.' + cl.replace(/^\s+|\s+$/g, '').split(/\s+/).join('.');
+    \\      names.push(nm);
     \\    }
     \\    var fontOk = false;
     \\    try {
     \\      fontOk = document.fonts.check('16px ZTSSans') && document.fonts.check('16px ZTSMono');
     \\    } catch (e) { fontOk = false; }
+    \\    // 診断用の 1 点計測。OS 間で箱がずれたとき、原因が「フォントが当たっていない」
+    \\    // のか「同じフォントでも送り幅が違う」のかを 1 回の実行で切り分ける。
+    \\    var probe = {};
+    \\    try {
+    \\      var cv = document.createElement('canvas').getContext('2d');
+    \\      var round2 = function (v) { return Math.round(v * 100) / 100; };
+    \\      cv.font = '16px ZTSSans';
+    \\      var zero = cv.measureText('0').width;
+    \\      var cjk = cv.measureText('デスクトップ').width;
+    \\      cv.font = '16px sans-serif';
+    \\      var fb = cv.measureText('0').width;
+    \\      var el = document.createElement('div');
+    \\      el.style.cssText = 'position:absolute;left:-9999px;top:0;width:44ch;' +
+    \\                         'font:16px ZTSSans';
+    \\      el.textContent = '0';
+    \\      document.body.appendChild(el);
+    \\      var ch44 = el.getBoundingClientRect().width;
+    \\      document.body.removeChild(el);
+    \\      var cs = getComputedStyle(document.body);
+    \\      probe = {
+    \\        zero: round2(zero),
+    \\        cjk: round2(cjk),
+    \\        fallback_zero: round2(fb),
+    \\        ch44: round2(ch44),
+    \\        family: cs.fontFamily,
+    \\        size: cs.fontSize,
+    \\        dpr: round2(window.devicePixelRatio || 1),
+    \\        ua: navigator.userAgent
+    \\      };
+    \\    } catch (e) { probe = { error: String(e) }; }
     \\    post({
     \\      app: 'layout',
     \\      boxes: boxes,
+    \\      names: names,
     \\      doc_w: document.documentElement.scrollWidth,
     \\      doc_h: document.documentElement.scrollHeight,
-    \\      font_ok: fontOk
+    \\      font_ok: fontOk,
+    \\      probe: probe
     \\    });
     \\  };
     \\  // フォントを **明示的に** 読み込む。`document.fonts.ready` だけだと「そのページが実際に

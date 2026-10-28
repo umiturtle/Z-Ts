@@ -74,34 +74,59 @@ if (hosts.includes('mock')) fail(`a run used the HeadlessMock backend (${hosts.j
 
 const reference = runs[0];
 const rows = [];
+// Collect every mismatch instead of aborting on the first one: a single run then tells us all
+// 17 patterns × 3 pairs of trouble, which is the difference between one CI round and five.
+const problems = [];
 let worstDiff = 0;
 let worstMad = 0;
 let compared = 0;
 
+const probeLine = (host, layout) => {
+  const probe = layout && layout.probe;
+  if (!probe) return `  ${host} probe: (none)`;
+  const { ua = '', ...rest } = probe;
+  const engine = (ua.match(/(Chrome|Safari|WebKit)\/[\d.]+/) || [ua.slice(0, 40)])[0];
+  return `  ${host} probe: ${JSON.stringify(rest)} [${engine}]`;
+};
+
+/** Record a mismatch and skip the rest of this pair. */
+const reject = (msg) => {
+  problems.push(msg);
+};
+
 for (const pattern of reference.manifest.patterns) {
   for (const other of runs.slice(1)) {
     const b = other.byName.get(pattern.name);
-    if (!b) fail(`${pattern.name}: missing from ${other.manifest.host}`);
+    if (!b) {
+      reject(`${pattern.name}: missing from ${other.manifest.host}`);
+      continue;
+    }
     if (b.width !== pattern.width || b.height !== pattern.height) {
-      fail(
+      reject(
         `${pattern.name}: ${other.manifest.host} captured ${b.width}x${b.height} but ` +
           `${reference.manifest.host} captured ${pattern.width}x${pattern.height} ` +
           `(same OS-independent CSS size expected)`,
       );
     }
     if (pattern.css_width !== b.css_width || pattern.css_height !== b.css_height) {
-      fail(`${pattern.name}: CSS viewport differs (${pattern.css_width}x${pattern.css_height} vs ${b.css_width}x${b.css_height})`);
+      reject(`${pattern.name}: CSS viewport differs (${pattern.css_width}x${pattern.css_height} vs ${b.css_width}x${b.css_height})`);
+      continue;
     }
 
     // ---- 1. layout fingerprint ----
     const la = pattern.layout ? JSON.parse(pattern.layout) : null;
     const lb = b.layout ? JSON.parse(b.layout) : null;
-    if (!la || !lb) fail(`${pattern.name}: missing layout fingerprint (page reported no boxes)`);
+    if (!la || !lb) {
+      reject(`${pattern.name}: missing layout fingerprint (page reported no boxes)`);
+      continue;
+    }
     if (!la.font_ok || !lb.font_ok) {
-      fail(`${pattern.name}: bundled fonts did not load (font_ok ${la.font_ok} / ${lb.font_ok})`);
+      reject(`${pattern.name}: bundled fonts did not load (font_ok ${la.font_ok} / ${lb.font_ok})`);
+      continue;
     }
     if (la.boxes.length !== lb.boxes.length) {
-      fail(`${pattern.name}: ${la.boxes.length} boxes vs ${lb.boxes.length} — DOM differs between OSes`);
+      reject(`${pattern.name}: ${la.boxes.length} boxes vs ${lb.boxes.length} — DOM differs between OSes`);
+      continue;
     }
     let maxDelta = 0;
     let badBox = -1;
@@ -114,15 +139,29 @@ for (const pattern of reference.manifest.patterns) {
         }
       }
     }
-    if (maxDelta > layoutTolerance) {
-      fail(
-        `${pattern.name}: layout differs by ${maxDelta}px at box #${badBox} ` +
-          `(tolerance ${layoutTolerance}px)\n  ${reference.manifest.host}: ${JSON.stringify(la.boxes[badBox])}\n  ${other.manifest.host}: ${JSON.stringify(lb.boxes[badBox])}`,
+    if (la.names && lb.names && la.names.join('|') !== lb.names.join('|')) {
+      const at = la.names.findIndex((n, i) => n !== lb.names[i]);
+      reject(
+        `${pattern.name}: DOM differs at box #${at} (${la.names[at] ?? '?'} vs ${lb.names[at] ?? '?'}) — ` +
+          'the same source must produce the same element list',
       );
+      continue;
+    }
+    if (maxDelta > layoutTolerance) {
+      const label = la.names && la.names[badBox] ? ` (${la.names[badBox]})` : '';
+      reject(
+        `${pattern.name}: layout differs by ${maxDelta}px at box #${badBox}${label} ` +
+          `(tolerance ${layoutTolerance}px)\n  ${reference.manifest.host}: ${JSON.stringify(la.boxes[badBox])}\n  ${other.manifest.host}: ${JSON.stringify(lb.boxes[badBox])}\n` +
+          probeLine(reference.manifest.host, la) +
+          '\n' +
+          probeLine(other.manifest.host, lb),
+      );
+      continue;
     }
     const docDelta = Math.max(Math.abs(la.doc_w - lb.doc_w), Math.abs(la.doc_h - lb.doc_h));
     if (docDelta > layoutTolerance) {
-      fail(`${pattern.name}: document size differs by ${docDelta}px (${la.doc_w}x${la.doc_h} vs ${lb.doc_w}x${lb.doc_h})`);
+      reject(`${pattern.name}: document size differs by ${docDelta}px (${la.doc_w}x${la.doc_h} vs ${lb.doc_w}x${lb.doc_h})`);
+      continue;
     }
 
     // ---- 2. pixels ----
@@ -141,15 +180,17 @@ for (const pattern of reference.manifest.patterns) {
     const bgB = rgbAt(decodedB, parsedB, 1, 1);
     const bgTolerance = flag('--bg-tolerance', 4);
     if (bgA.some((v, i) => Math.abs(v - bgB[i]) > bgTolerance)) {
-      fail(`${pattern.name}: background rgb(${bgA}) vs rgb(${bgB}) — colours differ by more than ${bgTolerance}`);
+      reject(`${pattern.name}: background rgb(${bgA}) vs rgb(${bgB}) — colours differ by more than ${bgTolerance}`);
+      continue;
     }
     const stA = stats(decodedA, parsedA);
     const stB = stats(decodedB, parsedB);
     if (Math.abs(stA.mean - stB.mean) > 2.0) {
-      fail(`${pattern.name}: mean luminance ${stA.mean.toFixed(1)} vs ${stB.mean.toFixed(1)} — visibly different`);
+      reject(`${pattern.name}: mean luminance ${stA.mean.toFixed(1)} vs ${stB.mean.toFixed(1)} — visibly different`);
+      continue;
     }
     if (diff.diffRatio > maxDiff || diff.meanAbsDiff > maxMad) {
-      fail(
+      reject(
         `${pattern.name}: pixels differ (${(diff.diffRatio * 100).toFixed(1)}% > ${(maxDiff * 100).toFixed(1)}% ` +
           `or MAD ${diff.meanAbsDiff.toFixed(2)} > ${maxMad}) worst at ${diff.worst}`,
       );
@@ -168,6 +209,11 @@ for (const pattern of reference.manifest.patterns) {
   }
 }
 
+if (problems.length > 0) {
+  for (const msg of problems) console.error(`FAIL parity ${msg}`);
+  console.error(`FAIL parity ${problems.length} mismatch(es) across ${reference.manifest.patterns.length} patterns`);
+  process.exit(1);
+}
 if (compared === 0) fail('no pattern was compared');
 
 for (const row of rows) {
