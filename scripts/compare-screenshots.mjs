@@ -121,12 +121,14 @@ for (const pattern of reference.manifest.patterns) {
     const decodedB = unfilter(parsedB);
     const diff = diffPixels(decodedA, parsedA, decodedB, parsedB);
 
-    // The painted background (0,0) must match *exactly*: a theme/colour regression is not
-    // something an anti-aliasing tolerance should hide.
+    // The painted background (1,1) must match within 4/255 per channel: a theme or palette
+    // regression is not something an anti-aliasing tolerance should be allowed to hide, but
+    // WebKit/Blink can differ by a rounding step when the page paints a gradient.
     const bgA = rgbAt(decodedA, parsedA, 1, 1);
     const bgB = rgbAt(decodedB, parsedB, 1, 1);
-    if (bgA.join(',') !== bgB.join(',')) {
-      fail(`${pattern.name}: background rgb(${bgA}) vs rgb(${bgB}) — colours must be identical`);
+    const bgTolerance = flag('--bg-tolerance', 4);
+    if (bgA.some((v, i) => Math.abs(v - bgB[i]) > bgTolerance)) {
+      fail(`${pattern.name}: background rgb(${bgA}) vs rgb(${bgB}) — colours differ by more than ${bgTolerance}`);
     }
     const stA = stats(decodedA, parsedA);
     const stB = stats(decodedB, parsedB);

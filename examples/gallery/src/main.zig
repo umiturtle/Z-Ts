@@ -547,13 +547,27 @@ const ready_script =
     \\      font_ok: fontOk
     \\    });
     \\  };
-    \\  var fontsDone = (document.fonts && document.fonts.ready) ? document.fonts.ready : null;
-    \\  if (fontsDone && fontsDone.then) {
-    \\    fontsDone.then(function () {
+    \\  // フォントを **明示的に** 読み込む。`document.fonts.ready` だけだと「そのページが実際に
+    \\  // 使った字」しか読み込まれず、CSS を後から差し込む構成（SvelteKit の single bundle 等）では
+    \\  // 使われていない扱いになって `check()` が false のままになる。
+    \\  var loads = [];
+    \\  try {
+    \\    loads.push(document.fonts.load('16px ZTSSans'));
+    \\    loads.push(document.fonts.load('700 16px ZTSSans'));
+    \\    loads.push(document.fonts.load('16px ZTSSerif'));
+    \\    loads.push(document.fonts.load('16px ZTSMono'));
+    \\  } catch (e) { /* no FontFaceSet: fall through to the timed measure */ }
+    \\  var afterFonts = function () {
+    \\    var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : null;
+    \\    var next = function () {
     \\      requestAnimationFrame(function () { requestAnimationFrame(measure); });
-    \\    });
+    \\    };
+    \\    if (ready && ready.then) ready.then(next); else next();
+    \\  };
+    \\  if (loads.length > 0 && window.Promise) {
+    \\    Promise.all(loads).then(afterFonts, afterFonts);
     \\  } else {
-    \\    requestAnimationFrame(measure);
+    \\    afterFonts();
     \\  }
     \\});
 ;
