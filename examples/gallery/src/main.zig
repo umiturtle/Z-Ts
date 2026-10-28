@@ -207,6 +207,9 @@ const WindowState = struct {
     layout: ?[]u8 = null,
     /// The page's own `{"app":"ready"}` message (framework demos post it after hydration).
     app_ready: bool = false,
+    /// The `{"app":"fontfetch", …}` probe: can the page actually read the bundled woff2 bytes?
+    /// A webfont that loads in Chromium but not in WebKit shows up here as a failed fetch.
+    font_fetch: ?[]u8 = null,
 };
 
 const Gallery = struct {
@@ -352,6 +355,10 @@ fn onMessage(userdata: ?*anyopaque, win: webview.WindowId, message: []const u8) 
     }
     if (std.mem.indexOf(u8, message, "\"app\":\"ready\"")) |_| {
         ws.app_ready = true;
+        return;
+    }
+    if (std.mem.indexOf(u8, message, "\"app\":\"fontfetch\"")) |_| {
+        if (ws.font_fetch == null) ws.font_fetch = g.allocator.dupe(u8, message) catch null;
         return;
     }
     if (ws.report == null) {
@@ -520,6 +527,23 @@ const ready_script =
     \\      dpr: window.devicePixelRatio || 1
     \\    }));
     \\  } catch (e) { /* older hosts without the alias: the app falls back to a timed wait */ }
+    \\  // 3 通目: 同梱フォントが「ページから取得できるか」。WebKit がカスタムスキーム経由の
+    \\  // webfont を拒否すると、ここだけが静かに失敗する（レイアウトはフォールバック書体で進む）。
+    \\  try {
+    \\    fetch('/zts/fonts/zts-sans-400.woff2').then(function (r) {
+    \\      return r.arrayBuffer().then(function (b) { return [r.status, b.byteLength]; });
+    \\    }).then(function (v) {
+    \\      try {
+    \\        window.__ztsPostMessage(JSON.stringify({
+    \\          app: 'fontfetch', ok: v[0] === 200 && v[1] > 1000, status: v[0], bytes: v[1]
+    \\        }));
+    \\      } catch (e) {}
+    \\    }, function (err) {
+    \\      try {
+    \\        window.__ztsPostMessage(JSON.stringify({ app: 'fontfetch', ok: false, err: String(err) }));
+    \\      } catch (e) {}
+    \\    });
+    \\  } catch (e) {}
     \\  // 2 通目: レイアウト指紋。フォントのロード完了後・次フレームで測る。
     \\  // 3 OS のギャラリー出力を `scripts/compare-screenshots.mjs` が突き合わせ、
     \\  // 「同じ解像度なら同じ位置・同じ大きさ」を機械的に保証する。
@@ -541,36 +565,93 @@ const ready_script =
     \\      if (cl) nm += '.' + cl.replace(/^\s+|\s+$/g, '').split(/\s+/).join('.');
     \\      names.push(nm);
     \\    }
+    \\    // 「フォントが読み込めた」ではなく「同梱フォントが実際に描かれている」を確かめる。
+    \\    // `document.fonts.check()` はエンジンによって当てにならない（WebKit は未適用でも true を
+    \\    // 返す）ので、同じ文字をフォールバック書体で描いた canvas と画素比較する。
+    \\    var paint = {};
+    \\    var raster = function (family, text, px) {
+    \\      var c = document.createElement('canvas');
+    \\      c.width = 240;
+    \\      c.height = 64;
+    \\      var g = c.getContext('2d');
+    \\      if (!g) return null;
+    \\      g.fillStyle = '#ffffff';
+    \\      g.fillRect(0, 0, 240, 64);
+    \\      g.fillStyle = '#000000';
+    \\      g.font = px + 'px "' + family + '"';
+    \\      g.textBaseline = 'top';
+    \\      g.fillText(text, 4, 6);
+    \\      return g.getImageData(0, 0, 240, 64).data;
+    \\    };
+    \\    var ratioDifferent = function (family, generic, text) {
+    \\      var a = raster(family, text, 40);
+    \\      var b = raster(generic, text, 40);
+    \\      if (!a || !b) return -1;
+    \\      var n = 0;
+    \\      for (var i = 0; i < a.length; i += 4) if (a[i] !== b[i]) n++;
+    \\      return Math.round((n / (a.length / 4)) * 1000) / 1000;
+    \\    };
     \\    var fontOk = false;
     \\    try {
-    \\      fontOk = document.fonts.check('16px ZTSSans') && document.fonts.check('16px ZTSMono');
+    \\      paint = {
+    \\        sans: ratioDifferent('ZTSSans', 'sans-serif', 'Zig 0'),
+    \\        sansCjk: ratioDifferent('ZTSSans', 'sans-serif', 'あ'),
+    \\        serif: ratioDifferent('ZTSSerif', 'serif', 'Zig 0'),
+    \\        mono: ratioDifferent('ZTSMono', 'monospace', 'Zig 0')
+    \\      };
+    \\      var ratios = [paint.sans, paint.sansCjk, paint.serif, paint.mono];
+    \\      var loaded = true;
+    \\      Array.prototype.forEach.call(document.fonts, function (f) {
+    \\        if (f.status !== 'loaded') loaded = false;
+    \\      });
+    \\      var minRatio = 0.02;
+    \\      fontOk = loaded &&
+    \\        ratios.every(function (r) { return r > minRatio; });
     \\    } catch (e) { fontOk = false; }
-    \\    // 診断用の 1 点計測。OS 間で箱がずれたとき、原因が「フォントが当たっていない」
-    \\    // のか「同じフォントでも送り幅が違う」のかを 1 回の実行で切り分ける。
+    \\    // 診断用の計測。OS 間で箱がずれたとき「フォントが当たっていない」のか
+    \\    // 「同じフォントでも送り幅が違う」のかを 1 回の実行で切り分ける。
+    \\    // canvas の measureText はレイアウトと食い違うことがあるので DOM で測る。
     \\    var probe = {};
     \\    try {
-    \\      var cv = document.createElement('canvas').getContext('2d');
     \\      var round2 = function (v) { return Math.round(v * 100) / 100; };
-    \\      cv.font = '16px ZTSSans';
-    \\      var zero = cv.measureText('0').width;
-    \\      var cjk = cv.measureText('デスクトップ').width;
-    \\      cv.font = '16px sans-serif';
-    \\      var fb = cv.measureText('0').width;
-    \\      var el = document.createElement('div');
-    \\      el.style.cssText = 'position:absolute;left:-9999px;top:0;width:44ch;' +
-    \\                         'font:16px ZTSSans';
-    \\      el.textContent = '0';
-    \\      document.body.appendChild(el);
-    \\      var ch44 = el.getBoundingClientRect().width;
-    \\      document.body.removeChild(el);
-    \\      var cs = getComputedStyle(document.body);
+    \\      var widthOf = function (family, weight, text, size) {
+    \\        var s = document.createElement('span');
+    \\        s.style.cssText = 'position:absolute;left:-9999px;top:0;white-space:pre;' +
+    \\                          'font-size:' + (size || 16) + 'px;font-weight:' + (weight || 400) +
+    \\                          ';font-family:' + family;
+    \\        s.textContent = text;
+    \\        document.body.appendChild(s);
+    \\        var w = s.getBoundingClientRect().width;
+    \\        var fs = getComputedStyle(s).fontSize;
+    \\        document.body.removeChild(s);
+    \\        return [round2(w), fs];
+    \\      };
+    \\      var sans0 = widthOf('ZTSSans', 400, '0');
+    \\      var sans0b = widthOf('ZTSSans', 700, '0');
+    \\      var cjk = widthOf('ZTSSans', 400, 'デスクトップ');
+    \\      var generic = widthOf('sans-serif', 400, '0');
+    \\      var serif0 = widthOf('ZTSSerif', 400, '0');
+    \\      var mono0 = widthOf('ZTSMono', 400, '0');
+    \\      var chEl = document.createElement('div');
+    \\      chEl.style.cssText = 'position:absolute;left:-9999px;top:0;width:44ch;' +
+    \\                           'font-size:16px;font-family:ZTSSans';
+    \\      document.body.appendChild(chEl);
+    \\      var chWidth = chEl.getBoundingClientRect().width;
+    \\      document.body.removeChild(chEl);
     \\      probe = {
-    \\        zero: round2(zero),
-    \\        cjk: round2(cjk),
-    \\        fallback_zero: round2(fb),
-    \\        ch44: round2(ch44),
-    \\        family: cs.fontFamily,
-    \\        size: cs.fontSize,
+    \\        sans0: sans0[0],
+    \\        sans0b: sans0b[0],
+    \\        cjk: cjk[0],
+    \\        generic0: generic[0],
+    \\        serif0: serif0[0],
+    \\        mono0: mono0[0],
+    \\        ch44: round2(chWidth),
+    \\        size: sans0[1],
+    \\        paint: paint,
+    \\        status: document.fonts.status,
+    \\        faces: Array.prototype.map.call(document.fonts, function (f) {
+    \\          return f.family + '/' + f.weight + '/' + f.status;
+    \\        }).join(' '),
     \\        dpr: round2(window.devicePixelRatio || 1),
     \\        ua: navigator.userAgent
     \\      };
@@ -723,6 +804,7 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
             if (g.stateFor(id)) |state| {
                 if (state.report) |report| g.allocator.free(report);
                 if (state.layout) |layout| g.allocator.free(layout);
+                if (state.font_fetch) |probe| g.allocator.free(probe);
             }
             _ = g.windows.pop();
             g.engine.closeWindow(id) catch {};
@@ -796,6 +878,11 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
             try writeJsonString(writer, layout);
         }
         try writer.print(", \"font_ok\": {s}", .{if (fontOk(ws_ptr.layout)) "true" else "false"});
+        // 同梱フォントをページ側から読めたか（WebKit のカスタムスキーム/CORS 問題の切り分け用）。
+        if (ws_ptr.font_fetch) |probe| {
+            try writer.writeAll(", \"font_fetch\": ");
+            try writeJsonString(writer, probe);
+        }
         try writer.writeAll(" }");
         captured += 1;
 

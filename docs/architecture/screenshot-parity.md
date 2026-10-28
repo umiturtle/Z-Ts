@@ -58,8 +58,15 @@ examples/gallery (Zig)                         scripts/                      .gi
 
 - `boxes` は `body / .shell / .head / .card / .counter / .value / .features / h1… / button …` の
   最大 40 要素の `getBoundingClientRect()` を **1px に丸めた** もの。
-- `font_ok` は `document.fonts.check('16px ZTSSans')` と `'16px ZTSMono'`（ファミリ名に空白を
-  入れないのは、minify で `"ZTS Sans"` の引用符が落ちて無効名になるのを避けるため）。
+- `font_ok` は「同梱フォントが実際に描かれているか」。同じ文字を `ZTSSans` と `sans-serif` で
+  canvas に描いて画素を比べ、差が 2% 未満なら *フォールバックした* と判定する（`document.fonts.check()`
+  は WebKit では未適用でも `true` を返すため、単独では根拠にならない）。ファミリ名に空白を入れないのは、
+  minify で `"ZTS Sans"` の引用符が落ちて無効名になるのを避けるため。
+- `probe` は切り分け用（`sans0` / `sans0b` / `cjk` / `ch44` / `paint` / `faces`）。OS 間で箱がずれたとき、
+  「フォントが当たっていない」のか「同じフォントでも送り幅が違う」のかを 1 回で判別できる。
+- ページは `fetch('/zts/fonts/zts-sans-400.woff2')` も試し、`{"app":"fontfetch"}` を投稿する。
+  `verify-screenshots.mjs` はこれが失敗した時点で落ちる（カスタムスキーム経由の取得失敗は
+  レイアウトがフォールバック書体のまま進むので、`font_ok` だけでは見逃すことがある）。
 - ギャラリーはこれを `manifest.json` の `layout`（JSON 文字列）に保存し、`ci-parity` が突き合わせる。
 
 比較ルール（`scripts/compare-screenshots.mjs`）。フラグはディレクトリの前後どちらに置いてもよい:

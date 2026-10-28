@@ -169,6 +169,20 @@ for (const entry of manifest.patterns) {
       fail(`${entry.name}: bundled ZTS fonts did not load (font_ok=false) — Linux would render tofu`);
     }
     if (!entry.layout) fail(`${entry.name}: no layout fingerprint (page never measured itself)`);
+    // The page fetches the woff2 itself: a WebKit custom-scheme/CORS refusal shows up here even
+    // when `font_ok` still looks fine, so keep it as its own gate.
+    if (entry.font_fetch) {
+      let probe = null;
+      try {
+        probe = JSON.parse(entry.font_fetch);
+      } catch (err) {
+        fail(`${entry.name}: unreadable font_fetch probe (${err.message})`);
+      }
+      if (probe && probe.ok !== true) {
+        const why = probe.err ?? `status ${probe.status} bytes ${probe.bytes}`;
+        fail(`${entry.name}: the bundled font is not fetchable from the page (${why})`);
+      }
+    }
   }
 
   checked += 1;
