@@ -124,6 +124,27 @@ jobs:
             ../../zigw build --summary all
           } 2>&1 | tee -a ci-output.log
 
+      - name: Disable font hinting so WebKitGTK keeps fractional glyph advances (M5-05)
+        run: |
+          set -eo pipefail
+          # WebKitGTK builds its cairo font options from the fontconfig pattern
+          # (`setCairoFontOptionsFromFontConfigPattern`): with `hinting=false` it loads glyphs with
+          # FT_LOAD_NO_HINTING, so advance widths stay fractional (8.88px) instead of being rounded
+          # to whole pixels (9px). Without this the *same* woff2 lays out differently from CoreText
+          # and DirectWrite — 44 characters drift ~5px and the line breaks move.
+          printf '%s\n' \
+            '<?xml version="1.0"?>' \
+            '<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">' \
+            '<fontconfig><match target="font">' \
+            '<edit name="hinting" mode="assign"><bool>false</bool></edit>' \
+            '<edit name="hintstyle" mode="assign"><const>hintnone</const></edit>' \
+            '<edit name="antialias" mode="assign"><bool>true</bool></edit>' \
+            '<edit name="rgba" mode="assign"><const>none</const></edit>' \
+            '</match></fontconfig>' \
+            | sudo tee /etc/fonts/conf.d/99-zts-nohint.conf > /dev/null
+          sudo fc-cache -f > /dev/null
+          fc-match -v | grep -E '^\s+(hinting|hintstyle|rgba|antialias):' | head -4
+
       - name: Screenshot gallery — native captures under Xvfb (M5-04)
         run: |
           set -o pipefail
