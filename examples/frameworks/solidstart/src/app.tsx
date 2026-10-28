@@ -1,10 +1,6 @@
-import { Router } from '@solidjs/router';
-import { FileRoutes } from '@solidjs/start/router';
+import './app.css';
+import Home from './routes/index';
 
 export default function App() {
-  return (
-    <Router>
-      <FileRoutes />
-    </Router>
-  );
+  return <Home />;
 }

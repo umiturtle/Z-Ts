@@ -44,15 +44,15 @@ const V = {
 // ---------------------------------------------------------------- shared UI
 
 const APP_CSS = `/* Z-Ts framework demo — 3 OS で同一画素にするためシステムフォントを使わない。 */
-@font-face { font-family:"ZTS Sans"; font-style:normal; font-weight:400; font-display:block;
+@font-face { font-family:ZTSSans; font-style:normal; font-weight:400; font-display:block;
   src:url("/zts/fonts/zts-sans-400.woff2") format("woff2"); }
-@font-face { font-family:"ZTS Sans"; font-style:normal; font-weight:700; font-display:block;
+@font-face { font-family:ZTSSans; font-style:normal; font-weight:700; font-display:block;
   src:url("/zts/fonts/zts-sans-700.woff2") format("woff2"); }
-@font-face { font-family:"ZTS Mono"; font-style:normal; font-weight:400; font-display:block;
+@font-face { font-family:ZTSMono; font-style:normal; font-weight:400; font-display:block;
   src:url("/zts/fonts/zts-mono-400.woff2") format("woff2"); }
 * { box-sizing:border-box; }
 html,body { margin:0; padding:0; height:100%; }
-body { font-family:"ZTS Sans"; font-size:15px; line-height:1.6; color:#0f172a; background:#f4f6fb;
+body { font-family:ZTSSans; font-size:15px; line-height:1.6; color:#0f172a; background:#f4f6fb;
   -webkit-font-smoothing:antialiased; text-rendering:geometricPrecision; font-kerning:normal;
   font-synthesis:none; }
 .shell { width:760px; margin:0 auto; padding:28px 32px 32px; }
@@ -62,14 +62,14 @@ body { font-family:"ZTS Sans"; font-size:15px; line-height:1.6; color:#0f172a; b
   color:#fff; font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; }
 .title { font-size:19px; font-weight:700; letter-spacing:-.01em; }
 .sub { font-size:12px; color:#64748b; }
-.badge { font-family:"ZTS Mono"; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+.badge { font-family:ZTSMono; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
   padding:5px 10px; border-radius:999px; background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe; }
 .card { margin-top:22px; background:#fff; border:1px solid #e2e8f0; border-radius:16px;
   padding:22px 24px; box-shadow:0 10px 30px rgba(15,23,42,.06); }
 .counter { display:flex; align-items:center; gap:16px; }
-.value { font-family:"ZTS Mono"; font-size:44px; font-weight:400; line-height:1;
+.value { font-family:ZTSMono; font-size:44px; font-weight:400; line-height:1;
   min-width:120px; color:#0f172a; }
-button { font-family:"ZTS Sans"; font-size:14px; font-weight:600; padding:9px 16px; border-radius:10px;
+button { font-family:ZTSSans; font-size:14px; font-weight:600; padding:9px 16px; border-radius:10px;
   border:1px solid #cbd5e1; background:#fff; color:#0f172a; cursor:pointer; }
 button.primary { background:#4f46e5; border-color:#4338ca; color:#fff; }
 .features { margin:20px 0 0; padding:0; list-style:none; display:grid; grid-template-columns:1fr 1fr 1fr;
@@ -78,7 +78,7 @@ button.primary { background:#4f46e5; border-color:#4338ca; color:#fff; }
   font-size:13px; color:#334155; }
 .features b { display:block; font-size:13px; color:#0f172a; margin-bottom:2px; }
 .meta { margin-top:18px; display:flex; align-items:center; justify-content:space-between;
-  font-family:"ZTS Mono"; font-size:12px; color:#64748b; }
+  font-family:ZTSMono; font-size:12px; color:#64748b; }
 .tag { color:#0f766e; }
 `;
 
@@ -487,19 +487,21 @@ export default defineConfig({
   build: { assetsInlineLimit: 1e9 },
 });
 `);
-      write(join(dir, 'src/app.tsx'), `import { Router } from '@solidjs/router';
-import { FileRoutes } from '@solidjs/start/router';
+      // Single-route demo: rendering the page component directly keeps the SSR output
+      // deterministic (the file-router manifest is only needed for multi-route apps).
+      write(join(dir, 'src/app.tsx'), `import './app.css';
+import Home from './routes/index';
 
 export default function App() {
-  return (
-    <Router>
-      <FileRoutes />
-    </Router>
-  );
+  return <Home />;
 }
 `);
-      write(join(dir, 'src/entry-client.tsx'), `import { mount, StartClient } from '@solidjs/start/client';
-mount(() => <StartClient />, document.getElementById('app'));
+      // Custom SPA entry: mount the single page directly. (`StartClient` expects the hydration
+      // payload that only exists in the SSR flow, so it renders nothing in `ssr: false` builds.)
+      write(join(dir, 'src/entry-client.tsx'), `import './app.css';
+import { render } from 'solid-js/web';
+import Home from './routes/index';
+render(() => <Home />, document.getElementById('app'));
 `);
       write(join(dir, 'src/entry-server.tsx'), `import { createHandler, StartServer } from '@solidjs/start/server';
 export default createHandler(() => (
@@ -542,12 +544,22 @@ export default function Home() {
     // SolidStart 2 in SPA mode emits only `dist/client/_build` (no shell). The client entry is named
     // in Vite's manifest, so we write the shell ourselves — the app itself is SolidStart's router.
     prerender: (dir, distDir) => {
+      // `ssr: false` emits only `dist/client/_build`; the client entry is named in Vite's manifest.
       const manifest = JSON.parse(readFileSync(join(distDir, '.vite/manifest.json'), 'utf8'));
       const entry = Object.values(manifest).find((chunk) => chunk.isEntry && chunk.file.includes('entry-client'));
       if (!entry) throw new Error('no entry-client chunk in the Vite manifest');
+      // The build emits the app's CSS as a separate asset; a hand-written shell must link it.
+      const css = readdirSync(join(distDir, dirname(entry.file)))
+        .filter((name) => name.endsWith('.css'))
+        .sort()
+        .map((name) => `<link rel="stylesheet" href="./${join(dirname(entry.file), name).split(sep).join('/')}">`)
+        .join('\n');
       writeFileSync(
         join(distDir, 'index.html'),
-        HTML_SHELL('<div id="app"></div>', `<script type="module" src="./${entry.file}"></script>`),
+        HTML_SHELL(
+          '<div id="app"></div>',
+          `${css}\n<script type="module" src="./${entry.file}"></script>`,
+        ),
       );
     },
     bestEffort: true,

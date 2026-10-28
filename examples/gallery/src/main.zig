@@ -488,13 +488,13 @@ const parity_script =
     \\(function () {
     \\  try {
     \\    var css = [
-    \\      '@font-face{font-family:"ZTS Sans";font-style:normal;font-weight:400;font-display:block;' +
+    \\      '@font-face{font-family:ZTSSans;font-style:normal;font-weight:400;font-display:block;' +
     \\        'src:url("/zts/fonts/zts-sans-400.woff2") format("woff2")}',
-    \\      '@font-face{font-family:"ZTS Sans";font-style:normal;font-weight:700;font-display:block;' +
+    \\      '@font-face{font-family:ZTSSans;font-style:normal;font-weight:700;font-display:block;' +
     \\        'src:url("/zts/fonts/zts-sans-700.woff2") format("woff2")}',
-    \\      '@font-face{font-family:"ZTS Serif";font-style:normal;font-weight:400;font-display:block;' +
+    \\      '@font-face{font-family:ZTSSerif;font-style:normal;font-weight:400;font-display:block;' +
     \\        'src:url("/zts/fonts/zts-serif-400.woff2") format("woff2")}',
-    \\      '@font-face{font-family:"ZTS Mono";font-style:normal;font-weight:400;font-display:block;' +
+    \\      '@font-face{font-family:ZTSMono;font-style:normal;font-weight:400;font-display:block;' +
     \\        'src:url("/zts/fonts/zts-mono-400.woff2") format("woff2")}',
     \\      'html{scrollbar-width:none;-webkit-text-size-adjust:100%;}',
     \\      '::-webkit-scrollbar{width:0;height:0;}',
@@ -537,7 +537,7 @@ const ready_script =
     \\    }
     \\    var fontOk = false;
     \\    try {
-    \\      fontOk = document.fonts.check('16px "ZTS Sans"') && document.fonts.check('16px "ZTS Mono"');
+    \\      fontOk = document.fonts.check('16px ZTSSans') && document.fonts.check('16px ZTSMono');
     \\    } catch (e) { fontOk = false; }
     \\    post({
     \\      app: 'layout',

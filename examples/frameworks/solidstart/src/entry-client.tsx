@@ -1,2 +1,4 @@
-import { mount, StartClient } from '@solidjs/start/client';
-mount(() => <StartClient />, document.getElementById('app'));
+import './app.css';
+import { render } from 'solid-js/web';
+import Home from './routes/index';
+render(() => <Home />, document.getElementById('app'));
