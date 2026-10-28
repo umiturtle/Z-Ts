@@ -95,6 +95,17 @@ const probeLine = (host, layout) => {
   return `  ${host} probe: ${JSON.stringify(rest)} [${engine}]`;
 };
 
+/** Full per-box dump (names, sizes, line counts) for a failing pattern. */
+const dumpBoxes = (hostA, la, lb) => {
+  const rows = la.boxes.map((box, i) => {
+    const name = (la.names && la.names[i]) || `box${i}`;
+    const other = lb.boxes[i] ? lb.boxes[i].join(',') : '?';
+    return `    #${String(i).padStart(2)} ${name.padEnd(28)} ${hostA}=${box.join(',')} other=${other}` +
+      ` chars=${la.chars ? la.chars[i] : '?'} lines=${la.lines ? la.lines[i] : '?'}/${lb.lines ? lb.lines[i] : '?'}`;
+  });
+  return rows.join('\n');
+};
+
 /** Record a mismatch and skip the rest of this pair. */
 const reject = (msg) => {
   problems.push(msg);
@@ -183,7 +194,9 @@ for (const pattern of reference.manifest.patterns) {
           `(allowed ${maxSlack}px = ${layoutTolerance}px base + 0.5px per glyph)\n  ${reference.manifest.host}: ${JSON.stringify(la.boxes[badBox])}\n  ${other.manifest.host}: ${JSON.stringify(lb.boxes[badBox])}\n` +
           probeLine(reference.manifest.host, la) +
           '\n' +
-          probeLine(other.manifest.host, lb),
+          probeLine(other.manifest.host, lb) +
+          '\n' +
+          dumpBoxes(reference.manifest.host, la, lb),
       );
       continue;
     }
