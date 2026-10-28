@@ -79,6 +79,9 @@
 
 - **`M4-01` (`src/tauri/{dialog,clipboard}/`)**: ファイル選択・保存・メッセージダイアログ（GTK FileChooserNative / macOS NSOpenPanel・NSSavePanel / Win32 Common Item Dialog COM）および OS クリップボード読み書き。
 - **`M4-02` (`src/tauri/fs/`)**: `OsPath` 対応ファイル読み書き・ディレクトリ走査・ストリーム転送（`std.Io.File` + シンボリックリンク解決によるスコープ外脱出防止）。
+  - **実装**: [`../architecture/tauri-fs-plugin.md`](../architecture/tauri-fs-plugin.md) / **設計判断**: [`../decisions/0011-scoped-fs-plugin.md`](../decisions/0011-scoped-fs-plugin.md) / **タスク**: [`../tasks/M4-02-scoped-fs.md`](../tasks/M4-02-scoped-fs.md)
+  - `plugin:fs|*` 全 20 コマンド（`read_text_file` / `write_file` / `read_dir` / `stat` / `open`+`read`+`write`+`seek` …）。`rid` は既存 `ResourceTable` に載せるため偽造・二重 close は `BadResourceId`。
+  - スコープ判定は **字句正規化 → シンボリックリンク解決（40 ホップ上限）→ 成分単位の包含判定**。`/srv/app` は `/srv/app-evil` を含まず、`root/link -> /etc` 経由の脱出は `OutOfScope`。
 - **`M4-03` (`src/tauri/{menu,tray}/`)**: ネイティブアプリケーションメニュー・コンテキストメニュー・システムトレイアイコン。
 - **`M4-04` (`src/tauri/{config_import,acl}.zig`)**: 既存 Tauri v2 の `tauri.conf.json` および `capabilities/*.json` を `comptime` / 実行時に読み込み、コード書き換え最小で既存 Tauri フロントエンド資産を移行できる互換レイヤ。
 
