@@ -77,7 +77,9 @@
 
 すべて `zts_rpc.Schema` に選択的に追加できる **独立モジュール（未使用時はバイナリサイズ 0 バイト）** として実装します：
 
-- **`M4-01` (`src/tauri/{dialog,clipboard}/`)**: ファイル選択・保存・メッセージダイアログ（GTK FileChooserNative / macOS NSOpenPanel・NSSavePanel / Win32 Common Item Dialog COM）および OS クリップボード読み書き。
+- **`M4-01` (`src/tauri/{dialog,clipboard}/` + `src/tauri/native*`)**: ファイル選択・保存・メッセージダイアログ（GTK FileChooserNative / macOS NSOpenPanel・NSSavePanel / Win32 Common Item Dialog COM）および OS クリップボード読み書き。
+  - **実装**: [`../architecture/tauri-dialog-clipboard.md`](../architecture/tauri-dialog-clipboard.md) / **設計判断**: [`../decisions/0012-dialog-and-clipboard-backends.md`](../decisions/0012-dialog-and-clipboard-backends.md) / **タスク**: [`../tasks/M4-01-dialog-clipboard.md`](../tasks/M4-01-dialog-clipboard.md)
+  - ワイヤ層（`zts_tauri`）は Pure Zig のままバックエンド vtable + Mock を持ち、実 OS 実装は `zts_tauri_native` に隔離。選択されたパスは **`plugin:fs` のスコープへ動的に付与** される（本家 `tauri-plugin-fs` と同じ挙動）。
 - **`M4-02` (`src/tauri/fs/`)**: `OsPath` 対応ファイル読み書き・ディレクトリ走査・ストリーム転送（`std.Io.File` + シンボリックリンク解決によるスコープ外脱出防止）。
   - **実装**: [`../architecture/tauri-fs-plugin.md`](../architecture/tauri-fs-plugin.md) / **設計判断**: [`../decisions/0011-scoped-fs-plugin.md`](../decisions/0011-scoped-fs-plugin.md) / **タスク**: [`../tasks/M4-02-scoped-fs.md`](../tasks/M4-02-scoped-fs.md)
   - `plugin:fs|*` 全 20 コマンド（`read_text_file` / `write_file` / `read_dir` / `stat` / `open`+`read`+`write`+`seek` …）。`rid` は既存 `ResourceTable` に載せるため偽造・二重 close は `BadResourceId`。

@@ -107,6 +107,13 @@ pub fn build(b: *std.Build) void {
     webview_opts.addOption(bool, "enable_macos", is_macos and enable_macos);
     webview_opts.addOption(bool, "enable_windows", is_windows and enable_windows);
 
+    // `M4-01`: native dialog & clipboard backends reuse the same per-OS switches. Keeping them in
+    // a separate option module means `zts_tauri` never sees the flag and stays GUI-free.
+    const native_opts = b.addOptions();
+    native_opts.addOption(bool, "enable_gtk", is_linux and enable_gtk);
+    native_opts.addOption(bool, "enable_macos", is_macos and enable_macos);
+    native_opts.addOption(bool, "enable_windows", is_windows and enable_windows);
+
     // -------------------------------------------------------------------------
     // 1. Standalone Public Modules (independently importable via `b.dependency`)
     //    Every `.zig` source file belongs to strictly ONE module (disjoint DAG).
@@ -249,6 +256,42 @@ pub fn build(b: *std.Build) void {
             .{ .name = "zts_rpc", .module = rpc_mod },
         },
     });
+
+    // Level 1f-bis: `zts_tauri_native` — OS dialog & clipboard backends for `zts_tauri` plugins
+    // (`M4-01`). This is the ONLY module that links GTK / Cocoa / Win32 on behalf of `zts_tauri`;
+    // the plugin wire layer and its `Mock` backends stay Pure Zig.
+    const tauri_native_mod = b.addModule("zts_tauri_native", .{
+        .root_source_file = b.path("src/tauri/native.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = (is_linux and enable_gtk) or native_macos or native_windows,
+        .imports = &.{
+            .{ .name = "zts_foundation", .module = foundation_mod },
+            .{ .name = "zts_web", .module = web_mod },
+            .{ .name = "zts_core", .module = core_mod },
+            .{ .name = "zts_rpc", .module = rpc_mod },
+            .{ .name = "zts_tauri", .module = tauri_mod },
+            .{ .name = "native_options", .module = native_opts.createModule() },
+        },
+    });
+    if (is_linux and enable_gtk) {
+        tauri_native_mod.linkSystemLibrary("gtk+-3.0", .{});
+        tauri_native_mod.linkSystemLibrary("gdk-3.0", .{});
+        tauri_native_mod.linkSystemLibrary("glib-2.0", .{});
+    }
+    if (native_macos) {
+        tauri_native_mod.addCSourceFile(.{
+            .file = b.path("src/tauri/native_macos_shim.m"),
+            .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
+        });
+        tauri_native_mod.linkFramework("Cocoa", .{});
+        tauri_native_mod.linkFramework("Foundation", .{});
+    }
+    if (native_windows) {
+        for ([_][]const u8{
+            "user32", "kernel32", "ole32", "oleaut32", "shlwapi", "shell32",
+        }) |lib| tauri_native_mod.linkSystemLibrary(lib, .{ .use_pkg_config = .no });
+    }
 
     // Level 1g: `zts_wasm` — Isomorphic `wasm32-freestanding` runtime (`WasmHost`, `Instance`, C ABI exports).
     // Zero libc / OS GUI / socket dependencies; compiles identically for native unit tests & `.wasm`.
@@ -508,6 +551,7 @@ pub fn build(b: *std.Build) void {
     const webview_tests = b.addTest(.{ .root_module = webview_mod });
     const core_tests = b.addTest(.{ .root_module = core_mod });
     const tauri_tests = b.addTest(.{ .root_module = tauri_mod });
+    const tauri_native_tests = b.addTest(.{ .root_module = tauri_native_mod });
     const wasm_tests = b.addTest(.{ .root_module = wasm_mod });
     const ssg_tests = b.addTest(.{ .root_module = ssg_mod });
     const standalone_tests = b.addTest(.{ .root_module = standalone_consumer_mod });
@@ -547,6 +591,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(webview_tests).step);
     test_step.dependOn(&b.addRunArtifact(core_tests).step);
     test_step.dependOn(&b.addRunArtifact(tauri_tests).step);
+    test_step.dependOn(&b.addRunArtifact(tauri_native_tests).step);
     test_step.dependOn(&b.addRunArtifact(wasm_tests).step);
     test_step.dependOn(&b.addRunArtifact(ssg_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);

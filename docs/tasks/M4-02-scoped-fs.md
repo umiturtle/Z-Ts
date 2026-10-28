@@ -1,6 +1,6 @@
 # Task M4-02: スコープ付きファイルシステムプラグイン（`src/tauri/fs/`）
 
-- **Status**: `done`（CI run `40647424821` で 4 ジョブすべて green） <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `done`（CI run `40647424821` で 4 ジョブすべて green）
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/tauri/fs/`（`mod.zig` / `scope.zig` / `commands.zig`）, `src/tauri/mod.zig`, `docs/tasks/M4-02-scoped-fs.md`, `docs/architecture/tauri-fs-plugin.md`, `docs/decisions/0011-scoped-fs-plugin.md`, `docs/INDEX.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`
 - **Upstream Reference**: `@tauri-apps/plugin-fs` v2（`plugins-workspace/plugins/fs/src/commands.rs` / `guest-js/index.ts`）

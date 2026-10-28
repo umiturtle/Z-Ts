@@ -16,7 +16,9 @@ const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
 pub const app = @import("app.zig");
+pub const clipboard = @import("clipboard/mod.zig");
 pub const channel = @import("channel.zig");
+pub const dialog = @import("dialog/mod.zig");
 pub const event = @import("event.zig");
 pub const fs = @import("fs/mod.zig");
 pub const js_bootstrap = @import("js_bootstrap.zig");
@@ -116,6 +118,8 @@ pub const CorePluginStates = struct {
 test {
     _ = app;
     _ = channel;
+    _ = clipboard;
+    _ = dialog;
     _ = event;
     _ = fs;
     _ = js_bootstrap;

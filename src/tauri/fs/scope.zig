@@ -235,26 +235,24 @@ pub fn allowsPath(style: path.PathStyle, roots: []const Root, canonical: []const
 pub const Scope = struct {
     allocator: Allocator,
     style: path.PathStyle,
-    roots: []Root,
+    /// Growable: `plugin:dialog` appends a grant for every path the user picks (upstream
+    /// `tauri-plugin-fs` scope behaviour), so a dialog result can be read with `plugin:fs|*`.
+    roots: std.ArrayListUnmanaged(Root) = .empty,
 
     /// Builds a scope from raw root strings. Roots are lexically normalized only; pass them
     /// through [`initCanonical`] when the roots themselves may contain symlinks.
     pub fn init(allocator: Allocator, style: path.PathStyle, specs: []const Root) Allocator.Error!Scope {
-        const roots = try allocator.alloc(Root, specs.len);
-        var filled: usize = 0;
-        errdefer {
-            for (roots[0..filled]) |r| allocator.free(r.path);
-            allocator.free(roots);
-        }
-        for (specs, 0..) |spec, i| {
+        var self: Scope = .{ .allocator = allocator, .style = style };
+        errdefer self.deinit();
+        try self.roots.ensureTotalCapacity(allocator, specs.len);
+        for (specs) |spec| {
             if (!path.isAbsoluteWithStyle(style, spec.path)) return error.OutOfMemory;
-            roots[i] = .{
+            try self.roots.append(allocator, .{
                 .path = try path.normalizeWithStyle(allocator, style, spec.path),
                 .recursive = spec.recursive,
-            };
-            filled += 1;
+            });
         }
-        return .{ .allocator = allocator, .style = style, .roots = roots };
+        return self;
     }
 
     /// Builds a scope whose roots are fully canonicalized (symlinks resolved) exactly once.
@@ -264,34 +262,46 @@ pub const Scope = struct {
         style: path.PathStyle,
         specs: []const Root,
     ) ResolveError!Scope {
-        const roots = try allocator.alloc(Root, specs.len);
-        var filled: usize = 0;
-        errdefer {
-            for (roots[0..filled]) |r| allocator.free(r.path);
-            allocator.free(roots);
-        }
-        for (specs, 0..) |spec, i| {
+        var self: Scope = .{ .allocator = allocator, .style = style };
+        errdefer self.deinit();
+        try self.roots.ensureTotalCapacity(allocator, specs.len);
+        for (specs) |spec| {
             if (!path.isAbsoluteWithStyle(style, spec.path)) return error.InvalidPath;
-            const normalized = try path.normalizeWithStyle(allocator, style, spec.path);
-            const canonical = canonicalizeAlloc(io, allocator, style, normalized) catch |err| {
-                allocator.free(normalized);
-                return err;
-            };
-            allocator.free(normalized);
-            roots[i] = .{ .path = canonical, .recursive = spec.recursive };
-            filled += 1;
+            const canonical = try self.canonicalRootAlloc(io, spec.path);
+            errdefer allocator.free(canonical);
+            try self.roots.append(allocator, .{ .path = canonical, .recursive = spec.recursive });
         }
-        return .{ .allocator = allocator, .style = style, .roots = roots };
+        return self;
+    }
+
+    fn canonicalRootAlloc(self: *Scope, io: Io, raw: []const u8) ResolveError![]u8 {
+        const normalized = try path.normalizeWithStyle(self.allocator, self.style, raw);
+        defer self.allocator.free(normalized);
+        return canonicalizeAlloc(io, self.allocator, self.style, normalized);
     }
 
     pub fn deinit(self: *Scope) void {
-        for (self.roots) |root| self.allocator.free(root.path);
-        self.allocator.free(self.roots);
+        for (self.roots.items) |root| self.allocator.free(root.path);
+        self.roots.deinit(self.allocator);
         self.* = undefined;
     }
 
+    /// Grants `raw` at runtime (e.g. a path the user just picked in a native file dialog).
+    ///
+    /// The path is canonicalized first, so the grant names the real target rather than a symlink.
+    /// Returns `error.OutOfScope` when `raw` itself cannot be verified — callers should surface
+    /// that as a failed dialog grant instead of widening the scope blindly.
+    pub fn addRoot(self: *Scope, io: Io, raw: []const u8, recursive: bool) ResolveError!void {
+        if (raw.len == 0 or std.mem.indexOfScalar(u8, raw, 0) != null) return error.InvalidPath;
+        if (!path.isAbsoluteWithStyle(self.style, raw)) return error.InvalidPath;
+
+        const canonical = try self.canonicalRootAlloc(io, raw);
+        errdefer self.allocator.free(canonical);
+        try self.roots.append(self.allocator, .{ .path = canonical, .recursive = recursive });
+    }
+
     pub fn allowsCanonical(self: *const Scope, canonical: []const u8) bool {
-        return allowsPath(self.style, self.roots, canonical);
+        return allowsPath(self.style, self.roots.items, canonical);
     }
 
     /// Turns an untrusted `raw` path into a canonical, in-scope absolute path owned by `allocator`.
