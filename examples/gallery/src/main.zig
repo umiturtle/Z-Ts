@@ -515,7 +515,17 @@ const parity_script =
     \\  var parityCss = [
     \\    'html{scrollbar-width:none;-webkit-text-size-adjust:100%;}',
     \\    '::-webkit-scrollbar{width:0;height:0;}',
-    \\    'body{font-synthesis:none;}'
+    \\    'body{font-synthesis:none;}',
+    \\    // 決定的な組版のための 2 点。
+    \\    // (a) WebKitGTK は既定で FreeType のヒンティングを使い、**グリフ送り幅を整数 px に
+    \\    //     丸める**（8.88px の '0' が 9px になる）。44 文字で 5px ずれ、折り返しも変わる。
+    \\    //     `text-rendering: geometricPrecision` はサブピクセル送りを強制するので、
+    \\    //     macOS / Windows と同じ小数値になる。
+    \\    '*,*::before,*::after{text-rendering:geometricPrecision !important;}',
+    \\    // (b) `line-height` の小数（1.7 × 16 = 27.2px）は実装ごとに丸め方が違い、行が増えるほど
+    \\    //     ずれる。デモ側も整数 px にしてあるが、外部 CSS が混ざっても崩れないよう
+    \\    //     ここでも本文の行送りを整数に固定する。
+    \\    'body{line-height:24px;}'
     \\  ];
     \\
     \\  // (1) FontFace API。document-start（`<head>` すら無い時点）でも効く唯一の方法。

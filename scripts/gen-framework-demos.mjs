@@ -52,7 +52,7 @@ const APP_CSS = `/* Z-Ts framework demo — 3 OS で同一画素にするため�
   src:url("/zts/fonts/zts-mono-400.woff2") format("woff2"); }
 * { box-sizing:border-box; }
 html,body { margin:0; padding:0; height:100%; }
-body { font-family:ZTSSans; font-size:15px; line-height:1.6; color:#0f172a; background:#f4f6fb;
+body { font-family:ZTSSans; font-size:15px; line-height:24px; color:#0f172a; background:#f4f6fb;
   -webkit-font-smoothing:antialiased; text-rendering:geometricPrecision; font-kerning:normal;
   font-synthesis:none; }
 .shell { width:760px; margin:0 auto; padding:28px 32px 32px; }

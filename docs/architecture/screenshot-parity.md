@@ -106,6 +106,25 @@ FAIL parity fw-react: layout differs by 5px at box #3 (tolerance 1px)
   cocoa: [24,29,712,80]
 ```
 
+
+### 決定論的な組版のための CSS 不変条件
+
+同じ woff2 を配っても、エンジンが**グリフ送り幅を丸める**と折り返しが変わる。ギャラリーは
+`parity_script` で次の 2 つを全ページに強制する（`!important`）:
+
+| ルール | 理由 |
+|---|---|
+| `*,*::before,*::after { text-rendering: geometricPrecision }` | WebKitGTK は既定で FreeType のヒンティングを使い、送り幅を整数 px に丸める（8.88px の `0` が 9px）。44 文字で 5px ずれ、折り返しまで変わる。この指定でサブピクセル送りになる。 |
+| `body { line-height: 24px }` | `line-height:1.7`（= 27.2px）は行ごとの丸め方が実装依存で、行数ぶん誤差が積み上がる。 |
+
+デモ側の CSS でも次を守る（`examples/gallery/README.md` §レイアウト指紋に追記）:
+
+- `line-height` は**整数 px**（小数の倍率は使わない）
+- `letter-spacing` は **px**（`em` は丸め誤差を生む）
+- 幅の制約は **px**（`ch` は `0` の送り幅依存で、エンジン差が増幅される）
+- `font-family` に**システムフォントを混ぜない**（`hidpi-ruler` が `-apple-system` を
+  使っていて macOS/Linux で別書体になっていた）
+
 ---
 
 ## 4. 9 フレームワーク・デモ

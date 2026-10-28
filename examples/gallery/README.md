@@ -60,6 +60,17 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
 `font_ok` を `{"app":"layout", …}` として投稿し、`manifest.json` の `layout` に保存します。
 `scripts/compare-screenshots.mjs` が 3 OS でこれを突き合わせ、**1px を超える差があれば失敗** にします。
 
+### 決定論的な組版のための CSS 不変条件
+
+同じ woff2 を配っても、エンジンが送り幅を丸めると折り返しが変わる。9 デモと 8 ページは次を守る:
+
+- `line-height` は**整数 px**（`1.7` のような倍率は行ごとの丸め誤差が積み上がる）
+- `letter-spacing` は **px**（`em` は丸めを生む）
+- 幅の制約は **px**（`ch` は `0` の送り幅依存でエンジン差が増幅される）
+- `font-family` に**システムフォントを混ぜない**（`ZTSSans` / `ZTSSerif` / `ZTSMono` のみ）
+- ギャラリーは `parity_script` で `text-rendering: geometricPrecision` を全要素に強制する
+  （これが無いと WebKitGTK が送り幅を整数に丸め、44 文字で 5px ずれる）
+
 ## カスタムスキームは `tauri://`（重要）
 
 ページは `tauri://localhost/<pattern>` から配信されます。**WebView2 はカスタムスキームを
