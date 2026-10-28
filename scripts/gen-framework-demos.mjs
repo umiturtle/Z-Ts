@@ -57,12 +57,12 @@ body { font-family:ZTSSans; font-size:15px; line-height:24px; color:#0f172a; bac
   font-synthesis:none; }
 .shell { width:760px; margin:0 auto; padding:28px 32px 32px; }
 .head { display:flex; align-items:center; justify-content:space-between; }
-.brand { display:flex; align-items:center; gap:12px; }
+.brand { display:flex; align-items:center; gap:12px; flex:0 0 auto; }
 .logo { width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg,#6366f1,#22d3ee);
   color:#fff; font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; }
 .title { font-size:19px; font-weight:700; letter-spacing:-.01em; }
 .sub { font-size:12px; color:#64748b; }
-.badge { font-family:ZTSMono; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+.badge { flex:0 0 auto; font-family:ZTSMono; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
   padding:5px 10px; border-radius:999px; background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe; }
 .card { margin-top:22px; background:#fff; border:1px solid #e2e8f0; border-radius:16px;
   padding:22px 24px; box-shadow:0 10px 30px rgba(15,23,42,.06); }

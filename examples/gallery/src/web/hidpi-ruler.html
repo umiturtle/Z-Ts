@@ -56,7 +56,9 @@
   (function () {
     var build = function (id, step) {
       var host = document.getElementById(id);
-      var width = host.clientWidth || 520;
+      // Fixed 520px content width (body padding excluded). `clientWidth` is 0 before layout in
+      // some engines, which made the tick count (and therefore the pixels) differ per OS.
+      var width = 520;
       var count = Math.floor(width / step);
       var frag = document.createDocumentFragment();
       for (var i = 0; i < count; i++) {
