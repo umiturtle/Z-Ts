@@ -10,7 +10,7 @@ import { Component, signal } from '@angular/core';
           <div class="logo">ZT</div>
           <div>
             <div class="title">Z-Ts × Angular</div>
-            <div class="sub">Zig 製 WebView で動く Angular 22 の静的ビルド</div>
+            <div class="sub">Zig / WebView / Angular 22</div>
           </div>
         </div>
         <div class="badge">Angular 22</div>

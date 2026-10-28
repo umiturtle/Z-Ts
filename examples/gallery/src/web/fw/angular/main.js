@@ -30073,7 +30073,7 @@ var App = class _App {
       \u0275\u0275text(7, "Z-Ts \xD7 Angular");
       \u0275\u0275domElementEnd();
       \u0275\u0275domElementStart(8, "div", 5);
-      \u0275\u0275text(9, "Zig \u88FD WebView \u3067\u52D5\u304F Angular 22 \u306E\u9759\u7684\u30D3\u30EB\u30C9");
+      \u0275\u0275text(9, "Zig / WebView / Angular 22");
       \u0275\u0275domElementEnd()()();
       \u0275\u0275domElementStart(10, "div", 6);
       \u0275\u0275text(11, "Angular 22");
@@ -30133,7 +30133,7 @@ var App = class _App {
           <div class="logo">ZT</div>
           <div>
             <div class="title">Z-Ts \xD7 Angular</div>
-            <div class="sub">Zig \u88FD WebView \u3067\u52D5\u304F Angular 22 \u306E\u9759\u7684\u30D3\u30EB\u30C9</div>
+            <div class="sub">Zig / WebView / Angular 22</div>
           </div>
         </div>
         <div class="badge">Angular 22</div>

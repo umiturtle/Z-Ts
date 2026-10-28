@@ -13,7 +13,7 @@ export default function Home() {
           <div class="logo">ZT</div>
           <div>
             <div class="title">Z-Ts × SolidStart</div>
-            <div class="sub">Zig 製 WebView で動く SolidStart 2.1 の静的ビルド</div>
+            <div class="sub">Zig / WebView / SolidStart 2.1</div>
           </div>
         </div>
         <div class="badge">SolidStart 2.1</div>

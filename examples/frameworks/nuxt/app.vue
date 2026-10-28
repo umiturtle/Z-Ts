@@ -5,7 +5,7 @@
       <div class="logo">ZT</div>
       <div>
         <div class="title">Z-Ts × Nuxt</div>
-        <div class="sub">Zig 製 WebView で動く Nuxt 4.6 の静的ビルド</div>
+        <div class="sub">Zig / WebView / Nuxt 4.6</div>
       </div>
     </div>
     <div class="badge">Nuxt 4.6</div>

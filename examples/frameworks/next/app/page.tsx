@@ -14,7 +14,7 @@ export default function Page() {
           <div className="logo">ZT</div>
           <div>
             <div className="title">Z-Ts × Next.js</div>
-            <div className="sub">Zig 製 WebView で動く Next.js 16 の静的ビルド</div>
+            <div className="sub">Zig / WebView / Next.js 16</div>
           </div>
         </div>
         <div className="badge">Next.js 16</div>

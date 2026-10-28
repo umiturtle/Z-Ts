@@ -14,7 +14,7 @@ function App() {
           <div className="logo">ZT</div>
           <div>
             <div className="title">Z-Ts × React</div>
-            <div className="sub">Zig 製 WebView で動く React 19 の静的ビルド</div>
+            <div className="sub">Zig / WebView / React 19</div>
           </div>
         </div>
         <div className="badge">React 19</div>

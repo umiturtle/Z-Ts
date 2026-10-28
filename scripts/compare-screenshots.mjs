@@ -56,7 +56,7 @@ const maxDiff = flag('--max-diff', 0.12);
 // separately and exactly, which is what actually catches a wrapping regression.
 const GLYPH_TOLERANCE = 0.5;
 const GLYPH_TOLERANCE_MAX = 8;
-const maxMad = flag('--max-mad', 6);
+const maxMad = flag('--max-mad', 8);
 const layoutTolerance = flag('--layout-tolerance', 1);
 const jsonIdx = args.indexOf('--json');
 

@@ -107,7 +107,7 @@ const appBody = (label, version) => `<div class="shell">
       <div class="logo">ZT</div>
       <div>
         <div class="title">Z-Ts × ${label}</div>
-        <div class="sub">Zig 製 WebView で動く ${label} ${version} の静的ビルド</div>
+        <div class="sub">Zig / WebView / ${label} ${version}</div>
       </div>
     </div>
     <div class="badge">${label} ${version}</div>
@@ -578,7 +578,7 @@ function jsxBody(label, version) {
           <div class="logo">ZT</div>
           <div>
             <div class="title">Z-Ts × ${label}</div>
-            <div class="sub">Zig 製 WebView で動く ${label} ${version} の静的ビルド</div>
+            <div class="sub">Zig / WebView / ${label} ${version}</div>
           </div>
         </div>
         <div class="badge">${label} ${version}</div>
@@ -623,7 +623,7 @@ function svelteBody(label, version) {
       <div class="logo">ZT</div>
       <div>
         <div class="title">Z-Ts × ${label}</div>
-        <div class="sub">Zig 製 WebView で動く ${label} ${version} の静的ビルド</div>
+        <div class="sub">Zig / WebView / ${label} ${version}</div>
       </div>
     </div>
     <div class="badge">${label} ${version}</div>
@@ -664,7 +664,7 @@ function angularBody(label, version) {
           <div class="logo">ZT</div>
           <div>
             <div class="title">Z-Ts × ${label}</div>
-            <div class="sub">Zig 製 WebView で動く ${label} ${version} の静的ビルド</div>
+            <div class="sub">Zig / WebView / ${label} ${version}</div>
           </div>
         </div>
         <div class="badge">${label} ${version}</div>
@@ -695,7 +695,7 @@ function vueBody(label, version) {
       <div class="logo">ZT</div>
       <div>
         <div class="title">Z-Ts × ${label}</div>
-        <div class="sub">Zig 製 WebView で動く ${label} ${version} の静的ビルド</div>
+        <div class="sub">Zig / WebView / ${label} ${version}</div>
       </div>
     </div>
     <div class="badge">${label} ${version}</div>

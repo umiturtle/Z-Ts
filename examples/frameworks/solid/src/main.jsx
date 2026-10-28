@@ -14,7 +14,7 @@ function App() {
           <div class="logo">ZT</div>
           <div>
             <div class="title">Z-Ts × Solid</div>
-            <div class="sub">Zig 製 WebView で動く Solid 1.9 の静的ビルド</div>
+            <div class="sub">Zig / WebView / Solid 1.9</div>
           </div>
         </div>
         <div class="badge">Solid 1.9</div>

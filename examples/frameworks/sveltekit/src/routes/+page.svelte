@@ -14,7 +14,7 @@
       <div class="logo">ZT</div>
       <div>
         <div class="title">Z-Ts × SvelteKit</div>
-        <div class="sub">Zig 製 WebView で動く SvelteKit 3.1 の静的ビルド</div>
+        <div class="sub">Zig / WebView / SvelteKit 3.1</div>
       </div>
     </div>
     <div class="badge">SvelteKit 3.1</div>
