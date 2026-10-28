@@ -77,11 +77,25 @@ ${looseRows}
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
-const dir = args.find((a) => !a.startsWith('--'));
-if (!dir) fail('usage: verify-screenshots.mjs <dir> [--require-native] [--require-counts N]');
 const requireNative = args.includes('--require-native');
 const countsIdx = args.indexOf('--require-counts');
 const requireCounts = countsIdx >= 0 ? Number(args[countsIdx + 1]) : 0;
+// `--require-counts` eats the next token, so skip flag/value pairs before picking the directory
+// (otherwise `verify-screenshots.mjs --require-native 17 <dir>` would treat `17` as the dir).
+const VALUE_FLAGS = new Set(['--require-counts']);
+const positional = [];
+for (let i = 0; i < args.length; i++) {
+  if (VALUE_FLAGS.has(args[i])) {
+    i += 1;
+    continue;
+  }
+  if (args[i].startsWith('--')) continue;
+  positional.push(args[i]);
+}
+// Take the last positional: flags may legitimately be written before the directory
+// (`--require-native 17 <dir>`), leaving a stray number that is not the directory.
+const dir = positional[positional.length - 1];
+if (!dir) fail('usage: verify-screenshots.mjs <dir> [--require-native] [--require-counts N]');
 
 const manifestPath = path.join(dir, 'manifest.json');
 if (!existsSync(manifestPath)) fail(`missing ${manifestPath}`);

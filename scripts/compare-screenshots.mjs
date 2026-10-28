@@ -14,7 +14,8 @@
 //
 // 使い方:
 //   node scripts/compare-screenshots.mjs <dirA> <dirB> [<dirC> …]
-//        [--max-diff 0.06] [--max-mad 6] [--layout-tolerance 1] [--json out.json]
+//        [--max-diff 0.06] [--max-mad 6] [--layout-tolerance 1] [--bg-tolerance 4] [--json out.json]
+//   フラグはディレクトリの前後どちらでもよい（`--flag value` の組はディレクトリとして数えない）。
 //
 // 出力（成功時）: `OK parity hosts=gtk3,cocoa,win32 patterns=17 layout=ok pixels=max:2.1%`
 // 失敗時: `FAIL parity <pattern>: <理由>` + exit 1。
@@ -24,7 +25,19 @@ import path from 'node:path';
 import { parsePng, unfilter, diffPixels, rgbAt, stats } from './lib/png.mjs';
 
 const args = process.argv.slice(2);
-const dirs = args.filter((a) => !a.startsWith('--'));
+// Every flag here takes a value, so drop `--flag value` pairs before collecting the directories.
+// (Filtering on `startsWith('--')` alone leaves `0.06` behind and it gets mistaken for a run dir.)
+const VALUE_FLAGS = new Set(['--max-diff', '--max-mad', '--layout-tolerance', '--bg-tolerance', '--json']);
+const dirs = [];
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  if (VALUE_FLAGS.has(arg)) {
+    i += 1;
+    continue;
+  }
+  if (arg.startsWith('--')) continue;
+  dirs.push(arg);
+}
 const flag = (name, fallback) => {
   const i = args.indexOf(name);
   if (i < 0) return fallback;

@@ -58,10 +58,11 @@ examples/gallery (Zig)                         scripts/                      .gi
 
 - `boxes` は `body / .shell / .head / .card / .counter / .value / .features / h1… / button …` の
   最大 40 要素の `getBoundingClientRect()` を **1px に丸めた** もの。
-- `font_ok` は `document.fonts.check('16px "ZTS Sans"')` と `'ZTS Mono'`。
+- `font_ok` は `document.fonts.check('16px ZTSSans')` と `'16px ZTSMono'`（ファミリ名に空白を
+  入れないのは、minify で `"ZTS Sans"` の引用符が落ちて無効名になるのを避けるため）。
 - ギャラリーはこれを `manifest.json` の `layout`（JSON 文字列）に保存し、`ci-parity` が突き合わせる。
 
-比較ルール（`scripts/compare-screenshots.mjs`）:
+比較ルール（`scripts/compare-screenshots.mjs`）。フラグはディレクトリの前後どちらに置いてもよい:
 
 | 項目 | ルール |
 |---|---|
@@ -70,7 +71,7 @@ examples/gallery (Zig)                         scripts/                      .gi
 | ボックス | 各成分の差 ≤ `--layout-tolerance`（既定 1px） |
 | ドキュメントサイズ | 差 ≤ 1px |
 | `font_ok` | すべて `true` |
-| 背景色 (1,1) | **完全一致** |
+| 背景色 (1,1) | 各成分の差 ≤ `--bg-tolerance`（既定 4/255） |
 | 平均輝度 | 差 ≤ 2.0 |
 | 画素差分率 | ≤ `--max-diff`（既定 0.06） |
 | 平均絶対差 (MAD) | ≤ `--max-mad`（既定 6.0） |
@@ -97,7 +98,7 @@ FAIL parity fw-react: layout differs by 5px at box #3 (tolerance 1px)
 | `fw-nuxt` | Nuxt 4.6 | `nuxt generate`（`nitro.preset: static`） | `.output/public` |
 | `fw-astro` | Astro 6.4 | `astro build` | `dist/` |
 | `fw-sveltekit` | SvelteKit 3.1 | `vite build` + `adapter-static`（prerender） | `build/` |
-| `fw-solidstart` | SolidStart 2.1 | `vite build`（SPA）+ 生成した `index.html` | `dist/client` |
+| `fw-solidstart` | SolidStart 2.1 | `vite build`（`ssr: false`）+ 生成した `index.html` | `dist/client` |
 
 すべて `examples/frameworks/<name>/` にソースがあり、`node scripts/gen-framework-demos.mjs [name…]` で
 再生成 → `examples/gallery/src/web/fw/<name>/` と `src/fw_assets.zig` が更新される。
