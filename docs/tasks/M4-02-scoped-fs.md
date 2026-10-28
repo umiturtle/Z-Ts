@@ -1,10 +1,10 @@
 # Task M4-02: スコープ付きファイルシステムプラグイン（`src/tauri/fs/`）
 
-- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `done`（CI run `40647424821` で 4 ジョブすべて green） <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/tauri/fs/`（`mod.zig` / `scope.zig` / `commands.zig`）, `src/tauri/mod.zig`, `docs/tasks/M4-02-scoped-fs.md`, `docs/architecture/tauri-fs-plugin.md`, `docs/decisions/0011-scoped-fs-plugin.md`, `docs/INDEX.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`
 - **Upstream Reference**: `@tauri-apps/plugin-fs` v2（`plugins-workspace/plugins/fs/src/commands.rs` / `guest-js/index.ts`）
-- **Next Step**: CI（Linux / macOS / Windows）で `plugin:fs` のシンボリックリンク検査が通ることを確認する（Windows は Developer Mode 無効なら該当テストのみスキップされる）。
+- **Next Step**: なし。次は `M4-01`（ダイアログ & クリップボード）。
 
 ---
 
@@ -18,7 +18,7 @@
 - [x] 読み書き・ディレクトリ走査・メタデータ・リソース（`rid`）ベースのストリーム入出力
 - [x] 単体テスト: 正常系 / `..` 脱出 / シンボリックリンク脱出 / リンク内包 / Windows 形式パス / リーク検査
 - [x] `./zigw quick-test` / `./zigw build test` / `python3 scripts/check-docs.py` / `./zigw fmt --check` のパス
-- [ ] 3 OS CI グリーン
+- [x] 3 OS CI グリーン（`40647424821`: Linux / macOS / Windows / parity すべて success）
 
 ---
 
@@ -32,8 +32,19 @@
     `mkdir` / `remove` / `rename` / `copy_file` / `read_dir` / `create` / `open` / `read` / `write` / `seek` /
     `fstat` / `truncate` / `ftruncate`）、`FsState.resolve`、`FileHandle`（`ResourceTable` 上の `rid`）。
   - テスト 19 件（`zts_tauri`）: 純粋な包含判定 3 件 + 実 FS 3 件 + RPC 往復 3 件。`./zigw quick-test` 全緑。
-- **作業中・直前の状態**:
-  - `./zigw build test` 41/41 ステップ成功、`check-docs` 44 ファイル OK、`fmt --check` OK。CI 待ち。
+- **最終状態**:
+  - `./zigw build test` 41/41 ステップ成功、`check-docs` 44 ファイル OK、`fmt --check` OK。
+  - CI run `40647424821` = **4 ジョブすべて green**（Linux / macOS / Windows / parity）。
+    3 OS とも `run test 19 pass (19 total)`（`zts_tauri` スイート）を記録。
+  - `OK parity hosts=gtk3,cocoa,win32 patterns=17 comparisons=34 layout=ok pixels=max:9.77% mad:6.07`（回帰なし）。
+- **Windows で踏んだこと（初回 run `40646661658` は 3 テスト失敗）**:
+  - `/etc/passwd` は **Windows では絶対パスではない**（`isAbsoluteWithStyle(.windows)` が false）ため、
+    `cwd` 配下に結合されて **スコープ内** と判定された。→ テストは OS ごとに絶対パスを切り替える
+    （`C:/Windows/...` と `/etc/passwd`）。
+  - 期待値の `endsWith("real/data.txt")` は区切り文字が `\` になるため不一致。→
+    `path.joinWithStyle` で期待パスを組み立てて完全一致比較する。
+  - `/tmp/zts-escape.txt` への書き込みは Windows では相対パス扱い → スコープ内 → `NotFound`。
+    → 同じく OS 別の絶対パスに変更（JSON へは `C:/...` の前方スラッシュ表記で埋め込むとエスケープ不要）。
 
 ---
 
