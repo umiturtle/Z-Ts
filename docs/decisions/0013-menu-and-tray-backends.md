@@ -1,6 +1,6 @@
 # ADR-0013: メニュー / トレイは「コアが真実・バックエンドは平板スナップショット」で実装する
 
-- **Status**: Accepted（`M4-03`・ネイティブ描画は段階実装）
+- **Status**: Accepted（`M4-03`・GTK3 実装済み / AppKit・Win32 は段階実装）
 - **Date**: 2026-10-29
 - **関連**: [`../tasks/M4-03-menu-tray.md`](../tasks/M4-03-menu-tray.md)、
   [`../architecture/tauri-menu-tray.md`](../architecture/tauri-menu-tray.md)、
@@ -59,8 +59,11 @@ Tauri 本家は `muda` が OS ごとにツリーを差分更新する。Z-Ts で
 
 ## 4. 結果
 
-- メニュー / トレイの **wire・ツリー・リソース・チャネル**が 3 OS で同一コードとして検証済み。
+- メニュー / トレイの **wire・ツリー・リソース・チャネル**が 3 OS で同一コードとして検証済みで、
+  上流 `@tauri-apps/api` 2.12.4 の `menu` / `tray` を**無改変**で E2E 実行している。
 - ネイティブ描画は `Snapshot` を受けるだけなので、GTK / AppKit / Win32 の実装は
-  「平坦化リストをウィジェットにする」純粋な変換になる（`M4-03` の後半で実装）。
+  「平坦化リストをウィジェットにする」純粋な変換になる。
+  **GTK3 は実装済み**（Xvfb 上でウィジェットツリー・アクセラレータ・アクティベーションを検証）。
+  AppKit / Win32 は未実装で、`error.Unavailable` により fail-closed する。
 - トレードオフ: 画像アイコン（`JsImage`）は wire として受理するが描画しない。
-  ネイティブの stock icon（`NativeIcon`）とテキストのみ対応する。
+  トレイのアイコンは現状プラットフォーム既定のもの。

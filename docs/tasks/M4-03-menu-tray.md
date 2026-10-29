@@ -4,7 +4,7 @@
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/tauri/menu/`, `src/tauri/tray/`, `src/tauri/native*.zig`, `src/tauri/mod.zig`, `build.zig`, 本ファイル, `docs/architecture/tauri-menu-tray.md`, `docs/decisions/0013-menu-and-tray-backends.md`, `docs/INDEX.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`
 - **Upstream Reference**: `tauri` v2.12.4 `crates/tauri/src/menu/{mod,plugin}.rs` / `crates/tauri/src/tray/{mod,plugin}.rs` / `packages/api/src/{menu/*,tray}.ts`
-- **Next Step**: GTK ネイティブバックエンド（`src/tauri/menu/native_gtk.zig` / `src/tauri/tray/native_gtk.zig`）→ `native.zig` の `menuBackend()` / `trayBackend()` を差し替え → macOS シム → Win32。
+- **Next Step**: AppKit 描画（`native_macos_shim.m` に `zts_native_menu_*` / `zts_native_tray_*` を追加 + `menu/native_macos.zig`）→ Win32（`HMENU` + `Shell_NotifyIconW`、`WM_COMMAND` はウィンドウのサブクラスで受ける）。
 
 ---
 
@@ -18,11 +18,14 @@
 - [x] `Accelerator`（`CmdOrCtrl+Shift+K` 等）の Pure Zig パーサと 3 OS 向けレンダリング
 - [x] メニュー項目のアクティベーションを `Channel<string>` で通知（`id` を送る）
 - [x] 3 OS で同一の **メニュースナップショット**（バックエンドへ渡す平坦化ツリー）を Mock で検証
-- [ ] `CorePluginsSchema` に `menu` / `tray` を追加
+- [x] `CorePluginsSchema` に `menu` / `tray` を追加（全 7 コアプラグイン）
 - [ ] 未使用時 0 バイト / `zts_tauri` は `link_libc = false` を維持
 - [ ] `./zigw quick-test` / `./zigw build test -Dgtk=true` / `./zigw build test -Dgtk=false` / `fmt --check` / `check-docs`
 - [x] `./zigw quick-test` = `All 43 tests passed`（menu 5 + tray 2）
-- [x] `./zigw build test -Dgtk=true` = `46/46 steps succeeded; 107/109 tests passed (2 skipped)`
+- [x] `./zigw build test -Dgtk=true` / `-Dgtk=false`
+- [x] GTK3 ネイティブ描画（`GtkMenuBar` / `GtkMenu` / `GtkStatusIcon`、Xvfb でツリー検証）
+- [x] 上流 `@tauri-apps/api` 2.12.4 の menu / tray を無改変で E2E（Node bridge + 実 WebKit2GTK）
+- [ ] AppKit / Win32 のネイティブ描画（現状 `error.Unavailable` で fail-closed）
 - [ ] 3 OS CI グリーン
 
 ---
@@ -88,3 +91,24 @@ Z-Ts も同じ規則（`1`, `2`, ...）で採番する。ユーザー指定 `id`
 `append` / `prepend` / `insert` の `items` は **`[rid, kind]` タプル**か**オプションオブジェクト**の untagged。
 `zts_rpc` の untagged union では「配列 or オブジェクト」を表現できないため、
 `MessageDialogButtons`（M4-01）と同じく **手書き `jsonParse`** で受ける。
+
+### 2026-10-29 (2) — GTK ネイティブ + コア統合 + 上流 JS E2E
+
+- `src/tauri/menu/native_gtk.zig`: 平坦化スナップショット → `GtkMenuBar` / `GtkMenu`。
+  サブメニューは `.submenu` が depth+1 を開く、リーフは自 depth のシェルへ。
+  ニーモニック `_`、チェック状態、`set_sensitive`、`gtk_accelerator_parse` 経由のアクセラレータ、
+  `g_signal_connect_data` + `GClosureNotify` で `MenuId` を解放まで管理。
+- `src/tauri/tray/native_gtk.zig`: 1 トレイ = 1 `GtkStatusIcon`（`*Entry` はヒープ確保で
+  シグナルの user_data が安定）。ツールチップ / タイトル / 可視性 / メニュー / クリック。
+- `src/tauri/native.zig`: `menuBackend()` / `trayBackend()` / `registerMenuWindow()` /
+  `unregisterMenuWindow()`。GTK 以外は `native_stub.zig`（fail-closed）。
+- `CorePluginsSchema` と `CorePluginStates` に `tauri_menu` / `tauri_tray` を追加し、
+  `app_runtime` / `wasm/runtime` / `ssg` / `examples/counter` / e2e の bind を更新。
+  破棄順は「`resources` → `menu_state` → `tray_state`」（ノードは table 所有のため）。
+- `set_as_app_menu` / `set_as_window_menu` は上流同様**置き換え前**のメニューを返す。
+- `tests/tauri/src/e2e_suite.ts` に menu / tray 節を追加。**上流 npm パッケージそのまま**で
+  `Menu` / `Submenu` / `CheckMenuItem` / `PredefinedMenuItem` / `items()` / `setText` /
+  `setEnabled` / `setAccelerator` / `setAsAppMenu` / `setAsWindowMenu` / `popup` /
+  `TrayIcon.new` / `getById` / `removeById` を通し、`wasm` では fail-closed を検証。
+- e2e はさらに **バックエンドに届いたスナップショット**を assert（5 entries、depth 1、id、kind、
+  チェック状態、トレイのメニュー id）→ 3 OS で同じ構造になることの実証。

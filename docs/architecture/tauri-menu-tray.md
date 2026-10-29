@@ -85,12 +85,37 @@ pub const Entry = struct {
 
 | 項目 | 状態 |
 |---|---|
-| `plugin:menu` 22 コマンド（wire / ツリー / リソース / チャネル） | ✅ 実装済み・全 OS でテスト |
-| `plugin:tray` 12 コマンド | ✅ 実装済み・全 OS でテスト |
-| `Accelerator` パーサ & 3 OS レンダリング | ✅ 実装済み・全 OS でテスト |
-| `Mock` バックエンド（スナップショット記録） | ✅ 実装済み |
-| GTK / AppKit / Win32 のネイティブ描画 | ⏳ 未実装（`native.menuBackend()` はスタブ） |
-| 画像アイコン（`JsImage` の bytes / path / rid） | ⏳ wire としては受理するが描画は未対応（`NativeIcon` のみ） |
+| `plugin:menu` 22 コマンド（wire / ツリー / リソース / チャネル） | ✅ 全 OS でテスト |
+| `plugin:tray` 12 コマンド | ✅ 全 OS でテスト |
+| `Accelerator` パーサ & 3 OS レンダリング | ✅ 全 OS でテスト |
+| `Mock` バックエンド（スナップショット記録） | ✅ 全 OS でテスト |
+| 上流 `@tauri-apps/api` 2.12.4 の menu / tray を**無改変**で E2E 実行 | ✅ Node bridge + 実 WebKit2GTK |
+| GTK3 ネイティブ描画（`GtkMenuBar` / `GtkMenu` / `GtkStatusIcon`） | ✅ 実装済み（Xvfb でウィジェットツリーを検証） |
+| AppKit 描画（`NSMenu` / `NSStatusItem`） | ⏳ 未実装 → `error.Unavailable` で fail-closed |
+| Win32 描画（`HMENU` / `Shell_NotifyIconW`） | ⏳ 未実装 → `error.Unavailable` で fail-closed |
+| 画像アイコン（`JsImage` の bytes / path / rid） | ⏳ wire としては受理するが描画は未対応 |
 
-ネイティブ層が未実装の間も、`plugin:menu` を使わないアプリのバイナリは 0 バイト増えず、
-使った場合は `error.Unavailable` で fail-closed する。
+ネイティブ層が無い OS でも、`plugin:menu` を使わないアプリのバイナリは 0 バイト増えず、
+使った場合は `error.Unavailable` で **fail-closed** する（黙って成功したように見せない）。
+サーバーレス `wasm32` ビルドも同じで、E2E スイートがその fail-closed 挙動を検証している。
+
+### 4.1 GTK3 のウィンドウ契約
+
+GTK にはアプリケーションメニューバーが存在しない（メニューはウィンドウに詰めるウィジェット）。
+ホストは `native.registerMenuWindow(label, gtk_window)` でトップレベルウィンドウを登録し、
+`GtkMenuBar` はウィンドウ直下の子（`GtkBox`）の index 0 に挿入される。
+`GtkBox` 以外が直下にある場合は `error.Unsupported`（黙って何もしない、はしない）。
+
+トレイは `GtkStatusIcon` を使う。非推奨 API だが **追加のシステム依存が無い**ため、
+素のランナーでも `zig build -Dgtk=true` が通る（上流 `tauri` は `libappindicator` を使う）。
+wire 層は共通なので、将来 `libayatana-appindicator` に差し替えてもプラグイン側は無変更で済む。
+
+### 4.2 画面なし環境での検証
+
+メニューはヘッドレスだと開けないが、**ウィジェットツリーは検証できる**。
+`native_gtk.zig` は `GType` 名と `gtk_container_get_children` でツリーを読み返す
+`describeMenuItem` / `nthChild` / `childCount` を公開し、テストは
+「`_File` の下に New / separator / Exit、`Exit` は disabled、`Grid` はチェック済み」を
+実際の GTK オブジェクトから assert する（CI は Xvfb 上で実行）。
+アクティベーションは `g_signal_emit_by_name(item, "activate")` で発火させ、
+`Channel<string>` に `MenuId` が届くことまで確認している。

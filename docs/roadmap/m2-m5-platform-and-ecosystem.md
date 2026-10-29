@@ -86,7 +86,9 @@
   - スコープ判定は **字句正規化 → シンボリックリンク解決（40 ホップ上限）→ 成分単位の包含判定**。`/srv/app` は `/srv/app-evil` を含まず、`root/link -> /etc` 経由の脱出は `OutOfScope`。
 - **`M4-03` (`src/tauri/{menu,tray}/`)**: ネイティブアプリケーションメニュー・コンテキストメニュー・システムトレイアイコン。
   - **実装**: [`../architecture/tauri-menu-tray.md`](../architecture/tauri-menu-tray.md) / **設計判断**: [`../decisions/0013-menu-and-tray-backends.md`](../decisions/0013-menu-and-tray-backends.md) / **タスク**: [`../tasks/M4-03-menu-tray.md`](../tasks/M4-03-menu-tray.md)
-  - wire 層（`plugin:menu` 22 + `plugin:tray` 12 コマンド）・メニューツリー・`plugin:resources` 連携・`Channel` 通知・アクセラレータパーサは Pure Zig で完成。バックエンドは平坦化 `Snapshot` を受けるだけなので、`Mock` による同一検証が 3 OS で走る。
+  - wire 層（`plugin:menu` 22 + `plugin:tray` 12 コマンド）・メニューツリー・`plugin:resources` 連携・`Channel` 通知・アクセラレータパーサは Pure Zig で完成し、`withCorePlugins` の 7 コアプラグインに統合済み。
+  - 上流 `@tauri-apps/api` 2.12.4 の `menu` / `tray` を無改変で Node bridge と実 WebKit2GTK の両方で E2E 検証。
+  - GTK3 ネイティブ描画（`GtkMenuBar` / `GtkStatusIcon`）は実装済み。AppKit / Win32 は `error.Unavailable` で fail-closed（残作業）。
 - **`M4-04` (`src/tauri/{config_import,acl}.zig`)**: 既存 Tauri v2 の `tauri.conf.json` および `capabilities/*.json` を `comptime` / 実行時に読み込み、コード書き換え最小で既存 Tauri フロントエンド資産を移行できる互換レイヤ。
 
 ---
