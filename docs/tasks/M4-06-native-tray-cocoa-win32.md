@@ -1,6 +1,6 @@
 # Task M4-06: AppKit / Win32 のシステムトレイ（`NSStatusItem` / `Shell_NotifyIconW`）
 
-- **Status**: `in_progress`
+- **Status**: `done`
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/tauri/tray/{native_macos,native_windows}.zig`,
   `src/tauri/tray/native_macos_shim.m`, `src/tauri/menu/{native_macos,native_windows}.zig`
@@ -10,8 +10,8 @@
   `popUpStatusItemMenu` / `setImage`）、`src/platform_impl/windows/mod.rs`
   （`Shell_NotifyIconW` + `NOTIFYICONDATAW` + `NIN_SELECT` / `WM_RBUTTONUP`）、
   `tauri` 2.12.4 `crates/tauri/src/tray/mod.rs`
-- **Next Step**: 3 OS CI で `OK tray-cocoa checks=` / `OK tray-win32 checks=` を確認し、
-  ADR-0016 とロードマップを追記して本シートを `done` にする。
+- **Next Step**: なし（完了）。次の候補は ACL の権限スコープ `{path:…}` 適用、`zts migrate` CLI、
+  Win32 のショートカット実動作（`TranslateAcceleratorW`）。
 
 ---
 
@@ -55,8 +55,13 @@ macOS の `NSStatusItem` と Windows の `Shell_NotifyIconW` を実装し、
     （`unable to spawn foreign binary` は Linux ホストでの想定内）
   - `aarch64-macos` の Zig 型チェック（`zig test -fno-emit-bin`、C シム抜き）→ 成功
   - `fmt --check src/ tests/ build.zig` → 成功
+- **3 OS CI（run `40839036292`、commit `3c8017e`）**:
+  - macOS: `OK tray-cocoa checks=4 menu=2`（`OK menu-cocoa checks=6 items=3` と併存）
+  - Windows: `OK tray-win32 checks=9 shell=<0|1> menu=2`（`shell=` はタスクトレイの有無。
+    ランナーに `explorer.exe` が無くてもテストはコールバックメッセージ直送で通る）
+  - Linux: `46/46 steps; 55/62 tests (7 skipped)` / parity ジョブも success → **4/4 green**
 - **作業中・直前の状態**:
-  - コード・ゲート・ドキュメント追記のコミット待ち。CI が緑になったら ADR-0016 とロードマップ
+  - 完了。ADR-0016・architecture §5・ロードマップ・INDEX を追記済み
 
 ---
 

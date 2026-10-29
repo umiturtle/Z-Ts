@@ -88,7 +88,7 @@
   - **実装**: [`../architecture/tauri-menu-tray.md`](../architecture/tauri-menu-tray.md) / **設計判断**: [`../decisions/0013-menu-and-tray-backends.md`](../decisions/0013-menu-and-tray-backends.md) / **タスク**: [`../tasks/M4-03-menu-tray.md`](../tasks/M4-03-menu-tray.md)
   - wire 層（`plugin:menu` 22 + `plugin:tray` 12 コマンド）・メニューツリー・`plugin:resources` 連携・`Channel` 通知・アクセラレータパーサは Pure Zig で完成し、`withCorePlugins` の 7 コアプラグインに統合済み。
   - 上流 `@tauri-apps/api` 2.12.4 の `menu` / `tray` を無改変で Node bridge と実 WebKit2GTK の両方で E2E 検証。
-  - GTK3 ネイティブ描画（`GtkMenuBar` / `GtkStatusIcon`）は実装済み。AppKit / Win32 のメニューは `M4-05` で実装済み（トレイは `error.Unavailable` で fail-closed のまま）。
+  - GTK3 ネイティブ描画（`GtkMenuBar` / `GtkStatusIcon`）は実装済み。AppKit / Win32 のメニューは `M4-05`、トレイは `M4-06` で実装済み（3 OS パリティ達成）。
 - **`M4-04` (`src/tauri/{config_import,acl}.zig`)**: 既存 Tauri v2 の `tauri.conf.json` および `capabilities/*.json` を `comptime` / 実行時に読み込み、コード書き換え最小で既存 Tauri フロントエンド資産を移行できる互換レイヤ。
   - **実装**: [`../architecture/tauri-config-import-acl.md`](../architecture/tauri-config-import-acl.md) / **設計判断**: [`../decisions/0014-config-import-and-acl.md`](../decisions/0014-config-import-and-acl.md) / **タスク**: [`../tasks/M4-04-config-import-acl.md`](../tasks/M4-04-config-import-acl.md)
   - `config_import` は `productName` / `identifier` / `app.windows[]`（→ `core.WindowSpec`）/ `security.{csp,assetProtocol.scope,capabilities}` / `build` / `bundle` / `plugins` を読み、未知キーは警告・型違いはパス付きエラー。

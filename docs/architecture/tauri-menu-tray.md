@@ -93,8 +93,9 @@ pub const Entry = struct {
 | GTK3 ネイティブ描画（`GtkMenuBar` / `GtkMenu` / `GtkStatusIcon`） | ✅ 実装済み（Xvfb でウィジェットツリーを検証） |
 | AppKit 描画（`NSMenu`） | ✅ `M4-05`（`native_macos.zig` + `native_macos_shim.m`） |
 | Win32 描画（`HMENU`） | ✅ `M4-05`（`native_windows.zig`） |
-| AppKit / Win32 のトレイ（`NSStatusItem` / `Shell_NotifyIconW`） | ⏳ 未実装 → `error.Unavailable` で fail-closed |
-| 画像アイコン（`JsImage` の bytes / path / rid） | ⏳ wire としては受理するが描画は未対応 |
+| AppKit / Win32 のトレイ（`NSStatusItem` / `Shell_NotifyIconW`） | ✅ `M4-06`（`tray/native_macos.zig` + シム / `tray/native_windows.zig`） |
+| 画像アイコン（`JsImage` の bytes / path） | ✅ `M4-06`（`NativeIcon` は SF Symbol / `IDI_APPLICATION`） |
+| 画像アイコン（`JsImage` の `resource(rid)`） | ⏳ `plugin:resources` を引けないため縮退（現状維持） |
 | Win32 のショートカット**動作**（`TranslateAcceleratorW`） | ⏳ 表示のみ（下記 4.4） |
 
 ネイティブ層が無い OS でも、`plugin:menu` を使わないアプリのバイナリは 0 バイト増えず、
@@ -168,3 +169,75 @@ macOS / Windows も同じ考え方で **実物を読み返す**:
 
 CI はこの実行を `OK menu-cocoa checks=` / `OK menu-win32 checks=` マーカーで機械的に確認する
 （マーカーが無ければ「黙ってスキップされた」とみなして fail）。
+
+## 5. トレイの実装（`M4-06`）
+
+`plugin:tray` の 12 コマンドは wire 層（`tray/mod.zig`）で完結し、ネイティブ層には
+`Backend.VTable`（`create` / `update` / `remove` / `set_visible` / `set_emitter`）だけが渡る。
+`native.zig` の `trayBackend()` はメニューと同じ 4 分岐:
+
+| 条件 | 実装 | 状態 |
+|---|---|---|
+| Linux + `-Dgtk=true` | `tray/native_gtk.zig`（`GtkStatusIcon`） | ✅ |
+| macOS | `tray/native_macos.zig` + `tray/native_macos_shim.m` | ✅ `M4-06` |
+| Windows | `tray/native_windows.zig` | ✅ `M4-06` |
+| それ以外 / `-Dgtk=false` | `tray/native_stub.zig`（`error.Unavailable`） | ✅ fail-closed |
+
+### 5.1 トレイのメニューは「メニュー backend の detached メニュー」
+
+トレイに付くメニューは `plugin:menu` の `Menu` リソースを平坦化したものなので、
+**メニューバーと同じ変換層とアクティベータ**を通す:
+
+```text
+TrayIcon.setMenu(menu)  ──►  menu.flatten()  ──►  Snapshot
+                                                     │
+        ┌────────────────────────────────────────────┴──────────────────────┐
+        ▼                                                                   ▼
+ menu_macos.buildDetached(snapshot)                     menu_windows.buildDetached(snapshot)
+   → NSMenu *（zts_tray_set_menu）                        → Detached{hmenu, entries, idForCommand}
+        │                                                                   │
+ ztsTrayClicked: → Activator ──► Channel<string>       TrackPopupMenu → fire(id) ──► Channel<string>
+```
+
+新しいアクティベーション経路を増やしていないので、`MenuId` → `Channel` の対応表も 1 つで済む。
+
+### 5.2 クリック / ダブルクリック / ホバー
+
+| 入力 | macOS | Win32 |
+|---|---|---|
+| 左クリック | `target`/`action`（`NSEventMaskLeftMouseUp`）→ `Click` `Left` `Up` | `NIN_SELECT` / `WM_LBUTTONUP` → `Click` `Left` `Up` |
+| ダブルクリック | `event.clickCount >= 2` → `DoubleClick` | `WM_LBUTTONDBLCLK` → `DoubleClick` |
+| 右クリック | `NSEventMaskRightMouseUp` → `Click` `Right`（＋メニュー） | `WM_RBUTTONUP` → `Click` `Right`（＋`TrackPopupMenu`） |
+| ホバー | —（AppKit にトレイの enter/leave が無い） | `WM_MOUSEMOVE` → `Move` |
+| メニューを開く | 右クリック常時 / `show_menu_on_left_click` なら左も | 同左 |
+
+イベントは `Emitter` → `TrayState` → `Channel<TrayIconEvent>` に流れ、
+`@tauri-apps/api/tray` の `mapEvent` がそのまま解釈できる形（`type` / `id` / `button` /
+`button_state`）で送られる。
+
+### 5.3 トレイ用メッセージ専用ウィンドウ（Win32）
+
+`Shell_NotifyIconW` はコールバックメッセージの宛先 `HWND` を要求する。webview の
+ウィンドウプロシージャにフックを足すと `zts_webview → zts_tauri` の依存が生まれるので、
+トレイ側が **1 枚だけ** `HWND_MESSAGE` のウィンドウを作り、`uID`（1 始まり）で
+トレイを引く。ウィンドウが無い / シェルが無い環境では `shell=0` を記録して処理を続ける。
+
+### 5.4 画面なし CI での検証
+
+| | macOS | Win32 |
+|---|---|---|
+| 実体 | 本物の `NSStatusItem` を `[NSStatusBar systemStatusBar]` から作る | 本物の `NOTIFYICONDATAW` をメッセージ専用ウィンドウに対して登録 |
+| 読み返し | `zts_tray_is_visible` / `_tooltip` / `_title` / `_symbol` / `_is_template` / `_menu_item_count` | `isVisible` / `tooltipFor` / `menuItemCount`（`GetMenuItemCount`） |
+| 発火 | `zts_tray_click`（`[NSApp sendAction:to:from:]`） | `SendMessageW(hwnd, callback_message, uID, WM_LBUTTONUP)` |
+| マーカー | `OK tray-cocoa checks=4 menu=2` | `OK tray-win32 checks=9 shell=<0|1> menu=2` |
+
+CI はこのマーカーを grep し、無ければ「黙ってスキップされた」とみなして fail する
+（`ci.yml` の macOS / Windows ジョブ）。
+
+### 5.5 既知の制限
+
+* `JsImage.resource(rid)` アイコンは未対応（`plugin:resources` を native 層から引けない）。
+  現状のアイコンを維持する（黙って成功扱いにしない）。
+* Win32 にストックアイコン表が無いため、`NativeIcon` はすべて `IDI_APPLICATION` になる。
+* macOS のホバー（`Enter` / `Leave`）は AppKit の `NSStatusItem` では取得できない。
+* Win32 のショートカットは ADR-0015 §4.4 の制限をそのまま引き継ぐ（`HMENU` 側の話）。
