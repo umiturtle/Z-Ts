@@ -307,7 +307,9 @@ pub fn describeMenuItem(allocator: Allocator, widget: *GtkWidget) !MenuItemInfo 
     var label: ?[]const u8 = null;
     if (kind == .item or kind == .check_item) {
         if (gtk_menu_item_get_label(@ptrCast(widget))) |raw| {
-            label = try fromGtkAlloc(allocator, raw);
+            // `gtk_menu_item_get_label` is **transfer none**: the string belongs to the widget, so
+            // it is copied and must never be handed to `g_free` (that corrupts the heap).
+            label = try allocator.dupe(u8, std.mem.span(raw));
         }
     }
     const list = gtk_container_get_children(@ptrCast(widget));
