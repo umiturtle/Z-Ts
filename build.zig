@@ -613,6 +613,16 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    // `zts` CLI (`M5-02`): argument parsing + the `init` template are std-only pure functions.
+    const cli_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/cli/mod.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = false,
+        }),
+    });
+
     const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full Z-Ts & Tauri v2 E2E suite");
     test_step.dependOn(&b.addRunArtifact(foundation_tests).step);
     test_step.dependOn(&b.addRunArtifact(web_tests).step);
@@ -625,6 +635,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(wasm_tests).step);
     test_step.dependOn(&b.addRunArtifact(ssg_tests).step);
     test_step.dependOn(&b.addRunArtifact(build_tools_tests).step);
+    test_step.dependOn(&b.addRunArtifact(cli_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);
     test_step.dependOn(&b.addRunArtifact(c_abi_exe).step);
     test_step.dependOn(&b.addRunArtifact(umbrella_tests).step);

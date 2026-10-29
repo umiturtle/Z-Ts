@@ -13,6 +13,7 @@
 | [`architecture/web-zig-boundary.md`](architecture/web-zig-boundary.md) | HTML / CSS / TS ⇔ Zig `0.17.0` 言語仕様ギャップ 10 項目の解決規約 | 境界仕様（全パッケージ必読） |
 | [`architecture/ssg-and-wasm.md`](architecture/ssg-and-wasm.md) | 双方向 SSG（`embedFrontendDir` / `dist/` 出力）と `zts_wasm` 4 モード同型アーキテクチャ | サブシステム設計（静的 Web 出力時） |
 | [`architecture/zts-webview-backends.md`](architecture/zts-webview-backends.md) | `zts_webview` 4 バックエンドの共通契約・Overlay 埋め込み・C ABI・スクリーンショット取得・テスト戦略 | サブシステム設計（WebView 全般） |
+| [`architecture/build-tools.md`](architecture/build-tools.md) | `build.zig` 統合ヘルパー（`embedFrontend` の gzip/CSP マニフェスト生成・`tsgen` の生成/検証 2 モード・3 層構造）（`M5-01`） | サブシステム設計（ビルド統合時） |
 | [`architecture/screenshot-parity.md`](architecture/screenshot-parity.md) | 3 OS で「同じ表示」を保証する仕組み（同梱フォント・レイアウト指紋・画素許容差・9 フレームワーク） | サブシステム設計（CI 回帰） |
 | [`architecture/tauri-fs-plugin.md`](architecture/tauri-fs-plugin.md) | スコープ付きファイルシステム `plugin:fs`（正規化 → リンク解決 → 包含判定・全コマンド表・エラーコード） | サブシステム設計（FS 利用時） |
 | [`architecture/tauri-config-import-acl.md`](architecture/tauri-config-import-acl.md) | `tauri.conf.json` のインポートと `capabilities/*.json` の ACL（未知は警告・型違いはエラー・fail-closed） | Tauri プロジェクトを移行するとき |

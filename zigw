@@ -125,6 +125,8 @@ if [[ "${1:-}" == "quick-test" ]]; then
   "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc -Mroot=src/tauri/mod.zig "${TAURI_DEPS[@]}" "$@"
   "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc --dep zts_tauri -Mroot=src/wasm/mod.zig "${WASM_DEPS[@]}" "$@"
   "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_wasm -Mroot=src/ssg/mod.zig "${SSG_DEPS[@]}" "$@"
+  # `zts` CLI (`M5-02`): pure argument parsing + the `init` template, no library imports at all.
+  "$ZIG_BIN" test -Mroot=src/cli/mod.zig "$@"
   exec "$ZIG_BIN" test --dep zts_foundation --dep zts_web --dep zts_core --dep zts_rpc --dep zts_bridge --dep zts_webview --dep zts_tauri --dep zts_wasm --dep zts_ssg -Mroot=src/root.zig "${FULL_DEPS[@]}" "$@"
 fi
 

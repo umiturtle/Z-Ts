@@ -114,6 +114,11 @@
   - `zts init`: 最小構成テンプレート生成（5 秒でビルド完了する初期プロジェクト）。
   - `zts dev`: フロントエンド dev server 起動 ＋ Zig ファイル変更監視＆高速インクリメンタル再起動 ＋ `--browser`（Live Preview モード）オプション。
   - `zts build`: フロントエンドバンドル実行 → 単一実行ファイル生成（クロスコンパイル対応）。
+- **実装状況**: 引数解析（`args.zig`・13 テスト）と `init` テンプレート（`template.zig`・9 テスト、
+  `.fingerprint` の自動 patch を含む）まで完了。**タスク**: [`../tasks/M5-02-cli.md`](../tasks/M5-02-cli.md)
+  - 生成プロジェクトの `build.zig` は `M5-01` の共通エンベッダを `dep.builder.path(…)` で起動するため、
+    雛形側にスキャナの写しを持たない。`web/index.html` にインライン `<style>`/`<script>` を置き、
+    初回ビルドで `csp=2` が報告される（＝ CSP ハッシュ経路が最初から可視）。
 
 ### `M5-03`：3-OS パッケージャ & 対本家 Rust Tauri v2.12.4 ベンチマーク
 - **専有スコープ**: `src/bundler/`, `bench/`
