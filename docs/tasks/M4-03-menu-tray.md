@@ -122,11 +122,15 @@ Z-Ts も同じ規則（`1`, `2`, ...）で採番する。ユーザー指定 `id`
 `M4-03` の DoD（Mock + 3 OS CI）は達成済み。以下は「Linux だけネイティブメニューが出る」
 状態を解消するための追加作業で、**未実装の間も全 OS で fail-closed** する（害はない）。
 
-1. **AppKit**（`src/tauri/menu/native_macos.zig` + `native_macos_shim.m` の拡張）
+> **追記（2026-10-29）**: 下記 1・2 は `M4-05` で実装済み
+> （[`M4-05-native-menu-cocoa-win32.md`](M4-05-native-menu-cocoa-win32.md)、ADR-0015）。
+> トレイ（`NSStatusItem` / `Shell_NotifyIconW`）と画像アイコンは引き続き未実装。
+
+1. **AppKit**（`src/tauri/menu/native_macos.zig` + `native_macos_shim.m` の拡張）— ✅ `M4-05`
    - 平坦化スナップショットを ObjC 側へ渡すための共通ワイヤ（`menu/snapshot_wire.zig`）を用意し、
      `NSMenu` / `NSMenuItem` / `NSStatusItem` を構築、`tag` に `MenuId` を割り当てて
      `action:` で `Channel<string>` へ返す。
-2. **Win32**（`src/tauri/menu/native_windows.zig`）
+2. **Win32**（`src/tauri/menu/native_windows.zig`）— ✅ `M4-05`
    - `CreateMenu` / `CreatePopupMenu` / `AppendMenuW` / `SetMenu` + `DrawMenuBar`、
      アクティベーションは `WM_COMMAND`（`LOWORD(wParam)` に採番したコマンド ID）。
      トレイは `Shell_NotifyIconW` + `TrackPopupMenu`。

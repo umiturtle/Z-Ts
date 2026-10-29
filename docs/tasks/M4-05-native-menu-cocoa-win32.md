@@ -1,6 +1,6 @@
 # Task M4-05: AppKit / Win32 のネイティブメニュー描画（`M4-03` の残り）
 
-- **Status**: `in_progress`
+- **Status**: `done`
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/tauri/menu/{snapshot_wire,native_macos,native_windows}.zig`,
   `src/tauri/menu/native_macos_shim.m`, `src/tauri/native.zig`, `build.zig`,
@@ -12,8 +12,8 @@
   `insert_into` / `show_context_menu_for_hwnd`）、`src/accelerator/macos.rs`
   （`key_equivalent` の文字表）。`tauri` 2.12.4 の `Menu::set_as_app_menu` /
   `set_as_window_menu` / `popup`。
-- **Next Step**: `snapshot_wire.zig`（純粋な共通ワイヤ + ラベル/アクセラレータ変換）を
-  実装し、`./zigw quick-test` で全 OS 共通テストを通す。
+- **Next Step**: なし（3 OS CI グリーン）。残作業は「トレイ（AppKit / Win32）」と
+  「Win32 のキーボードショートカット動作」で、§4 に記録済み。
 
 ---
 
@@ -41,8 +41,9 @@ Windows（Win32）にも広げ、「Linux だけメニューが出る」状態�
   - `popup` = `TrackPopupMenu(TPM_RETURNCMD)`（戻り値をそのまま起動、`WM_COMMAND` 非依存）
   - `WM_NCDESTROY` でサブクラスを外し、スタックしたウィンドウ登録を掃除（リーク 0）
 - [x] `native.zig` の `menuBackend()` / `registerMenuWindow()` を 4 分岐に一般化
-- [ ] 3 OS CI: macOS / Windows で**実際に NSMenu / HMENU が組めた**ことを示すマーカー
+- [x] 3 OS CI: macOS / Windows で**実際に NSMenu / HMENU が組めた**ことを示すマーカー
       （`OK menu-cocoa checks=N` / `OK menu-win32 checks=N`）と、CI の grep ゲート
+      （run `40834612536` @ `8329f04` = 4/4 success）
 - [x] `./zigw quick-test` / `./zigw build test -Dgtk=true|false` / `fmt --check` / `check-docs`
 
 ---
@@ -58,7 +59,9 @@ Windows（Win32）にも広げ、「Linux だけメニューが出る」状態�
   - ローカル: `quick-test` 64 本、`-Dgtk=false` 138/138、`-Dgtk=true` 65/72 (7 skipped)、
     `fmt --check` / `check-docs`(55) OK
 - **作業中・直前の状態**:
-  - macOS / Windows の CI 待ち（初回コンパイルなので、シムの C と Win32 extern が本番）
+  - CI = [run `40834612536`](https://github.com/umiturtle/Z-Ts/actions/runs/40834612536) @ `8329f04`
+    の 4 ジョブすべて success（Linux / macOS / Windows / parity）。`OK menu-cocoa checks=6 items=3`。
+    Windows も `-Dgtk=true` 相当のフルスイートで `245/247 tests (2 skipped)` = メニューの 5 チェック込み。
 
 ---
 
