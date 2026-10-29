@@ -18,6 +18,7 @@ const rpc = @import("zts_rpc");
 pub const app = @import("app.zig");
 pub const clipboard = @import("clipboard/mod.zig");
 pub const channel = @import("channel.zig");
+pub const config_import = @import("config_import.zig");
 pub const dialog = @import("dialog/mod.zig");
 pub const event = @import("event.zig");
 pub const fs = @import("fs/mod.zig");
@@ -154,6 +155,7 @@ test {
     _ = app;
     _ = channel;
     _ = clipboard;
+    _ = config_import;
     _ = dialog;
     _ = event;
     _ = fs;
