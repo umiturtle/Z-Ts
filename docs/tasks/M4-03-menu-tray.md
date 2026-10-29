@@ -1,10 +1,10 @@
 # Task M4-03: ネイティブ Menu & System Tray（`src/tauri/{menu,tray}/`）
 
-- **Status**: `in_progress`
+- **Status**: `done`（CI run `40821047732` / `40821053934` で 4 ジョブすべて green）
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/tauri/menu/`, `src/tauri/tray/`, `src/tauri/native*.zig`, `src/tauri/mod.zig`, `build.zig`, 本ファイル, `docs/architecture/tauri-menu-tray.md`, `docs/decisions/0013-menu-and-tray-backends.md`, `docs/INDEX.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`
 - **Upstream Reference**: `tauri` v2.12.4 `crates/tauri/src/menu/{mod,plugin}.rs` / `crates/tauri/src/tray/{mod,plugin}.rs` / `packages/api/src/{menu/*,tray}.ts`
-- **Next Step**: AppKit 描画（`native_macos_shim.m` に `zts_native_menu_*` / `zts_native_tray_*` を追加 + `menu/native_macos.zig`）→ Win32（`HMENU` + `Shell_NotifyIconW`、`WM_COMMAND` はウィンドウのサブクラスで受ける）。
+- **Next Step**: なし（DoD 達成）。残作業は §5「フォローアップ」を参照。
 
 ---
 
@@ -25,8 +25,10 @@
 - [x] `./zigw build test -Dgtk=true` / `-Dgtk=false`
 - [x] GTK3 ネイティブ描画（`GtkMenuBar` / `GtkMenu` / `GtkStatusIcon`、Xvfb でツリー検証）
 - [x] 上流 `@tauri-apps/api` 2.12.4 の menu / tray を無改変で E2E（Node bridge + 実 WebKit2GTK）
-- [ ] AppKit / Win32 のネイティブ描画（現状 `error.Unavailable` で fail-closed）
-- [ ] 3 OS CI グリーン
+- [x] 3 OS CI グリーン（run `40821047732`: Linux/macOS/Windows/parity の 4 ジョブすべて success）
+  - Linux `46/46 steps, 217/219 tests (2 skipped)` / macOS 同 / Windows 同
+  - parity `OK parity hosts=gtk3,cocoa,win32 patterns=17 comparisons=34 layout=ok pixels=max:9.77% mad:6.07`
+- [ ] **フォローアップ**: AppKit / Win32 のネイティブ描画（現状 `error.Unavailable` で fail-closed。§5 参照）
 
 ---
 
@@ -112,3 +114,20 @@ Z-Ts も同じ規則（`1`, `2`, ...）で採番する。ユーザー指定 `id`
   `TrayIcon.new` / `getById` / `removeById` を通し、`wasm` では fail-closed を検証。
 - e2e はさらに **バックエンドに届いたスナップショット**を assert（5 entries、depth 1、id、kind、
   チェック状態、トレイのメニュー id）→ 3 OS で同じ構造になることの実証。
+
+---
+
+## 5. フォローアップ（DoD 外・別タスクで実施）
+
+`M4-03` の DoD（Mock + 3 OS CI）は達成済み。以下は「Linux だけネイティブメニューが出る」
+状態を解消するための追加作業で、**未実装の間も全 OS で fail-closed** する（害はない）。
+
+1. **AppKit**（`src/tauri/menu/native_macos.zig` + `native_macos_shim.m` の拡張）
+   - 平坦化スナップショットを ObjC 側へ渡すための共通ワイヤ（`menu/snapshot_wire.zig`）を用意し、
+     `NSMenu` / `NSMenuItem` / `NSStatusItem` を構築、`tag` に `MenuId` を割り当てて
+     `action:` で `Channel<string>` へ返す。
+2. **Win32**（`src/tauri/menu/native_windows.zig`）
+   - `CreateMenu` / `CreatePopupMenu` / `AppendMenuW` / `SetMenu` + `DrawMenuBar`、
+     アクティベーションは `WM_COMMAND`（`LOWORD(wParam)` に採番したコマンド ID）。
+     トレイは `Shell_NotifyIconW` + `TrackPopupMenu`。
+3. どちらも「`Snapshot` → ウィジェット」の純粋変換に留め、コアの wire 層は変更しない。
