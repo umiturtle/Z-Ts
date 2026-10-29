@@ -90,6 +90,9 @@
   - 上流 `@tauri-apps/api` 2.12.4 の `menu` / `tray` を無改変で Node bridge と実 WebKit2GTK の両方で E2E 検証。
   - GTK3 ネイティブ描画（`GtkMenuBar` / `GtkStatusIcon`）は実装済み。AppKit / Win32 は `error.Unavailable` で fail-closed（残作業）。
 - **`M4-04` (`src/tauri/{config_import,acl}.zig`)**: 既存 Tauri v2 の `tauri.conf.json` および `capabilities/*.json` を `comptime` / 実行時に読み込み、コード書き換え最小で既存 Tauri フロントエンド資産を移行できる互換レイヤ。
+  - **実装**: [`../architecture/tauri-config-import-acl.md`](../architecture/tauri-config-import-acl.md) / **設計判断**: [`../decisions/0014-config-import-and-acl.md`](../decisions/0014-config-import-and-acl.md) / **タスク**: [`../tasks/M4-04-config-import-acl.md`](../tasks/M4-04-config-import-acl.md)
+  - `config_import` は `productName` / `identifier` / `app.windows[]`（→ `core.WindowSpec`）/ `security.{csp,assetProtocol.scope,capabilities}` / `build` / `bundle` / `plugins` を読み、未知キーは警告・型違いはパス付きエラー。
+  - `acl` は `capabilities/*.json`（単体 / 配列 / `{capabilities:[…]}`）を解析し、**コマンド名から機械生成した権限識別子**で deny > allow の fail-closed 判定を行う。`Policy` を `withAuthCtx` に渡したときだけ有効（opt-in）。
 
 ---
 
