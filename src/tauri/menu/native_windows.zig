@@ -471,6 +471,39 @@ pub fn menuFor(label: []const u8) ?HMENU {
     return window.menu;
 }
 
+// ============================================================================
+// Detached menus (tray icons and hosts that own the `HMENU`)
+// ============================================================================
+
+/// A popup `HMENU` plus the snapshot it was built from (so a returned command id can be mapped
+/// back to its `MenuId`). Activations go through this module's `Activator`.
+pub const Detached = struct {
+    hmenu: HMENU,
+    entries: []menu.Entry,
+
+    pub fn deinit(self: *Detached) void {
+        _ = DestroyMenu(self.hmenu);
+        freeEntries(self.entries);
+        self.* = undefined;
+    }
+
+    pub fn idForCommand(self: Detached, command: u16) ?[]const u8 {
+        return menuIdForCommand(self.entries, command);
+    }
+};
+
+pub fn buildDetached(snapshot: menu.Snapshot) Error!Detached {
+    const entries = try cloneEntries(snapshot.entries);
+    errdefer freeEntries(entries);
+    const hmenu = try buildMenu(entries, true);
+    return .{ .hmenu = hmenu, .entries = entries };
+}
+
+/// Reports an activation to the menu backend's `Activator` (tray items use this).
+pub fn fire(id: []const u8) void {
+    activator.call(activator.ctx, id);
+}
+
 /// Clears the process-global registry (tests keep the fixtures isolated).
 pub fn resetForTesting() void {
     for (windows.items) |window| {

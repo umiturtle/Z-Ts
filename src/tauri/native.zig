@@ -83,6 +83,10 @@ else
 
 const tray_impl = if (is_gtk)
     @import("tray/native_gtk.zig")
+else if (is_macos)
+    @import("tray/native_macos.zig")
+else if (is_win32)
+    @import("tray/native_windows.zig")
 else
     @import("tray/native_stub.zig");
 

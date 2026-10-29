@@ -312,6 +312,19 @@ jobs:
           fi
           grep -o "OK menu-cocoa .*" ci-output.log | tail -n 1
 
+      - name: Verify the native AppKit tray backend actually ran (M4-06 gate)
+        run: |
+          set -euo pipefail
+          # `tray/native_macos.zig` prints `OK tray-cocoa checks=N` only after real `NSStatusItem`s
+          # were created, a bounded menu was attached, and a click round-tripped through
+          # `target`/`action` back into the tray's emitter.
+          if ! grep -q "OK tray-cocoa checks=" ci-output.log; then
+            echo "::error::AppKit tray marker missing — the Cocoa tray backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK tray-cocoa .*" ci-output.log | tail -n 1
+
       - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
         run: |
           set -eo pipefail
@@ -510,6 +523,20 @@ jobs:
             exit 1
           fi
           grep -o "OK menu-win32 .*" ci-output.log | tail -n 1
+
+      - name: Verify the native Win32 tray backend actually ran (M4-06 gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `tray/native_windows.zig` prints `OK tray-win32 checks=N` only after real
+          # `NOTIFYICONDATAW`s were registered through a message-only window, the shell callback
+          # message was dispatched into the tray emitter, and a menu was attached to the popup.
+          if ! grep -q "OK tray-win32 checks=" ci-output.log; then
+            echo "::error::Win32 tray marker missing — the Win32 tray backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK tray-win32 .*" ci-output.log | tail -n 1
 
       - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
         shell: bash

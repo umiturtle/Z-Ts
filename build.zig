@@ -288,6 +288,11 @@ pub fn build(b: *std.Build) void {
             .file = b.path("src/tauri/menu/native_macos_shim.m"),
             .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
         });
+        // `NSStatusItem` tray shim (`M4-06`); reuses the menu shim's `zts_menu_init`.
+        tauri_native_mod.addCSourceFile(.{
+            .file = b.path("src/tauri/tray/native_macos_shim.m"),
+            .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
+        });
         tauri_native_mod.linkFramework("Cocoa", .{});
         tauri_native_mod.linkFramework("Foundation", .{});
         // `native_macos_shim.m` maps filter extensions to UTIs (`UTType`), not the deprecated

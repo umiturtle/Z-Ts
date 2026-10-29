@@ -2,7 +2,7 @@
 
 - **Status**: `in_progress`
 - **Branch**: `arena/16ce0c2f-z-ts`
-- **Scope**: `src/tauri/tray/{native_nacos→native_macos,native_windows}.zig`,
+- **Scope**: `src/tauri/tray/{native_macos,native_windows}.zig`,
   `src/tauri/tray/native_macos_shim.m`, `src/tauri/menu/{native_macos,native_windows}.zig`
   （detached メニューの公開）, `src/tauri/native.zig`, `build.zig`, `.github/workflows/ci.yml`,
   `docs/architecture/tauri-menu-tray.md`, `docs/roadmap/m2-m5-platform-and-ecosystem.md`, 本ファイル
@@ -10,8 +10,8 @@
   `popUpStatusItemMenu` / `setImage`）、`src/platform_impl/windows/mod.rs`
   （`Shell_NotifyIconW` + `NOTIFYICONDATAW` + `NIN_SELECT` / `WM_RBUTTONUP`）、
   `tauri` 2.12.4 `crates/tauri/src/tray/mod.rs`
-- **Next Step**: `tray/native_macos_shim.m` とシムの Tray ハンドルを実装し、
-  `menu/native_macos.zig` に detached メニュー（tray 用）を公開する。
+- **Next Step**: 3 OS CI で `OK tray-cocoa checks=` / `OK tray-win32 checks=` を確認し、
+  ADR-0016 とロードマップを追記して本シートを `done` にする。
 
 ---
 
@@ -21,18 +21,19 @@
 macOS の `NSStatusItem` と Windows の `Shell_NotifyIconW` を実装し、
 「Linux だけトレイが出る」状態を解消する。
 
-- [ ] `tray/native_macos.zig` + `tray/native_macos_shim.m`
+- [x] `tray/native_macos.zig` + `tray/native_macos_shim.m`
       （`NSStatusItem` / ツールチップ / タイトル / 可視性 / メニュー / 画像アイコン /
       左クリック・右クリック・ダブルクリックの `Emitter`）
-- [ ] `tray/native_windows.zig`
+- [x] `tray/native_windows.zig`
       （`NOTIFYICONDATAW` + `Shell_NotifyIconW`、自前のメッセージ専用ウィンドウ、
       コールバックメッセージで Click / DoubleClick、右クリックで `TrackPopupMenu`）
-- [ ] `menu/native_{macos,windows}.zig` に **detached メニュー**（tray 用）を追加
+- [x] `menu/native_{macos,windows}.zig` に **detached メニュー**（tray 用）を追加
       （`MenuState` のアクティベータを共有するので `Channel<string>` へ届く）
-- [ ] アイコン: `NativeIcon` / `JsImage.path` / `JsImage.bytes`（`resource` は未対応で縮退）
-- [ ] `native.zig` の `trayBackend()` を 4 分岐に一般化
-- [ ] 3 OS CI: `OK tray-cocoa checks=N` / `OK tray-win32 checks=N` マーカー + grep ゲート
-- [ ] `quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
+- [x] アイコン: `NativeIcon` / `JsImage.path` / `JsImage.bytes`（`resource` は未対応で縮退）
+- [x] `native.zig` の `trayBackend()` を 4 分岐に一般化
+- [x] 3 OS CI: `OK tray-cocoa checks=N` / `OK tray-win32 checks=N` マーカー + grep ゲート
+      （ゲートは `ci.yml` の macOS / Windows ジョブ）
+- [x] `quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
 
 ---
 
@@ -40,8 +41,22 @@ macOS の `NSStatusItem` と Windows の `Shell_NotifyIconW` を実装し、
 
 - **完了したこと**:
   - 本タスクシートの作成、`muda` 0.20 の tray 実装の読了
+  - `menu/native_macos.zig`: `detached` レジストリ + `buildDetached` / `freeDetached` / `nsMenuOf`
+  - `menu/native_windows.zig`: `Detached{hmenu, entries, deinit, idForCommand}` + `buildDetached` + `fire`
+  - `tray/native_macos_shim.m`: `zts_tray_*`（22 関数、SF Symbol 表、`target`/`action`、
+    `popUpStatusItemMenu:`）
+  - `tray/native_macos.zig`: vtable 5 関数 + 参照系 + テスト 3 本
+  - `tray/native_windows.zig`: vtable 5 関数 + メッセージ専用ウィンドウ + テスト 3 本
+  - `native.zig` の tray 4 分岐化 / `build.zig` に tray シム / `ci.yml` に grep ゲート 2 本
+- **検証済み**:
+  - `build test -Dgtk=false` → `44/44 steps`
+  - `build test -Dgtk=true` → `46/46 steps; 55/62 tests (7 skipped)`
+  - `build test -Dtarget=x86_64-windows-gnu` → 全ステップ **コンパイル成功**
+    （`unable to spawn foreign binary` は Linux ホストでの想定内）
+  - `aarch64-macos` の Zig 型チェック（`zig test -fno-emit-bin`、C シム抜き）→ 成功
+  - `fmt --check src/ tests/ build.zig` → 成功
 - **作業中・直前の状態**:
-  - 実装着手前
+  - コード・ゲート・ドキュメント追記のコミット待ち。CI が緑になったら ADR-0016 とロードマップ
 
 ---
 

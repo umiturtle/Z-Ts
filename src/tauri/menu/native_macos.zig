@@ -67,6 +67,9 @@ const Menu = struct {
 };
 
 var menus: std.ArrayListUnmanaged(*Menu) = .empty;
+/// Menus with no attachment (the tray owns them); kept apart from `menus` so `findMenu(null)`
+/// keeps meaning "the application menu bar".
+var detached: std.ArrayListUnmanaged(*Menu) = .empty;
 var activator: menu.Activator = .{};
 
 fn findMenu(label: ?[]const u8) ?*Menu {
@@ -205,6 +208,47 @@ pub fn handleFor(label: ?[]const u8) ?*anyopaque {
     return m.handle;
 }
 
+// ============================================================================
+// Detached menus (tray icons and hosts that own the `NSMenu` themselves)
+// ============================================================================
+
+/// Builds an `NSMenu` that is not attached to a window or the app bar. It shares this module's
+/// `Activator`, so a click anywhere (tray, popover, …) still reaches the item's
+/// `Channel<string>` exactly like a menu-bar item.
+///
+/// The returned handle must be released with `freeDetached`; the `NSMenu *` itself is
+/// `nsMenuOf(handle)`.
+pub fn buildDetached(snapshot: menu.Snapshot) Error!*anyopaque {
+    const m = gpa.create(Menu) catch return error.OutOfMemory;
+    errdefer gpa.destroy(m);
+    m.* = .{ .label = null, .handle = undefined };
+    m.handle = zts_menu_new(onActivate, m) orelse return error.Unavailable;
+    errdefer zts_menu_free(m.handle);
+    try applyTo(m, snapshot);
+    detached.append(gpa, m) catch {
+        zts_menu_free(m.handle);
+        return error.OutOfMemory;
+    };
+    return m.handle;
+}
+
+pub fn freeDetached(handle: ?*anyopaque) void {
+    const target = handle orelse return;
+    for (detached.items, 0..) |m, i| {
+        if (m.handle != target) continue;
+        zts_menu_free(m.handle);
+        if (m.wire) |*w| w.deinit();
+        gpa.destroy(m);
+        _ = detached.orderedRemove(i);
+        return;
+    }
+}
+
+/// The `NSMenu *` behind a handle from `buildDetached` / `handleFor`.
+pub fn nsMenuOf(handle: ?*anyopaque) ?*anyopaque {
+    return zts_menu_root(handle);
+}
+
 /// Clears the process-global registry (tests keep the fixtures isolated).
 pub fn resetForTesting() void {
     for (menus.items) |m| {
@@ -214,6 +258,12 @@ pub fn resetForTesting() void {
         gpa.destroy(m);
     }
     menus.clearRetainingCapacity();
+    for (detached.items) |m| {
+        zts_menu_free(m.handle);
+        if (m.wire) |*w| w.deinit();
+        gpa.destroy(m);
+    }
+    detached.clearRetainingCapacity();
     activator = .{};
 }
 
