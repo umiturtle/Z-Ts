@@ -1,4 +1,5 @@
 const std = @import("std");
+const zts_build = @import("src/build_tools/mod.zig");
 
 fn detectSystemGtkWebkit(b: *std.Build) bool {
     var code: u8 = 0;
@@ -36,41 +37,13 @@ pub fn embedFrontendDir(
     web_mod: *std.Build.Module,
     opts: EmbedFrontendDirOptions,
 ) EmbeddedFrontendDir {
-    const scan_mod = b.createModule(.{
-        .root_source_file = b.path("src/ssg/mod.zig"),
-        .target = b.graph.host,
-        .optimize = .debug,
-        .link_libc = false,
-        .imports = &.{
-            .{ .name = "zts_foundation", .module = b.modules.get("zts_foundation").? },
-            .{ .name = "zts_web", .module = web_mod },
-            .{ .name = "zts_wasm", .module = b.modules.get("zts_wasm").? },
-        },
+    // `M5-01`: the scanner, the gzip twins and the CSP hashes all live in `src/build_tools/`.
+    const embedded = zts_build.embedFrontend(b, .{
+        .src_dir = opts.src_dir,
+        .web_mod = web_mod,
+        .module_name = opts.module_name,
     });
-    const scan_exe = b.addExecutable(.{
-        .name = "zts_embed_frontend_dir",
-        .root_module = scan_mod,
-    });
-    const run = b.addRunArtifact(scan_exe);
-    // The scanner writes a directory tree (`assets_manifest.zig` + staged `files/**`).
-    // Zig does not verify output *directories*, so force execution to keep the tree present.
-    run.has_side_effects = true;
-    run.addArg("--src");
-    run.addDirectoryArg(opts.src_dir);
-    run.addArg("--out");
-    const generated_dir = run.addOutputDirectoryArg(opts.module_name);
-
-    const module = b.createModule(.{
-        .root_source_file = generated_dir.path(b, "assets_manifest.zig"),
-        .target = b.graph.host,
-        .optimize = .debug,
-        .link_libc = false,
-        .imports = &.{
-            .{ .name = "zts_web", .module = web_mod },
-        },
-    });
-
-    return .{ .run = run, .module = module };
+    return .{ .run = embedded.run, .module = embedded.module };
 }
 
 pub fn build(b: *std.Build) void {
@@ -597,6 +570,49 @@ pub fn build(b: *std.Build) void {
 
     const tauri_e2e_tests = b.addTest(.{ .root_module = tauri_e2e_mod });
 
+    // -------------------------------------------------------------------------
+    // `M5-01`: `bindings.gen.ts` is generated from the counter schema at build time.
+    //   `zig build tsgen`           -> writes `examples/counter/web/bindings.gen.ts`
+    //   `zig build check-bindings`  -> fails when the committed file is stale (CI runs this)
+    // -------------------------------------------------------------------------
+    const counter_schema_mod = b.createModule(.{
+        .root_source_file = b.path("examples/counter/src/bindings_schema.zig"),
+        .target = b.graph.host,
+        .optimize = .debug,
+        .imports = &.{
+            .{ .name = "zts_core", .module = core_mod },
+            .{ .name = "zts_rpc", .module = rpc_mod },
+            .{ .name = "zts_tauri", .module = tauri_mod },
+            .{ .name = "zts_wasm", .module = wasm_mod },
+        },
+    });
+    const bindings_path = "examples/counter/web/bindings.gen.ts";
+
+    const tsgen = zts_build.tsgenBindings(b, .{
+        .schema_mod = counter_schema_mod,
+        .output_path = bindings_path,
+    });
+    const tsgen_step = b.step("tsgen", "Regenerate examples/counter/web/bindings.gen.ts from the counter schema");
+    tsgen_step.dependOn(tsgen.step);
+
+    const check_bindings = zts_build.tsgenBindings(b, .{
+        .schema_mod = counter_schema_mod,
+        .output_path = bindings_path,
+        .check = true,
+    });
+    const check_bindings_step = b.step("check-bindings", "Fail when bindings.gen.ts is out of date");
+    check_bindings_step.dependOn(check_bindings.step);
+
+    // `src/build_tools/assets.zig` is std-only, so its tests run on every host.
+    const build_tools_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/build_tools/assets.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = false,
+        }),
+    });
+
     const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full Z-Ts & Tauri v2 E2E suite");
     test_step.dependOn(&b.addRunArtifact(foundation_tests).step);
     test_step.dependOn(&b.addRunArtifact(web_tests).step);
@@ -608,11 +624,14 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(tauri_native_tests).step);
     test_step.dependOn(&b.addRunArtifact(wasm_tests).step);
     test_step.dependOn(&b.addRunArtifact(ssg_tests).step);
+    test_step.dependOn(&b.addRunArtifact(build_tools_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);
     test_step.dependOn(&b.addRunArtifact(c_abi_exe).step);
     test_step.dependOn(&b.addRunArtifact(umbrella_tests).step);
     test_step.dependOn(&b.addRunArtifact(tauri_e2e_tests).step);
     test_step.dependOn(&b.addRunArtifact(wasm_app_native_tests).step);
+    // Generated typings must match the schema (a stale `bindings.gen.ts` fails the build).
+    test_step.dependOn(check_bindings.step);
     test_step.dependOn(&b.addRunArtifact(embedded_consumer_tests).step);
     test_step.dependOn(&run_wasm_e2e.step);
     // Native Windows E2E (`M3-02`): real HWND + WebView2 round trip, `OK windows-wv2 …` marker.

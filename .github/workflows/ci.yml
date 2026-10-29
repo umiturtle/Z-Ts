@@ -94,6 +94,22 @@ jobs:
           fi
           grep -o "OK embed-gtk .*" ci-output.log | tail -n 1
 
+      - name: Verify the build-tools embedder and the generated bindings (M5-01 gate)
+        run: |
+          set -eo pipefail
+          # The M5-01 embedder runs as part of `zig build test` (the generated module backs
+          # `tests/ssg/embedded_consumer.zig`). The marker only appears when the walk, the gzip
+          # twins, the CSP hashes and the manifest were really produced, so a silent skip fails.
+          if ! grep -q "OK build-tools embed" ci-output.log; then
+            echo "::error::build-tools embed marker missing - the embedder was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK build-tools embed .*" ci-output.log | tail -n 1
+          # `zig build test` also depends on `zig build check-bindings`: a stale
+          # `examples/counter/web/bindings.gen.ts` would already have failed the build above.
+          echo "bindings freshness is enforced by the check-bindings build step."
+
       - name: Cross-compile the Windows Win32 + Direct WebView2 backend from Linux (M3-02 gate)
         run: |
           set -o pipefail

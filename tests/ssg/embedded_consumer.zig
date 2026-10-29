@@ -1,4 +1,4 @@
-//! Inbound SSG consumer test (`M2-01`): imports the module generated at build time by
+//! Inbound SSG consumer test (`M2-01` / `M5-01`): imports the module generated at build time by
 //! `build.zig`'s `embedFrontendDir` helper and exercises it through `zts_web.Assets`.
 
 const std = @import("std");
@@ -18,6 +18,28 @@ test "embedFrontendDir embeds a deterministic multi-page SSG tree" {
     // SHA-256 digests are emitted for every entry (usable for immutable CSP / ETag handling).
     try testing.expectEqual(frontend.entries.len, frontend.sha256_digests.len);
     try testing.expectEqual(@as(usize, 64), frontend.sha256_digests[0].len);
+}
+
+test "M5-01: the generated manifest carries gzip twins (and skips incompressible files)" {
+    try testing.expectEqual(frontend.entries.len, frontend.gzip_entries.len);
+
+    // `about/index.html` and `index.html` compress; the 27-byte `assets/app.js` does not, so its
+    // twin is `null` ("serve the raw bytes") instead of a larger `.gz`.
+    try testing.expect(frontend.gzip_entries[0] != null);
+    try testing.expect(frontend.gzip_entries[1] == null);
+    try testing.expect(frontend.gzip_entries[2] != null);
+
+    for (frontend.gzip_entries) |maybe| {
+        const gz = maybe orelse continue;
+        // A real gzip member: magic `1f 8b`, and strictly smaller than the original.
+        try testing.expect(gz.len > 10);
+        try testing.expectEqual(@as(u8, 0x1f), gz[0]);
+        try testing.expectEqual(@as(u8, 0x8b), gz[1]);
+    }
+
+    // This fixture references an *external* script (`<script src=…>`), and external scripts are
+    // not CSP-hashed — only inline bodies are.
+    try testing.expectEqual(@as(usize, 0), frontend.csp_hashes.len);
 }
 
 test "embedded multi-page SSG assets resolve directory indices, MIME & 404 correctly" {

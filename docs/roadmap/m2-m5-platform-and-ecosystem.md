@@ -101,6 +101,12 @@
 ### `M5-01`：`build.zig` 統合ヘルパー（`embedFrontend` & 自動 `tsgen`）
 - **専有スコープ**: `src/build_tools/`
 - **内容**: Vite 等の出力ディレクトリ `dist/` を走査して圧縮・CSP ハッシュ付与済みの静的 Zig モジュールを生成するビルドステップと、コンパイルと同時にフロントエンド側へ `bindings.gen.ts` を自動出力するビルドステップ。
+- **実装**: [`../architecture/build-tools.md`](../architecture/build-tools.md) / **設計判断**: [`../decisions/0017-build-tools.md`](../decisions/0017-build-tools.md) / **タスク**: [`../tasks/M5-01-build-tools.md`](../tasks/M5-01-build-tools.md)
+  - `src/build_tools/{mod,assets,embed_main,tsgen_main}.zig` の 3 層。`mod.zig` は `std.Build` のみ、`assets.zig` は `std` のみ（＝全 OS で単体テスト可能）、残り 2 つはビルド時に走る CLI。
+  - `embedFrontend` の生成物は `M2-01` の上位互換（`entries` / `assets` / `sha256_digests` に `gzip_entries` と `csp_hashes` を追加）。gzip は `MTIME=0` / `OS=Unix` 固定で**どの OS でも同一バイト列**、元より大きくなるファイルは `.gz` を作らない。
+  - CSP は**インライン**の `<script>` / `<style>` 本文のみをハッシュ化（外部 script は対象外、引用符内の `>` でタグを打ち切らない）。
+  - `tsgenBindings` は生成（`captureStdOut` → `addUpdateSourceFiles`）と検証（`--check`、**キャッシュ無効化**付き）の 2 モード。`zig build test` が検証に依存するので、再生成忘れは CI で落ちる。
+  - `examples/counter/build.zig` の写し実装（約 40 行）を削除し、`dep.builder.path("src/build_tools/embed_main.zig")` で共通実装を起動する形にした。
 
 ### `M5-02`：`zts` CLI ツール（`init` / `dev` / `build`）
 - **専有スコープ**: `src/cli/`

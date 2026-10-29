@@ -214,11 +214,12 @@ pub fn build(b: *std.Build) void {
 }
 
 // ---------------------------------------------------------------------------
-// `embedFrontendDir` — ルート `build.zig` と同等の暫定実装。
+// `embedFrontendDir` — `M5-01` の共通エンベッダを**依存パッケージのソースから直接**起動する。
 //
-// `M5-01` で `src/build_tools/` へ抽出され、依存パッケージから直接呼べる公開 API に昇格する
-// 予定です。それまでは「外部パッケージから `dep.module("zts_ssg")` を再利用して同じスキャナを
-// 起動できる」ことを示すため、このサンプル内に同型の実装を置いています。
+// ビルドスクリプトは依存パッケージのモジュールを `@import` できない（別ビルドルート）が、
+// `dep.builder.path(...)` でソースファイルを指すことはできる。したがってスキャナ / gzip /
+// CSP ハッシュ / マニフェスト生成のロジックは全部ライブラリ側 (`src/build_tools/`) に 1 つだけ
+// 置き、このサンプルは「ステップを繋ぐだけ」で済む。
 // ---------------------------------------------------------------------------
 const EmbedFrontendDirOptions = struct {
     src_dir: std.Build.LazyPath,
@@ -236,15 +237,10 @@ fn embedFrontendDir(
     opts: EmbedFrontendDirOptions,
 ) EmbeddedFrontend {
     const scan_mod = b.createModule(.{
-        .root_source_file = dep.builder.path("src/ssg/mod.zig"),
+        .root_source_file = dep.builder.path("src/build_tools/embed_main.zig"),
         .target = b.graph.host,
         .optimize = .debug,
         .link_libc = false,
-        .imports = &.{
-            .{ .name = "zts_foundation", .module = dep.module("zts_foundation") },
-            .{ .name = "zts_web", .module = dep.module("zts_web") },
-            .{ .name = "zts_wasm", .module = dep.module("zts_wasm") },
-        },
     });
     const scan_exe = b.addExecutable(.{ .name = "counter_embed_frontend", .root_module = scan_mod });
     const run = b.addRunArtifact(scan_exe);
