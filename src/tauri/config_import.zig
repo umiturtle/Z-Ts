@@ -698,9 +698,9 @@ fn parseInto(allocator: Allocator, json_text: []const u8, diags: *Diagnostics) E
 
 fn isKnownTopLevel(key: []const u8) bool {
     const known = [_][]const u8{
-        "$schema",     "productName", "product-name", "version",
-        "identifier",  "app",         "build",        "bundle",
-        "plugins",     "mainBinaryName",
+        "$schema",    "productName",    "product-name", "version",
+        "identifier", "app",            "build",        "bundle",
+        "plugins",    "mainBinaryName",
     };
     for (known) |candidate| {
         if (std.mem.eql(u8, key, candidate)) return true;

@@ -15,6 +15,7 @@ const Allocator = std.mem.Allocator;
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
+pub const acl = @import("acl.zig");
 pub const app = @import("app.zig");
 pub const clipboard = @import("clipboard/mod.zig");
 pub const channel = @import("channel.zig");
@@ -152,6 +153,7 @@ pub const CorePluginStates = struct {
 };
 
 test {
+    _ = acl;
     _ = app;
     _ = channel;
     _ = clipboard;
