@@ -284,6 +284,10 @@ pub fn build(b: *std.Build) void {
             .file = b.path("src/tauri/native_macos_shim.m"),
             .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
         });
+        tauri_native_mod.addCSourceFile(.{
+            .file = b.path("src/tauri/menu/native_macos_shim.m"),
+            .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
+        });
         tauri_native_mod.linkFramework("Cocoa", .{});
         tauri_native_mod.linkFramework("Foundation", .{});
         // `native_macos_shim.m` maps filter extensions to UTIs (`UTType`), not the deprecated
@@ -292,7 +296,9 @@ pub fn build(b: *std.Build) void {
     }
     if (native_windows) {
         for ([_][]const u8{
-            "user32", "kernel32", "ole32", "oleaut32", "shlwapi", "shell32",
+            // `comctl32` provides `SetWindowSubclass`, which is how `plugin:menu` learns about
+            // `WM_COMMAND` without the webview having to know about menus.
+            "user32", "kernel32", "comctl32", "ole32", "oleaut32", "shlwapi", "shell32",
         }) |lib| tauri_native_mod.linkSystemLibrary(lib, .{ .use_pkg_config = .no });
     }
 

@@ -91,9 +91,11 @@ pub const Entry = struct {
 | `Mock` バックエンド（スナップショット記録） | ✅ 全 OS でテスト |
 | 上流 `@tauri-apps/api` 2.12.4 の menu / tray を**無改変**で E2E 実行 | ✅ Node bridge + 実 WebKit2GTK |
 | GTK3 ネイティブ描画（`GtkMenuBar` / `GtkMenu` / `GtkStatusIcon`） | ✅ 実装済み（Xvfb でウィジェットツリーを検証） |
-| AppKit 描画（`NSMenu` / `NSStatusItem`） | ⏳ 未実装 → `error.Unavailable` で fail-closed |
-| Win32 描画（`HMENU` / `Shell_NotifyIconW`） | ⏳ 未実装 → `error.Unavailable` で fail-closed |
+| AppKit 描画（`NSMenu`） | ✅ `M4-05`（`native_macos.zig` + `native_macos_shim.m`） |
+| Win32 描画（`HMENU`） | ✅ `M4-05`（`native_windows.zig`） |
+| AppKit / Win32 のトレイ（`NSStatusItem` / `Shell_NotifyIconW`） | ⏳ 未実装 → `error.Unavailable` で fail-closed |
 | 画像アイコン（`JsImage` の bytes / path / rid） | ⏳ wire としては受理するが描画は未対応 |
+| Win32 のショートカット**動作**（`TranslateAcceleratorW`） | ⏳ 表示のみ（下記 4.4） |
 
 ネイティブ層が無い OS でも、`plugin:menu` を使わないアプリのバイナリは 0 バイト増えず、
 使った場合は `error.Unavailable` で **fail-closed** する（黙って成功したように見せない）。
@@ -110,7 +112,43 @@ GTK にはアプリケーションメニューバーが存在しない（メニ�
 素のランナーでも `zig build -Dgtk=true` が通る（上流 `tauri` は `libappindicator` を使う）。
 wire 層は共通なので、将来 `libayatana-appindicator` に差し替えてもプラグイン側は無変更で済む。
 
-### 4.2 画面なし環境での検証
+### 4.2 3 OS 共通の変換層（`menu/snapshot_wire.zig`）
+
+ネイティブ描画のうち **OS に依存しない部分** は全部ここに寄せてある（Pure Zig・全 OS でテスト）:
+
+| 変換 | macOS | Win32 |
+|---|---|---|
+| ラベルのニーモニック `_F` | 除去（`File`） | `&F` へ（Windows の慣習） |
+| リテラルの `_` / `&` | `__` → `_` | `__` → `_` / `&&` |
+| アクセラレータ | `keyEquivalent` + modifier mask（**そのまま動作する**） | `\t` 右寄せの表示テキストのみ |
+| コマンド ID | `NSMenuItem.tag` | `AppendMenuW` の ID（1 始まり、`WM_COMMAND` で戻る） |
+| 深さ検証 | 「飛び級は `error.InvalidMenuDepth`」を 3 実装で共有 | 同左 |
+
+`muda` は共有状態のラベルに `&` を使うが、Z-Ts は GTK の `_` を採用している
+（既存の GTK 実装とそのテストを壊さないため）。**変換はバックエンド側** で行う。
+
+### 4.3 AppKit / Win32 のアタッチ契約
+
+| | macOS | Win32 |
+|---|---|---|
+| `set_as_app_menu` | `[NSApp setMainMenu:menu]` | 登録済みの全ウィンドウへ `SetMenu`（後から作られたウィンドウにも replay） |
+| `set_as_window_menu` | `[window setMenu:menu]`（AppKit にウィンドウ固有のバーは無いが、`NSWindow.menu` はキーウィンドウ時のバー） | そのウィンドウだけ差し替え（ウィンドウメニューがアプリメニューに勝つ） |
+| `popup` | `[NSMenu popUpMenuPositioningItem:atLocation:inView:]`（`Position` は top-left → Cocoa の下原点へ反転） | `TrackPopupMenu(TPM_RETURNCMD)`（同期で ID が返るので `WM_COMMAND` 不要） |
+| 登録 API | `native.registerMenuWindow(label, ns_window)` | `native.registerMenuWindow(label, hwnd)` |
+
+アクティベーションは macOS が共有ターゲットオブジェクトの `action:`、Win32 が
+`SetWindowSubclass` で拾う `WM_COMMAND`（`LOWORD(wParam)`）。どちらも
+`command - 1` を平坦リストの添字として `MenuId` に戻し、`Channel<string>` へ流す。
+**webview 側は一切変更していない**（サブクラス化はメニュー側で完結する）。
+
+### 4.4 Win32 のキーボードショートカット（既知の制限）
+
+`HMENU` にはアイテム単位のショートカット欄が無いため、`Accelerator` は
+`AppendMenuW` のラベルに `\tCtrl+N` として **表示** している。実際のキー入力は
+ホストのメッセージループが `TranslateAcceleratorW` を呼ばないと動かない（未実装）。
+macOS は `keyEquivalent` が AppKit 側で解決されるため、この制限は無い。
+
+### 4.5 画面なし環境での検証
 
 メニューはヘッドレスだと開けないが、**ウィジェットツリーは検証できる**。
 `native_gtk.zig` は `GType` 名と `gtk_container_get_children` でツリーを読み返す
@@ -119,3 +157,14 @@ wire 層は共通なので、将来 `libayatana-appindicator` に差し替えて
 実際の GTK オブジェクトから assert する（CI は Xvfb 上で実行）。
 アクティベーションは `g_signal_emit_by_name(item, "activate")` で発火させ、
 `Channel<string>` に `MenuId` が届くことまで確認している。
+
+macOS / Windows も同じ考え方で **実物を読み返す**:
+
+* macOS: シムの `zts_menu_item_title` / `_key_equivalent` / `_state` / `_has_role` /
+  `_submenu_at` で `NSMenuItem` を検査し、`zts_menu_fire` で `action:` を発火。
+* Win32: `GetMenuItemCount` / `GetSubMenu` / `GetMenuStringW` / `GetMenuState` で `HMENU` を検査し、
+  `SendMessageW(hwnd, WM_COMMAND, id, 0)` で **本物のメッセージ** を流して発火
+  （サブクラス → `Activator` の経路が実際に通る）。
+
+CI はこの実行を `OK menu-cocoa checks=` / `OK menu-win32 checks=` マーカーで機械的に確認する
+（マーカーが無ければ「黙ってスキップされた」とみなして fail）。

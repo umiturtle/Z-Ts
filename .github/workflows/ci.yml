@@ -299,6 +299,19 @@ jobs:
           fi
           grep -o "OK macos-wk .*" ci-output.log | tail -n 1
 
+      - name: Verify the native AppKit menu backend actually ran (M4-05 gate)
+        run: |
+          set -euo pipefail
+          # `native_macos.zig` prints `OK menu-cocoa checks=N` only after a real `NSMenu` was built
+          # from the flattened snapshot and an item activation round-tripped through the bridge
+          # object. Absence means AppKit was never reached (the old fail-closed stub was used).
+          if ! grep -q "OK menu-cocoa checks=" ci-output.log; then
+            echo "::error::AppKit menu marker missing — the Cocoa backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK menu-cocoa .*" ci-output.log | tail -n 1
+
       - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
         run: |
           set -eo pipefail
@@ -483,6 +496,20 @@ jobs:
             exit 1
           fi
           grep -o "OK windows-wv2 .*" ci-output.log | tail -n 1
+
+      - name: Verify the native Win32 menu backend actually ran (M4-05 gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `native_windows.zig` prints `OK menu-win32 checks=N` only after a real `HMENU` was
+          # installed with `SetMenu` on a real `HWND` and a `WM_COMMAND` round-tripped through the
+          # window subclass into the item's `Channel<string>`.
+          if ! grep -q "OK menu-win32 checks=" ci-output.log; then
+            echo "::error::Win32 menu marker missing — the Win32 backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK menu-win32 .*" ci-output.log | tail -n 1
 
       - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
         shell: bash

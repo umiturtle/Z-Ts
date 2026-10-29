@@ -74,6 +74,10 @@ pub fn clipboardBackend() clipboard.Backend {
 
 const menu_impl = if (is_gtk)
     @import("menu/native_gtk.zig")
+else if (is_macos)
+    @import("menu/native_macos.zig")
+else if (is_win32)
+    @import("menu/native_windows.zig")
 else
     @import("menu/native_stub.zig");
 
@@ -94,13 +98,13 @@ pub fn trayBackend() tray.Backend {
 
 /// Registers a toplevel window with the native menu backend.
 ///
-/// GTK has no application menu bar: the menu is a widget packed into each window, so the host must
-/// hand over every toplevel (`handle` = `GtkWindow`). Backends with a real global menu (Cocoa,
-/// Win32) ignore this. Returns `false` when the backend does not need window registration.
+/// Menus are per-window on GTK (`GtkWindow` — the bar is a widget packed into the window) and on
+/// Win32 (`HWND` — `SetMenu`), while AppKit installs them on `NSWindow` and on `NSApp` (the menu
+/// bar itself). `handle` is therefore the toolkit's own toplevel: `GtkWindow *`, `HWND`, or
+/// `NSWindow *`. Returns `false` when the platform has no menu backend at all.
 pub fn registerMenuWindow(label: []const u8, handle: ?*anyopaque) bool {
     if (comptime @hasDecl(menu_impl, "registerWindow")) {
-        const widget: *@import("native_gtk.zig").GtkWidget = @ptrCast(@alignCast(handle orelse return false));
-        menu_impl.registerWindow(label, widget) catch return false;
+        menu_impl.registerWindow(label, handle orelse return false) catch return false;
         return true;
     }
     return false;

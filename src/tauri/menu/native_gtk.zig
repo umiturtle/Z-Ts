@@ -264,7 +264,11 @@ fn applyTo(entry: *WindowEntry, entries: []const menu.Entry) Error!void {
 }
 
 /// Registers a toplevel window so menus can be packed into it (applies any menu already set).
-pub fn registerWindow(label: []const u8, window: *gtk.GtkWidget) Error!void {
+///
+/// `native` is the `GtkWindow *`; the opaque parameter keeps the signature identical to the
+/// Cocoa / Win32 backends (`native.registerMenuWindow` dispatches on it).
+pub fn registerWindow(label: []const u8, native: ?*anyopaque) Error!void {
+    const window: *gtk.GtkWidget = @ptrCast(@alignCast(native orelse return error.Unsupported));
     if (!gtk.ensureInit()) return error.Unavailable;
     if (findWindow(label) != null) return; // idempotent
     const owned = gpa.dupe(u8, label) catch return error.OutOfMemory;

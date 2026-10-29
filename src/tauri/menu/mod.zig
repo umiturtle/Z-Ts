@@ -39,7 +39,11 @@ const accelerator = @import("accelerator.zig");
 
 test {
     _ = accelerator;
+    _ = snapshot_wire;
 }
+
+/// OS-independent conversion of a flattened snapshot for the native backends (`M4-05`).
+pub const snapshot_wire = @import("snapshot_wire.zig");
 
 pub const Accelerator = accelerator.Accelerator;
 pub const Mods = accelerator.Mods;
