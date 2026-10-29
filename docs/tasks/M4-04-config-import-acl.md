@@ -1,6 +1,6 @@
 # Task M4-04: Tauri 資産移行レイヤ（`tauri.conf.json` インポート & ACL）
 
-- **Status**: `in_progress`
+- **Status**: `done`
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/tauri/config_import.zig`, `src/tauri/acl.zig`, `src/tauri/mod.zig`,
   `tests/tauri/`, `docs/architecture/tauri-config-import-acl.md`,
@@ -10,7 +10,7 @@
   `WindowConfig` / `BuildConfig` / `SecurityConfig` / `AssetProtocolConfig`）、
   `crates/tauri-utils/src/acl/capability.rs`（`Capability` / `CapabilityFile` / `PermissionEntry` /
   `CapabilityRemote`）、`crates/tauri/src/ipc/authority.rs`（実行時照合）
-- **Next Step**: 3 OS CI（run 完了待ち）。残作業は §5「フォローアップ」参照。
+- **Next Step**: なし（3 OS CI グリーン）。DoD 外の残作業は §5「フォローアップ」参照。
 
 ---
 
@@ -41,7 +41,7 @@
 - [x] `comptime` 読み込み（`@embedFile` した JSON 文字列を `parse` に渡せる。`FixedBufferAllocator` 併用可）
 - [x] 単体テスト（正常系 / 型違い / 未知フィールド / glob / platform / remote / deny / リーク 0）
 - [x] `./zigw quick-test` / `./zigw build test -Dgtk=true|false` / `fmt --check` / `check-docs`
-- [ ] 3 OS CI グリーン
+- [x] 3 OS CI グリーン（run `40829957744` @ `10a59eb` = 4/4）
 
 ---
 
@@ -56,7 +56,8 @@
 - **作業中・直前の状態**:
   - `quick-test` = `All 56 tests passed`、`build test -Dgtk=false` = `222/224 (2 skipped)`、
     `-Dgtk=true` = `46/46 steps, 99/108 (9 skipped)`、`fmt --check` / `check-docs`(53) OK
-  - 3 OS CI のみ未確認
+  - 3 OS CI = [run `40829957744`](https://github.com/umiturtle/Z-Ts/actions/runs/40829957744)
+    @ `10a59eb` の 4 ジョブすべて success（Linux / macOS / Windows / Cross-OS parity）
 
 ---
 
