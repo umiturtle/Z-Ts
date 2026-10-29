@@ -471,14 +471,16 @@ test "gtk menu bar mirrors the flattened snapshot: nesting, labels, sensitivity,
     try testing.expectEqual(@as(usize, 3), gtk.childCount(file_menu));
     try testing.expectEqual(gtk.MenuItemInfo.Kind.separator, gtk.widgetKind(gtk.nthChild(file_menu, 1).?));
 
+    // `gtk_menu_item_new_with_mnemonic` keeps the `_` marker in the label property, so the exact
+    // string is what a GTK user sees with the mnemonic stripped.
     const first = try gtk.describeMenuItem(gpa, gtk.nthChild(file_menu, 0).?);
     defer if (first.label) |l| gpa.free(l);
-    try testing.expectEqualStrings("New", first.label.?);
+    try testing.expectEqualStrings("_New", first.label.?);
     try testing.expect(first.sensitive);
 
     const exit = try gtk.describeMenuItem(gpa, gtk.nthChild(file_menu, 2).?);
     defer if (exit.label) |l| gpa.free(l);
-    try testing.expectEqualStrings("Exit", exit.label.?);
+    try testing.expectEqualStrings("E_xit", exit.label.?);
     try testing.expect(!exit.sensitive);
 
     // (4) A check item round-trips its state.
@@ -487,7 +489,7 @@ test "gtk menu bar mirrors the flattened snapshot: nesting, labels, sensitivity,
     const grid_info = try gtk.describeMenuItem(gpa, grid);
     defer if (grid_info.label) |l| gpa.free(l);
     try testing.expectEqual(gtk.MenuItemInfo.Kind.check_item, grid_info.kind);
-    try testing.expectEqualStrings("Grid", grid_info.label.?);
+    try testing.expectEqualStrings("_Grid", grid_info.label.?);
     try testing.expect(grid_info.active);
 
     // (5) Re-applying replaces the bar instead of stacking a second one.
