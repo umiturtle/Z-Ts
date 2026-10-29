@@ -163,7 +163,7 @@ pub const panic = std.debug.FullPanic(zts_wasm.host.reportPanic);  // ブラウ�
 
 - ブラウザ上では OS ネイティブ権限（任意パス読書き・ネイティブウィンドウ移動・画面キャプチャ等）は使えません。`WasmHost` は仮想状態を保持して `Unsupported` を返します。
 - セーブデータ等の永続化は将来 `M4-02`（ストレージ抽象）で OPFS / IndexedDB バックエンドへ接続します。
-- `build.zig` の `embedFrontendDir` は現状リポジトリ内ヘルパーです。`M5-01` で `src/build_tools/` へ抽出し、外部プロジェクトから `b.dependency("z_ts")` 経由で利用できるパッケージへ昇格させます。
+- `embedFrontendDir` は `M5-01` で [`src/build_tools/`](build-tools.md) へ抽出済みです。下流プロジェクトは `dep.builder.path("src/build_tools/embed_main.zig")` で共通行を起動でき（`examples/counter` が実例）、gzip 双子・CSP ハッシュ・マニフェスト生成が 1 箇所に集約されています。
 
 ---
 
@@ -203,9 +203,10 @@ zig build test       # 単体 + 実 TCP E2E + 実 WebAssembly E2E
 `dep.module("zts_web")` … `dep.module("z_ts")` を取得します。これにより
 「ルート `build.zig` を変更せずに standalone モジュール群を再利用できる」ことが CI で常時検証されます。
 
-`embedFrontendDir` は現状ルート `build.zig` 内の関数で依存パッケージからは呼べないため、
-サンプル側に同型実装（`dep.builder.path("src/ssg/mod.zig")` を root にしたスキャナ起動）を置いています。
-`M5-01` で `src/build_tools/` へ抽出した時点でこの重複は解消されます。
+`M5-01` 以降、埋め込みは共通実装（[`build-tools.md`](build-tools.md)）を起動するだけです。
+サンプルは `dep.builder.path("src/build_tools/embed_main.zig")` を root にして同じエンベッダを
+走らせるため、gzip / CSP / マニフェストのロジックはリポジトリ内に 1 つしかありません
+（以前あった `embedFrontendDir` の写しは削除済み）。
 
 ### 6.3 実測値（Linux Debug / `-Dwasm-optimize=small`）
 

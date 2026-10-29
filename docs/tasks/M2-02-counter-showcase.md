@@ -65,7 +65,7 @@ cd examples/counter
 
 ## 4. 設計判断・技術メモ・ハマりどころ
 
-- **`build.zig` ヘルパーの重複を許容**: `embedFrontendDir` はルート `build.zig` 内の関数で、依存パッケージからは呼べない。`M5-01` で `src/build_tools/` へ抽出するまでの暫定措置として、`examples/counter/build.zig` に同等実装を置いた（`dep.builder.path("src/ssg/mod.zig")` を root にしたスキャナを起動）。ルート `build.zig` と同じ「同一 `.zig` を別モジュールとして起動する」パターン。
+- ~~**`build.zig` ヘルパーの重複を許容**~~（`M5-01` で解消済み・記録として残す）: `embedFrontendDir` はルート `build.zig` 内の関数で、依存パッケージからは呼べない。`M5-01` で `src/build_tools/` へ抽出するまでの暫定措置として、`examples/counter/build.zig` に同等実装を置いた（`dep.builder.path("src/ssg/mod.zig")` を root にしたスキャナを起動）。ルート `build.zig` と同じ「同一 `.zig` を別モジュールとして起動する」パターン。
 - **`RuntimeMode` は comptime パラメータ**: JS 側で UA / `location` を判定しない。`getState` が返す `mode` フィールドに `@tagName(runtime)` を埋め、画面に表示する。
 - **Zig 0.17 の `std.Build`**: `b.args`（`zig build run -- ...` の転送）と `b.pathFromRoot` は存在しない。前者は `preview` ステップを既定ポート固定にし、後者は `tests/live_probe.mjs` を `@embedFile`（モジュール化）+ `testing.tmpDir` へ書き出して解決した。
 - **`i53` は符号込み 53 ビット**（`[-2^52, 2^52-1]`）。JS の `Number.MAX_SAFE_INTEGER` 全域が必要なら `zts_rpc.types.SafeInt`。カウンタの上限は `std.math.maxInt(i53)` を使う。
