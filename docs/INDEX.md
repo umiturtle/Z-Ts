@@ -24,6 +24,9 @@
 | [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
 | [`roadmap/m1-foundation-packages.md`](roadmap/m1-foundation-packages.md) | M1 詳細仕様（コア 5 パッケージのファイル境界・公開型・DoD） | 実装仕様リファレンス |
 | [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
+| [`guides/getting-started.md`](guides/getting-started.md) | はじめかた（5 分）: テスト → サンプル → 埋め込み → 型生成 → サイト生成 | 入門（最初に読む） |
+| [`guides/migrating-from-tauri.md`](guides/migrating-from-tauri.md) | Tauri v2 からの移行（`tauri.conf.json` / ACL / コマンド / プラグイン対応表） | 移行時 |
+| [`guides/troubleshooting.md`](guides/troubleshooting.md) | トラブルシューティング（実際に踏んだエラーと 0.17 の API 差分） | 困ったとき |
 | [`tasks/TEMPLATE.md`](tasks/TEMPLATE.md) | 1タスク＝1ファイルの作業計画＆記憶チェックポイント標準テンプレート | テンプレート |
 | `tasks/<ID>-<slug>.md` | 個別タスクの進捗・設計メモ・次の1手（例: [`tasks/M0-01-bootstrap.md`](tasks/M0-01-bootstrap.md)） | **担当ブランチ専有（競合ゼロ）** |
 | `decisions/<NNNN>-<slug>.md` | アーキテクチャ意思決定記録（ADR）（[`0001`](decisions/0001-zig-017-and-sharded-agent-workflow.md), [`0002`](decisions/0002-hybrid-architecture-proposal.md), … , [`0009`](decisions/0009-screenshot-capture-and-ci-gallery.md), [`0010`](decisions/0010-cross-os-pixel-parity.md), [`0011`](decisions/0011-scoped-fs-plugin.md), [`0012`](decisions/0012-dialog-and-clipboard-backends.md), [`0013`](decisions/0013-menu-and-tray-backends.md), [`0014`](decisions/0014-config-import-and-acl.md), [`0015`](decisions/0015-native-menu-cocoa-win32.md), [`0016`](decisions/0016-native-tray-cocoa-win32.md), [`0017`](decisions/0017-build-tools.md), [`0018`](decisions/0018-documentation-site.md)） | **新規ファイル追加のみ（競合ゼロ）** |
@@ -33,5 +36,6 @@
 | [`../examples/frameworks/README.md`](../examples/frameworks/README.md) | 9 フレームワーク（Angular/Solid/Svelte/SolidStart/Next/Nuxt/Astro/SvelteKit/React）の同一画面デモと再生成手順（`M5-05`） | 実装サンプル（追記のみ） |
 | [`environment/arena-and-caching.md`](environment/arena-and-caching.md) | 毎チャットキャッシュ揮発対策・LLVM 同梱検証・高速ビルド規約 | 環境変更時のみ |
 | [`environment/github-actions.md`](environment/github-actions.md) | GitHub Actions 3 OS マトリクス・キャッシュ自動配信・ベンチ/差分テスト運用 | CI 変更時のみ |
+| [`reference/cli.md`](reference/cli.md) | コマンドリファレンス（`./zigw` / `zig build` ステップ / スクリプト / `zts` 設計面） | リファレンス（追記のみ） |
 | [`reference/tauri-usage.md`](reference/tauri-usage.md) | Tauri v2 の使い方リファレンス（Rust/JS API・設定・Capabilities） | リファレンス（追記のみ） |
 | [`reference/tauri-internals.md`](reference/tauri-internals.md) | Tauri v2 内部実装の完全解剖（IPC プロトコル・マクロ・10個の内蔵 Plugin・OS 層） | リファレンス（追記のみ） |

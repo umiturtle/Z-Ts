@@ -359,6 +359,7 @@ fn displayDir(dir: []const u8) []const u8 {
         .{ .dir = "docs/architecture", .label = "アーキテクチャ" },
         .{ .dir = "docs/roadmap", .label = "ロードマップ" },
         .{ .dir = "docs/reference", .label = "リファレンス" },
+        .{ .dir = "docs/guides", .label = "ガイド" },
         .{ .dir = "docs/environment", .label = "実行環境" },
         .{ .dir = "docs", .label = "ドキュメント" },
         .{ .dir = "examples/frameworks", .label = "フレームワーク" },

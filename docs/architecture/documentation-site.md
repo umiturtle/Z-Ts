@@ -96,6 +96,10 @@ push to main ──> build ──> ./zigw build docs            (リンク検査
 * `.nojekyll` を置くので Jekyll の処理は走らない（`_zts/` のようなアンダースコア始まりの
   ディレクトリもそのまま配信される）。
 * サイトは `https://umiturtle.github.io/Z-Ts/` に公開される。
+* **初回だけリポジトリ設定が必要**: Settings → Pages → Build and deployment → Source を
+  **GitHub Actions** にする（Pages API は Bot トークンからは叩けないので、リポジトリ管理者が
+  1 回だけ設定する）。未設定のまま `main` に push すると deploy ジョブが
+  `Get Pages site failed` で止まる — ビルド自体は成功しているので、設定後に再実行すればよい。
 
 ## 7. ローカルで確認する
 

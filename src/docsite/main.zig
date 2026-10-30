@@ -135,17 +135,17 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         var still_broken: std.ArrayListUnmanaged(site.BrokenLink) = .empty;
 
         for (first_pass.broken) |broken| {
-            // Repository files that the site does not publish are linked on GitHub.
-            const exists = if (cwd.readFileAlloc(io, broken.resolved, arena, .limited(4 * 1024 * 1024))) |_| true else |_| false;
-            if (!exists) {
-                try still_broken.append(arena, broken);
-                continue;
-            }
-            try rewrites.append(arena, .{
-                .page = broken.from,
-                .href = broken.href,
-                .to = try std.fmt.allocPrint(arena, "{s}{s}", .{ repo_blob_base, broken.resolved }),
-            });
+            // Repository paths that the site does not publish are linked on GitHub (blob for a
+            // file, tree for a directory such as `src/tauri/menu/`).
+            const to = switch (repoPathKind(io, broken.resolved)) {
+                .missing => {
+                    try still_broken.append(arena, broken);
+                    continue;
+                },
+                .file => try std.fmt.allocPrint(arena, "{s}{s}", .{ repo_blob_base, broken.resolved }),
+                .directory => try std.fmt.allocPrint(arena, "{s}{s}", .{ repo_tree_base, broken.resolved }),
+            };
+            try rewrites.append(arena, .{ .page = broken.from, .href = broken.href, .to = to });
         }
 
         if (still_broken.items.len > 0) {
@@ -251,6 +251,15 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
 }
 
 const repo_blob_base = "https://github.com/umiturtle/Z-Ts/blob/main/";
+const repo_tree_base = "https://github.com/umiturtle/Z-Ts/tree/main/";
+
+/// A path that exists in the working tree, as a file (`blob`) or a directory (`tree`).
+const RepoPath = enum { missing, file, directory };
+
+fn repoPathKind(io: Io, path: []const u8) RepoPath {
+    const stat = Io.Dir.cwd().statFile(io, path, .{}) catch return .missing;
+    return if (stat.kind == .directory) .directory else .file;
+}
 
 /// Renders one source file into `out` (no link rewrites).
 fn renderInto(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype) !void {
@@ -430,10 +439,11 @@ fn groupFor(path: []const u8) []const u8 {
     if (std.mem.startsWith(u8, path, "docs/roadmap/")) return "ロードマップ";
     if (std.mem.startsWith(u8, path, "docs/reference/")) return "リファレンス";
     if (std.mem.startsWith(u8, path, "docs/environment/")) return "環境";
+    if (std.mem.startsWith(u8, path, "docs/guides/")) return "ガイド";
     return "ドキュメント";
 }
 
-const group_order = [_][]const u8{ "はじめに", "ロードマップ", "アーキテクチャ", "決定（ADR）", "リファレンス", "環境", "タスク", "サンプル", "ドキュメント" };
+const group_order = [_][]const u8{ "はじめに", "ガイド", "ロードマップ", "アーキテクチャ", "決定（ADR）", "リファレンス", "環境", "タスク", "サンプル", "ドキュメント" };
 
 fn buildGroups(arena: Allocator, rendered: anytype) ![]const site.Group {
     var groups: std.ArrayListUnmanaged(site.Group) = .empty;
