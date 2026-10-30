@@ -99,3 +99,13 @@ Tauri は `devUrl` / `frontendDist` で切り替えますが、Z-Ts では**ビ�
    `WM_COMMAND` / セレクタ経由で通知されます。
 5. **`tauri build` の成果物**: `.dmg` / `.msi` / `AppImage` はまだ作れません（`M5-03`）。
    単一バイナリ（`zig-out/bin/<name>`）までは `zig build` で作れます。
+
+---
+
+## 次に読むもの
+
+- API の引き方: [`using-the-api-reference.md`](using-the-api-reference.md)（`plugin:window|set_title` →
+  `Commands.set_title` の対応表があります）
+- プラグインの実装状況: [`using-plugins.md`](using-plugins.md)
+- 移行後に動かないとき: [`troubleshooting.md`](troubleshooting.md)
+- 既存の Tauri アプリの設定取り込み: [`../api/zts_tauri/config_import.html`](../api/zts_tauri/config_import.html)

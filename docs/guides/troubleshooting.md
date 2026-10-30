@@ -197,3 +197,11 @@ bash scripts/ci-logs.sh <run_id>     # Check Run API 経由で Step Summary を�
 「レイアウト 1px + 0.5px×文字数、背景 ±4/255、平均輝度 ≤3.0、画素 ≤12%、MAD ≤8」。
 フォント同梱と `--require-native` を確認してください
 （内部資料 [`../architecture/screenshot-parity.md`](../architecture/screenshot-parity.md)）。
+
+---
+
+## 次に読むもの
+
+- 使い方の全体像: [`getting-started.md`](getting-started.md)
+- エラーに対応する API の引き方: [`using-the-api-reference.md`](using-the-api-reference.md)
+- ログの取得: [`../../scripts/ci-logs.sh`](../../scripts/ci-logs.sh) / [`../../AGENTS.md`](../../AGENTS.md)

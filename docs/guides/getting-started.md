@@ -135,3 +135,4 @@ python3 -m http.server --directory zig-out/docs 8137
 | Tauri v2 からの移行 | [`migrating-from-tauri.md`](migrating-from-tauri.md) |
 | うまく動かないとき | [`troubleshooting.md`](troubleshooting.md) |
 | コマンド一覧 | [`../reference/cli.md`](../reference/cli.md) |
+| API ページの読み方 | [`using-the-api-reference.md`](using-the-api-reference.md) |

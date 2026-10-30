@@ -210,6 +210,7 @@ if (!policy.allows("main-window", "plugin:fs|read_text_file")) return error.Forb
   [`window`](../api/zts_tauri/window.html) / [`event`](../api/zts_tauri/event.html) /
   [`fs`](../api/zts_tauri/fs/commands.html) / [`menu`](../api/zts_tauri/menu/mod.html)
 - コマンドの書き方: [`using-rpc.md`](using-rpc.md)
+- API ページの読み方（`@import` の 1 行・`L43` の意味）: [`using-the-api-reference.md`](using-the-api-reference.md)
 - 移行: [`migrating-from-tauri.md`](migrating-from-tauri.md)
 - 内部資料: [`../architecture/tauri-menu-tray.md`](../architecture/tauri-menu-tray.md) /
   [`../architecture/tauri-dialog-clipboard.md`](../architecture/tauri-dialog-clipboard.md) /

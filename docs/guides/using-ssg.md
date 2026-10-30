@@ -162,6 +162,7 @@ try testing.expectEqualStrings("{\"count\":1,…}", inst.last_response.body.slic
 - API: [`zts_ssg`](../api/zts_ssg/index.html) / [`exporter`](../api/zts_ssg/exporter.html) /
   [`zts_wasm`](../api/zts_wasm/index.html) / [`runtime`](../api/zts_wasm/runtime.html)
 - 実例: [`../../examples/counter/README.md`](../../examples/counter/README.md)
+- API ページの読み方: [`using-the-api-reference.md`](using-the-api-reference.md)
 - ビルド統合: [`../architecture/build-tools.md`](../architecture/build-tools.md)（`embedFrontend`）
 - 内部資料: [`../architecture/ssg-and-wasm.md`](../architecture/ssg-and-wasm.md) /
   [`../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`](../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md)

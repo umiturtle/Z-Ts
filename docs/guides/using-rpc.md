@@ -212,5 +212,6 @@ try std.testing.expectEqualStrings(
 - 実例: [`../../examples/counter/README.md`](../../examples/counter/README.md)（全コマンドが実装済み）
 - 設計の背景: [`../architecture/rpc-codec.md`](../architecture/rpc-codec.md)（内部資料）,
   [`../decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md`](../decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md)
+- API ページの読み方: [`using-the-api-reference.md`](using-the-api-reference.md)
 - 送り手側: [`using-plugins.md`](using-plugins.md)（Tauri 標準プラグイン） /
   [`using-ssg.md`](using-ssg.md)（同じスキーマを WASM で動かす）

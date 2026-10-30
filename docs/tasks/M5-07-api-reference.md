@@ -8,10 +8,10 @@
   `docs/decisions/0019-api-reference.md`, 本ファイル
 - **Upstream Reference**: `zig doc`（`std` の autodoc: 宣言ごとのシグネチャ + ドキュメント
   コメント + ソース位置）と [`docs/decisions/0018-documentation-site.md`](../decisions/0018-documentation-site.md)
-- **Next Step**: `///` は **宣言 455/455 = 100%**、**型メンバ 1,477/1,477 = 100%** に到達。
-  ページ上に「未文書」表示は 1 件も無いため、残る 1 件は集計側のオフバイワン（調査未着手）。
-  次は (1) 生成ページの読み味（長い `Options` 型の折り畳み）、(2) ガイドのリンク充実、
-  (3) 本タスクの完了判定。
+- **Next Step**: 生成器・`///`・ページ構成・CI ゲートまで揃った（宣言 455/455、メンバ
+  1,477/1,477、`api_undoc=0` を CI が検査）。残りは (1) ガイド相互リンクの最終確認、
+  (2) `docs/tasks/milestones.md` の M5-07 行は**編集しない**決まりなので、完了は本ファイルの
+  Status と PR 説明で示す、(3) 長い `Options` 型の折り畳みは将来の改善として §4 に残す。
 
 ---
 
