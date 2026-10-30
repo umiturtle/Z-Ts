@@ -37,7 +37,9 @@ const StringDecodeMode = scanner.StringDecodeMode;
 ///   TypeScript expects.
 /// * `.array` — a JSON array of numbers. Verbose, but readable in a log or a `curl` session.
 pub const BytesFormat = enum {
+    /// One Base64 string (compact, what the JS client expects).
     base64,
+    /// An array of byte values (debuggable, larger).
     array,
 };
 
@@ -46,14 +48,18 @@ pub const BytesFormat = enum {
 /// `.reject` is the default because a lone surrogate cannot be re-encoded as UTF-8; `.replace_with_fffd`
 /// is for parsers that must accept hostile input without failing the whole request.
 pub const SurrogatePolicy = enum {
+    /// Fail with `error.LoneSurrogate` (the default).
     reject,
+    /// Substitute U+FFFD and keep going.
     replace_with_fffd,
 };
 
 /// What to do when a JSON object repeats a field. The default is `.@"error"`: silently picking the
 /// first or the last occurrence is how request smuggling bugs get in.
 pub const DuplicateFieldBehavior = enum {
+    /// Keep the first occurrence.
     use_first,
+    /// Keep the last occurrence.
     use_last,
     @"error",
 };
@@ -67,9 +73,13 @@ pub const DuplicateFieldBehavior = enum {
 /// * `emit_null_optional_fields` — emit `"field":null` instead of omitting the key. TypeScript
 ///   optional properties decode both, but `exactOptionalPropertyTypes` users usually want `false`.
 pub const EncodeOptions = struct {
+    /// Escape `<`, `>` and `&` so the payload can sit inside an inline `<script>`.
     html_safe: bool = false,
+    /// How `Bytes` values are written.
     bytes_format: BytesFormat = .base64,
+    /// Wire shape for `union(enum)` values that did not declare one.
     default_union_style: types.UnionStyle = .internal,
+    /// Write `"field": null` instead of omitting optional fields.
     emit_null_optional_fields: bool = true,
 };
 
@@ -85,12 +95,19 @@ pub const EncodeOptions = struct {
 /// * `duplicate_field_behavior` — see `DuplicateFieldBehavior`.
 /// * `max_depth` — recursion limit; a deeply nested body is a denial-of-service vector.
 pub const DecodeOptions = struct {
+    /// Whether decoded strings are borrowed or copied.
     allocate: std.json.AllocWhen = .alloc_if_needed,
+    /// What to do with lone surrogates.
     surrogate_policy: SurrogatePolicy = .reject,
+    /// Accept fields the target type does not declare.
     ignore_unknown_fields: bool = false,
+    /// Accept `snake_case` where the wire used `camelCase`.
     allow_snake_case_fallback: bool = false,
+    /// What to do when a field repeats.
     duplicate_field_behavior: DuplicateFieldBehavior = .@"error",
+    /// Wire shape assumed for `union(enum)` values.
     default_union_style: types.UnionStyle = .internal,
+    /// Nesting limit; deeper documents fail instead of overflowing the stack.
     max_depth: usize = 256,
 };
 

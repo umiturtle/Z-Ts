@@ -21,13 +21,21 @@ const webview_host = @import("webview_host.zig");
 /// Everything `DesktopRuntime.init()` needs: which backend to build, the app identity, the embedded
 /// asset bundle, and the protocol knobs. `.{}` is a runnable app (headless-capable, no assets).
 pub const DesktopConfig = struct {
+    /// Which WebView engine to create.
     backend: webview.BackendKind = .auto,
+    /// Identity reported by `plugin:app`.
     app: tauri.AppConfig = .{},
+    /// Base directories used by `plugin:path`.
     paths: tauri.PathState = .{},
+    /// Frontend to serve over `asset://`.
     assets: ?*const web.Assets = null,
+    /// CSP applied to served HTML.
     csp: ?[]const u8 = null,
+    /// Extra globs the `asset://` route may serve.
     asset_allow_globs: []const []const u8 = &.{},
+    /// Origins allowed to call IPC on top of the defaults.
     extra_allowed_origins: []const []const u8 = &.{},
+    /// Fixed invoke key (tests / embedded hosts); random when `null`.
     invoke_key_override: ?[]const u8 = null,
 };
 
@@ -45,15 +53,24 @@ fn noopRpcDispatch(
 /// registry and the per-window state. `run()` is `init` → `step` loop → `deinit`; tests can drive
 /// `step(.poll)` by hand against `HeadlessMock` and never touch a window.
 pub const DesktopRuntime = struct {
+    /// Allocator that owns the runtime and everything it creates.
     allocator: Allocator,
+    /// IO reactor shared by the engine, the plugins and the router.
     io: Io,
+    /// The WebView engine (native or headless).
     engine: webview.Engine,
+    /// Bridges `zts_core.Host` onto the engine.
     host_adapter: webview_host.WebviewHost,
+    /// State of every core plugin (`window`, `menu`, `fs`, …).
     plugins: *tauri.CorePluginStates,
+    /// Backing buffer for `invoke_key`, so the key never moves.
     invoke_key_storage: [64]u8,
+    /// Secret that every `ipc://` request must present.
     invoke_key: []const u8,
+    /// Serves `tauri://` / `ipc://` / `asset://` and owns the RPC handler.
     router: tauri.ProtocolRouter,
 
+    /// Builds the engine, plugins and router, and wires the callbacks between them.
     pub fn create(allocator: Allocator, io: Io, cfg: DesktopConfig) !*DesktopRuntime {
         const self = try allocator.create(DesktopRuntime);
         errdefer allocator.destroy(self);
@@ -100,6 +117,7 @@ pub const DesktopRuntime = struct {
         return self;
     }
 
+    /// Detaches callbacks, then tears the engine and plugins down in order.
     pub fn destroy(self: *DesktopRuntime) void {
         const alloc = self.allocator;
         // Detach callbacks BEFORE destroying GTK/OS windows so synchronous GObject `"destroy"`
@@ -111,10 +129,12 @@ pub const DesktopRuntime = struct {
         alloc.destroy(self);
     }
 
+    /// Installs the RPC handler the router calls for `ipc://` requests.
     pub inline fn setRpcHandler(self: *DesktopRuntime, handler: rpc.Handler) void {
         self.router.rpc_handler = handler;
     }
 
+    /// The `core.Host` plugins use to reach the window backend.
     pub inline fn host(self: *DesktopRuntime) core.Host {
         return self.host_adapter.host();
     }
@@ -150,10 +170,12 @@ pub const DesktopRuntime = struct {
         return win_id;
     }
 
+    /// Pumps one turn of the event loop; `false` once the app asked to quit.
     pub inline fn step(self: *DesktopRuntime, mode: webview.StepMode) bool {
         return self.engine.step(mode);
     }
 
+    /// Runs the loop until the app quits.
     pub fn run(self: *DesktopRuntime) void {
         while (self.engine.step(.blocking)) {}
     }

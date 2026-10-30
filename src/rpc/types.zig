@@ -26,19 +26,24 @@ pub const min_safe_int: i64 = -max_safe_int;
 /// Lossless signed JS safe integer wrapper (`[-9007199254740991, +9007199254740991]` ⇔ JS `number`).
 /// Complements `u53` (`[0, 2^53 - 1]`) and `i53` (`[-2^52, 2^52 - 1]`) when full `±(2^53 - 1)` signed range is needed.
 pub const SafeInt = struct {
+    /// The integer, guaranteed to round-trip through a JS `number`.
     value: i64,
 
+    /// Codegen marker: serialize as a plain JSON number, checked against the safe range.
     pub const zts_rpc_type = .safe_int;
 
+    /// Validates the range and fails with `error.Overflow` outside it.
     pub fn init(v: i64) error{Overflow}!SafeInt {
         if (v < min_safe_int or v > max_safe_int) return error.Overflow;
         return .{ .value = v };
     }
 
+    /// The wrapped integer.
     pub inline fn get(self: SafeInt) i64 {
         return self.value;
     }
 
+    /// Compares two values.
     pub inline fn eql(a: SafeInt, b: SafeInt) bool {
         return a.value == b.value;
     }
@@ -49,11 +54,15 @@ pub const SafeInt = struct {
 /// Ideal for generic event brokers (`plugin:event|emit`), pass-through RPC gateways,
 /// and late-bound payloads where re-parsing and re-serializing arbitrary JSON trees is unnecessary.
 pub const RawJson = struct {
+    /// The JSON text, borrowed; `"null"` when the wire sent nothing.
     raw: []const u8 = "null",
 
+    /// Codegen marker: pass the bytes through untouched.
     pub const zts_rpc_type = .raw_json;
+    /// TypeScript type emitted for this wrapper.
     pub const zts_ts_type: []const u8 = "unknown";
 
+    /// Wraps a slice, substituting `null` for an empty one.
     pub inline fn init(raw_slice: []const u8) RawJson {
         return .{ .raw = if (raw_slice.len == 0) "null" else raw_slice };
     }
@@ -167,26 +176,33 @@ pub fn isBigIntType(comptime T: type) bool {
 /// In JSON mode, `Bytes` encodes as a Base64 string (or `[u8, ...]` array when configured)
 /// and decodes from either a Base64 string or a JSON array of `0..255` numbers.
 pub const Bytes = struct {
+    /// The raw bytes, borrowed from the input.
     data: []const u8,
 
+    /// Codegen marker: Base64 on the wire, `Uint8Array` in TypeScript.
     pub const zts_rpc_type = .bytes;
 
+    /// Wraps a borrowed slice.
     pub fn init(data: []const u8) Bytes {
         return .{ .data = data };
     }
 
+    /// The zero-length value.
     pub fn empty() Bytes {
         return .{ .data = "" };
     }
 
+    /// The raw bytes.
     pub fn slice(self: Bytes) []const u8 {
         return self.data;
     }
 
+    /// Length in bytes.
     pub fn len(self: Bytes) usize {
         return self.data.len;
     }
 
+    /// Compares contents.
     pub fn eql(self: Bytes, other: Bytes) bool {
         return std.mem.eql(u8, self.data, other.data);
     }
@@ -216,6 +232,7 @@ pub const Bytes = struct {
         return .{ .data = buf };
     }
 
+    /// Writes standard Base64 (what `Uint8Array` transports as).
     pub fn jsonStringify(self: Bytes, jw: anytype) !void {
         try jw.beginWriteRaw();
         try jw.writer.writeByte('"');
@@ -224,6 +241,7 @@ pub const Bytes = struct {
         jw.endWriteRaw();
     }
 
+    /// Decodes standard Base64 into a buffer owned by the caller's allocator.
     pub fn jsonParse(
         allocator: Allocator,
         source: anytype,
@@ -362,6 +380,7 @@ pub const OsPath = struct {
     /// computed on the fly during JSON encoding.
     display: []const u8,
 
+    /// Codegen marker: `{ raw, display }` object on the wire.
     pub const zts_rpc_type = .os_path;
 
     /// Constructs an `OsPath` from a known valid UTF-8 slice with zero allocation.
@@ -416,6 +435,7 @@ pub const OsPath = struct {
         return self.raw;
     }
 
+    /// Compares the raw bytes.
     pub fn eql(self: OsPath, other: OsPath) bool {
         return std.mem.eql(u8, self.raw, other.raw);
     }
@@ -521,8 +541,11 @@ pub const UnionStyle = enum {
 /// Can be declared on a union type as `pub const json_union: UnionConfig = .{ ... };`
 /// (or `pub const json_union = UnionStyle.untagged;`).
 pub const UnionConfig = struct {
+    /// How the tag and payload are laid out in JSON.
     style: UnionStyle = .internal,
+    /// Key that carries the variant name.
     tag_field: []const u8 = "kind",
+    /// Key that carries the payload for `.internal` scalar and `.adjacent` variants.
     content_field: []const u8 = "value",
 };
 

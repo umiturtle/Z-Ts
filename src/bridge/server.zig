@@ -49,6 +49,7 @@ pub const Config = struct {
     max_body_bytes: usize = 16 * 1024 * 1024,
     /// Optional domain-specific environment pointer injected into every `rpc.Ctx` (`Ctx.withEnv`).
     env_ptr: ?*anyopaque = null,
+    /// Type id of `env_ptr`, so `rpc.Ctx` can hand back the right pointer type.
     env_type_id: usize = 0,
 
     /// Returns a copy of `Config` that injects `ptr` (`*T`) into every `rpc.Ctx`.
@@ -74,20 +75,35 @@ const ExtractedHeaders = struct {
 /// libc. Runs the same command handlers as the desktop app, so `zig build preview` exercises the real
 /// code path.
 pub const BridgeServer = struct {
+    /// Allocator that owns the server, its hub and the bootstrap script.
     allocator: Allocator,
+    /// IO reactor every socket and thread coordination goes through.
     io: Io,
+    /// The settings the server was started with.
     config: Config,
+    /// Session + invoke tokens and the origin policy.
     security: auth.SecurityState,
+    /// The `<script>` injected into served HTML; carries the invoke key.
     bootstrap_html: []u8,
+    /// Fan-out of SSE messages to every connected page.
     sse_hub: sse.SseHub,
+    /// Guards `active_workers`, `active_conns` and `stopping`.
     conn_mu: Io.Mutex = .init,
+    /// Signalled when a connection worker exits, so `stop()` can wait.
     conn_done: Io.Condition = .init,
+    /// Connection threads still running.
     active_workers: usize = 0,
+    /// Open sockets, kept alive until shutdown so `stop()` can close them.
     active_conns: foundation.HandlePool(Io.net.Stream, .bridge_conn) = .empty,
+    /// The listening socket.
     net_server: Io.net.Server,
+    /// The port actually bound (`config.port` may have been 0).
     bound_port: u16,
+    /// Set by `stop()`; connection threads poll it.
     stopping: std.atomic.Value(bool) = .init(false),
+    /// Whether the accept thread and every worker have finished.
     stopped: bool = false,
+    /// The dedicated thread that accepts connections.
     accept_thread: std.Thread = undefined,
 
     /// Allocates, binds, and starts the dedicated accept OS thread immediately.
@@ -165,6 +181,7 @@ pub const BridgeServer = struct {
         alloc.destroy(self);
     }
 
+    /// The TCP port the server is listening on.
     pub inline fn port(self: *const BridgeServer) u16 {
         return self.bound_port;
     }
@@ -179,30 +196,37 @@ pub const BridgeServer = struct {
         self.config = self.config.withEnv(ptr);
     }
 
+    /// `http://127.0.0.1:<port>` formatted into `buf`.
     pub fn baseUrl(self: *const BridgeServer, buf: *[64]u8) []const u8 {
         return std.fmt.bufPrint(buf, "http://127.0.0.1:{d}", .{self.bound_port}) catch unreachable;
     }
 
+    /// The token the browser session cookie must carry.
     pub inline fn sessionToken(self: *const BridgeServer) *const [auth.token_hex_len]u8 {
         return &self.security.session_token;
     }
 
+    /// The `__ZTS_INVOKE_KEY__` value the bootstrap script and IPC both use.
     pub inline fn invokeKey(self: *const BridgeServer) *const [auth.token_hex_len]u8 {
         return &self.security.invoke_key;
     }
 
+    /// Publishes a Tauri event to every connected page; returns how many got it.
     pub fn emitEvent(self: *BridgeServer, event_name: []const u8, json_payload: []const u8) Allocator.Error!usize {
         return self.sse_hub.publishEmit(self.io, event_name, json_payload);
     }
 
+    /// Publishes an eval request to every connected page.
     pub fn evalJs(self: *BridgeServer, js_source: []const u8) Allocator.Error!usize {
         return self.sse_hub.publishEval(self.io, js_source);
     }
 
+    /// Tells the pages that the window title changed.
     pub fn broadcastWindowTitle(self: *BridgeServer, title: []const u8) Allocator.Error!usize {
         return self.sse_hub.publishWindowTitle(self.io, title);
     }
 
+    /// Sends one raw SSE frame (`event_type` + `data`).
     pub fn broadcastRawSse(self: *BridgeServer, event_type: []const u8, data: []const u8) Allocator.Error!usize {
         return self.sse_hub.publishRaw(self.io, event_type, data);
     }

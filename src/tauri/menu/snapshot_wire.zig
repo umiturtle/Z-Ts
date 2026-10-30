@@ -51,33 +51,55 @@ pub const Platform = enum { gtk, macos, windows };
 
 /// Entry discriminant in the C ABI struct (`ZtsMenuEntry.kind`). Values are fixed by the shims.
 pub const Kind = enum(u8) {
+    /// A submenu header; the following entries are its children.
     submenu = 0,
+    /// A leaf item.
     item = 1,
+    /// A separator line.
     separator = 2,
 };
 
 /// What a predefined item maps to on AppKit. `none` = a plain item (the backend still creates it
 /// so the snapshot round-trips; Win32 always renders a plain item).
 pub const Role = enum(u8) {
+    /// Plain item (no native role).
     none = 0,
+    /// `orderFrontStandardAboutPanel:`.
     about,
+    /// The Services menu.
     services,
+    /// `hide:` — hide the app.
     hide,
+    /// `hideOtherApplications:`.
     hide_others,
+    /// `unhideAllApplications:`.
     show_all,
+    /// `performClose:`.
     close_window,
+    /// `terminate:`.
     quit,
+    /// `arrangeInFront:`.
     bring_all_to_front,
+    /// `performMiniaturize:`.
     minimize,
+    /// `zoom:`.
     maximize,
+    /// `toggleFullScreen:`.
     fullscreen,
+    /// `undo:`.
     undo,
+    /// `redo:`.
     redo,
+    /// `cut:`.
     cut,
+    /// `copy:`.
     copy,
+    /// `paste:`.
     paste,
+    /// `selectAll:`.
     select_all,
 
+    /// Maps a core `Predefined` to its AppKit role (separators map to `.none`).
     pub fn of(predefined: ?menu.Predefined) Role {
         const p = predefined orelse return .none;
         return switch (p) {
@@ -127,12 +149,15 @@ pub const WireEntry = extern struct {
 
 /// A validated snapshot, ready for a native toolkit. Owns every string it exposes.
 pub const Wire = struct {
+    /// Allocator that owns every string below.
     allocator: Allocator,
+    /// Validated entries, in display order (pre-order over the tree).
     entries: []WireEntry,
     /// Every NUL-terminated allocation, freed together in `deinit`. The slice type keeps the
     /// sentinel: `Allocator.free` only releases the trailing NUL when it can see it.
     owned: []const [:0]u8,
 
+    /// Frees the strings and the entry array.
     pub fn deinit(self: *Wire) void {
         for (self.owned) |s| self.allocator.free(s);
         self.allocator.free(self.owned);
