@@ -14,13 +14,19 @@ const Allocator = std.mem.Allocator;
 /// callback (WebKitGTK's `GDestroyNotify`) or from a C host without the consumer knowing which.
 /// `.empty` is a valid, allocation-free value.
 pub const OwnedBytes = struct {
+    /// The payload. Empty means "nothing to free".
     bytes: []const u8 = "",
+    /// Opaque owner (allocator pointer, pool slot, library handle).
     ctx_ptr: ?*anyopaque = null,
+    /// Allocator vtable or other type metadata the release function needs.
     ctx_meta: ?*const anyopaque = null,
+    /// Called by `deinit()`; `null` for static memory, which must not be freed.
     release_fn: ?ReleaseFn = null,
 
+    /// Frees the payload. `ctx_ptr` / `ctx_meta` are whatever the owner stashed.
     pub const ReleaseFn = *const fn (bytes: []const u8, ctx_ptr: ?*anyopaque, ctx_meta: ?*const anyopaque) void;
 
+    /// Nothing to send and nothing to free.
     pub const empty: OwnedBytes = .{};
 
     /// Wraps compile-time or externally outliving immutable memory with zero overhead.
@@ -61,10 +67,12 @@ pub const OwnedBytes = struct {
         };
     }
 
+    /// The raw bytes.
     pub inline fn slice(self: *const OwnedBytes) []const u8 {
         return self.bytes;
     }
 
+    /// Length in bytes.
     pub inline fn len(self: *const OwnedBytes) usize {
         return self.bytes.len;
     }
@@ -109,8 +117,11 @@ pub const OwnedBytes = struct {
         box_alloc: Allocator,
     };
 
+    /// A borrowed view of the payload, shaped for a C ABI (`ptr` + `len` + `user_data`).
     pub const CParts = struct {
+        /// Pointer to the first byte (may be `null` for an empty payload).
         ptr: ?[*]const u8,
+        /// Length in bytes.
         len: usize,
         /// Pass to C `user_data`; invoke `OwnedBytes.destroyFromC(token)` when C finishes reading `ptr[0..len]`.
         /// May be `null` when the slice requires no destruction (static/empty), in which case `destroyFromC(null)` is also safe.

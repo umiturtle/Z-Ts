@@ -89,6 +89,7 @@ pub fn errorResponseComptime(http_code: u16, err: anytype) core.OutgoingResponse
 
 /// Standard pre-built zero-allocation protocol error responses.
 pub const Responses = struct {
+    /// 404 `{"code":"UnknownCommand"}` for a command the schema does not know.
     pub const unknown_command: core.OutgoingResponse = .{
         .status = .err,
         .http_code = 404,
@@ -96,6 +97,7 @@ pub const Responses = struct {
         .body = core.OwnedBytes.static("{\"code\":\"UnknownCommand\"}"),
     };
 
+    /// 403 `{"code":"Forbidden"}` when the ACL refuses the call.
     pub const forbidden: core.OutgoingResponse = .{
         .status = .err,
         .http_code = 403,
@@ -103,6 +105,7 @@ pub const Responses = struct {
         .body = core.OwnedBytes.static("{\"code\":\"Forbidden\"}"),
     };
 
+    /// 500 `{"code":"OutOfMemory"}` when building the reply failed.
     pub const internal_oom: core.OutgoingResponse = .{
         .status = .err,
         .http_code = 500,
@@ -110,6 +113,7 @@ pub const Responses = struct {
         .body = core.OwnedBytes.static("{\"code\":\"OutOfMemory\"}"),
     };
 
+    /// 200 with the body `null` (a `void` handler).
     pub const ok_null: core.OutgoingResponse = .{
         .status = .ok,
         .http_code = 200,
@@ -117,6 +121,7 @@ pub const Responses = struct {
         .body = core.OwnedBytes.static("null"),
     };
 
+    /// 200 with the body `true`.
     pub const ok_true: core.OutgoingResponse = .{
         .status = .ok,
         .http_code = 200,
@@ -124,6 +129,7 @@ pub const Responses = struct {
         .body = core.OwnedBytes.static("true"),
     };
 
+    /// 200 with the body `false`.
     pub const ok_false: core.OutgoingResponse = .{
         .status = .ok,
         .http_code = 200,
@@ -134,7 +140,9 @@ pub const Responses = struct {
 
 /// Type-erased 2-word RPC dispatcher consumed by any transport (HTTP, WebSocket, stdio, WebView IPC).
 pub const Handler = struct {
+    /// Opaque pointer passed back to `dispatchFn`.
     userdata: ?*anyopaque = null,
+    /// Dispatches one command and returns the response to send.
     dispatchFn: *const fn (
         userdata: ?*anyopaque,
         resp_allocator: Allocator,

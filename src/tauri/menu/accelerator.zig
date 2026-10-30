@@ -20,13 +20,18 @@ pub const ParseError = error{ InvalidAccelerator, OutOfMemory };
 /// Modifier flags. `cmd_or_ctrl` is kept separate from `meta`/`ctrl` because it resolves to
 /// **Command on macOS and Control everywhere else**, which only the backend can decide.
 pub const Mods = struct {
+    /// Shift is held.
     shift: bool = false,
+    /// Control is held.
     ctrl: bool = false,
+    /// Alt / Option is held.
     alt: bool = false,
     /// Command (macOS) / Super / Win (elsewhere).
     meta: bool = false,
+    /// Platform-dependent: Command on macOS, Control elsewhere.
     cmd_or_ctrl: bool = false,
 
+    /// Whether no modifier was requested.
     pub fn isEmpty(self: Mods) bool {
         return !self.shift and !self.ctrl and !self.alt and !self.meta and !self.cmd_or_ctrl;
     }
@@ -43,42 +48,74 @@ pub const Mods = struct {
 
 /// A single printable key (`'A'`..`'Z'`, `'0'`..`'9'`, punctuation), upper-cased.
 pub const Key = union(enum) {
+    /// A literal character (`K`, `,`, …).
     char: u8,
     /// `F1`..`F24`.
     function: u8,
     /// `Numpad0`..`Numpad9`.
     numpad: u8,
+    /// A key that has a name rather than a printable character.
     named: Named,
 
+    /// Keys without a printable character of their own.
     pub const Named = enum {
+        /// Backspace.
         backspace,
+        /// Caps Lock.
         caps_lock,
+        /// Return.
         enter,
+        /// Space.
         space,
+        /// Tab.
         tab,
+        /// Delete (forward delete on macOS).
         delete,
+        /// End.
         end,
+        /// Home.
         home,
+        /// Insert.
         insert,
+        /// Page Down.
         page_down,
+        /// Page Up.
         page_up,
+        /// Print Screen.
         print_screen,
+        /// Scroll Lock.
         scroll_lock,
+        /// Num Lock.
         num_lock,
+        /// Escape.
         escape,
+        /// Up arrow.
         arrow_up,
+        /// Down arrow.
         arrow_down,
+        /// Left arrow.
         arrow_left,
+        /// Right arrow.
         arrow_right,
+        /// Numpad `+`.
         numpad_add,
+        /// Numpad `-`.
         numpad_subtract,
+        /// Numpad `*`.
         numpad_multiply,
+        /// Numpad `/`.
         numpad_divide,
+        /// Numpad `.`.
         numpad_decimal,
+        /// Numpad Enter.
         numpad_enter,
+        /// Numpad `=`.
         numpad_equal,
+        /// Volume up.
         audio_volume_up,
+        /// Volume down.
         audio_volume_down,
+        /// Mute.
         audio_volume_mute,
     };
 };
@@ -87,7 +124,9 @@ pub const Key = union(enum) {
 /// resolves `CmdOrCtrl` to Command on macOS and Control elsewhere, which is how one menu definition
 /// stays native on all three platforms.
 pub const Accelerator = struct {
+    /// Modifiers that must be held.
     mods: Mods = .{},
+    /// The key that triggers the item.
     key: Key,
 
     /// Parses `CmdOrCtrl+Shift+K`. Unknown modifiers or keys are rejected (never silently ignored,
@@ -189,11 +228,14 @@ pub const FALT: u8 = 0x10;
 /// `ACCEL` entry for `CreateAcceleratorTableW`: `virt` holds the `fVirt` flags, `key` the virtual-key
 /// code (or `0` to use `ascii`).
 pub const Win32Accel = struct {
+    /// `MOD_*` bit mask.
     virt: u8,
     /// `wVk`; `0` means "literal character" (use `wAsciiChar` instead).
     key: u16,
+    /// `wAsciiChar` used when `key` is 0.
     ascii: u8 = 0,
 
+    /// Returns `self` (kept for symmetry with the other converters).
     pub fn init(self: Win32Accel) Win32Accel {
         return self;
     }
@@ -212,10 +254,12 @@ pub const MAC_COMMAND: u8 = 1 << 3;
 /// `NSMenuItem` shortcut: a modifier mask plus either a literal `keyEquivalent` character or a
 /// virtual key code for keys that have no printable equivalent.
 pub const MacosAccel = struct {
+    /// `NSEventModifierFlag*` bit mask.
     modifier_mask: u8,
     /// Single-character `keyEquivalent`, or an empty string when the key has no direct equivalent
     /// (the shim then falls back to the `virtual_key` code below).
     key_equivalent: u8 = 0,
+    /// `kVK_*` code used when `key_equivalent` is 0.
     virtual_key: u16 = 0,
 };
 

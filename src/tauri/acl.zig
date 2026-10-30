@@ -65,10 +65,14 @@ pub const Error = error{
 /// The three desktop platforms a `capabilities/*.json` file can restrict itself to. Parsing accepts
 /// the upstream spellings (`Linux`, `macOS`, `Windows`) case-insensitively.
 pub const Platform = enum {
+    /// Linux (GTK).
     linux,
+    /// macOS (AppKit).
     macos,
+    /// Windows (Win32 + WebView2).
     windows,
 
+    /// The platform this binary was built for.
     pub fn current() Platform {
         return switch (builtin.os.tag) {
             .macos => .macos,
@@ -85,6 +89,7 @@ pub const Platform = enum {
         return null;
     }
 
+    /// Upstream spelling (`Linux` / `macOS` / `Windows`).
     pub fn label(self: Platform) []const u8 {
         return switch (self) {
             .linux => "Linux",
@@ -97,6 +102,7 @@ pub const Platform = enum {
 /// One `permissions[]` entry: `"fs:allow-read-text-file"` or
 /// `{ "identifier": "…", "allow": […], "deny": […] }`.
 pub const Permission = struct {
+    /// `fs:allow-read` / `core:window:allow-close` / …
     identifier: []const u8,
     /// Scope objects attached to this entry (`allow` / `deny` in upstream `Scopes`); kept as JSON
     /// so `plugin:fs` can interpret them without this module knowing about paths.
@@ -108,11 +114,15 @@ pub const Permission = struct {
 /// empty means "every window", and a capability that matches no window is a no-op rather than an
 /// error (upstream behaviour).
 pub const Capability = struct {
+    /// Name other capabilities reference.
     identifier: []const u8,
+    /// Free-form note; never parsed.
     description: []const u8 = "",
     /// Glob patterns; empty = "every window" only when `webviews` is empty as well.
     windows: []const []const u8 = &.{},
+    /// Webview labels this capability applies to (empty = every window, unless `windows` is set).
     webviews: []const []const u8 = &.{},
+    /// Commands this capability grants.
     permissions: []const Permission = &.{},
     /// `null` = every platform.
     platforms: ?[]const Platform = null,
@@ -121,6 +131,7 @@ pub const Capability = struct {
     /// Remote URL patterns (`https://*.example.com`).
     remote: []const []const u8 = &.{},
 
+    /// Whether the capability lists this platform (or lists none).
     pub fn matchesPlatform(self: Capability, platform: Platform) bool {
         const allowed = self.platforms orelse return true;
         for (allowed) |candidate| {
@@ -141,6 +152,7 @@ pub const Capability = struct {
         return false;
     }
 
+    /// Whether a local or remote page origin may use this capability.
     pub fn matchesOrigin(self: Capability, origin: []const u8) bool {
         if (isLocalOrigin(origin)) return self.local;
         for (self.remote) |pattern| {
@@ -302,7 +314,9 @@ fn permissionResolves(identifier: []const u8, command: []const u8, deny: bool) b
 
 /// The compiled, immutable set of capabilities for one app.
 pub const Policy = struct {
+    /// Arena holding every capability and permission parsed from the config.
     arena: std.heap.ArenaAllocator,
+    /// The parsed capabilities, in declaration order.
     capabilities: []Capability,
     /// Platform used for `platforms` filtering (injectable so tests cover all 3 OS in one run).
     platform: Platform,
@@ -310,6 +324,7 @@ pub const Policy = struct {
     /// (`unknown permissions` are reported here so a typo does not silently widen access).
     known: []const []const u8 = &.{},
 
+    /// Where capabilities come from.
     pub const Source = struct {
         /// Contents of `capabilities/*.json`.
         files: []const config_import.Imported.CapabilityFile = &.{},
@@ -317,6 +332,7 @@ pub const Policy = struct {
         inline_entries: []const config_import.Config.CapabilityEntry = &.{},
     };
 
+    /// Parses capability files plus inline entries into a policy.
     pub fn init(backing: Allocator, source: Source) Error!Policy {
         var arena = std.heap.ArenaAllocator.init(backing);
         errdefer arena.deinit();
@@ -355,11 +371,13 @@ pub const Policy = struct {
         };
     }
 
+    /// Frees the arena and poisons the value.
     pub fn deinit(self: *Policy) void {
         self.arena.deinit();
         self.* = undefined;
     }
 
+    /// The arena allocator, for callers that need to extend the policy.
     pub fn allocator(self: *const Policy) Allocator {
         return self.arena.allocator();
     }

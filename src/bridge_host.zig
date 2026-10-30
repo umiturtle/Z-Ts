@@ -16,12 +16,18 @@ const bridge = @import("zts_bridge");
 /// `zts_core.Host` implemented on top of a `BridgeServer`, so `zts_tauri` plugins (window, event,
 /// path, …) work unchanged when the same app is served to a browser instead of a native window.
 pub const BridgeHost = struct {
+    /// Allocator for the backing host's windows and eval log.
     allocator: Allocator,
+    /// IO reactor used by the mutex.
     io: Io,
+    /// Guards `backing`, which the SSE threads also touch.
     mu: Io.Mutex = .init,
+    /// The HTTP/SSE server whose pages receive the events.
     server: *bridge.BridgeServer,
+    /// In-memory window bookkeeping, so window commands work without a GUI.
     backing: core.RecordingHost,
 
+    /// Creates a host that mirrors every window call into `server`.
     pub fn init(allocator: Allocator, io: Io, server: *bridge.BridgeServer) BridgeHost {
         return .{
             .allocator = allocator,
@@ -31,10 +37,12 @@ pub const BridgeHost = struct {
         };
     }
 
+    /// Frees the backing host's windows and eval log.
     pub fn deinit(self: *BridgeHost) void {
         self.backing.deinit();
     }
 
+    /// The `core.Host` view of `self`.
     pub fn host(self: *BridgeHost) core.Host {
         return .{
             .userdata = self,
@@ -42,10 +50,12 @@ pub const BridgeHost = struct {
         };
     }
 
+    /// Pushes a Tauri event to every connected page.
     pub fn emitEvent(self: *BridgeHost, event_name: []const u8, json_payload: []const u8) Allocator.Error!usize {
         return self.server.emitEvent(event_name, json_payload);
     }
 
+    /// Whether the page asked the app to exit.
     pub fn quitRequested(self: *BridgeHost) bool {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);

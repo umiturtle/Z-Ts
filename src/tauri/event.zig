@@ -39,11 +39,13 @@ pub const EventTarget = union(enum) {
     /// The window/webview pair with this label (`@tauri-apps/api`'s default target).
     WebviewWindow: struct { label: []const u8 },
 
+    /// Internally tagged (`{ "kind": "Window", "label": … }`), matching upstream.
     pub const json_union: rpc.UnionConfig = .{
         .style = .internal,
         .tag_field = "kind",
     };
 
+    /// The window label the target names, or `null` for app-wide targets.
     pub fn targetLabel(self: EventTarget) ?[]const u8 {
         return switch (self) {
             .Any, .App => null,
@@ -113,10 +115,12 @@ pub const EventBus = struct {
     /// Opaque pointer passed to `window_labels`.
     window_labels_ctx: ?*anyopaque = null,
 
+    /// Creates a bus with no listeners.
     pub fn init(allocator: Allocator, io: Io) EventBus {
         return .{ .allocator = allocator, .io = io };
     }
 
+    /// Frees both listener tables.
     pub fn deinit(self: *EventBus) void {
         for (self.js_listeners.items) |*l| l.deinit(self.allocator);
         self.js_listeners.deinit(self.allocator);
@@ -124,6 +128,7 @@ pub const EventBus = struct {
         self.native_listeners.deinit(self.allocator);
     }
 
+    /// Registers a Zig-side listener (used by the plugins themselves).
     pub fn onNative(
         self: *EventBus,
         event_name: []const u8,
@@ -264,9 +269,12 @@ pub const EventBus = struct {
 
 /// `plugin:event|*` RPC command namespace (`Schema` key: `.event`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:event|";
+    /// The state type `zts_rpc` resolves per app; identical to `EventBus` here.
     pub const RpcState = EventBus;
 
+    /// `plugin:event|listen` — subscribes the calling window; returns an event id.
     pub fn listen(
         ctx: *rpc.Ctx,
         bus: *EventBus,
@@ -322,6 +330,7 @@ pub const Commands = struct {
         return event_id;
     }
 
+    /// `plugin:event|unlisten` — drops a subscription by id.
     pub fn unlisten(
         _: *rpc.Ctx,
         bus: *EventBus,
@@ -342,6 +351,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:event|emit` — broadcasts to every listener, including native ones.
     pub fn emit(
         ctx: *rpc.Ctx,
         bus: *EventBus,
@@ -351,6 +361,7 @@ pub const Commands = struct {
         try bus.dispatchRaw(call_ctx.host, ctx.scratch, .Any, args.event, args.payload.raw);
     }
 
+    /// `plugin:event|emit_to` — sends only to the listeners the target names.
     pub fn emit_to(
         ctx: *rpc.Ctx,
         bus: *EventBus,

@@ -24,14 +24,18 @@ pub const ClientId = foundation.Handle(.sse_client);
 /// One open `text/event-stream` connection: the socket, its pending frames, and the metadata needed
 /// to close it cleanly. Frames are queued (`RingQueue`) because a slow client must not block `emit()`.
 pub const ClientEntry = struct {
+    /// Allocator that owns the queued frames.
     allocator: Allocator,
+    /// Frames waiting to be written to `stream`.
     queue: foundation.RingQueue([]u8) = .empty,
+    /// The client's socket, or `null` until the subscription is attached.
     stream: ?Io.net.Stream = null,
 
     fn freeSlice(alloc: Allocator, item_ptr: *[]u8) void {
         alloc.free(item_ptr.*);
     }
 
+    /// Frees every queued frame and the queue itself.
     pub fn deinit(self: *ClientEntry) void {
         const alloc = self.allocator;
         while (self.queue.buf.len > 0 and self.queue.len > 0) {
@@ -72,15 +76,21 @@ pub fn formatSseFrameAlloc(allocator: Allocator, event_name: []const u8, data: [
 /// The set of live SSE clients behind `emit()`. Thread-safe: the RPC handler runs on the event loop
 /// while the HTTP server threads write to the sockets.
 pub const SseHub = struct {
+    /// Allocator that owns the client table.
     allocator: Allocator,
+    /// Guards `clients` and `closed`; publishing happens from any thread.
     mu: Io.Mutex = .init,
+    /// Every connected page, keyed by a handle.
     clients: foundation.HandlePool(*ClientEntry, .sse_client) = .empty,
+    /// Set by `deinit`; further publishes become no-ops.
     closed: bool = false,
 
+    /// Creates an empty hub.
     pub fn init(allocator: Allocator) SseHub {
         return .{ .allocator = allocator };
     }
 
+    /// Drops every client and marks the hub closed.
     pub fn deinit(self: *SseHub) void {
         var it = self.clients.iterator();
         while (it.next()) |slot| {
@@ -91,6 +101,7 @@ pub const SseHub = struct {
         self.clients.deinit(self.allocator);
     }
 
+    /// One attached client, handed out by `subscribe()`.
     pub const Subscription = struct {
         id: ClientId,
         entry: *ClientEntry,
@@ -129,6 +140,7 @@ pub const SseHub = struct {
         }
     }
 
+    /// How many pages are currently connected.
     pub fn subscriberCount(self: *SseHub, io: Io) u32 {
         self.mu.lockUncancelable(io);
         defer self.mu.unlock(io);

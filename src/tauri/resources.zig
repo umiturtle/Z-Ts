@@ -30,15 +30,21 @@ const Entry = struct {
 /// `plugin:resources`). Forged or double-closed ids resolve to `error.BadResourceId` instead of
 /// use-after-free, because handles carry a generation counter.
 pub const ResourceTable = struct {
+    /// Allocator that owns the stored values.
     allocator: Allocator,
+    /// IO reactor used by `mu`.
     io: Io,
+    /// Guards the handle pool; the frontend closes resources from worker threads.
     mu: Io.Mutex = .init,
+    /// Live resources, keyed by the `rid` the frontend holds.
     pool: core.HandlePool(Entry, .resource) = .empty,
 
+    /// Creates an empty table.
     pub fn init(allocator: Allocator, io: Io) ResourceTable {
         return .{ .allocator = allocator, .io = io };
     }
 
+    /// Releases every resource still open.
     pub fn deinit(self: *ResourceTable) void {
         var it = self.pool.iterator();
         while (it.next()) |slot| {
@@ -116,9 +122,12 @@ pub const ResourceTable = struct {
 
 /// `plugin:resources|*` RPC command namespace (`Schema` key: `.resources`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:resources|";
+    /// The state type `zts_rpc` resolves per app; identical to `ResourceTable` here.
     pub const RpcState = ResourceTable;
 
+    /// `plugin:resources|close` — drops one resource handle (no-op if already gone).
     pub fn close(state: *ResourceTable, args: struct { rid: u53 }) ResourceError!void {
         try state.closeRid(args.rid);
     }
