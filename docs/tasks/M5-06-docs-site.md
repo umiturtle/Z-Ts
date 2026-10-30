@@ -1,7 +1,7 @@
 # Task M5-06: ドキュメントの充実 + GitHub Pages 公開（Markdown → 静的サイト）
 
-- **Status**: `in_progress`（生成器・テンプレート・サンプル公開・Pages ワークフローまで実装。
-  スクリーンショット画廊と counter 以外のサンプルの取り込みが残り）
+- **Status**: `in_progress`（生成器・テンプレート・サンプル公開・Pages ワークフローまで実装し、
+  CI の M5-06 ゲートは green。残りはスクリーンショット画廊の取り込みと、Pages の初回有効化）
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/docsite/`（新規）, `build.zig`, `zigw`, `.github/workflows/pages.yml`（新規）,
   `docs/architecture/documentation-site.md`, `docs/decisions/0018-documentation-site.md`,
@@ -57,7 +57,9 @@
     （`examples/*/README.md` の読み込み上限 1 KB が原因）、5 本はサイト外ファイル（GitHub
     blob URL へ自動差し替え）で解消
   - `zig build test -Dgtk=false`: **52/52 steps, 289/291 tests**（2 skipped）
-- **作業中・直前の状態**: Pages 公開の初回実行は未（`main` へのマージが必要）。
+- **作業中・直前の状態**: CI run `40979757166`（`81a2447`）で **4/4 green**、
+  Linux の `Render the documentation site and verify every internal link (M5-06 gate)` も success。
+  Pages への初回デプロイは `main` へのマージ後（リポジトリ設定で Source = GitHub Actions が必要）。
 - **再開するとき**: `./zigw build docs` が `OK docsite pages=…` を出すことを確認し、
   `python3 -m http.server --directory zig-out/docs` で目視 → 次の増分（スクショ）へ。
 
