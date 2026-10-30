@@ -1,6 +1,6 @@
 # Task M5-07: API リファレンス生成（zig doc 相当）と「使い方」中心へのサイト再編
 
-- **Status**: `in_progress`
+- **Status**: `done`（生成器・100% カバレッジ・CI ゲート・ガイドまで完了。3 OS の CI が green）
 - **Branch**: `arena/18884101-z-ts`
 - **Scope**: `src/docsite/{apidoc.zig,mod.zig,main.zig,site.zig,assets/site.css,assets/site.js}`,
   `src/*/**.zig`（`///` ドキュメントコメントの追記）, `docs/guides/using-*.md`,
@@ -8,10 +8,10 @@
   `docs/decisions/0019-api-reference.md`, 本ファイル
 - **Upstream Reference**: `zig doc`（`std` の autodoc: 宣言ごとのシグネチャ + ドキュメント
   コメント + ソース位置）と [`docs/decisions/0018-documentation-site.md`](../decisions/0018-documentation-site.md)
-- **Next Step**: 生成器・`///`・ページ構成・CI ゲートまで揃った（宣言 455/455、メンバ
-  1,477/1,477、`api_undoc=0` を CI が検査）。残りは (1) ガイド相互リンクの最終確認、
-  (2) `docs/tasks/milestones.md` の M5-07 行は**編集しない**決まりなので、完了は本ファイルの
-  Status と PR 説明で示す、(3) 長い `Options` 型の折り畳みは将来の改善として §4 に残す。
+- **Next Step**: なし（完了）。`docs/roadmap/milestones.md` の行は**編集しない**決まりなので、
+  完了は本ファイルの Status と PR 説明で示す。任意の将来改善: メンバ 20 件超の型の折り畳み
+  （ただし `<details>` 内のアンカーは開かないと飛べないため、リンク検査と両立させる設計が要る）、
+  シグネチャ中の型名から他モジュールへのリンク。
 
 ---
 
