@@ -84,7 +84,14 @@ jobs:
           du -sh _site
           find _site -name '*.html' | wc -l
 
-      - uses: actions/configure-pages@v5
+      # `enablement: true` creates the Pages site (build type = GitHub Actions) when the
+      # repository has never had Pages on. Without it the very first deployment fails with
+      # `Get Pages site failed ... Error: Not Found`, because the action only *reads* the site.
+      - name: Configure Pages (enable it on the first run)
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -93,6 +100,10 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    # Only `main` publishes. A `workflow_dispatch` on a feature branch still builds the whole
+    # site (so the generator, the link check and the demo rewrite are verified), it just stops
+    # before touching the production site.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
