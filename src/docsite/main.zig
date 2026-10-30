@@ -48,6 +48,10 @@ pub const SiteReport = struct {
     api_decls: usize = 0,
     /// Struct fields and enum cases listed underneath those declarations.
     api_members: usize = 0,
+    /// Reader-facing declarations and members with no `///` at all. Reported so CI can refuse a
+    /// regression instead of trusting a percentage that a huge internal module could dilute.
+    api_undoc: usize = 0,
+    /// Declarations inside FFI tables and contract tests (excluded from `api_undoc`).
     api_internal: usize = 0,
 };
 
@@ -82,8 +86,12 @@ pub fn main(init: std.process.Init) !u8 {
     };
 
     std.debug.print(
-        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d} api_members={d} api_internal={d}\n",
-        .{ report.pages, report.links, report.assets, report.words, report.bytes, report.demo_files, report.api_pages, report.api_decls, report.api_members, report.api_internal },
+        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d} api_members={d} api_undoc={d} api_internal={d}\n",
+        .{
+            report.pages,       report.links,      report.assets,       report.words,
+            report.bytes,       report.demo_files, report.api_pages,    report.api_decls,
+            report.api_members, report.api_undoc,  report.api_internal,
+        },
     );
     return 0;
 }
@@ -259,6 +267,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     report.api_pages = api.pages.len;
     report.api_decls = api.decl_count;
     report.api_members = api.member_count;
+    report.api_undoc = api.undoc_count;
     report.api_internal = api.internal_count;
 
     // 4c. The one page that lists everything the sidebar deliberately no longer shows.
@@ -746,6 +755,7 @@ const ApiSite = struct {
     /// Struct fields and enum cases below those declarations. Reported apart from `decl_count` so
     /// the page can say "455 declarations, 1442 members" instead of one inflated total.
     member_count: usize,
+    undoc_count: usize,
     /// Declarations of FFI tables and contract tests. Reported separately so a reader-facing number
     /// never hides a hundred `extern` declarations, and CI can still notice when the scan breaks.
     internal_count: usize,
@@ -759,11 +769,13 @@ fn buildApiPages(arena: Allocator, io: Io) !ApiSite {
 
     var decl_count: usize = 0;
     var member_count: usize = 0;
+    var undoc_count: usize = 0;
     var internal_count: usize = 0;
     for (packages) |pkg| {
         const coverage = apidoc.coverageOf(pkg);
         decl_count += coverage.total;
         member_count += coverage.member_total;
+        undoc_count += (coverage.total - coverage.documented) + (coverage.member_total - coverage.member_documented);
         internal_count += coverage.internal_total;
     }
 
@@ -772,6 +784,7 @@ fn buildApiPages(arena: Allocator, io: Io) !ApiSite {
         .packages = packages,
         .decl_count = decl_count,
         .member_count = member_count,
+        .undoc_count = undoc_count,
         .internal_count = internal_count,
     };
 }

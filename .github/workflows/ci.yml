@@ -131,8 +131,16 @@ jobs:
           fi
           # `M5-07`: the API reference is generated from the sources. `api_pages=0` / `api_decls=0`
           # means the scanner silently found nothing, which must not pass as a green build.
-          if grep -q "OK docsite .* api_pages=0 " ci-output.log || grep -q "api_decls=0$" ci-output.log; then
+          if grep -q "OK docsite .* api_pages=0 " ci-output.log || grep -q "api_decls=0 " ci-output.log; then
             echo "::error::the API reference is empty - src/docsite/apidoc.zig scanned nothing."
+            exit 1
+          fi
+          # Every reader-facing declaration and member carries a `///` (`api_undoc=0`). The count is
+          # reported by the generator, so a new undocumented public symbol turns this red instead of
+          # quietly lowering a percentage nobody watches. Internal FFI tables are excluded above.
+          if ! grep -q "api_undoc=0 " ci-output.log; then
+            echo "::error::an undocumented public declaration or member slipped in - see docs/tasks/M5-07-api-reference.md."
+            grep -o "api_undoc=[0-9]*" ci-output.log || true
             exit 1
           fi
           test -f zig-out/docs/docs/api/index.html

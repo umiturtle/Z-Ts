@@ -61,6 +61,8 @@ pub const DuplicateFieldBehavior = enum {
     use_first,
     /// Keep the last occurrence.
     use_last,
+    /// Reject the whole payload. Surfacing the ambiguity beats guessing: a request that sets the
+    /// same key twice does not say which value it meant.
     @"error",
 };
 

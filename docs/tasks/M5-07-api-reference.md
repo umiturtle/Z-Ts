@@ -8,7 +8,7 @@
   `docs/decisions/0019-api-reference.md`, 本ファイル
 - **Upstream Reference**: `zig doc`（`std` の autodoc: 宣言ごとのシグネチャ + ドキュメント
   コメント + ソース位置）と [`docs/decisions/0018-documentation-site.md`](../decisions/0018-documentation-site.md)
-- **Next Step**: `///` は **宣言 455/455 = 100%**、**型メンバ 1,476/1,477 = 99%** まで到達。
+- **Next Step**: `///` は **宣言 455/455 = 100%**、**型メンバ 1,477/1,477 = 100%** に到達。
   ページ上に「未文書」表示は 1 件も無いため、残る 1 件は集計側のオフバイワン（調査未着手）。
   次は (1) 生成ページの読み味（長い `Options` 型の折り畳み）、(2) ガイドのリンク充実、
   (3) 本タスクの完了判定。
@@ -29,7 +29,7 @@
       内部資料（ADR・タスク・設計・ロードマップ・環境）は**個別ページとして並ばない**
 - [x] 検索は利用者向けページ + API 宣言だけを対象にする（内部資料は出さない）
 - [x] 主要 API の `///` カバレッジを引き上げ、生成ページに「未文書宣言」の一覧を出す
-      （公開宣言 **455 件 = 100%**、型メンバ **1,476/1,477 = 99%**。ページ上に未文書表示はゼロ。
+      （公開宣言 **455 件 = 100%**、型メンバ **1,477/1,477 = 100%**。ページ上に未文書表示はゼロ。
       ネイティブ FFI は内部扱いのため分母から除外）
 - [x] `./zigw quick-test` / `./zigw build docs` / `python3 scripts/check-docs.py` が通る
 - [x] **追加**: 読者向け / 内部向けの層分け（`docs/guides/README.md`）と API の公開・内部分離
@@ -51,7 +51,7 @@
   - 公開面の `///` 約 90 件（webview / tauri / rpc / bridge / core / ssg / app_runtime）。
 - **このターンの追加分（第 2〜4 波）**:
   - 公開面の `///` を全トップレベル宣言まで完了。続いて**型メンバ・ネスト型・`zts_rpc_type`
-    マーカー定数まで含めて全域**に到達（宣言 455/455、メンバ 1,476/1,477）。
+    マーカー定数まで含めて全域**に到達（宣言 455/455、メンバ 1,477/1,477）。
   - 対象: `core/host.zig`（Host の 23 メソッド + `VTable` + `RecordingHost`）/ `webview/mock.zig`
     （`HeadlessMock` 31 / `MockWindow` 20）/ `tauri/menu/mod.zig`（`MenuState`・`Node`・
     `Options`・`Backend`・`Mock`・`Commands` 27）/ `tauri/tray/mod.zig`（`TrayEvent` の
@@ -89,13 +89,14 @@
   - `/tmp/which.py` 相当の未文書一覧は **1 件も出なくなった**（`api-undoc` マーカー 0）。
 - **直前の検証値**:
   `OK docsite pages=184 links=328 assets=8377 words=350343 bytes=4253223 demos=60
-  api_pages=90 api_decls=455 api_members=1477 api_internal=452` / `check-docs OK (75)` /
+  api_pages=90 api_decls=455 api_members=1477 api_undoc=0 api_internal=452` / `check-docs OK (75)` /
   `docsite 47` / `quick-test 7` / `build test -Dgtk=false` 52/52。
   パッケージ別（内部モジュール除外、宣言ベース）: **10 パッケージすべて 100%**
   （`zts_tauri` 168 / `zts_webview` 91 / `zts_rpc` 78 / `zts_web` 33 / `zts_foundation` 31 /
   `zts_bridge` 21 / `zts_wasm` 11 / `zts_ssg` 10 / `zts_core` 8 / `z_ts` 4）。
-  型メンバは 1,476/1,477 = 99%（残る 1 件は `zts_rpc` の集計オフバイワンで、ページ上の
-  未文書マーカーは 0）。内部モジュールは `zts_webview` の 10 件のみ。
+  型メンバも **1,477/1,477 = 100%**（最後の 1 件は `DuplicateFieldBehavior.@"error"` —
+  引用符つき識別子で、以前のスクリプトが拾い損ねていた）。内部モジュールは `zts_webview` の 10 件。
+  **CI ゲート**: `api_undoc=0` を `ci.yml` が検査するので、`///` の無い公開宣言が入ると赤になる。
 
 ## 3. 設計判断・技術メモ・ハマりどころ
 
