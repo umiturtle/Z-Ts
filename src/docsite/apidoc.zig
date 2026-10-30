@@ -56,10 +56,16 @@ pub const Decl = struct {
 };
 
 pub const Module = struct {
-    /// Repository path (`src/rpc/mod.zig`).
+    /// Repository path (`src/tauri/fs/mod.zig`).
     path: []const u8,
-    /// Display name (`mod`, `codec`, …).
+    /// Basename without `.zig` (`mod`, `codec`, …).
     name: []const u8,
+    /// Path relative to the package root, without `.zig` (`fs/mod`, `codec`).
+    ///
+    /// Several packages have one `mod.zig` per plugin directory, so the *basename* is not unique
+    /// inside a package: using it as the page name silently overwrote
+    /// `zts_tauri/mod.html` with `zts_tauri/tray/mod.zig`.
+    slug: []const u8 = "",
     /// `//!` header text.
     doc: []const u8,
     decls: []const Decl,
@@ -491,6 +497,18 @@ fn moduleDoc(arena: Allocator, lines: []const []const u8) Error![]const u8 {
     return std.mem.join(arena, "\n", collected.items);
 }
 
+/// `src/tauri/fs/mod.zig` with package root `src/tauri/mod.zig` → `fs/mod`.
+pub fn moduleSlug(arena: Allocator, package_root: []const u8, module_path: []const u8) Error![]const u8 {
+    const dir = std.fs.path.dirname(package_root) orelse "";
+    var rel = module_path;
+    if (dir.len > 0 and std.mem.startsWith(u8, module_path, dir)) {
+        rel = std.mem.trimStart(u8, module_path[dir.len..], "/");
+    }
+    if (std.mem.endsWith(u8, rel, ".zig")) rel = rel[0 .. rel.len - 4];
+    _ = arena;
+    return rel;
+}
+
 /// Parses one source file into a [`Module`]. Pure: same bytes in, same module out.
 pub fn scanModule(arena: Allocator, path: []const u8, source: []const u8) Error!Module {
     const lines = try splitLines(arena, source);
@@ -613,7 +631,9 @@ pub fn collectPackage(arena: Allocator, io: std.Io, spec: PackageSpec) !Package 
             std.debug.print("docsite: cannot read {s}: {t}\n", .{ path, err });
             return err;
         };
-        try modules.append(arena, try scanModule(arena, path, source));
+        var module = try scanModule(arena, path, source);
+        module.slug = try moduleSlug(arena, spec.root, path);
+        try modules.append(arena, module);
 
         const dir = std.fs.path.dirname(path) orelse "";
         for (try importsOf(arena, source)) |spec_path| {
@@ -859,7 +879,7 @@ fn renderDecl(
 }
 
 pub fn moduleHref(arena: Allocator, package_name: []const u8, module: Module) Error![]const u8 {
-    return std.fmt.allocPrint(arena, "docs/api/{s}/{s}.html", .{ package_name, module.name });
+    return std.fmt.allocPrint(arena, "docs/api/{s}/{s}.html", .{ package_name, module.slug });
 }
 
 pub fn packageHref(arena: Allocator, package_name: []const u8) Error![]const u8 {
@@ -917,7 +937,7 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
 
             try pages.append(arena, .{
                 .href = href,
-                .title = try std.fmt.allocPrint(arena, "{s}/{s}", .{ pkg.spec.name, module.name }),
+                .title = try std.fmt.allocPrint(arena, "{s}/{s}", .{ pkg.spec.name, module.slug }),
                 .body = try body.toOwnedSlice(),
                 .plain = try searchText(arena, module),
                 .links = try links.toOwnedSlice(arena),
@@ -944,10 +964,9 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
 
         try writer.writeAll("<h2>モジュール</h2>\n<ul class=\"api-modules\">\n");
         for (pkg.modules) |module| {
-            const module_href = try moduleHref(arena, pkg.spec.name, module);
             const summary = try firstParagraph(arena, module.doc);
-            try writer.print("<li><a href=\"{s}\">{s}.zig</a> <span class=\"api-count\">{d}</span>", .{
-                try std.fmt.allocPrint(arena, "{s}.html", .{module.name}), module.name, declCount(module),
+            try writer.print("<li><a href=\"{s}.html\">{s}.zig</a> <span class=\"api-count\">{d}</span>", .{
+                module.slug, module.slug, declCount(module),
             });
             if (summary.len > 0) {
                 try writer.writeAll("<div class=\"api-summary prose\">");
@@ -955,7 +974,6 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
                 try writer.writeAll("</div>");
             }
             try writer.writeAll("</li>\n");
-            _ = module_href;
         }
         try writer.writeAll("</ul>\n");
 
@@ -963,7 +981,7 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
         for (pkg.modules) |module| {
             for (module.decls) |decl| {
                 try writer.print("<a class=\"api-chip\" href=\"{s}.html#{s}\"><span class=\"api-kind\">{s}</span>{s}</a>\n", .{
-                    module.name, decl.name, kindGlyph(decl.kind), decl.name,
+                    module.slug, decl.name, kindGlyph(decl.kind), decl.name,
                 });
             }
         }
@@ -1015,7 +1033,7 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
             for (pkg.modules) |module| {
                 for (module.decls) |decl| {
                     try writer.print("<a class=\"api-chip\" href=\"{s}/{s}.html#{s}\"><span class=\"api-kind\">{s}</span>{s}<span class=\"api-where\">{s}</span></a>\n", .{
-                        pkg.spec.name, module.name, decl.name, kindGlyph(decl.kind), decl.name, module.name,
+                        pkg.spec.name, module.slug, decl.name, kindGlyph(decl.kind), decl.name, module.slug,
                     });
                 }
             }
@@ -1285,4 +1303,16 @@ test "isAlias recognises re-exports and dotted paths but not values" {
 
     const function = Decl{ .kind = .function, .name = "f", .signature = "pub fn f() void", .doc = "", .line = 1 };
     try testing.expect(!isAlias(function));
+}
+
+test "moduleSlug keeps the path inside the package so plugin mod.zig files do not collide" {
+    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    try testing.expectEqualStrings("mod", try moduleSlug(arena, "src/tauri/mod.zig", "src/tauri/mod.zig"));
+    try testing.expectEqualStrings("tray/mod", try moduleSlug(arena, "src/tauri/mod.zig", "src/tauri/tray/mod.zig"));
+    try testing.expectEqualStrings("fs/mod", try moduleSlug(arena, "src/tauri/mod.zig", "src/tauri/fs/mod.zig"));
+    try testing.expectEqualStrings("codec", try moduleSlug(arena, "src/rpc/mod.zig", "src/rpc/codec.zig"));
+    try testing.expectEqualStrings("root", try moduleSlug(arena, "src/root.zig", "src/root.zig"));
 }

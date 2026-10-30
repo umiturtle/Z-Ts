@@ -300,8 +300,8 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         for (pkg.modules) |module| {
             for (module.decls) |decl| {
                 try search_list.append(arena, .{
-                    .href = try std.fmt.allocPrint(arena, "docs/api/{s}/{s}.html#{s}", .{ pkg.spec.name, module.name, decl.name }),
-                    .title = try std.fmt.allocPrint(arena, "{s}.{s}", .{ module.name, decl.name }),
+                    .href = try std.fmt.allocPrint(arena, "docs/api/{s}/{s}.html#{s}", .{ pkg.spec.name, module.slug, decl.name }),
+                    .title = try std.fmt.allocPrint(arena, "{s}.{s}", .{ module.slug, decl.name }),
                     .group = "API",
                     .text = try apidoc.firstParagraph(arena, decl.doc),
                 });
