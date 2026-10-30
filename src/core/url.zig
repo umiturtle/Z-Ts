@@ -20,11 +20,17 @@ pub const UrlError = error{
 
 /// Zero-allocation borrowed components of a parsed URL (`scheme://host[:port][/path][?query][#frag]`).
 pub const ParsedUrl = struct {
+    /// Scheme without `://` (`https`, `tauri`).
     scheme: []const u8,
+    /// Authority host, without the port.
     host: []const u8,
+    /// Explicit port, if the URL had one.
     port: ?u16,
+    /// Path, still percent-encoded.
     path: []const u8,
+    /// Query string without `?`, or `null`.
     query: ?[]const u8,
+    /// Fragment without `#`, or `null`.
     fragment: ?[]const u8,
 
     /// Returns the effective port, normalizing standard `http` (`80`) and `https` (`443`).

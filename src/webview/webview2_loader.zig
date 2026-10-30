@@ -48,16 +48,21 @@ pub const LoadError = error{
 };
 
 pub const Runtime = struct {
+    /// Handle of the loaded `WebView2Loader.dll`.
     module: HMODULE,
+    /// Resolved `CreateCoreWebView2EnvironmentWithOptions`.
     create: CreateEnvironmentInternalFn,
     /// Human-readable runtime version (`"130.0.2849.68"`), empty when unknown.
     version: []u8,
+    /// Whether the runtime was found at a fixed (non-registry) path.
     fixed: bool,
 
+    /// The runtime version the loader found, or `""`.
     pub fn versionString(self: *const Runtime) []const u8 {
         return self.version;
     }
 
+    /// Frees the version string and unloads the DLL when it allows it.
     pub fn deinit(self: *Runtime, allocator: Allocator) void {
         if (self.version.len > 0) allocator.free(self.version);
         // The client DLL may be unloaded only when it says so (same rule as Microsoft's loader).

@@ -26,6 +26,8 @@ const wasm = @import("zts_wasm");
 const glob = foundation.glob;
 const html_escape = foundation.html_escape;
 
+/// One page to render at build time. `route` is the URL the page will be served at; every other
+/// field is optional and only affects that page.
 pub const PrerenderRoute = struct {
     /// Clean URL route (e.g. `"/"`, `"/about"`, `"/chapters/prologue"`).
     route: []const u8,
@@ -42,6 +44,8 @@ pub const PrerenderRoute = struct {
     body_html: ?[]const u8 = null,
 };
 
+/// Inputs for `exportStaticSite()` — the `dist/` half of the 3-artifact story (desktop binary,
+/// Live Preview server, static site). Build it once in `build.zig` and let CI publish the output.
 pub const ExportOptions = struct {
     /// Embedded or scanned frontend asset set (`zts_web.Assets`).
     assets: web.Assets,
@@ -65,11 +69,18 @@ pub const ExportOptions = struct {
     cross_origin_isolated: bool = false,
 };
 
+/// What `exportStaticSite()` actually wrote. Returned so `build.zig` (and CI) can assert on it
+/// instead of trusting a silent success.
 pub const ExportReport = struct {
+    /// HTML documents written (`index.html` per route).
     html_pages_written: usize = 0,
+    /// Non-HTML files copied through unchanged.
     static_files_written: usize = 0,
+    /// Assets that came from the frontend bundle.
     bundled_assets_written: usize = 0,
+    /// Assets left out because the route was outside the configured scope.
     skipped_out_of_scope_assets: usize = 0,
+    /// Total size of the `.wasm` payloads written.
     wasm_bytes_written: usize = 0,
 };
 

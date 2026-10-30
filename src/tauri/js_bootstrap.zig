@@ -23,11 +23,18 @@ const testing = std.testing;
 const foundation = @import("zts_foundation");
 const html_escape = foundation.html_escape;
 
+/// Which OS convention the injected bootstrap script should follow. Windows resolves custom schemes
+/// through `http://<scheme>.localhost/…`, the other two use `<scheme>://localhost/…`; the page must be
+/// told which one it is talking to.
 pub const OsTarget = enum {
+    /// Linux (`linux` in the injected API).
     linux,
+    /// macOS (`macos`).
     macos,
+    /// Windows (`windows`).
     windows,
 
+    /// The platform the bootstrap should report.
     pub fn current() OsTarget {
         return switch (builtin.os.tag) {
             .macos => .macos,
@@ -36,6 +43,7 @@ pub const OsTarget = enum {
         };
     }
 
+    /// The `platform()` string upstream returns.
     pub fn asTauriName(self: OsTarget) []const u8 {
         return switch (self) {
             .linux => "linux",
@@ -44,6 +52,7 @@ pub const OsTarget = enum {
         };
     }
 
+    /// `\` on Windows, `/` elsewhere.
     pub fn pathSep(self: OsTarget) []const u8 {
         return switch (self) {
             .windows => "\\",
@@ -51,6 +60,7 @@ pub const OsTarget = enum {
         };
     }
 
+    /// `;` on Windows, `:` elsewhere.
     pub fn pathDelimiter(self: OsTarget) []const u8 {
         return switch (self) {
             .windows => ";",
@@ -59,6 +69,8 @@ pub const OsTarget = enum {
     }
 };
 
+/// Inputs for the injected `window.__TAURI_INTERNALS__` script. `invoke_key` is the per-launch CSRF
+/// secret; everything else adapts the script to the current window and OS.
 pub const BootstrapOptions = struct {
     /// Window / Webview label reported through `getCurrentWindow().label`.
     label: []const u8 = "main",

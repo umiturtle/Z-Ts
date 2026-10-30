@@ -9,6 +9,9 @@ const Io = std.Io;
 
 const manifest_gen = @import("manifest_gen.zig");
 
+/// `zts-embed-dir <src_dir> <out.zig> [--gzip]` — the build-time helper behind
+/// `zts_build.embedFrontendDir()`. It writes a Zig module that `@embedFile`s every asset, so the
+/// build graph never needs a custom compiler pass.
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;

@@ -22,6 +22,8 @@ const testing = std.testing;
 const foundation = @import("zts_foundation");
 const html_escape = foundation.html_escape;
 
+/// URLs the in-browser `window.__TAURI_INTERNALS__` needs: where the `.wasm` lives and where
+/// `convertFileSrc()` should resolve assets. All relative, so `dist/` can be served from any subpath.
 pub const WasmBootstrapOptions = struct {
     /// Window / WebView label exposed to `@tauri-apps/api`.
     label: []const u8 = "main",
@@ -31,6 +33,7 @@ pub const WasmBootstrapOptions = struct {
     asset_base_url: []const u8 = "./_zts/assets/",
     /// POSIX path conventions inside virtualized browser runtime (`"/"` / `":"`).
     sep: []const u8 = "/",
+    /// `PATH` delimiter inside the virtualized runtime (`:`).
     delimiter: []const u8 = ":",
 };
 
@@ -41,6 +44,8 @@ pub fn writeInlineHtmlTag(writer: *std.Io.Writer, opts: WasmBootstrapOptions) st
     try writer.writeAll("</script>");
 }
 
+/// `writeInlineHtmlTag` into a fresh buffer — the form `zts_ssg` uses when it injects the bootstrap
+/// into a prerendered page.
 pub fn renderInlineHtmlTagAlloc(allocator: Allocator, opts: WasmBootstrapOptions) Allocator.Error![]u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     errdefer aw.deinit();
@@ -48,6 +53,8 @@ pub fn renderInlineHtmlTagAlloc(allocator: Allocator, opts: WasmBootstrapOptions
     return aw.toOwnedSlice();
 }
 
+/// Writes just the JavaScript (no `<script>` tags) that installs `window.__TAURI_INTERNALS__` for the
+/// WebAssembly runtime. Safe to call twice: the script returns early when already installed.
 pub fn writeScript(writer: *std.Io.Writer, opts: WasmBootstrapOptions) std.Io.Writer.Error!void {
     try writer.writeAll("(() => { if (typeof window === \"undefined\" && typeof globalThis !== \"undefined\") { globalThis.window = globalThis; } if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.__ztsReady) return;\n");
     try writer.writeAll("const LABEL=");

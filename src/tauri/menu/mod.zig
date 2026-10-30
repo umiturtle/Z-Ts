@@ -77,11 +77,17 @@ pub const MenuError = error{
 
 /// `muda::ItemKind` — serde serializes the unit variants as their names.
 pub const ItemKind = enum {
+    /// The root handle returned by `plugin:menu|new`; never rendered on its own.
     Menu,
+    /// A container: its children form a nested menu.
     Submenu,
+    /// A plain clickable item (`MenuItem`) or a checkable one (`CheckMenuItem`).
     MenuItem,
+    /// An OS-defined role; the backend maps it to a native action instead of an id.
     Predefined,
+    /// An item whose checked state is stored by the menu (`CheckMenuItem`).
     Check,
+    /// An item that draws an `Icon` (`IconMenuItem`).
     Icon,
 
     /// Only containers (`Menu` / `Submenu`) hold children.
@@ -92,61 +98,109 @@ pub const ItemKind = enum {
 
 /// `muda::NativeIcon` — the platform-provided stock icons.
 pub const NativeIcon = enum {
+    /// A plus sign (`NSImageNameAddTemplate`).
     Add,
+    /// A minus sign.
     Remove,
+    /// The application icon, for an `About` item.
     About,
+    /// The gear used by the Services submenu.
     Services,
+    /// A vertical separator, for toolbars.
     Separator,
+    /// The Copy glyph.
     Copy,
+    /// The Cut glyph.
     Cut,
+    /// The Paste glyph.
     Paste,
+    /// The Select All glyph.
     SelectAll,
+    /// The Undo arrow.
     Undo,
+    /// The Redo arrow.
     Redo,
+    /// The minimise (yellow) button glyph.
     Minimize,
+    /// The zoom (green) button glyph.
     Maximize,
+    /// The fullscreen arrows.
     Fullscreen,
+    /// An eye with a slash.
     Hide,
+    /// Hide-others (macOS).
     HideOthers,
+    /// Show-all (macOS).
     ShowAll,
+    /// The close (red) button glyph.
     CloseWindow,
+    /// The power symbol.
     Quit,
+    /// Bring-all-to-front (macOS).
     BringAllToFront,
 };
 
 /// `tauri::menu::AboutMetadata` (`camelCase` on the wire).
 pub const AboutMetadata = struct {
+    /// Application name shown as the panel's title.
     name: ?[]const u8 = null,
+    /// Version string (`0.1.0`).
     version: ?[]const u8 = null,
+    /// Marketing version, when it differs from `version`.
     short_version: ?[]const u8 = null,
+    /// Author line, one entry per author.
     authors: ?[]const []const u8 = null,
+    /// Free-form description under the title.
     comments: ?[]const u8 = null,
+    /// Copyright line at the bottom.
     copyright: ?[]const u8 = null,
+    /// License name.
     license: ?[]const u8 = null,
+    /// Project URL.
     website: ?[]const u8 = null,
+    /// Text for the `website` link.
     website_label: ?[]const u8 = null,
+    /// Credits line (icons, contributors, …).
     credits: ?[]const u8 = null,
 };
 
 /// `tauri::menu::PredefinedMenuItem` payload (`serde` externally tagged).
 pub const Predefined = union(enum) {
+    /// A horizontal rule between groups of items.
     Separator,
+    /// The OS-defined `Copy` role (selection-aware on macOS).
     Copy,
+    /// The OS-defined `Cut` role.
     Cut,
+    /// The OS-defined `Paste` role.
     Paste,
+    /// The OS-defined `Select All` role.
     SelectAll,
+    /// The OS-defined `Undo` role; the OS keeps the undo stack.
     Undo,
+    /// The OS-defined `Redo` role.
     Redo,
+    /// Minimise the focused window.
     Minimize,
+    /// Zoom / maximise the focused window.
     Maximize,
+    /// Toggle fullscreen for the focused window.
     Fullscreen,
+    /// Hide the application (macOS).
     Hide,
+    /// Hide every other application (macOS).
     HideOthers,
+    /// Un-hide every hidden application (macOS).
     ShowAll,
+    /// Close the focused window.
     CloseWindow,
+    /// Quit the application.
     Quit,
+    /// The `About` panel; the payload customises its contents or `null` uses the OS default.
     About: ?AboutMetadata,
+    /// The macOS Services submenu.
     Services,
+    /// Raise all of the application's windows (macOS).
     BringAllToFront,
 
     /// Human-readable fallback label used when the frontend did not pass `text`.
@@ -173,6 +227,7 @@ pub const Predefined = union(enum) {
         };
     }
 
+    /// Maps a wire name (`"quit"`, `"copy"`, …) to its role, or `null`.
     pub fn fromName(name: []const u8) ?Predefined {
         inline for (@typeInfo(Predefined).@"union".field_names) |field_name| {
             if (std.mem.eql(u8, name, field_name)) {
@@ -186,16 +241,22 @@ pub const Predefined = union(enum) {
 
 /// `tauri::image::JsImage` — untagged: path string, raw ICO/PNG bytes, or an `plugin:image` `rid`.
 pub const JsImage = union(enum) {
+    /// A filesystem path (resolved through the asset protocol scope).
     path: []const u8,
+    /// Encoded image bytes (PNG / JPEG / …), decoded by the backend.
     bytes: []const u8,
+    /// A `plugin:resources` handle to an image already loaded in the engine.
     resource: u53,
 };
 
 /// `tauri::menu::Icon` — untagged between a stock icon name and a `JsImage`.
 pub const Icon = union(enum) {
+    /// A stock OS icon name.
     native: NativeIcon,
+    /// A caller-provided image (path, bytes or resource).
     image: JsImage,
 
+    /// Decodes an `ImageResource`-style JSON value into a native name or an image.
     pub fn fromValue(value: std.json.Value) ?Icon {
         switch (value) {
             .string => |s| {
@@ -220,14 +281,20 @@ pub const Icon = union(enum) {
 /// `MenuItemPayloadKind` — untagged: either `[rid, kind]` (an existing resource) or an inline
 /// options object. `zts_rpc` cannot express "array **or** object", so decoding is manual.
 pub const Spec = struct {
+    /// Attach an existing menu/submenu resource instead of building a new item.
     resource: ?ResourceRef = null,
+    /// Build a new item from options (mutually exclusive with `resource`).
     options: ?Options = null,
 
+    /// Reference to an already-created menu or submenu.
     pub const ResourceRef = struct {
+        /// Handle in the `plugin:resources` table.
         rid: u53,
+        /// What the handle is (a menu or a submenu).
         kind: ItemKind,
     };
 
+    /// Decodes one entry of the `items` array.
     pub fn decodeZtsJson(allocator: Allocator, raw: []const u8) rpc.DecodeError!Spec {
         const value = parseValue(allocator, raw) catch |err| return toDecodeError(err);
         switch (value) {
@@ -246,18 +313,26 @@ pub const Spec = struct {
 /// `MenuItemOptions | SubmenuOptions | CheckMenuItemOptions | IconMenuItemOptions |
 /// PredefinedMenuItemOptions` — the superset that `plugin:menu|new` and nested `items` accept.
 pub const Options = struct {
+    /// Wire id; generated when omitted.
     id: ?[]const u8 = null,
+    /// Label, with GTK mnemonics (`_File`).
     text: ?[]const u8 = null,
+    /// Whether the item can be activated.
     enabled: ?bool = null,
+    /// Initial check state for `Check` items.
     checked: ?bool = null,
+    /// Shortcut string (`"CmdOrCtrl+K"`), parsed by `Accelerator.parse`.
     accelerator: ?[]const u8 = null,
     /// `Predefined` payload (the wire key is `item`, not `predefined`).
     item: ?Predefined = null,
+    /// Icon for `Icon` / `IconCheck` items.
     icon: ?Icon = null,
+    /// Children of a submenu (ignored for leaf items).
     items: ?[]const Spec = null,
     /// `Channel<string>` injected by `@tauri-apps/api/menu` for nested items with an `action`.
     handler: ?u32 = null,
 
+    /// Decodes the options object `plugin:menu|new` receives.
     pub fn decodeZtsJson(allocator: Allocator, raw: []const u8) rpc.DecodeError!Options {
         const value = parseValue(allocator, raw) catch |err| return toDecodeError(err);
         const obj = switch (value) {
@@ -353,8 +428,10 @@ pub const Options = struct {
 /// `plugin:menu|popup`'s `at` and `set_icon`'s `icon` are untagged shapes owned by `@tauri-apps/api`,
 /// so they are decoded lazily through this hook instead of a rigid Zig struct.
 pub const JsonArg = struct {
+    /// Raw JSON the wire supplied, or `null` when the key was absent.
     value: ?std.json.Value = null,
 
+    /// Decodes a raw JSON value, or `null` when the wire sent `null`.
     pub fn decodeZtsJson(allocator: Allocator, raw: []const u8) rpc.DecodeError!JsonArg {
         const value = parseValue(allocator, raw) catch |err| return toDecodeError(err);
         return .{ .value = if (value == .null) null else value };
@@ -363,10 +440,14 @@ pub const JsonArg = struct {
 
 /// `tauri_runtime::dpi::Position` — `{"Logical": {x, y}}` or `{"Physical": {x, y}}`.
 pub const Position = struct {
+    /// X in pixels.
     x: f64,
+    /// Y in pixels.
     y: f64,
+    /// Whether `x`/`y` are logical (DPI-independent) rather than physical pixels.
     logical: bool = true,
 
+    /// Decodes `{ Logical: [x, y] }` / `{ Physical: [x, y] }`, or `null` when malformed.
     pub fn fromJsonValue(value: std.json.Value) ?Position {
         const obj = switch (value) {
             .object => |o| o,
@@ -398,6 +479,9 @@ pub const Position = struct {
 // Snapshot — the only thing a backend ever sees
 // ============================================================================
 
+/// What a backend has to draw for one flattened entry: a submenu, a leaf item, or a separator.
+/// Deciding this once (instead of at every backend) is what keeps Cocoa, Win32 and GTK menus
+/// structurally identical.
 pub const EntryKind = enum {
     /// A `Submenu`: opens its children (`depth + 1`).
     submenu,
@@ -406,6 +490,7 @@ pub const EntryKind = enum {
     /// A `Predefined::Separator`.
     separator,
 
+    /// Classifies an `ItemKind` as a leaf, a submenu or a separator.
     pub fn of(kind: ItemKind, predefined: ?Predefined) EntryKind {
         if (kind == .Submenu) return .submenu;
         if (predefined) |p| if (p == .Separator) return .separator;
@@ -413,13 +498,21 @@ pub const EntryKind = enum {
     }
 };
 
+/// One flattened menu entry — the *only* shape a backend ever sees. Strings are borrowed from the
+/// `Node` tree, and `depth` encodes nesting because every native menu API wants a flat list plus an
+/// indent level.
 pub const Entry = struct {
+    /// What the backend should draw.
     kind: EntryKind,
     /// Wire `MenuId` (what `Channel<string>` reports on activation).
     id: []const u8,
+    /// Label with mnemonics.
     text: []const u8,
+    /// Whether the item can be activated.
     enabled: bool = true,
+    /// Check state (`Check` items only).
     checked: bool = false,
+    /// Keyboard shortcut shown next to the label, or `null`.
     accelerator: ?Accelerator = null,
     /// 0 for top-level entries, `parent.depth + 1` inside a submenu.
     depth: u16 = 0,
@@ -429,9 +522,13 @@ pub const Entry = struct {
     item_kind: ItemKind = .MenuItem,
 };
 
+/// A complete menu at one instant, flattened. Built fresh on every `apply*` call rather than mutated
+/// in place, so a backend never observes a half-updated menu.
 pub const Snapshot = struct {
+    /// The flattened menu, in display order (pre-order over the tree).
     entries: []const Entry,
 
+    /// How many entries the backend will draw.
     pub fn len(self: Snapshot) usize {
         return self.entries.len;
     }
@@ -467,26 +564,41 @@ fn appendEntries(allocator: Allocator, out: *std.ArrayListUnmanaged(Entry), node
 // Tree node (stored inside the shared `plugin:resources` table)
 // ============================================================================
 
+/// A menu tree node, stored inside the shared `plugin:resources` table so the JS side addresses it by
+/// handle (`rid`). Only menus mutate this; backends see `Snapshot`s instead.
 pub const Node = struct {
+    /// Owning state; needed to reach the resource table when this node is closed.
     state: *MenuState,
+    /// Allocator that owns `id` and `text`.
     allocator: Allocator,
     /// `plugin:resources` handle (set right after insertion; `0` while unregistered).
     rid: u53 = 0,
+    /// What the node renders as (plain item, check, icon, submenu, …).
     kind: ItemKind,
+    /// Wire id reported on activation, and the key the JS `Channel` is registered under.
     id: []const u8,
+    /// Label, including GTK mnemonics (`_File`).
     text: []const u8,
+    /// Whether the item can be activated.
     enabled: bool = true,
+    /// Check state for `Check` items.
     checked: bool = false,
+    /// Keyboard shortcut, or `null`.
     accelerator: ?Accelerator = null,
+    /// Set when the item is a predefined (native) role rather than user text.
     predefined: ?Predefined = null,
+    /// Icon override, if any.
     icon: ?Icon = null,
     /// `Channel<string>` for this item's activation (`action` in JS).
     handler: ?u32 = null,
+    /// Owning container; `null` for a root menu.
     parent: ?*Node = null,
+    /// Sub-items in display order (containers only).
     children: std.ArrayListUnmanaged(*Node) = .empty,
     /// Every string this node owns (freed in `deinit`).
     owned: std.ArrayListUnmanaged([]u8) = .empty,
 
+    /// Frees the id, text and child list. Children are owned by `resources`, not by this call.
     pub fn deinit(self: *Node) void {
         // Detach from the parent so a closed node never leaves a dangling child pointer.
         self.state.detach(self);
@@ -521,16 +633,23 @@ pub const Node = struct {
 /// `Channel<string>` (upstream `MenuChannels`). `Mock` stores it so the whole click → IPC path is
 /// exercisable without a toolkit.
 pub const Activator = struct {
+    /// Opaque pointer handed back to `activate`.
     ctx: ?*anyopaque = null,
+    /// Receives the wire id of the activated item. Defaults to a no-op.
     call: *const fn (ctx: ?*anyopaque, id: []const u8) void = noop,
 
     fn noop(_: ?*anyopaque, _: []const u8) void {}
 };
 
+/// A native menu backend: an Objective-C / Win32 / GTK implementation plus the function table that
+/// `MenuState` drives. The `Mock` backend records snapshots so all three OSes run the same assertions.
 pub const Backend = struct {
+    /// Opaque pointer handed back to every vtable entry.
     ctx: ?*anyopaque = null,
+    /// The native implementation. `StubBackend.vtable` records nothing and accepts everything.
     vtable: *const VTable,
 
+    /// The four operations a native menu backend must provide.
     pub const VTable = struct {
         /// Installs `snapshot` as the app-wide (menu bar) menu.
         apply_app_menu: *const fn (ctx: ?*anyopaque, snapshot: Snapshot) MenuError!void,
@@ -542,15 +661,19 @@ pub const Backend = struct {
         set_activator: *const fn (ctx: ?*anyopaque, activator: Activator) void,
     };
 
+    /// Installs `snapshot` as the app menu.
     pub fn applyAppMenu(self: Backend, snapshot: Snapshot) MenuError!void {
         return self.vtable.apply_app_menu(self.ctx, snapshot);
     }
+    /// Installs `snapshot` as the menu bar of `window` (`null` = every window).
     pub fn applyWindowMenu(self: Backend, window: ?[]const u8, snapshot: Snapshot) MenuError!void {
         return self.vtable.apply_window_menu(self.ctx, window, snapshot);
     }
+    /// Shows `snapshot` as a context menu at `at` (`null` = the cursor position).
     pub fn popup(self: Backend, window: ?[]const u8, snapshot: Snapshot, at: ?Position) MenuError!void {
         return self.vtable.popup(self.ctx, window, snapshot, at);
     }
+    /// Registers the activation receiver. `MenuState` calls this before every apply.
     pub fn setActivator(self: Backend, activator: Activator) void {
         self.vtable.set_activator(self.ctx, activator);
     }
@@ -560,28 +683,40 @@ pub const Backend = struct {
 // State
 // ============================================================================
 
+/// `plugin:menu` state: the owned `Node` trees, the handle table that connects them to
+/// `plugin:resources`, and the active `Backend`. Every public command starts here.
 pub const MenuState = struct {
+    /// Allocator that owns the id map and channel entries.
     allocator: Allocator,
+    /// IO reactor used for the state mutex.
     io: Io,
     /// The shared `plugin:resources` table (menu `rid`s live there, like upstream).
     resources: *ResourceTable,
+    /// Native backend that applies the snapshots. Starts as `StubBackend`, which records nothing.
     backend: Backend,
     /// `muda::util::next_id` replacement: ids default to `"1"`, `"2"`, …
     next_id: u32 = 1,
+    /// Root of the app-wide menu bar, or `null` when none was set.
     app_menu: ?*Node = null,
+    /// Per-window menu bars, keyed by window label.
     window_menus: std.StringHashMapUnmanaged(*Node) = .empty,
     /// Menu id → activation channel. Values are fixed-size so the map never reallocates payloads.
     channels: std.StringHashMapUnmanaged(ChannelEntry) = .empty,
 
+    /// Activation route for one menu id.
     pub const ChannelEntry = struct {
+        /// Channel the frontend listens on; the payload is the menu id.
         channel: Channel([]const u8),
+        /// Caller context captured when the item was created, so the event carries its window.
         call_ctx: ?core.CallContext = null,
     };
 
+    /// Creates empty state that applies menus through `StubBackend`.
     pub fn init(allocator: Allocator, io: Io, resources: *ResourceTable) MenuState {
         return .{ .allocator = allocator, .io = io, .resources = resources, .backend = Backend{ .vtable = &StubBackend.vtable } };
     }
 
+    /// Returns a copy of `self` that draws through `backend` (the handle is not updated).
     pub fn withBackend(self: MenuState, backend: Backend) MenuState {
         var copy = self;
         copy.backend = backend;
@@ -750,6 +885,7 @@ fn inferKind(opts: Options) ItemKind {
 /// Fallback backend: every operation reports `error.Unavailable` (headless / unsupported OS).
 /// Keeps `plugin:menu` importable without any native toolkit, so DCE still removes it entirely.
 pub const StubBackend = struct {
+    /// The do-nothing backend used until `withBackend()` installs a real one.
     pub const vtable = Backend.VTable{
         .apply_app_menu = unavailableApp,
         .apply_window_menu = unavailableWindow,
@@ -772,24 +908,38 @@ pub const StubBackend = struct {
 // Mock backend — records every snapshot so all 3 OS run the same assertions
 // ============================================================================
 
+/// Recording backend used by the tests (and by `HeadlessMock` runs): it stores the last snapshot per
+/// window instead of drawing anything, so assertions can be written once against the native shape.
 pub const Mock = struct {
+    /// Allocator that owns the recorded snapshots.
     allocator: Allocator,
+    /// Last snapshot applied as the app menu.
     app_menu: ?[]Entry = null,
+    /// Last snapshot applied per window label.
     window_menus: std.StringHashMapUnmanaged([]Entry) = .empty,
+    /// Every context-menu popup that was requested.
     popups: std.ArrayListUnmanaged(Popup) = .empty,
+    /// How many apply calls were made (assertions on "applied exactly once").
     apply_count: usize = 0,
+    /// The activation receiver the state installed, if any.
     activator: ?Activator = null,
 
+    /// One recorded context menu.
     pub const Popup = struct {
+        /// Window the popup was opened for, or `null` for "the current one".
         window: ?[]const u8,
+        /// Requested position, or `null` for the cursor.
         at: ?Position,
+        /// What the backend was asked to draw.
         entries: []Entry,
     };
 
+    /// Creates a backend that records what it is asked to draw.
     pub fn init(allocator: Allocator) Mock {
         return .{ .allocator = allocator };
     }
 
+    /// Frees the recorded snapshots and popups.
     pub fn deinit(self: *Mock) void {
         if (self.app_menu) |entries| freeEntries(self.allocator, entries);
         var it = self.window_menus.iterator();
@@ -805,6 +955,7 @@ pub const Mock = struct {
         self.popups.deinit(self.allocator);
     }
 
+    /// The `Backend` view of `self`, ready to hand to `MenuState.withBackend`.
     pub fn backend(self: *Mock) Backend {
         return .{ .ctx = self, .vtable = &vtable };
     }
@@ -881,7 +1032,9 @@ pub const Mock = struct {
 
 /// `plugin:menu|*` command namespace (`Schema` key: `.menu`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:menu|";
+    /// The state type `zts_rpc` resolves per app; identical to `MenuState` here.
     pub const RpcState = MenuState;
 
     const Created = struct { u53, []const u8, ItemKind };
@@ -921,6 +1074,7 @@ pub const Commands = struct {
         return .{ root.rid, root.id };
     }
 
+    /// `append` — adds `items` to the end of a menu or submenu.
     pub fn append(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -929,6 +1083,7 @@ pub const Commands = struct {
         return insertMany(ctx, state, args.rid, args.kind, args.items, null);
     }
 
+    /// `prepend` — adds `items` at the front.
     pub fn prepend(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -937,6 +1092,7 @@ pub const Commands = struct {
         return insertMany(ctx, state, args.rid, args.kind, args.items, 0);
     }
 
+    /// `insert` — adds `items` at `position` (0-based).
     pub fn insert(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -969,6 +1125,7 @@ pub const Commands = struct {
         try state.refresh(ctx.scratch);
     }
 
+    /// `remove` — detaches one child item, by rid.
     pub fn remove(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -987,6 +1144,7 @@ pub const Commands = struct {
         return error.NotFound;
     }
 
+    /// `remove_at` — detaches the child at `position`; `null` when out of range.
     pub fn remove_at(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1002,6 +1160,7 @@ pub const Commands = struct {
         return .{ child.rid, child.id, child.kind };
     }
 
+    /// `items` — lists the direct children as `[rid, id, kind]` triples.
     pub fn items(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1013,6 +1172,7 @@ pub const Commands = struct {
         return out;
     }
 
+    /// `get` — finds one direct child by wire id, or `null`.
     pub fn get(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1027,6 +1187,7 @@ pub const Commands = struct {
         return null;
     }
 
+    /// `popup` — shows the menu as a context menu on `window`, at `at` when given.
     pub fn popup(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1040,6 +1201,7 @@ pub const Commands = struct {
         return state.backend.popup(args.window, .{ .entries = entries }, at);
     }
 
+    /// `set_as_app_menu` — installs the menu as the app menu; returns the menu it replaced.
     pub fn set_as_app_menu(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53 }) MenuError!?struct { u53, []const u8 } {
         const node = state.lookup(args.rid, .Menu) orelse return error.BadResourceId;
         // Upstream returns the menu that was replaced (`Option<(ResourceId, MenuId)>`), not the new
@@ -1052,6 +1214,7 @@ pub const Commands = struct {
         return null;
     }
 
+    /// `set_as_window_menu` — installs the menu as `window`'s menu bar; returns the menu it replaced.
     pub fn set_as_window_menu(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         window: ?[]const u8 = null,
@@ -1068,11 +1231,13 @@ pub const Commands = struct {
         return null;
     }
 
+    /// `text` — the item's current label.
     pub fn text(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53, kind: ItemKind }) MenuError![]const u8 {
         _ = ctx;
         return (try nodeOf(state, args.rid, args.kind)).text;
     }
 
+    /// `set_text` — replaces the label and re-applies the menus.
     pub fn set_text(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1083,11 +1248,13 @@ pub const Commands = struct {
         try state.refresh(ctx.scratch);
     }
 
+    /// `is_enabled` — whether the item can currently be activated.
     pub fn is_enabled(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53, kind: ItemKind }) MenuError!bool {
         _ = ctx;
         return (try nodeOf(state, args.rid, args.kind)).enabled;
     }
 
+    /// `set_enabled` — greys the item out (or re-enables it).
     pub fn set_enabled(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1098,6 +1265,7 @@ pub const Commands = struct {
         try state.refresh(ctx.scratch);
     }
 
+    /// `set_accelerator` — parses and installs a shortcut, or clears it with `null`.
     pub fn set_accelerator(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1118,12 +1286,14 @@ pub const Commands = struct {
         _ = args;
     }
 
+    /// `set_as_help_menu_for_nsapp` — macOS-only upstream; a no-op that still succeeds here.
     pub fn set_as_help_menu_for_nsapp(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53 }) MenuError!void {
         _ = ctx;
         _ = state;
         _ = args;
     }
 
+    /// `is_checked` — the check state of a check item.
     pub fn is_checked(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53 }) MenuError!bool {
         _ = ctx;
         const node = state.resources.getPtr(Node, args.rid) catch return error.BadResourceId;
@@ -1131,6 +1301,7 @@ pub const Commands = struct {
         return node.checked;
     }
 
+    /// `set_checked` — ticks or unticks a check item.
     pub fn set_checked(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53, checked: bool }) MenuError!void {
         const node = state.resources.getPtr(Node, args.rid) catch return error.BadResourceId;
         if (node.state != state) return error.BadResourceId;
@@ -1138,6 +1309,7 @@ pub const Commands = struct {
         try state.refresh(ctx.scratch);
     }
 
+    /// `set_icon` — replaces the item's icon, or clears it.
     pub fn set_icon(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,

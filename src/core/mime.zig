@@ -11,12 +11,20 @@
 const std = @import("std");
 const testing = std.testing;
 
+/// Fallback for anything unrecognised: a browser must not sniff executable bytes out of it.
 pub const DEFAULT_BINARY: []const u8 = "application/octet-stream";
+/// Documents. The `charset` parameter is what keeps a UTF-8 page from being re-decoded as Latin-1.
 pub const HTML_UTF8: []const u8 = "text/html; charset=utf-8";
+/// ES modules are rejected by the browser when the type is not a JavaScript MIME type — plain
+/// `text/plain` turns `<script type="module">` into a console error, so this string matters.
 pub const JS_UTF8: []const u8 = "text/javascript; charset=utf-8";
+/// Stylesheets. The `charset` keeps a UTF-8 `content:` string from rendering as mojibake.
 pub const CSS_UTF8: []const u8 = "text/css; charset=utf-8";
+/// JSON responses. No `charset`: RFC 8259 fixes UTF-8, and a parameter makes some clients vary.
 pub const JSON_UTF8: []const u8 = "application/json";
+/// Required by `WebAssembly.instantiateStreaming()`, which refuses to compile anything else.
 pub const WASM: []const u8 = "application/wasm";
+/// Required for `<img src="logo.svg">`; served as `text/xml` the browser shows a broken image.
 pub const SVG: []const u8 = "image/svg+xml";
 
 const ExtensionEntry = struct {
@@ -148,6 +156,8 @@ pub fn detect(path: []const u8, bytes: []const u8) []const u8 {
     return fromPath(path) orelse sniff(bytes) orelse DEFAULT_BINARY;
 }
 
+/// True for `text/html` and XHTML, so a router can decide "serve the SPA shell" without caring
+/// about the `charset=` parameter or casing.
 pub fn isHtml(mime_type: []const u8) bool {
     return startsWithIgnoreCase(mime_type, "text/html") or
         startsWithIgnoreCase(mime_type, "application/xhtml+xml");

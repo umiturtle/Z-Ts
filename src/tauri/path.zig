@@ -11,14 +11,21 @@ const testing = std.testing;
 
 const rpc = @import("zts_rpc");
 
+/// Which platform's path grammar to use. The plugin must be *host independent*: a `path.join`
+/// invoked by a Windows client has to use Windows rules even when the test runs on Linux, so every
+/// function below takes the style explicitly and `.current()` only appears at the OS boundary.
 pub const PathStyle = enum {
+    /// `/` separators, case-sensitive (Linux, macOS).
     posix,
+    /// `\` separators, drive letters and UNC prefixes.
     windows,
 
+    /// The style of the OS this binary was built for.
     pub fn current() PathStyle {
         return if (builtin.os.tag == .windows) .windows else .posix;
     }
 
+    /// The separator character (`/` or `\`).
     pub fn sep(self: PathStyle) u8 {
         return switch (self) {
             .posix => '/',
@@ -29,28 +36,51 @@ pub const PathStyle = enum {
 
 /// Exact wire integer discriminants matching `@tauri-apps/api/path` `enum BaseDirectory`.
 pub const BaseDirectory = enum(u8) {
+    /// User's audio library (`$XDG_MUSIC_DIR` / `~/Music` / `%USERPROFILE%\Music`).
     audio = 1,
+    /// Per-user cache (`$XDG_CACHE_HOME` / `~/Library/Caches` / `%LOCALAPPDATA%`). Safe to delete.
     cache = 2,
+    /// Per-user configuration (`$XDG_CONFIG_HOME` / `~/Library/Application Support` / `%APPDATA%`).
     config = 3,
+    /// Per-user data (`$XDG_DATA_HOME` / `~/Library/Application Support` / `%APPDATA%`).
     data = 4,
+    /// Per-user, machine-local data that must not roam (`%LOCALAPPDATA%` on Windows).
     local_data = 5,
+    /// The user's Documents folder.
     document = 6,
+    /// The user's Downloads folder.
     download = 7,
+    /// The user's Pictures folder.
     picture = 8,
+    /// The shared Public folder (Windows `%PUBLIC%`, macOS `~/Public`).
     public = 9,
+    /// The user's Videos folder.
     video = 10,
+    /// The app's bundled resources (`<exe dir>/resources`). Read-only in a released build.
     resource = 11,
+    /// The OS temporary directory. Everything here may vanish between runs.
     temp = 12,
+    /// `<config>/<bundle identifier>` — this application's own configuration.
     app_config = 13,
+    /// `<data>/<bundle identifier>` — this application's own data.
     app_data = 14,
+    /// `<local_data>/<bundle identifier>` — machine-local application data.
     app_local_data = 15,
+    /// `<cache>/<bundle identifier>` — this application's cache.
     app_cache = 16,
+    /// `<data>/<bundle identifier>/logs` — where `tauri-plugin-log` writes.
     app_log = 17,
+    /// The user's Desktop folder.
     desktop = 18,
+    /// The directory containing the running executable.
     executable = 19,
+    /// The user's font directory (`~/.local/share/fonts` / `~/Library/Fonts`).
     font = 20,
+    /// The user's home directory.
     home = 21,
+    /// The runtime directory (`$XDG_RUNTIME_DIR`); falls back to `temp` where the OS has none.
     runtime = 22,
+    /// A scratch directory for templates shipped with the app.
     template = 23,
 };
 
@@ -61,19 +91,32 @@ pub const PathError = error{
 
 /// Deterministic cross-platform path configuration (pure Zig, zero `libc` / `getenv` global races).
 pub const PathState = struct {
+    /// Which separator conventions `normalize`/`join` follow.
     style: PathStyle = PathStyle.current(),
+    /// Bundle id used for the per-app subdirectories.
     app_identifier: []const u8 = "com.zts.app",
+    /// `$HOME` (override in tests).
     home_dir: []const u8 = "/home/user",
+    /// `appCacheDir` base, or `null` to derive it.
     cache_dir: ?[]const u8 = null,
+    /// `appConfigDir` base, or `null` to derive it.
     config_dir: ?[]const u8 = null,
+    /// `appDataDir` base, or `null` to derive it.
     data_dir: ?[]const u8 = null,
+    /// `appLocalDataDir` base, or `null` to derive it.
     local_data_dir: ?[]const u8 = null,
+    /// `resourceDir()` — where bundled resources live.
     resource_dir: []const u8 = "/app/resources",
+    /// `resolve('exe')` — directory of the running binary.
     executable_dir: []const u8 = "/app/bin",
+    /// `$XDG_RUNTIME_DIR` (Linux); unused on other platforms.
     runtime_dir: []const u8 = "/run/user/1000",
+    /// `tempDir()`.
     temp_dir: []const u8 = if (builtin.os.tag == .windows) "C:\\Temp" else "/tmp",
+    /// `resolve('cwd')` — the process working directory.
     cwd: []const u8 = "/",
 
+    /// Maps a `BaseDirectory` tag to its absolute path, appending the identifier where needed.
     pub fn resolveBaseAlloc(self: *const PathState, scratch: Allocator, raw_dir: u8) PathError![]const u8 {
         const dir = std.enums.fromInt(BaseDirectory, raw_dir) orelse return error.UnknownBaseDirectory;
         const home = self.home_dir;
@@ -117,6 +160,8 @@ fn isSep(style: PathStyle, c: u8) bool {
     };
 }
 
+/// `true` for `/x` (posix) and `C:\\x`, `\\\\server\\share` (windows). Drive-relative `C:x` is *not*
+/// absolute — treating it as such is how a scope check gets bypassed.
 pub fn isAbsoluteWithStyle(style: PathStyle, p: []const u8) bool {
     if (p.len == 0) return false;
     return switch (style) {
@@ -129,6 +174,9 @@ pub fn isAbsoluteWithStyle(style: PathStyle, p: []const u8) bool {
     };
 }
 
+/// Collapses `.`/`..`, drops duplicate separators and guarantees a non-empty result (`"."`), keeping
+/// the drive/UNC prefix. This is the first step of every `plugin:fs` scope check: the engine never
+/// compares a raw string with a root.
 pub fn normalizeWithStyle(allocator: Allocator, style: PathStyle, raw_path: []const u8) Allocator.Error![]u8 {
     if (raw_path.len == 0) return allocator.dupe(u8, ".");
 
@@ -189,6 +237,8 @@ pub fn normalizeWithStyle(allocator: Allocator, style: PathStyle, raw_path: []co
     return aw.toOwnedSlice();
 }
 
+/// Joins `parts` with the platform separator, then normalises. Empty parts are skipped so
+/// `join(&.{ base, "", "x" })` still yields `<base>/x`.
 pub fn joinWithStyle(allocator: Allocator, style: PathStyle, parts: []const []const u8) Allocator.Error![]u8 {
     if (parts.len == 0) return allocator.dupe(u8, ".");
     const sep_char = style.sep();
@@ -206,6 +256,8 @@ pub fn joinWithStyle(allocator: Allocator, style: PathStyle, parts: []const []co
     return normalizeWithStyle(allocator, style, aw.written());
 }
 
+/// Resolves `parts` against `cwd` — the pure half of `path.resolve`. An absolute part restarts the
+/// walk (a later absolute component wins, exactly like the Node API).
 pub fn resolveWithStyle(
     allocator: Allocator,
     style: PathStyle,
@@ -229,6 +281,8 @@ pub fn resolveWithStyle(
     return normalizeWithStyle(allocator, style, acc);
 }
 
+/// Directory part of `p`, without allocating. Trailing separators are ignored and a bare file name
+/// yields `"."` (the Node behaviour, which is what JS callers expect).
 pub fn dirnameWithStyle(style: PathStyle, p: []const u8) []const u8 {
     if (p.len == 0) return ".";
     var end = p.len;
@@ -242,6 +296,8 @@ pub fn dirnameWithStyle(style: PathStyle, p: []const u8) []const u8 {
     return trimmed[0 .. idx - 1];
 }
 
+/// Final component of `p`, optionally with `ext` stripped (`"/a/b.html", ".html"` → `"b"`). The
+/// comparison is exact, case-sensitive and only strips one extension.
 pub fn basenameWithStyle(style: PathStyle, p: []const u8, ext: ?[]const u8) []const u8 {
     if (p.len == 0) return "";
     var end = p.len;
@@ -282,9 +338,12 @@ pub fn extnameWithStyle(style: PathStyle, p: []const u8) []const u8 {
 
 /// `plugin:path|*` RPC command namespace (`Schema` key: `.path`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:path|";
+    /// The state type `zts_rpc` resolves per app; identical to `PathState` here.
     pub const RpcState = PathState;
 
+    /// `plugin:path|resolve_directory` — base directory without a sub-path.
     pub fn resolve_directory(
         ctx: *rpc.Ctx,
         state: *PathState,
@@ -299,30 +358,37 @@ pub const Commands = struct {
         return base;
     }
 
+    /// `plugin:path|resolve` — joins a base directory with `path`.
     pub fn resolve(ctx: *rpc.Ctx, state: *PathState, args: struct { paths: []const []const u8 }) PathError![]const u8 {
         return resolveWithStyle(ctx.scratch, state.style, state.cwd, args.paths);
     }
 
+    /// `plugin:path|normalize` — resolves `.` and `..` without touching the filesystem.
     pub fn normalize(ctx: *rpc.Ctx, state: *PathState, args: struct { path: []const u8 }) PathError![]const u8 {
         return normalizeWithStyle(ctx.scratch, state.style, args.path);
     }
 
+    /// `plugin:path|join` — joins parts with the platform separator.
     pub fn join(ctx: *rpc.Ctx, state: *PathState, args: struct { paths: []const []const u8 }) PathError![]const u8 {
         return joinWithStyle(ctx.scratch, state.style, args.paths);
     }
 
+    /// `plugin:path|dirname` — the parent directory.
     pub fn dirname(_: *PathState, args: struct { path: []const u8 }) []const u8 {
         return dirnameWithStyle(PathStyle.current(), args.path);
     }
 
+    /// `plugin:path|extname` — the extension including the dot.
     pub fn extname(_: *PathState, args: struct { path: []const u8 }) []const u8 {
         return extnameWithStyle(PathStyle.current(), args.path);
     }
 
+    /// `plugin:path|basename` — the last component, minus a matching suffix.
     pub fn basename(_: *PathState, args: struct { path: []const u8, ext: ?[]const u8 = null }) []const u8 {
         return basenameWithStyle(PathStyle.current(), args.path, args.ext);
     }
 
+    /// `plugin:path|is_absolute` — whether the path starts at a root.
     pub fn is_absolute(state: *PathState, args: struct { path: []const u8 }) bool {
         return isAbsoluteWithStyle(state.style, args.path);
     }

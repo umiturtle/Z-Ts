@@ -9,6 +9,9 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+/// Renders the `<script>` block that defines `window.__TAURI_INTERNALS__` (and the `tsgen` client) for
+/// a served page. `invoke_key_hex` is embedded as the CSRF token the page must echo on every
+/// `ipc://` call, so the script is per-server-instance, not a constant.
 pub fn allocBootstrapScript(allocator: Allocator, invoke_key_hex: []const u8) Allocator.Error![]u8 {
     return std.fmt.allocPrint(allocator, template_fmt, .{invoke_key_hex});
 }

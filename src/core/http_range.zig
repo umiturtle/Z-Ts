@@ -9,7 +9,9 @@ const testing = std.testing;
 
 /// Closed, validated byte interval `[start, end_inclusive]` (`0 <= start <= end_inclusive < total_len`).
 pub const ByteRange = struct {
+    /// First byte of the slice.
     start: u64,
+    /// Last byte of the slice (inclusive, as HTTP spells it).
     end_inclusive: u64,
 
     /// Exact byte length of this partial slice (`end_inclusive - start + 1`).

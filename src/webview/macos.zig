@@ -191,22 +191,37 @@ fn sameWindow(a: types.WindowId, b: types.WindowId) bool {
 
 /// Native `NSWindow` frame in Cocoa coordinates (origin = bottom-left, Y grows upwards).
 pub const CocoaFrame = struct {
+    /// Left edge, in Cocoa points.
     x: f64 = 0,
+    /// Bottom edge (Cocoa's origin is bottom-left).
     y: f64 = 0,
+    /// Width in points.
     width: f64 = 0,
+    /// Height in points.
     height: f64 = 0,
 };
 
+/// Cocoa (`NSApplication` / `NSWindow`) + `WKWebView` backend. The Objective-C side lives in
+/// `macos_shim.m` behind a C ABI, so Zig never needs the Objective-C runtime headers.
 pub const MacOsBackend = struct {
+    /// Allocator for windows, slots and pending tables.
     allocator: Allocator,
+    /// IO reactor behind the run-loop wakeups.
     io: Io,
+    /// The shim's `ZtsMacosApp*` (an `NSApplication` plus shared configuration).
     handle: *anyopaque,
+    /// Live windows, keyed by handle.
     windows: foundation.HandlePool(MacWindow, .window) = .empty,
+    /// Registered `WKURLSchemeHandler`s; WebKit keeps the pointers.
     scheme_slots: std.ArrayList(*SchemeSlot) = .empty,
+    /// Scheme requests waiting for `completeRequest`.
     pending: pending_mod.PendingTable(PendingToken) = .{},
+    /// Replies queued from worker threads, drained by `step()`.
     completions: pending_mod.CompletionQueue,
 
+    /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
     /// Screenshot slots WebKit still owes a completion handler for (`M5-04`).
@@ -241,6 +256,7 @@ pub const MacOsBackend = struct {
         return self;
     }
 
+    /// Destroys every window and the shared `NSApplication`.
     pub fn deinit(self: *MacOsBackend) void {
         const alloc = self.allocator;
 
@@ -291,6 +307,7 @@ pub const MacOsBackend = struct {
     // Event loop
     // -----------------------------------------------------------------------
 
+    /// Runs one turn of the `NSRunLoop`; `.blocking` waits for the next event.
     pub fn step(self: *MacOsBackend, mode: types.StepMode) bool {
         self.drainCompletions();
         if (shim.zts_macos_quit_requested(self.handle) != 0) return false;
@@ -300,14 +317,17 @@ pub const MacOsBackend = struct {
         return rc != 0;
     }
 
+    /// Posts to the main run loop, so a parked `step` returns.
     pub fn wakeup(self: *MacOsBackend) void {
         shim.zts_macos_wakeup(self.handle);
     }
 
+    /// Marks the app for exit and wakes the loop.
     pub fn requestQuit(self: *MacOsBackend) void {
         shim.zts_macos_request_quit(self.handle);
     }
 
+    /// Whether `requestQuit()` was called.
     pub fn quitRequested(self: *MacOsBackend) bool {
         return shim.zts_macos_quit_requested(self.handle) != 0;
     }
@@ -322,6 +342,7 @@ pub const MacOsBackend = struct {
     // Screen geometry
     // -----------------------------------------------------------------------
 
+    /// The main screen's visible area, in Cocoa points (menu bar / Dock removed).
     pub fn screenVisibleFrame(self: *MacOsBackend) coords.ScreenFrame {
         var frame = coords.ScreenFrame{};
         shim.zts_macos_screen_visible_frame(self.handle, &frame.x, &frame.y, &frame.width, &frame.height);
@@ -332,6 +353,7 @@ pub const MacOsBackend = struct {
     // Custom URI schemes
     // -----------------------------------------------------------------------
 
+    /// Installs a `WKURLSchemeHandler` for `scheme`.
     pub fn registerScheme(self: *MacOsBackend, scheme: []const u8, handler: types.SchemeHandler) types.WebviewError!void {
         if (scheme.len == 0) return error.InvalidArgument;
 
@@ -483,6 +505,7 @@ pub const MacOsBackend = struct {
     // Window lifecycle
     // -----------------------------------------------------------------------
 
+    /// Creates the `NSWindow` and its `WKWebView`.
     pub fn createWindow(self: *MacOsBackend, cfg: types.WindowConfig) types.WebviewError!types.WindowId {
         const alloc = self.allocator;
 
@@ -557,6 +580,7 @@ pub const MacOsBackend = struct {
         return win_id;
     }
 
+    /// Closes the window and frees its slot.
     pub fn closeWindow(self: *MacOsBackend, win_id: types.WindowId) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const native = w.native;
@@ -567,6 +591,7 @@ pub const MacOsBackend = struct {
         if (shim.zts_macos_window_close(self.handle, native) == 0) return error.WindowNotFound;
     }
 
+    /// The `NSView*` for `win_id`, or `null`.
     pub fn nativeHandle(self: *MacOsBackend, win_id: types.WindowId) ?*anyopaque {
         const w = self.windows.getPtr(win_id) orelse return null;
         return shim.zts_macos_window_native(self.handle, w.native);
@@ -663,6 +688,7 @@ pub const MacOsBackend = struct {
     // Window properties
     // -----------------------------------------------------------------------
 
+    /// Calls `setTitle:`.
     pub fn setTitle(self: *MacOsBackend, win_id: types.WindowId, title: []const u8) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const z = self.allocator.dupeSentinel(u8, title, 0) catch return error.OutOfMemory;
@@ -670,11 +696,13 @@ pub const MacOsBackend = struct {
         shim.zts_macos_window_set_title(self.handle, w.native, z.ptr);
     }
 
+    /// Calls `setContentSize:` in points.
     pub fn setSize(self: *MacOsBackend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_size(self.handle, w.native, size.width.v, size.height.v);
     }
 
+    /// Calls `setContentMinSize:`.
     pub fn setMinSize(self: *MacOsBackend, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.min_size = size;
@@ -685,6 +713,7 @@ pub const MacOsBackend = struct {
         }
     }
 
+    /// Calls `setContentMaxSize:`.
     pub fn setMaxSize(self: *MacOsBackend, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.max_size = size;
@@ -715,46 +744,55 @@ pub const MacOsBackend = struct {
         return out;
     }
 
+    /// Toggles the `.resizable` style mask.
     pub fn setResizable(self: *MacOsBackend, win_id: types.WindowId, resizable: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_resizable(self.handle, w.native, @intFromBool(resizable));
     }
 
+    /// Calls `miniaturize:` / `deminiaturize:`.
     pub fn setMinimized(self: *MacOsBackend, win_id: types.WindowId, minimized: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_minimized(self.handle, w.native, @intFromBool(minimized));
     }
 
+    /// Calls `zoom:`.
     pub fn setMaximized(self: *MacOsBackend, win_id: types.WindowId, maximized: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_maximized(self.handle, w.native, @intFromBool(maximized));
     }
 
+    /// Calls `toggleFullScreen:`.
     pub fn setFullscreen(self: *MacOsBackend, win_id: types.WindowId, fullscreen: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_fullscreen(self.handle, w.native, @intFromBool(fullscreen));
     }
 
+    /// Calls `orderFront:` / `orderOut:`.
     pub fn setVisible(self: *MacOsBackend, win_id: types.WindowId, visible: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_visible(self.handle, w.native, @intFromBool(visible));
     }
 
+    /// Toggles `.titled` on the style mask.
     pub fn setDecorations(self: *MacOsBackend, win_id: types.WindowId, decorations: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_decorations(self.handle, w.native, @intFromBool(decorations));
     }
 
+    /// Calls `setLevel:(NSFloatingWindowLevel)`.
     pub fn setAlwaysOnTop(self: *MacOsBackend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_always_on_top(self.handle, w.native, @intFromBool(on_top));
     }
 
+    /// Calls `makeKeyAndOrderFront:` on the main thread.
     pub fn setFocus(self: *MacOsBackend, win_id: types.WindowId) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_focus(self.handle, w.native);
     }
 
+    /// Calls `performWindowDragWithEvent:` semantics via the shim.
     pub fn startDrag(self: *MacOsBackend, win_id: types.WindowId) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_start_drag(self.handle, w.native);
@@ -764,6 +802,7 @@ pub const MacOsBackend = struct {
     // Web content
     // -----------------------------------------------------------------------
 
+    /// Adds a `WKUserScript` at document start.
     pub fn addInitScript(self: *MacOsBackend, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const z = self.allocator.dupeSentinel(u8, script, 0) catch return error.OutOfMemory;
@@ -771,6 +810,7 @@ pub const MacOsBackend = struct {
         shim.zts_macos_window_add_init_script(self.handle, w.native, z.ptr);
     }
 
+    /// Calls `evaluateJavaScript:completionHandler:`.
     pub fn evalJs(self: *MacOsBackend, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
         if (script.len == 0) return;
         const w = try self.requireWindow(win_id);
@@ -779,6 +819,7 @@ pub const MacOsBackend = struct {
         shim.zts_macos_window_eval_js(self.handle, w.native, z.ptr);
     }
 
+    /// Calls `loadRequest:` with an `NSURLRequest`.
     pub fn navigate(self: *MacOsBackend, win_id: types.WindowId, url: []const u8) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const z = self.allocator.dupeSentinel(u8, url, 0) catch return error.OutOfMemory;
@@ -786,6 +827,7 @@ pub const MacOsBackend = struct {
         shim.zts_macos_window_navigate(self.handle, w.native, z.ptr);
     }
 
+    /// Calls `loadHTMLString:baseURL:`.
     pub fn loadHtml(self: *MacOsBackend, win_id: types.WindowId, html: []const u8, base_uri: ?[]const u8) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const hz = self.allocator.dupeSentinel(u8, html, 0) catch return error.OutOfMemory;
@@ -795,6 +837,7 @@ pub const MacOsBackend = struct {
         shim.zts_macos_window_load_html(self.handle, w.native, hz.ptr, if (bz) |s| s.ptr else null);
     }
 
+    /// Opens the Safari Web Inspector.
     pub fn openDevtools(self: *MacOsBackend, win_id: types.WindowId) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_open_devtools(self.handle, w.native);

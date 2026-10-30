@@ -12,10 +12,14 @@ const builtin = @import("builtin");
 
 /// Microsoft's Evergreen channel ids, from `WebView2Loader.cpp` / wry.
 pub const RuntimeChannel = struct {
+    /// Channel name as Microsoft spells it (`stable`, `beta`, `dev`, `canary`).
     name: []const u8,
+    /// Registry key under `…\EdgeUpdate\Clients` that holds the version.
     guid: []const u8,
+    /// MSIX package family name, used when the runtime came from the Store.
     package_family: []const u8,
 
+    /// Every channel, in the order the loader probes them.
     pub const all = [_]RuntimeChannel{
         .{
             .name = "stable",
@@ -44,11 +48,16 @@ pub const RuntimeChannel = struct {
 pub const min_runtime_version = Version{ .major = 86, .minor = 0, .build = 616, .patch = 0 };
 
 pub const Version = struct {
+    /// Major version.
     major: u32 = 0,
+    /// Minor version.
     minor: u32 = 0,
+    /// Build number.
     build: u32 = 0,
+    /// Patch number.
     patch: u32 = 0,
 
+    /// Lexicographic comparison, most significant field first.
     pub fn order(a: Version, b: Version) std.math.Order {
         const keys = [_][2]u32{
             .{ a.major, b.major }, .{ a.minor, b.minor },
@@ -61,6 +70,7 @@ pub const Version = struct {
         return .eq;
     }
 
+    /// Whether this version is `floor` or newer.
     pub fn atLeast(self: Version, floor: Version) bool {
         return self.order(floor) != .lt;
     }

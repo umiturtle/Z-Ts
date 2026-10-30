@@ -26,17 +26,24 @@ comptime {
 
 pub const coords = @import("coords.zig");
 
+/// `true` when this build contains the GTK3 + WebKit2GTK backend. `linux` is an empty struct
+/// otherwise, so `zts_webview.linux.LinuxGtkBackend` fails to compile on a host that cannot link GTK
+/// instead of failing at runtime.
 pub const has_native_gtk = (builtin.os.tag == .linux) and webview_options.enable_gtk;
+/// The GTK backend module, or an empty struct when GTK was not compiled in (`-Dgtk=false`, or a
+/// non-Linux target).
 pub const linux = if (has_native_gtk) @import("linux.zig") else struct {};
 
 /// Native macOS `NSApplication` + `WKWebView` backend availability (`M3-01`).
 pub const has_native_macos = (builtin.os.tag == .macos) and webview_options.enable_macos;
+/// The Cocoa + `WKWebView` module, or an empty struct when macOS support was not compiled in.
 pub const macos = if (has_native_macos) @import("macos.zig") else struct {};
 
 /// Native Windows `Win32` + Direct `WebView2` backend availability (`M3-02`).
 /// No `WebView2Loader.dll`: the Evergreen runtime is located in the registry and
 /// `EmbeddedBrowserWebView.dll` is loaded directly (see `webview2_loader.zig`).
 pub const has_native_windows = (builtin.os.tag == .windows) and webview_options.enable_windows;
+/// The Win32 + WebView2 module, or an empty struct when Windows support was not compiled in.
 pub const windows = if (has_native_windows) @import("windows.zig") else struct {};
 
 /// Hand-generated `ICoreWebView2*` COM vtables (`M3-02`). Pure declarations, so the vtable
@@ -67,11 +74,16 @@ pub const HeadlessMock = mock.HeadlessMock;
 /// Runtime-selectable WebView engine wrapping either the native OS WebView (`LinuxGtkBackend`)
 /// or the zero-dependency in-memory `HeadlessMock`.
 pub const Engine = union(enum) {
+    /// Pure-Zig engine: no display server, deterministic screenshots.
     headless_mock: *HeadlessMock,
+    /// GTK3 + WebKitGTK backend (only reachable when the build enables GTK).
     linux_gtk: if (has_native_gtk) *linux.LinuxGtkBackend else noreturn,
+    /// AppKit + WKWebView backend.
     macos_wk: if (has_native_macos) *macos.MacOsBackend else noreturn,
+    /// Win32 + WebView2 backend.
     windows_webview2: if (has_native_windows) *windows.WindowsWebView2Backend else noreturn,
 
+    /// Creates the requested backend; `.auto` falls back to the mock when there is no display.
     pub fn init(allocator: Allocator, io: Io, kind: BackendKind) WebviewError!Engine {
         switch (kind) {
             .headless_mock => {
@@ -123,6 +135,7 @@ pub const Engine = union(enum) {
         }
     }
 
+    /// Tears the backend down and frees its state.
     pub fn deinit(self: *Engine) void {
         switch (self.*) {
             .headless_mock => |m| {
@@ -136,6 +149,7 @@ pub const Engine = union(enum) {
         }
     }
 
+    /// Pumps one turn of the event loop. Returns `false` once the app asked to quit.
     pub fn step(self: *Engine, mode: StepMode) bool {
         return switch (self.*) {
             .headless_mock => |m| m.step(mode),
@@ -145,6 +159,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Wakes a parked `step(.blocking)` from any thread.
     pub fn wakeup(self: *Engine) void {
         switch (self.*) {
             .headless_mock => |m| m.wakeup(),
@@ -154,6 +169,7 @@ pub const Engine = union(enum) {
         }
     }
 
+    /// Asks the loop to stop after the current turn.
     pub fn requestQuit(self: *Engine) void {
         switch (self.*) {
             .headless_mock => |m| m.requestQuit(),
@@ -163,6 +179,7 @@ pub const Engine = union(enum) {
         }
     }
 
+    /// Installs the handler for a custom URI scheme (`tauri`, `ipc`, `asset`, …).
     pub fn registerScheme(self: *Engine, scheme: []const u8, handler: SchemeHandler) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.registerScheme(scheme, handler),
@@ -172,6 +189,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Registers the receiver for `window.__zts.postMessage` from page JS.
     pub fn setMessageHandler(self: *Engine, handler: ?MessageHandler) void {
         switch (self.*) {
             .headless_mock => |m| m.message_handler = handler,
@@ -187,6 +205,7 @@ pub const Engine = union(enum) {
         }
     }
 
+    /// Registers the receiver for user-initiated window closes.
     pub fn setCloseHandler(self: *Engine, handler: ?CloseHandler) void {
         switch (self.*) {
             .headless_mock => |m| m.close_handler = handler,
@@ -225,6 +244,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Answers a scheme request, possibly from a worker thread.
     pub fn completeRequest(self: *Engine, req_id: RequestId, resp: SchemeResponse) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.completeRequest(req_id, resp),
@@ -234,6 +254,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Opens a window and returns its id.
     pub fn createWindow(self: *Engine, cfg: WindowConfig) WebviewError!WindowId {
         return switch (self.*) {
             .headless_mock => |m| m.createWindow(cfg),
@@ -243,6 +264,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Closes a window and drops its OS resources.
     pub fn closeWindow(self: *Engine, win_id: WindowId) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.closeWindow(win_id),
@@ -252,6 +274,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// The native window/view pointer, for embedding; `null` when there is none.
     pub fn nativeHandle(self: *Engine, win_id: WindowId) ?*anyopaque {
         return switch (self.*) {
             .headless_mock => |m| if (m.windows.getPtr(win_id)) |w| w.parent_native_handle else null,
@@ -273,6 +296,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Updates the title bar text.
     pub fn setTitle(self: *Engine, win_id: WindowId, title: []const u8) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setTitle(win_id, title),
@@ -282,6 +306,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Sets the client size in logical pixels.
     pub fn setSize(self: *Engine, win_id: WindowId, size: types.LogicalSize) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setSize(win_id, size),
@@ -291,6 +316,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Sets or clears the minimum client size.
     pub fn setMinSize(self: *Engine, win_id: WindowId, size: ?types.LogicalSize) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setMinSize(win_id, size),
@@ -300,6 +326,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Sets or clears the maximum client size.
     pub fn setMaxSize(self: *Engine, win_id: WindowId, size: ?types.LogicalSize) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setMaxSize(win_id, size),
@@ -309,6 +336,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Moves the client area.
     pub fn setPosition(self: *Engine, win_id: WindowId, pos: types.LogicalPoint) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setPosition(win_id, pos),
@@ -318,6 +346,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Toggles user resizing.
     pub fn setResizable(self: *Engine, win_id: WindowId, resizable: bool) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setResizable(win_id, resizable),
@@ -327,6 +356,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Minimizes or restores the window.
     pub fn setMinimized(self: *Engine, win_id: WindowId, minimized: bool) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setMinimized(win_id, minimized),
@@ -336,6 +366,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Maximizes or restores the window.
     pub fn setMaximized(self: *Engine, win_id: WindowId, maximized: bool) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setMaximized(win_id, maximized),
@@ -345,6 +376,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Enters or leaves fullscreen.
     pub fn setFullscreen(self: *Engine, win_id: WindowId, fullscreen: bool) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setFullscreen(win_id, fullscreen),
@@ -354,6 +386,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Shows or hides the window.
     pub fn setVisible(self: *Engine, win_id: WindowId, visible: bool) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setVisible(win_id, visible),
@@ -363,6 +396,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Turns the native title bar / border on or off.
     pub fn setDecorations(self: *Engine, win_id: WindowId, decorations: bool) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setDecorations(win_id, decorations),
@@ -372,6 +406,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Keeps the window above (or releases it from) the others.
     pub fn setAlwaysOnTop(self: *Engine, win_id: WindowId, on_top: bool) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setAlwaysOnTop(win_id, on_top),
@@ -381,6 +416,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Gives the window keyboard focus.
     pub fn setFocus(self: *Engine, win_id: WindowId) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.setFocus(win_id),
@@ -390,6 +426,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Starts an OS-level drag for `data-tauri-drag-region`.
     pub fn startDrag(self: *Engine, win_id: WindowId) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.startDrag(win_id),
@@ -399,6 +436,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Appends a script that runs before the next document load.
     pub fn addInitScript(self: *Engine, win_id: WindowId, script: []const u8) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.addInitScript(win_id, script),
@@ -408,6 +446,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Evaluates a script in the window's page.
     pub fn evalJs(self: *Engine, win_id: WindowId, script: []const u8) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.evalJs(win_id, script),
@@ -417,6 +456,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Points the window at another URL.
     pub fn navigate(self: *Engine, win_id: WindowId, url: []const u8) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.navigate(win_id, url),
@@ -426,6 +466,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Loads inline HTML, resolving relative links against `base_uri`.
     pub fn loadHtml(self: *Engine, win_id: WindowId, html: []const u8, base_uri: ?[]const u8) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.loadHtml(win_id, html, base_uri),
@@ -461,6 +502,7 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Opens the platform web inspector.
     pub fn openDevtools(self: *Engine, win_id: WindowId) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.openDevtools(win_id),

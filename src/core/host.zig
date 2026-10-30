@@ -34,29 +34,50 @@ pub const StepMode = enum {
     poll,
 };
 
+/// What the OS tells the app about its title bar. `.system` means "not reported" — a page should
+/// then follow `prefers-color-scheme` instead of guessing.
 pub const WindowTheme = enum {
+    /// Follow the OS look (and its live light/dark switch).
     system,
+    /// Force the light palette.
     light,
+    /// Force the dark palette.
     dark,
 };
 
 /// Declarative initial window creation specification.
 pub const WindowSpec = struct {
+    /// Window label the page and `@tauri-apps/api` address it by. Two windows must not share one.
     label: []const u8 = "main",
+    /// Initial title-bar text. Empty is allowed; the OS then shows the app name.
     title: []const u8 = "Z-Ts Application",
+    /// Initial client-area size in logical (CSS) pixels.
     size: LogicalSize = .wh(800, 600),
+    /// Lower bound for user resizing; `null` leaves it to the OS.
     min_size: ?LogicalSize = null,
+    /// Upper bound for user resizing; `null` leaves it to the OS.
     max_size: ?LogicalSize = null,
+    /// Top-left corner in logical pixels; `null` lets the window manager place the window.
     position: ?LogicalPoint = null,
+    /// Whether the user may resize the window (programmatic resizes still work).
     resizable: bool = true,
+    /// Draw the native title bar and frame. `false` is how a custom title bar is built.
     decorations: bool = true,
+    /// Make the window background transparent. Requires a compositor.
     transparent: bool = false,
+    /// Keep the window above other windows.
     always_on_top: bool = false,
+    /// Map the window immediately. `false` creates it hidden (splash → main window flows).
     visible: bool = true,
+    /// Start fullscreen.
     fullscreen: bool = false,
+    /// Allow opening the WebView inspector for this window.
     devtools: bool = false,
+    /// Painted behind the page, so the first frame is not white on a dark theme.
     background_color: ?Color = null,
+    /// Which title-bar appearance to request.
     theme: WindowTheme = .system,
+    /// First navigation target. The default is the embedded `dist/` bundle, not a URL.
     initial_url: []const u8 = "tauri://localhost/",
 };
 
@@ -65,7 +86,9 @@ pub const OutgoingResponse = response.OutgoingResponse;
 
 /// Per-call desktop window context injectable into `zts_rpc.Ctx` via `ctx.withEnv(&call_ctx)`.
 pub const CallContext = struct {
+    /// Backend the command may call into (window changes, JS eval, quit).
     host: Host,
+    /// Window the IPC message arrived on; `null` for app-level calls.
     window_id: WindowId = .invalid,
 };
 
@@ -83,9 +106,13 @@ pub const HostError = error{
 /// Every method is safe to call from any thread: implementations either enqueue an internal
 /// main-thread command via `wakeup` or act directly on thread-safe state.
 pub const Host = struct {
+    /// Backend state, passed back as the first argument of every vtable entry.
     userdata: ?*anyopaque = null,
+    /// The backend. `null_host` installs a table that only implements `wakeup`/`requestQuit`.
     vtable: *const VTable,
 
+    /// One entry per `Host` method. A `null` entry makes the matching method return
+    /// `error.Unsupported`, so a backend only implements what it can.
     pub const VTable = struct {
         /// Wakes the main OS event loop from any background thread (lock-free / async-signal-safe).
         wakeup: *const fn (userdata: ?*anyopaque) void = noopWakeup,
@@ -123,104 +150,125 @@ pub const Host = struct {
 
     fn noopWakeup(_: ?*anyopaque) void {}
 
+    /// Wakes the main event loop so a queued command runs. Safe from any thread.
     pub inline fn wakeup(self: Host) void {
         self.vtable.wakeup(self.userdata);
     }
 
+    /// Asks the app to exit; the loop notices on its next `step()`.
     pub inline fn requestQuit(self: Host) void {
         self.vtable.requestQuit(self.userdata);
     }
 
+    /// Opens a native window and returns its id.
     pub fn createWindow(self: Host, spec: WindowSpec) HostError!WindowId {
         const f = self.vtable.createWindow orelse return error.Unsupported;
         return f(self.userdata, spec);
     }
 
+    /// Closes a window and drops its OS resources.
     pub fn closeWindow(self: Host, win: WindowId) HostError!void {
         const f = self.vtable.closeWindow orelse return error.Unsupported;
         return f(self.userdata, win);
     }
 
+    /// Updates the title bar text.
     pub fn setWindowTitle(self: Host, win: WindowId, title: []const u8) HostError!void {
         const f = self.vtable.setWindowTitle orelse return error.Unsupported;
         return f(self.userdata, win, title);
     }
 
+    /// Resizes the window (inner size, in logical pixels).
     pub fn setWindowSize(self: Host, win: WindowId, size: LogicalSize) HostError!void {
         const f = self.vtable.setWindowSize orelse return error.Unsupported;
         return f(self.userdata, win, size);
     }
 
+    /// Sets the minimum inner size, or clears it with `null`.
     pub fn setWindowMinSize(self: Host, win: WindowId, size: ?LogicalSize) HostError!void {
         const f = self.vtable.setWindowMinSize orelse return error.Unsupported;
         return f(self.userdata, win, size);
     }
 
+    /// Sets the maximum inner size, or clears it with `null`.
     pub fn setWindowMaxSize(self: Host, win: WindowId, size: ?LogicalSize) HostError!void {
         const f = self.vtable.setWindowMaxSize orelse return error.Unsupported;
         return f(self.userdata, win, size);
     }
 
+    /// Moves the window's top-left corner.
     pub fn setWindowPosition(self: Host, win: WindowId, pos: LogicalPoint) HostError!void {
         const f = self.vtable.setWindowPosition orelse return error.Unsupported;
         return f(self.userdata, win, pos);
     }
 
+    /// Toggles user resizing.
     pub fn setWindowResizable(self: Host, win: WindowId, resizable: bool) HostError!void {
         const f = self.vtable.setWindowResizable orelse return error.Unsupported;
         return f(self.userdata, win, resizable);
     }
 
+    /// Minimizes or restores the window.
     pub fn setWindowMinimized(self: Host, win: WindowId, minimized: bool) HostError!void {
         const f = self.vtable.setWindowMinimized orelse return error.Unsupported;
         return f(self.userdata, win, minimized);
     }
 
+    /// Maximizes or restores the window.
     pub fn setWindowMaximized(self: Host, win: WindowId, maximized: bool) HostError!void {
         const f = self.vtable.setWindowMaximized orelse return error.Unsupported;
         return f(self.userdata, win, maximized);
     }
 
+    /// Enters or leaves fullscreen.
     pub fn setWindowFullscreen(self: Host, win: WindowId, fullscreen: bool) HostError!void {
         const f = self.vtable.setWindowFullscreen orelse return error.Unsupported;
         return f(self.userdata, win, fullscreen);
     }
 
+    /// Shows or hides the window (hidden windows stay alive).
     pub fn setWindowVisible(self: Host, win: WindowId, visible: bool) HostError!void {
         const f = self.vtable.setWindowVisible orelse return error.Unsupported;
         return f(self.userdata, win, visible);
     }
 
+    /// Turns the native title bar / border on or off.
     pub fn setWindowDecorations(self: Host, win: WindowId, decorations: bool) HostError!void {
         const f = self.vtable.setWindowDecorations orelse return error.Unsupported;
         return f(self.userdata, win, decorations);
     }
 
+    /// Keeps the window above (or releases it from) other windows.
     pub fn setWindowAlwaysOnTop(self: Host, win: WindowId, on_top: bool) HostError!void {
         const f = self.vtable.setWindowAlwaysOnTop orelse return error.Unsupported;
         return f(self.userdata, win, on_top);
     }
 
+    /// Gives the window keyboard focus.
     pub fn setWindowFocus(self: Host, win: WindowId) HostError!void {
         const f = self.vtable.setWindowFocus orelse return error.Unsupported;
         return f(self.userdata, win);
     }
 
+    /// Starts an OS-level drag, so `data-tauri-drag-region` works without a JS loop.
     pub fn startWindowDrag(self: Host, win: WindowId) HostError!void {
         const f = self.vtable.startWindowDrag orelse return error.Unsupported;
         return f(self.userdata, win);
     }
 
+    /// Evaluates a script in the window's page.
     pub fn evalJs(self: Host, win: WindowId, script: []const u8) HostError!void {
         const f = self.vtable.evalJs orelse return error.Unsupported;
         return f(self.userdata, win, script);
     }
 
+    /// Points the window at another URL (assets protocol or remote).
     pub fn navigate(self: Host, win: WindowId, url: []const u8) HostError!void {
         const f = self.vtable.navigate orelse return error.Unsupported;
         return f(self.userdata, win, url);
     }
 
+    /// Opens the platform web inspector, when the backend supports it.
     pub fn openDevtools(self: Host, win: WindowId) HostError!void {
         const f = self.vtable.openDevtools orelse return error.Unsupported;
         return f(self.userdata, win);
@@ -248,13 +296,20 @@ pub const Host = struct {
 /// Lightweight deterministic `Host` implementation for unit-testing `zts_rpc` and `zts_tauri`
 /// command handlers without spinning up any GUI window or network socket.
 pub const RecordingHost = struct {
+    /// Allocator for labels, titles and the eval log.
     allocator: Allocator,
+    /// Windows created through this host, keyed by the id handed out.
     windows: handle_pool.HandlePool(MockWindow, .window) = .empty,
+    /// Scripts passed to `evalJs`, in call order.
     eval_log: std.ArrayList([]u8) = .empty,
+    /// How many times `wakeup`/`requestQuit` spun the loop.
     wakeups: usize = 0,
+    /// Set by `requestQuit`; the test loop can assert on it.
     quit_requested: bool = false,
+    /// How many times `startWindowDrag` was called.
     drag_count: usize = 0,
 
+    /// The state remembered per window, so tests can assert on the effect of a command.
     pub const MockWindow = struct {
         label: []u8,
         title: []u8,
@@ -269,10 +324,12 @@ pub const RecordingHost = struct {
         resizable: bool = true,
     };
 
+    /// Creates an empty host. Free it with `deinit`.
     pub fn init(allocator: Allocator) RecordingHost {
         return .{ .allocator = allocator };
     }
 
+    /// Frees every remembered label, title and eval log entry.
     pub fn deinit(self: *RecordingHost) void {
         const alloc = self.allocator;
         var it = self.windows.iterator();
@@ -285,6 +342,7 @@ pub const RecordingHost = struct {
         self.eval_log.deinit(alloc);
     }
 
+    /// Wraps `self` as a `Host` the command handlers can call into.
     pub fn host(self: *RecordingHost) Host {
         return .{
             .userdata = self,

@@ -81,10 +81,15 @@ pub fn withCorePlugins(comptime app_schema_or_specs: anytype) type {
 
 /// Bundles runtime state for all 5 Tauri v2 core plugins and wires automatic window-label lookup.
 pub const CorePluginStates = struct {
+    /// `plugin:window` state: the live windows and their labels.
     windows: WindowRegistry,
+    /// `plugin:event` state: JS and native listeners.
     events: EventBus,
+    /// `plugin:path` state: base directories.
     paths: PathState,
+    /// `plugin:app` state: identity and theme.
     app_state: AppState,
+    /// `plugin:resources` state: handles handed to JS.
     resources: ResourceTable,
     /// `M4-03`: `plugin:menu`. Starts on the `Stub` backend; `withMenuBackend` swaps in a native
     /// one (`native.menuBackend()`) or a `Mock` for tests.
@@ -134,6 +139,7 @@ pub const CorePluginStates = struct {
         return self;
     }
 
+    /// Frees the bundle after tearing every plugin down.
     pub fn destroy(self: *CorePluginStates) void {
         const alloc = self.windows.allocator;
         // Menu nodes are owned by `resources`; closing the table detaches them from `menu_state`

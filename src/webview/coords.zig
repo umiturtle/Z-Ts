@@ -13,10 +13,13 @@ const testing = std.testing;
 
 /// Visible frame of an `NSScreen` in Cocoa coordinates (`visibleFrame` excludes the menu bar/dock).
 pub const ScreenFrame = struct {
+    /// Left edge in Cocoa points.
     x: f64 = 0,
     /// Cocoa bottom-left Y (can be negative on secondary displays placed below the main one).
     y: f64 = 0,
+    /// Visible width in points.
     width: f64 = 1280,
+    /// Visible height in points.
     height: f64 = 800,
 
     /// Y coordinate of the TOP edge of the screen in Cocoa space.

@@ -22,14 +22,30 @@ pub const WindowId = Handle(.window);
 /// Nominal 53-bit generational pending scheme request identifier (`foundation.Handle(.ipc_request)`).
 pub const RequestId = Handle(.ipc_request);
 
+/// How long `step()` is allowed to block.
+///
+/// * `.blocking` — park the calling thread until at least one event (input, navigation, pending
+///   scheme completion) arrives. Use it for a plain `while (running) try app.step(.blocking);`.
+/// * `.poll` — return immediately, even when nothing happened. Use it when the main thread has
+///   other work to do (a 60fps render loop, a game engine, an embedded host that owns the run loop).
 pub const StepMode = enum(u32) {
+    /// Park until at least one event arrives (the plain `while (running) step(...)` loop).
     blocking = 0,
+    /// Return immediately; use when the host owns the run loop.
     poll = 1,
 };
 
+/// Which engine `Backend.init()` should build.
+///
+/// `.auto` picks a native backend when one was compiled in **and** the platform can actually open a
+/// window (a GTK backend without `$DISPLAY` falls back), otherwise `HeadlessMock`. `.native` and
+/// `.headless_mock` are for tests that must not silently change engine.
 pub const BackendKind = enum(u32) {
+    /// Native when it was compiled in and a display is available, else the mock.
     auto = 0,
+    /// Force the in-memory engine (tests never silently switch backends).
     headless_mock = 1,
+    /// Force the native engine; `error.DisplayUnavailable` when there is none.
     native = 2,
 };
 
@@ -43,8 +59,11 @@ pub const WebviewError = error{
     PlatformFailure,
 };
 
+/// One HTTP header of a scheme request or response. Names are ASCII, values are opaque bytes.
 pub const HeaderPair = struct {
+    /// Header name (ASCII).
     name: []const u8,
+    /// Header value (opaque bytes).
     value: []const u8,
 };
 
@@ -52,14 +71,22 @@ pub const HeaderPair = struct {
 /// Lifetime of slice fields is valid for the duration of `SchemeHandler.call`; handlers that dispatch
 /// asynchronously onto worker threads simply dupe the slices they need and complete later via `RequestId`.
 pub const SchemeRequest = struct {
+    /// Token to answer with (`completeRequest` / `zts_webview_complete_request`).
     request_id: RequestId,
+    /// Window the request came from.
     window_id: WindowId,
+    /// Scheme without `://` (`tauri`, `ipc`, `asset`).
     scheme: []const u8,
+    /// HTTP method (`GET`, `POST`, …).
     method: []const u8,
+    /// Full request URI, still percent-encoded.
     uri: []const u8,
+    /// Request headers, borrowed for the duration of the handler call.
     headers: []const HeaderPair = &.{},
+    /// Request body bytes (empty for `GET`).
     body: []const u8 = "",
 
+    /// Case-insensitive header lookup, or `null`.
     pub fn header(self: SchemeRequest, target_name: []const u8) ?[]const u8 {
         for (self.headers) |h| {
             if (std.ascii.eqlIgnoreCase(h.name, target_name)) return h.value;
@@ -71,11 +98,16 @@ pub const SchemeRequest = struct {
 /// Custom response envelope supporting full HTTP status, extra headers (e.g. `Content-Range`,
 /// `Tauri-Response`), and zero-copy `OwnedBytes` payload completion.
 pub const SchemeResponse = struct {
+    /// HTTP status (`200`, `404`, …).
     status_code: u16 = 200,
+    /// `Content-Type` header value.
     content_type: []const u8 = "application/octet-stream",
+    /// Additional headers (`Tauri-Response`, `Content-Range`, …).
     extra_headers: []const HeaderPair = &.{},
+    /// Response bytes; ownership transfers to the engine.
     body: OwnedBytes,
 
+    /// Converts an `OutgoingResponse`, folding its status into `Tauri-Response`.
     pub fn fromOutgoing(out: OutgoingResponse) SchemeResponse {
         const status_hdr: HeaderPair = .{
             .name = "Tauri-Response",
@@ -93,6 +125,7 @@ pub const SchemeResponse = struct {
         };
     }
 
+    /// Releases `body`. Headers are borrowed and are not freed.
     pub fn deinit(self: *SchemeResponse) void {
         self.body.deinit();
     }
@@ -100,17 +133,26 @@ pub const SchemeResponse = struct {
 
 /// Owned heap copy of `SchemeResponse` queued safely across worker -> main UI thread boundaries.
 pub const QueuedCompletion = struct {
+    /// Request this reply belongs to.
     request_id: RequestId,
+    /// Owned copy of the HTTP status.
     status_code: u16,
+    /// Owned `Content-Type`.
     content_type: []u8,
+    /// Owned copies of the extra headers.
     extra_headers: []OwnedHeader,
+    /// Owned response bytes, moved from the `SchemeResponse`.
     body: OwnedBytes,
 
+    /// One header, copied so the completion can outlive the handler call.
     pub const OwnedHeader = struct {
+        /// Owned header name.
         name: []u8,
+        /// Owned header value.
         value: []u8,
     };
 
+    /// Deep-copies `resp` (except the body, which is moved) so it can cross a thread boundary.
     pub fn cloneFrom(allocator: Allocator, request_id: RequestId, resp: SchemeResponse) Allocator.Error!QueuedCompletion {
         // Note: on OOM caller still owns `resp.body` until moved at the very end!
         const ct_copy = try allocator.dupe(u8, resp.content_type);
@@ -143,6 +185,7 @@ pub const QueuedCompletion = struct {
         };
     }
 
+    /// Frees the copies and the body.
     pub fn deinit(self: *QueuedCompletion, allocator: Allocator) void {
         allocator.free(self.content_type);
         for (self.extra_headers) |h| {
@@ -154,28 +197,51 @@ pub const QueuedCompletion = struct {
     }
 };
 
+/// Callback invoked (on the backend's main thread) for every `tauri://` / `ipc://` / `asset://` hit.
+///
+/// `onRequest` must either call `completeRequest()` before returning — synchronous handlers such as
+/// `zts_bridge` do exactly that — or keep the `RequestId` and complete it from a worker thread;
+/// the backend holds the request pending until then (`step()` keeps servicing the UI meanwhile).
 pub const SchemeHandler = struct {
+    /// Opaque pointer passed back on every call.
     userdata: ?*anyopaque = null,
+    /// Handles one request; must complete it now or keep the id for later.
     onRequest: *const fn (userdata: ?*anyopaque, req: SchemeRequest) void,
 
+    /// Invokes `onRequest` with `userdata`.
     pub inline fn call(self: SchemeHandler, req: SchemeRequest) void {
         self.onRequest(self.userdata, req);
     }
 };
 
+/// Receives `window.__zts.postMessage(...)` payloads from the page (`ipc://` channel).
+///
+/// `message` is borrowed for the duration of the call; dupe it if the handler hands it to a queue.
+/// Returning is the only acknowledgement the page gets, so a handler that needs to reply should do
+/// so through the same IPC channel rather than through the return path.
 pub const MessageHandler = struct {
+    /// Opaque pointer passed back on every call.
     userdata: ?*anyopaque = null,
+    /// Receives one page message; `message` is only valid during the call.
     onMessage: *const fn (userdata: ?*anyopaque, window_id: WindowId, message: []const u8) void,
 
+    /// Invokes `onMessage` with `userdata`.
     pub inline fn call(self: MessageHandler, window_id: WindowId, message: []const u8) void {
         self.onMessage(self.userdata, window_id, message);
     }
 };
 
+/// Called after a window has been closed (user clicked the frame button, or the app called
+/// `closeWindow()`). By the time it runs the `WindowId` is already invalid, so the handler is for
+/// bookkeeping — dropping per-window state, decrementing a "quit when zero" counter — not for
+/// cancelling the close.
 pub const CloseHandler = struct {
+    /// Opaque pointer passed back on every call.
     userdata: ?*anyopaque = null,
+    /// Bookkeeping only: the window is already gone when this runs.
     onClose: *const fn (userdata: ?*anyopaque, window_id: WindowId) void,
 
+    /// Invokes `onClose` with `userdata`.
     pub inline fn call(self: CloseHandler, window_id: WindowId) void {
         self.onClose(self.userdata, window_id);
     }
@@ -185,6 +251,7 @@ pub const CloseHandler = struct {
 /// (cairo, `NSBitmapImageRep`, WebView2 `CapturePreview` all encode it natively); the enum exists so
 /// a future `.jpeg` can be added without changing the ABI.
 pub const CaptureFormat = enum(u32) {
+    /// PNG — the only format every backend can encode natively.
     png = 0,
 };
 
@@ -194,9 +261,13 @@ pub const CaptureFormat = enum(u32) {
 /// never frees bytes it has already handed out, and `closeWindow()` / `deinit()` free anything the
 /// caller left behind (verified with `std.testing.allocator`).
 pub const Capture = struct {
+    /// PNG bytes. Freed by `deinit()`, never by the backend.
     bytes: []u8,
+    /// Width parsed from the PNG's IHDR chunk.
     width: u32,
+    /// Height parsed from the PNG's IHDR chunk.
     height: u32,
+    /// Allocator that owns `bytes`.
     allocator: Allocator,
 
     /// Takes ownership of `bytes`; returns `error.PlatformFailure` (and frees them) when the buffer
@@ -214,31 +285,53 @@ pub const Capture = struct {
         };
     }
 
+    /// Frees the PNG bytes and poisons the value.
     pub fn deinit(self: *Capture) void {
         self.allocator.free(self.bytes);
         self.* = undefined;
     }
 };
 
+/// Everything a window needs at creation time. Every field has a default, so
+/// `.{}` is a valid (and common) configuration.
+///
+/// String fields are borrowed only until `createWindow()` returns; the backend copies what it keeps.
+/// `size` / `min_size` / `position` are in **logical (CSS) pixels**, which is what a HiDPI screen
+/// scales for you — the same numbers produce the same layout on every OS.
 pub const WindowConfig = struct {
+    /// Title bar text.
     title: []const u8 = "Z-Ts Window",
+    /// Initial client size in logical pixels.
     size: LogicalSize = .wh(800, 600),
+    /// Lower bound for user resizing.
     min_size: ?LogicalSize = null,
+    /// Upper bound for user resizing.
     max_size: ?LogicalSize = null,
+    /// Initial top-left corner; `null` lets the window manager place it.
     position: ?LogicalPoint = null,
+    /// Whether the user may resize the window.
     resizable: bool = true,
+    /// Draw the native title bar and frame.
     decorations: bool = true,
+    /// Transparent background; needs a compositor.
     transparent: bool = false,
+    /// Keep the window above others.
     always_on_top: bool = false,
+    /// Map the window immediately; `false` creates it hidden.
     visible: bool = true,
+    /// Start fullscreen.
     fullscreen: bool = false,
+    /// Allow the WebView inspector for this window.
     devtools: bool = false,
+    /// Painted before the first frame, so a dark theme does not flash white.
     background_color: ?Color = null,
     /// Optional native parent widget/view handle (`*GtkWidget` / `NSView*` / `HWND`) for embedding
     /// a WebView inside an existing game engine / broadcast dock window!
     parent_native_handle: ?*anyopaque = null,
     /// UserScripts injected at `DOCUMENT_START` before any page `<script>` executes.
     init_scripts: []const []const u8 = &.{},
+    /// URL to open first; `null` means `about:blank` until `navigate()`.
     initial_url: ?[]const u8 = null,
+    /// Inline HTML to load first; overrides `initial_url` when set.
     initial_html: ?[]const u8 = null,
 };

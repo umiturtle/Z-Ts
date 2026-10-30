@@ -23,9 +23,14 @@ const tauri = @import("zts_tauri");
 const host_mod = @import("host.zig");
 const io_stub = @import("io_stub.zig");
 
+/// How the JS side should decode a response body: JSON, raw bytes, or text. Encoded as a `u32`
+/// across the WASM boundary (`0`/`1`/`2`), inferred from the `Content-Type` the handler set.
 pub const ResponseKind = enum(u32) {
+    /// Object/array payload, serialized as JSON.
     json = 0,
+    /// Raw bytes.
     binary = 1,
+    /// A plain string.
     text = 2,
 };
 

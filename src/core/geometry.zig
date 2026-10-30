@@ -18,12 +18,15 @@ pub const GeometryError = error{
 
 /// Device-independent CSS logical pixel value (`f64`, e.g. `800.0` matching CSS `800px`).
 pub const LogicalPx = struct {
+    /// The value in CSS pixels.
     v: f64,
 
+    /// Wraps a raw value.
     pub inline fn init(val: f64) LogicalPx {
         return .{ .v = val };
     }
 
+    /// Scales up and rounds to whole device pixels.
     pub fn toPhysical(self: LogicalPx, scale: ScaleFactor) PhysicalPx {
         return .{ .v = @intFromFloat(@round(self.v * scale.v)) };
     }
@@ -31,12 +34,15 @@ pub const LogicalPx = struct {
 
 /// Raw hardware framebuffer pixel coordinate (`i32`, e.g. `1600` at 200% Windows DPI).
 pub const PhysicalPx = struct {
+    /// The value in device pixels.
     v: i32,
 
+    /// Wraps a raw value.
     pub inline fn init(val: i32) PhysicalPx {
         return .{ .v = val };
     }
 
+    /// Divides by the scale factor, back to CSS pixels.
     pub fn toLogical(self: PhysicalPx, scale: ScaleFactor) LogicalPx {
         return .{ .v = @as(f64, @floatFromInt(self.v)) / scale.v };
     }
@@ -44,24 +50,33 @@ pub const PhysicalPx = struct {
 
 /// Validated positive finite HiDPI scale factor (`window.devicePixelRatio`, e.g. `1.0`, `2.0`).
 pub const ScaleFactor = struct {
+    /// The multiplier (`window.devicePixelRatio`).
     v: f64 = 1.0,
 
+    /// The `1.0` factor of a non-HiDPI display.
     pub const standard: ScaleFactor = .{ .v = 1.0 };
 
+    /// Validates that the factor is finite and positive.
     pub fn init(factor: f64) GeometryError!ScaleFactor {
         if (!std.math.isFinite(factor) or factor <= 0.0) return error.InvalidScaleFactor;
         return .{ .v = factor };
     }
 };
 
+/// A point in **logical (CSS) pixels**, Y-down from the top-left corner — the coordinate system the
+/// page itself uses. Multiply by a `ScaleFactor` to reach device pixels.
 pub const LogicalPoint = struct {
+    /// X in CSS pixels, from the left edge.
     x: LogicalPx,
+    /// Y in CSS pixels, from the top edge (Y-down, like the page).
     y: LogicalPx,
 
+    /// Builds a point from two raw values.
     pub inline fn xy(x: f64, y: f64) LogicalPoint {
         return .{ .x = .init(x), .y = .init(y) };
     }
 
+    /// Converts both axes to device pixels.
     pub fn toPhysical(self: LogicalPoint, scale: ScaleFactor) PhysicalPoint {
         return .{
             .x = self.x.toPhysical(scale),
@@ -78,14 +93,20 @@ pub const LogicalPoint = struct {
     }
 };
 
+/// A point in **physical (device) pixels**, Y-down. This is what Win32 and X11 report, and what a
+/// screenshot's pixel coordinates mean.
 pub const PhysicalPoint = struct {
+    /// X in device pixels.
     x: PhysicalPx,
+    /// Y in device pixels.
     y: PhysicalPx,
 
+    /// Builds a point from two raw values.
     pub inline fn xy(x: i32, y: i32) PhysicalPoint {
         return .{ .x = .init(x), .y = .init(y) };
     }
 
+    /// Converts both axes to CSS pixels.
     pub fn toLogical(self: PhysicalPoint, scale: ScaleFactor) LogicalPoint {
         return .{
             .x = self.x.toLogical(scale),
@@ -94,14 +115,20 @@ pub const PhysicalPoint = struct {
     }
 };
 
+/// Width/height in logical (CSS) pixels — the unit `WindowConfig.size` and CSS `px` share, so the
+/// same number produces the same layout on a 1x and a 2x screen.
 pub const LogicalSize = struct {
+    /// Width in CSS pixels.
     width: LogicalPx,
+    /// Height in CSS pixels.
     height: LogicalPx,
 
+    /// Builds a size from two raw values.
     pub inline fn wh(w: f64, h: f64) LogicalSize {
         return .{ .width = .init(w), .height = .init(h) };
     }
 
+    /// Converts both axes to device pixels.
     pub fn toPhysical(self: LogicalSize, scale: ScaleFactor) PhysicalSize {
         return .{
             .width = self.width.toPhysical(scale),
@@ -110,14 +137,19 @@ pub const LogicalSize = struct {
     }
 };
 
+/// Width/height in physical (device) pixels, as reported by the OS window manager.
 pub const PhysicalSize = struct {
+    /// Width in device pixels.
     width: PhysicalPx,
+    /// Height in device pixels.
     height: PhysicalPx,
 
+    /// Builds a size from two raw values.
     pub inline fn wh(w: i32, h: i32) PhysicalSize {
         return .{ .width = .init(w), .height = .init(h) };
     }
 
+    /// Converts both axes to CSS pixels.
     pub fn toLogical(self: PhysicalSize, scale: ScaleFactor) LogicalSize {
         return .{
             .width = self.width.toLogical(scale),
@@ -126,10 +158,15 @@ pub const PhysicalSize = struct {
     }
 };
 
+/// A rectangle in logical pixels: origin is the top-left corner. `flipY` converts to and from the
+/// Bottom-Left Y-up system AppKit uses (the mapping is its own inverse).
 pub const LogicalRect = struct {
+    /// Top-left corner in CSS pixels.
     origin: LogicalPoint,
+    /// Extent in CSS pixels.
     size: LogicalSize,
 
+    /// Builds a rect from four raw values.
     pub inline fn xywh(x: f64, y: f64, w: f64, h: f64) LogicalRect {
         return .{ .origin = .xy(x, y), .size = .wh(w, h) };
     }
@@ -147,6 +184,7 @@ pub const LogicalRect = struct {
         };
     }
 
+    /// Converts the corner and the extent to device pixels.
     pub fn toPhysical(self: LogicalRect, scale: ScaleFactor) PhysicalRect {
         return .{
             .origin = self.origin.toPhysical(scale),
@@ -155,10 +193,14 @@ pub const LogicalRect = struct {
     }
 };
 
+/// A rectangle in physical pixels, used for capture regions and hit testing.
 pub const PhysicalRect = struct {
+    /// Top-left corner in device pixels.
     origin: PhysicalPoint,
+    /// Extent in device pixels.
     size: PhysicalSize,
 
+    /// Converts the corner and the extent back to CSS pixels.
     pub fn toLogical(self: PhysicalRect, scale: ScaleFactor) LogicalRect {
         return .{
             .origin = self.origin.toLogical(scale),

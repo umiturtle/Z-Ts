@@ -16,8 +16,12 @@ const testing = std.testing;
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
+/// Wire marker of a `Channel<T>` handle: the JS side passes `"__CHANNEL__:<id>"` in the command
+/// arguments, and the engine turns it back into a native send/receive pair.
 pub const channel_prefix = "__CHANNEL__:";
 
+/// `Channel<T>` failures: the host could not deliver, the payload failed to encode, or the channel
+/// was closed by the receiver.
 pub const ChannelError = core.HostError || rpc.EncodeError || error{
     MissingHostContext,
     ChannelClosed,

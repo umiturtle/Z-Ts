@@ -12,10 +12,19 @@ const std = @import("std");
 const Io = std.Io;
 const testing = std.testing;
 
+/// Entropy of the per-run session token, in bytes. 32 bytes (256 bits) makes guessing infeasible and
+/// still fits one cookie value comfortably.
 pub const token_bytes = 32; // 256-bit entropy
+/// Length of the hex-encoded session token — 64 characters for 256 bits of entropy, which is what
+/// `Config.invoke_key` holds.
 pub const token_hex_len = token_bytes * 2; // 64 hex chars
+/// Name of the session cookie. `__Host-`/`__Secure-` prefixes are avoided on purpose: the bridge is
+/// served over plain `http://127.0.0.1`, where a browser would silently drop a `Secure` cookie.
 pub const cookie_name = "__zts_session";
 
+/// Which browser origins may call the bridge. The default `.same_host` compares the `Origin`
+/// authority with the request's `Host`, which blocks a malicious tab on another origin while still
+/// working behind a port-forwarding proxy; `.allow_list` adds explicit dev-server origins.
 pub const OriginPolicy = union(enum) {
     /// Requires `Origin` header authority (`host[:port]`) to match the request `Host` header
     /// case-insensitively. Works seamlessly on `http://127.0.0.1:<port>`, `http://localhost:<port>`,
@@ -148,10 +157,14 @@ pub fn percentDecodeSegment(out: []u8, raw: []const u8) error{ InvalidEncoding, 
 
 /// Immutable per-server cryptographic credentials initialized at `BridgeServer.start`.
 pub const SecurityState = struct {
+    /// Hex token the browser session cookie must carry.
     session_token: [token_hex_len]u8,
+    /// Hex token every `ipc://` request must present.
     invoke_key: [token_hex_len]u8,
+    /// Which `Origin` values may connect at all.
     origin_policy: OriginPolicy = .same_host,
 
+    /// Generates both tokens from the OS RNG.
     pub fn initRandom(io: Io, origin_policy: OriginPolicy) SecurityState {
         return .{
             .session_token = generateTokenHex(io),
@@ -160,6 +173,7 @@ pub const SecurityState = struct {
         };
     }
 
+    /// Formats the `Set-Cookie` value (`HttpOnly; SameSite=Strict`) into `buf`.
     pub fn setCookieHeaderValue(self: *const SecurityState, buf: *[160]u8) []const u8 {
         return std.fmt.bufPrint(
             buf,
@@ -168,6 +182,7 @@ pub const SecurityState = struct {
         ) catch unreachable;
     }
 
+    /// Constant-time check of the session cookie.
     pub fn hasValidSessionCookie(self: *const SecurityState, cookie_header: ?[]const u8) bool {
         const hdr = cookie_header orelse return false;
         const val = extractCookieValue(hdr, cookie_name) orelse return false;

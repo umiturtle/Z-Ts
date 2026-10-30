@@ -91,10 +91,14 @@ pub fn PendingTable(comptime NativePayload: type) type {
 
 /// Multi-producer, main-thread single-consumer completion channel for `completeRequest`.
 pub const CompletionQueue = struct {
+    /// Allocator that owns the queued replies.
     allocator: Allocator,
+    /// IO reactor the ring queue uses.
     io: Io,
+    /// Replies pushed by worker threads, popped by the main thread.
     queue: foundation.RingQueue(types.QueuedCompletion) = .empty,
 
+    /// Creates an empty queue.
     pub fn init(allocator: Allocator, io: Io) CompletionQueue {
         return .{
             .allocator = allocator,
@@ -102,6 +106,7 @@ pub const CompletionQueue = struct {
         };
     }
 
+    /// Frees every reply still queued.
     pub fn deinit(self: *CompletionQueue) void {
         while (self.queue.tryPop(self.io)) |item_val| {
             var item = item_val;
@@ -110,6 +115,7 @@ pub const CompletionQueue = struct {
         self.queue.deinit(self.allocator);
     }
 
+    /// Queues a reply (copies the response out of the caller's stack).
     pub fn push(
         self: *CompletionQueue,
         request_id: types.RequestId,
@@ -120,6 +126,7 @@ pub const CompletionQueue = struct {
         _ = self.queue.push(self.allocator, self.io, cloned) catch return error.OutOfMemory;
     }
 
+    /// Takes the oldest reply, or `null` when the queue is empty.
     pub fn tryPop(self: *CompletionQueue) ?types.QueuedCompletion {
         return self.queue.tryPop(self.io);
     }

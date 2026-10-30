@@ -106,28 +106,46 @@ fn cancelWebKitRequest(req_ptr: *c.WebKitURISchemeRequest) void {
     c.g_object_unref(req_ptr);
 }
 
+/// GTK3 + WebKit2GTK 4.1 backend, bound through hand-written `extern` declarations (no `@cImport`, so
+/// the build needs no clang at compile time). Requires a display; without one `Backend.init` falls back
+/// to `HeadlessMock` unless `.native` was requested explicitly.
 pub const LinuxGtkBackend = struct {
+    /// Allocator for windows, slots and pending tables.
     allocator: Allocator,
+    /// IO reactor behind the idle-source wakeups.
     io: Io,
+    /// Shared `WebKitWebContext` (one per process).
     web_context: *c.WebKitWebContext,
+    /// Set by `requestQuit()`, read from the GTK main loop.
     quit_requested: std.atomic.Value(bool) = .init(false),
+    /// Whether an idle callback is already queued (coalesces wakeups).
     wakeup_scheduled: std.atomic.Value(bool) = .init(false),
+    /// URI-scheme requests currently being answered asynchronously.
     active_streams: std.atomic.Value(usize) = .init(0),
 
+    /// Live windows, keyed by handle.
     windows: foundation.HandlePool(LinuxWindow, .window) = .empty,
+    /// Allocated `g_signal_connect_data` slots; they must outlive their widget.
     signal_slots: std.ArrayList(*SignalSlot) = .empty,
+    /// Registered URI-scheme handlers; GTK keeps the pointers.
     scheme_slots: std.ArrayList(*SchemeSlot) = .empty,
+    /// Scheme requests waiting for `completeRequest`.
     pending: pending_mod.PendingTable(*c.WebKitURISchemeRequest) = .{},
+    /// Replies queued from worker threads, drained by `step()`.
     completions: pending_mod.CompletionQueue,
 
+    /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
+    /// Disable GPU compositing (headless CI without a GL stack).
     force_software_render: bool = false,
 
     /// Screenshot slots that WebKit still owes us a callback for, plus finished-but-uncollected
     /// images. Freed by `deinit()` in every path, so `std.testing.allocator` proves no leak.
     snapshots: std.ArrayList(*SnapshotSlot) = .empty,
 
+    /// Opens the display, creates the `WebKitWebContext`, or fails with `error.DisplayUnavailable`.
     pub fn init(allocator: Allocator, io: Io) types.WebviewError!*LinuxGtkBackend {
         if (c.gtk_init_check(null, null) == 0) {
             return error.DisplayUnavailable;
@@ -153,6 +171,7 @@ pub const LinuxGtkBackend = struct {
         return false;
     }
 
+    /// Destroys every window and drops the context.
     pub fn deinit(self: *LinuxGtkBackend) void {
         const alloc = self.allocator;
 
@@ -208,6 +227,7 @@ pub const LinuxGtkBackend = struct {
         alloc.destroy(self);
     }
 
+    /// Iterates the GTK main loop; `.blocking` waits for the next event.
     pub fn step(self: *LinuxGtkBackend, mode: types.StepMode) bool {
         self.drainCompletions();
         if (self.quit_requested.load(.acquire)) return false;
@@ -226,17 +246,20 @@ pub const LinuxGtkBackend = struct {
         return c.G_SOURCE_REMOVE;
     }
 
+    /// Queues an idle callback, so the loop wakes from any thread.
     pub fn wakeup(self: *LinuxGtkBackend) void {
         if (!self.wakeup_scheduled.swap(true, .acq_rel)) {
             _ = c.g_idle_add_full(c.G_PRIORITY_HIGH, onIdleWakeup, self, null);
         }
     }
 
+    /// Marks the app for exit and wakes the loop.
     pub fn requestQuit(self: *LinuxGtkBackend) void {
         self.quit_requested.store(true, .release);
         self.wakeup();
     }
 
+    /// Installs a `WebKitURISchemeHandler` for `scheme`.
     pub fn registerScheme(self: *LinuxGtkBackend, scheme: []const u8, handler: types.SchemeHandler) types.WebviewError!void {
         if (scheme.len == 0) return error.InvalidArgument;
         const scheme_z = self.allocator.dupeSentinel(u8, scheme, 0) catch return error.OutOfMemory;
@@ -415,6 +438,7 @@ pub const LinuxGtkBackend = struct {
         self.drainCompletions();
     }
 
+    /// Answers a pending scheme request (from any thread).
     pub fn completeRequest(self: *LinuxGtkBackend, req_id: types.RequestId, resp: types.SchemeResponse) types.WebviewError!void {
         self.completions.push(req_id, resp) catch return error.OutOfMemory;
         self.wakeup();
@@ -535,6 +559,7 @@ pub const LinuxGtkBackend = struct {
         }
     }
 
+    /// Creates the `GtkWindow`, the `WebKitWebView` and the signal handlers.
     pub fn createWindow(self: *LinuxGtkBackend, cfg: types.WindowConfig) types.WebviewError!types.WindowId {
         const ucm = c.webkit_user_content_manager_new();
         errdefer c.g_object_unref(ucm);
@@ -682,6 +707,7 @@ pub const LinuxGtkBackend = struct {
         return win_id;
     }
 
+    /// Destroys the window and drops its slots.
     pub fn closeWindow(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
         const w_ptr = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         self.dropSnapshots(win_id);
@@ -699,6 +725,7 @@ pub const LinuxGtkBackend = struct {
         c.g_object_unref(ucm);
     }
 
+    /// The `GtkWidget*` for `win_id`, or `null`.
     pub fn nativeHandle(self: *LinuxGtkBackend, win_id: types.WindowId) ?*anyopaque {
         const w = self.windows.getPtr(win_id) orelse return null;
         // Embedded windows have no `GtkWindow` of their own: hand back the widget the host actually
@@ -854,6 +881,7 @@ pub const LinuxGtkBackend = struct {
         c.gtk_window_set_geometry_hints(@ptrCast(top), null, if (mask != 0) &geom else null, mask);
     }
 
+    /// Calls `gtk_window_set_title`.
     pub fn setTitle(self: *LinuxGtkBackend, win_id: types.WindowId, title: []const u8) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         const z = self.allocator.dupeSentinel(u8, title, 0) catch return error.OutOfMemory;
@@ -861,6 +889,7 @@ pub const LinuxGtkBackend = struct {
         c.gtk_window_set_title(gtk_win, z.ptr);
     }
 
+    /// Calls `gtk_window_resize` (logical pixels).
     pub fn setSize(self: *LinuxGtkBackend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_resize(
@@ -870,69 +899,82 @@ pub const LinuxGtkBackend = struct {
         );
     }
 
+    /// Sets `gtk_widget_set_size_request` minimum.
     pub fn setMinSize(self: *LinuxGtkBackend, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         w.min_size = size;
         try self.applyGeometryHints(win_id);
     }
 
+    /// Records the maximum via the geometry hints.
     pub fn setMaxSize(self: *LinuxGtkBackend, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         w.max_size = size;
         try self.applyGeometryHints(win_id);
     }
 
+    /// Calls `gtk_window_move`.
     pub fn setPosition(self: *LinuxGtkBackend, win_id: types.WindowId, pos: types.LogicalPoint) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_move(gtk_win, @intFromFloat(pos.x.v), @intFromFloat(pos.y.v));
     }
 
+    /// Calls `gtk_window_set_resizable`.
     pub fn setResizable(self: *LinuxGtkBackend, win_id: types.WindowId, resizable: bool) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_set_resizable(gtk_win, if (resizable) 1 else 0);
     }
 
+    /// Calls `gtk_window_iconify` / `deiconify`.
     pub fn setMinimized(self: *LinuxGtkBackend, win_id: types.WindowId, minimized: bool) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         if (minimized) c.gtk_window_iconify(gtk_win) else c.gtk_window_deiconify(gtk_win);
     }
 
+    /// Calls `gtk_window_maximize` / `unmaximize`.
     pub fn setMaximized(self: *LinuxGtkBackend, win_id: types.WindowId, maximized: bool) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         if (maximized) c.gtk_window_maximize(gtk_win) else c.gtk_window_unmaximize(gtk_win);
     }
 
+    /// Calls `gtk_window_fullscreen` / `unfullscreen`.
     pub fn setFullscreen(self: *LinuxGtkBackend, win_id: types.WindowId, fullscreen: bool) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         if (fullscreen) c.gtk_window_fullscreen(gtk_win) else c.gtk_window_unfullscreen(gtk_win);
     }
 
+    /// Calls `gtk_widget_show` / `gtk_widget_hide`.
     pub fn setVisible(self: *LinuxGtkBackend, win_id: types.WindowId, visible: bool) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         const target = w.toplevel orelse @as(*c.GtkWidget, @ptrCast(w.webview));
         if (visible) c.gtk_widget_show_all(target) else c.gtk_widget_hide(target);
     }
 
+    /// Calls `gtk_window_set_decorated`.
     pub fn setDecorations(self: *LinuxGtkBackend, win_id: types.WindowId, decorations: bool) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_set_decorated(gtk_win, if (decorations) 1 else 0);
     }
 
+    /// Calls `gtk_window_set_keep_above`.
     pub fn setAlwaysOnTop(self: *LinuxGtkBackend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_set_keep_above(gtk_win, if (on_top) 1 else 0);
     }
 
+    /// Calls `gtk_window_present`.
     pub fn setFocus(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_present(gtk_win);
     }
 
+    /// Calls `gtk_window_begin_move_drag`, so GTK runs the drag.
     pub fn startDrag(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_begin_move_drag(gtk_win, 1, 0, 0, 0);
     }
 
+    /// Adds a `WebKitUserScript` at `DOCUMENT_START`.
     pub fn addInitScript(self: *LinuxGtkBackend, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         const z = self.allocator.dupeSentinel(u8, script, 0) catch return error.OutOfMemory;
@@ -949,6 +991,7 @@ pub const LinuxGtkBackend = struct {
         c.webkit_user_content_manager_add_script(w.ucm, user_script);
     }
 
+    /// Calls `webkit_web_view_evaluate_javascript`.
     pub fn evalJs(self: *LinuxGtkBackend, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         if (script.len == 0) return;
@@ -964,6 +1007,7 @@ pub const LinuxGtkBackend = struct {
         );
     }
 
+    /// Calls `webkit_web_view_load_uri`.
     pub fn navigate(self: *LinuxGtkBackend, win_id: types.WindowId, url: []const u8) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         const z = self.allocator.dupeSentinel(u8, url, 0) catch return error.OutOfMemory;
@@ -971,6 +1015,7 @@ pub const LinuxGtkBackend = struct {
         c.webkit_web_view_load_uri(w.webview, z.ptr);
     }
 
+    /// Calls `webkit_web_view_load_html` with the base URI when given.
     pub fn loadHtml(self: *LinuxGtkBackend, win_id: types.WindowId, html: []const u8, base_uri: ?[]const u8) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         const hz = self.allocator.dupeSentinel(u8, html, 0) catch return error.OutOfMemory;
@@ -982,6 +1027,7 @@ pub const LinuxGtkBackend = struct {
         c.webkit_web_view_load_html(w.webview, hz.ptr, if (bz) |s| s.ptr else null);
     }
 
+    /// Enables developer extras and shows the WebKit inspector.
     pub fn openDevtools(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         const settings = c.webkit_web_view_get_settings(w.webview);

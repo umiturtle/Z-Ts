@@ -14,6 +14,9 @@ pub const QueueError = error{
     Closed,
 } || Allocator.Error;
 
+/// A bounded, thread-safe multi-producer/multi-consumer queue that grows on demand. `pop` blocks
+/// until an item arrives or the queue is closed (`error.Closed`), which is how the SSE and event
+/// pumps idle without spinning.
 pub fn RingQueue(comptime T: type) type {
     return struct {
         const Self = @This();

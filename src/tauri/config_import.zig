@@ -47,18 +47,25 @@ pub const Error = error{
 /// Non-fatal migration notes. Every entry is `path` + human-readable `message`, so a CLI can print
 /// `warning: app.windows[0].titleBarStyle: … not supported by Z-Ts` and keep going.
 pub const Diagnostics = struct {
+    /// Allocator that owns the recorded paths and messages.
     allocator: Allocator,
+    /// Everything discovered so far, in discovery order.
     items: std.ArrayListUnmanaged(Item) = .empty,
 
+    /// One migration finding.
     pub const Item = struct {
+        /// Dotted config path (`app.windows[0].width`) or file name the message refers to.
         path: []u8,
+        /// What is wrong and what Z-Ts does instead.
         message: []u8,
     };
 
+    /// Creates an empty list.
     pub fn init(allocator: Allocator) Diagnostics {
         return .{ .allocator = allocator };
     }
 
+    /// Frees every recorded path and message.
     pub fn deinit(self: *Diagnostics) void {
         for (self.items.items) |item| {
             self.allocator.free(item.path);
@@ -67,6 +74,7 @@ pub const Diagnostics = struct {
         self.items.deinit(self.allocator);
     }
 
+    /// Records one finding. Never fails the import: a warning is not an error.
     pub fn add(self: *Diagnostics, path: []const u8, message: []const u8) Allocator.Error!void {
         try self.items.append(self.allocator, .{
             .path = try self.allocator.dupe(u8, path),
@@ -74,10 +82,12 @@ pub const Diagnostics = struct {
         });
     }
 
+    /// How many findings were recorded.
     pub fn count(self: *const Diagnostics) usize {
         return self.items.items.len;
     }
 
+    /// Whether anything was recorded for `path` (lets a test assert per key).
     pub fn has(self: *const Diagnostics, path: []const u8) bool {
         for (self.items.items) |item| {
             if (std.mem.eql(u8, item.path, path)) return true;
@@ -92,62 +102,97 @@ pub const Diagnostics = struct {
 
 /// `tauri.conf.json` — only the keys Z-Ts acts on, plus raw JSON escape hatches.
 pub const Config = struct {
+    /// `$schema` URL from the file, kept so a round-trip preserves it.
     schema: ?[]const u8 = null,
+    /// Human-readable app name (`productName`).
     product_name: ?[]const u8 = null,
+    /// App version string (`version`).
     version: ?[]const u8 = null,
+    /// Reverse-DNS bundle id; defaults to empty when the file omits it.
     identifier: []const u8 = "",
 
+    /// Window, security and tray settings.
     app: App = .{},
+    /// Dev server and frontend output settings.
     build: Build = .{},
+    /// Bundling settings (`bundle.active`, targets, icons).
     bundle: Bundle = .{},
     /// `plugins` verbatim (JSON text) — Z-Ts plugin configuration is code, not JSON, so this is
     /// informational only.
     plugins_json: ?[]const u8 = null,
 
+    /// `app` — everything the config says about the app itself.
     pub const App = struct {
+        /// Windows to open at launch, in order.
         windows: []WindowConfig = &.{},
+        /// CSP, capabilities and asset-protocol settings.
         security: Security = .{},
+        /// `app.withGlobalTauri` — expose the API on `window.__TAURI__`.
         with_global_tauri: bool = false,
+        /// Tray icon to create at launch, if any.
         tray_icon: ?TrayIcon = null,
         /// `app.macOSPrivateApi` — always reported as unsupported (Z-Ts never links private APIs).
         macos_private_api: bool = false,
     };
 
+    /// `build` — where the frontend comes from and which hooks run around it.
     pub const Build = struct {
+        /// `build.devUrl` — URL the dev server serves, used by `zts dev`.
         dev_url: ?[]const u8 = null,
+        /// `build.frontendDist` — directory (or URL) with the built frontend.
         frontend_dist: ?[]const u8 = null,
+        /// Shell command run before the dev server starts.
         before_dev_command: ?[]const u8 = null,
+        /// Shell command run before building the app.
         before_build_command: ?[]const u8 = null,
     };
 
+    /// `bundle` — packaging settings.
     pub const Bundle = struct {
+        /// Whether bundling is enabled at all.
         active: bool = true,
+        /// Requested bundle formats (`deb`, `app`, `nsis`, …).
         targets: []const []const u8 = &.{},
+        /// Icon files, relative to `src-tauri/`.
         icon: []const []const u8 = &.{},
     };
 
+    /// `app.trayIcon` — the tray created at launch.
     pub const TrayIcon = struct {
+        /// Stable tray id; generated when omitted.
         id: ?[]const u8 = null,
+        /// Icon file, relative to `src-tauri/`.
         icon_path: ?[]const u8 = null,
+        /// Treat the icon as a macOS template image.
         icon_as_template: bool = false,
+        /// Deprecated upstream alias of `show_menu_on_left_click`.
         menu_on_left_click: bool = false,
+        /// Whether a left click opens the tray menu.
         show_menu_on_left_click: bool = false,
+        /// Text drawn next to the icon (macOS).
         title: ?[]const u8 = null,
+        /// Hover text.
         tooltip: ?[]const u8 = null,
     };
 
+    /// `security` — CSP, capability list and asset-protocol rules.
     pub const Security = struct {
         /// `security.csp` rendered back to JSON text (`"default-src 'self'"` or an object).
         csp_json: ?[]const u8 = null,
+        /// CSP used in development only (dev server / HMR pages).
         dev_csp_json: ?[]const u8 = null,
+        /// `security.freezePrototype` — harden `Object.prototype` before page scripts run.
         freeze_prototype: bool = false,
+        /// `security.assetProtocol` — whether `asset://` is served and what it may read.
         asset_protocol: AssetProtocol = .{},
         /// `security.capabilities` — either a reference to a capability identifier or an inline
         /// capability object (kept as raw JSON for `acl.zig` to interpret).
         capabilities: []CapabilityEntry = &.{},
+        /// Extra response headers, as raw JSON.
         headers_json: ?[]const u8 = null,
     };
 
+    /// One entry of `security.capabilities`: either a name or an inline object.
     pub const CapabilityEntry = union(enum) {
         /// `"my-capability"` — resolved against `capabilities/*.json` by identifier.
         reference: []const u8,
@@ -156,18 +201,25 @@ pub const Config = struct {
         inline_json: std.json.Value,
     };
 
+    /// `security.assetProtocol`.
     pub const AssetProtocol = struct {
+        /// Whether `asset://` requests are served at all.
         enable: bool = false,
+        /// Which paths they may read.
         scope: Scope = .{},
     };
 
     /// `FsScope`: a single pattern, a list of patterns, or `{ allow, deny, requireLiteralLeadingDot }`.
     pub const Scope = struct {
+        /// Glob patterns the scope allows.
         allow: []const []const u8 = &.{},
+        /// Glob patterns the scope rejects (checked first).
         deny: []const []const u8 = &.{},
+        /// Whether `*` refuses to match a leading dot (upstream default: true).
         require_literal_leading_dot: bool = true,
     };
 
+    /// One entry of `app.windows`, in `tauri.conf.json` spelling.
     pub const WindowConfig = struct {
         label: []const u8 = "main",
         title: ?[]const u8 = null,
@@ -282,18 +334,23 @@ pub const Config = struct {
 
 /// A `Config` plus the arena that owns every string it points at.
 pub const Parsed = struct {
+    /// Arena that owns every string in `config`; freed by `deinit`.
     arena: std.heap.ArenaAllocator,
+    /// The parsed `tauri.conf.json`.
     config: Config,
 
+    /// Frees the arena and poisons the value.
     pub fn deinit(self: *Parsed) void {
         self.arena.deinit();
         self.* = undefined;
     }
 
+    /// The arena allocator, for callers that need to extend the result.
     pub fn allocator(self: *const Parsed) Allocator {
         return self.arena.allocator();
     }
 
+    /// Converts `app.windows` into the specs the host opens.
     pub fn windowSpecs(self: *const Parsed, out_allocator: Allocator) Allocator.Error![]core.WindowSpec {
         return self.config.windowSpecs(out_allocator);
     }
@@ -301,28 +358,35 @@ pub const Parsed = struct {
 
 /// `src-tauri/` as a whole: the parsed config, the capability files, and migration warnings.
 pub const Imported = struct {
+    /// Arena that owns the config, the capability text and the warnings.
     arena: std.heap.ArenaAllocator,
+    /// The parsed `tauri.conf.json`.
     config: Config,
     /// Capability files found under `<dir>/capabilities/*.json`, with their file name (for
     /// diagnostics). Interpretation lives in `acl.zig`.
     capabilities: []CapabilityFile = &.{},
+    /// Everything that differs from upstream, reported instead of failing.
     warnings: Diagnostics,
 
+    /// A file read from `<dir>/capabilities/`.
     pub const CapabilityFile = struct {
         /// `"main"` for `capabilities/main.json` (used when a capability has no identifier).
         file_name: []const u8,
         json: []const u8,
     };
 
+    /// Frees the arena and poisons the value.
     pub fn deinit(self: *Imported) void {
         self.arena.deinit();
         self.* = undefined;
     }
 
+    /// The arena allocator, for callers that need to extend the result.
     pub fn allocator(self: *const Imported) Allocator {
         return self.arena.allocator();
     }
 
+    /// Converts `app.windows` into the specs the host opens.
     pub fn windowSpecs(self: *const Imported, out_allocator: Allocator) Allocator.Error![]core.WindowSpec {
         return self.config.windowSpecs(out_allocator);
     }

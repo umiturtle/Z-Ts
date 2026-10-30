@@ -27,17 +27,25 @@ pub const Handler = ctx_mod.Handler;
 
 /// Compile-time metadata describing one namespace passed into `Schema(.{ ... })`.
 pub const NamespaceMeta = struct {
+    /// Namespace key (`window`, `fs`, …).
     name: [:0]const u8,
+    /// Wire prefix shared by its commands (`plugin:window|`).
     prefix: []const u8,
+    /// Per-app state type the namespace resolves.
     State: type,
+    /// The `Commands` struct holding the handlers.
     Cmds: type,
 };
 
 /// Compile-time metadata describing one discovered `pub fn` RPC command.
 pub const CommandMeta = struct {
+    /// Index of the owning namespace.
     ns_index: usize,
+    /// Namespace key, for diagnostics.
     ns_name: [:0]const u8,
+    /// Wire prefix of the owning namespace.
     prefix: []const u8,
+    /// Handler name inside `Cmds`.
     fn_name: [:0]const u8,
     /// Primary wire command string (`camelCase` when `prefix == ""`, else `prefix ++ fn_name`).
     wire_name: []const u8,
@@ -45,8 +53,11 @@ pub const CommandMeta = struct {
     alt_wire_name: ?[]const u8,
     /// JS method name inside generated TS client namespace/root (`camelCase`).
     ts_method_name: []const u8,
+    /// Per-app state type this command resolves.
     State: type,
+    /// The argument type the handler accepts.
     Args: type,
+    /// What the handler returns on success.
     Payload: type,
     /// True if calling this command in TS allows omitting the `args` argument (`void` or all-default struct).
     args_optional: bool,
@@ -94,6 +105,9 @@ fn parseNamespaceSpec(comptime ns_name: [:0]const u8, comptime entry: anytype) N
     };
 }
 
+/// `true` when a command with this argument type may be called with no arguments at all — `void`,
+/// or a struct whose every field is optional. The generated TypeScript uses it to make the last
+/// parameter optional.
 pub fn canOmitArgs(comptime Args: type) bool {
     if (Args == void) return true;
     const info = @typeInfo(Args);

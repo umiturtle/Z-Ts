@@ -17,6 +17,8 @@ const html_escape = foundation.html_escape;
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
+/// `plugin:event` failures. `IllegalEventName` rejects names Tauri reserves (`tauri://…`), which is
+/// what keeps a page from forging the framework's own lifecycle events.
 pub const EventError = core.HostError || error{
     IllegalEventName,
     MissingHostContext,
@@ -24,18 +26,26 @@ pub const EventError = core.HostError || error{
 
 /// Wire-compatible with Tauri v2 `#[serde(tag = "kind")] enum EventTarget`.
 pub const EventTarget = union(enum) {
+    /// Every listener, whatever window it belongs to. Used for app-wide broadcasts.
     Any: void,
+    /// Application-level listeners only (the `listen()` calls that passed no target).
     App: void,
+    /// Every window whose label matches the pattern (glob).
     AnyLabel: struct { label: []const u8 },
+    /// The window with exactly this label.
     Window: struct { label: []const u8 },
+    /// The webview with this label (same set as `Window` today, kept for v2 wire parity).
     Webview: struct { label: []const u8 },
+    /// The window/webview pair with this label (`@tauri-apps/api`'s default target).
     WebviewWindow: struct { label: []const u8 },
 
+    /// Internally tagged (`{ "kind": "Window", "label": … }`), matching upstream.
     pub const json_union: rpc.UnionConfig = .{
         .style = .internal,
         .tag_field = "kind",
     };
 
+    /// The window label the target names, or `null` for app-wide targets.
     pub fn targetLabel(self: EventTarget) ?[]const u8 {
         return switch (self) {
             .Any, .App => null,
@@ -58,6 +68,8 @@ pub fn isValidEventName(name: []const u8) bool {
     return true;
 }
 
+/// Zig-side listener: receives the raw JSON payload exactly as the webview will see it, so a native
+/// subscriber and a JS subscriber can never observe different encodings.
 pub const NativeEventFn = *const fn (userdata: ?*anyopaque, event_name: []const u8, raw_json_payload: []const u8) void;
 
 const JsListener = struct {
@@ -82,20 +94,33 @@ const NativeListener = struct {
     cb: NativeEventFn,
 };
 
+/// The `plugin:event` registry: JS listeners (id per `listen()` call, filtered by target) and native
+/// listeners, plus the label resolver used to route `AnyLabel` / `Window` targets. Mutations are
+/// mutex-guarded because `emit()` may come from any thread.
 pub const EventBus = struct {
+    /// Allocator that owns listener names and labels.
     allocator: Allocator,
+    /// IO reactor used for the mutex.
     io: Io,
+    /// Guards the listener lists: `emit()` may be called from any thread.
     mu: Io.Mutex = .init,
+    /// Counter behind the ids `listen()` returns.
     next_id: u32 = 1,
+    /// Listeners registered from the page.
     js_listeners: std.ArrayList(JsListener) = .empty,
+    /// Listeners registered from Zig.
     native_listeners: std.ArrayList(NativeListener) = .empty,
+    /// Resolves a `WindowId` to its label, so `AnyLabel` / `Window` targeting can match.
     window_labels: ?*const fn (userdata: ?*anyopaque, Allocator, core.WindowId) Allocator.Error!?[]u8 = null,
+    /// Opaque pointer passed to `window_labels`.
     window_labels_ctx: ?*anyopaque = null,
 
+    /// Creates a bus with no listeners.
     pub fn init(allocator: Allocator, io: Io) EventBus {
         return .{ .allocator = allocator, .io = io };
     }
 
+    /// Frees both listener tables.
     pub fn deinit(self: *EventBus) void {
         for (self.js_listeners.items) |*l| l.deinit(self.allocator);
         self.js_listeners.deinit(self.allocator);
@@ -103,6 +128,7 @@ pub const EventBus = struct {
         self.native_listeners.deinit(self.allocator);
     }
 
+    /// Registers a Zig-side listener (used by the plugins themselves).
     pub fn onNative(
         self: *EventBus,
         event_name: []const u8,
@@ -243,9 +269,12 @@ pub const EventBus = struct {
 
 /// `plugin:event|*` RPC command namespace (`Schema` key: `.event`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:event|";
+    /// The state type `zts_rpc` resolves per app; identical to `EventBus` here.
     pub const RpcState = EventBus;
 
+    /// `plugin:event|listen` — subscribes the calling window; returns an event id.
     pub fn listen(
         ctx: *rpc.Ctx,
         bus: *EventBus,
@@ -301,6 +330,7 @@ pub const Commands = struct {
         return event_id;
     }
 
+    /// `plugin:event|unlisten` — drops a subscription by id.
     pub fn unlisten(
         _: *rpc.Ctx,
         bus: *EventBus,
@@ -321,6 +351,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:event|emit` — broadcasts to every listener, including native ones.
     pub fn emit(
         ctx: *rpc.Ctx,
         bus: *EventBus,
@@ -330,6 +361,7 @@ pub const Commands = struct {
         try bus.dispatchRaw(call_ctx.host, ctx.scratch, .Any, args.event, args.payload.raw);
     }
 
+    /// `plugin:event|emit_to` — sends only to the listeners the target names.
     pub fn emit_to(
         ctx: *rpc.Ctx,
         bus: *EventBus,

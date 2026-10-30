@@ -18,14 +18,23 @@ const types = @import("types.zig");
 const pending_mod = @import("pending.zig");
 const png = @import("png.zig");
 
+/// Record of one answered scheme request, kept so a test can assert on the status, headers and body
+/// the engine would have handed the WebView.
 pub const CompletedSchemeRecord = struct {
+    /// Window the request came from.
     window_id: types.WindowId,
+    /// Requested URI, owned copy.
     uri: []u8,
+    /// Status the handler answered with.
     status_code: u16,
+    /// `Content-Type` the handler answered with.
     content_type: []u8,
+    /// Extra headers the handler answered with, in send order.
     headers: []types.QueuedCompletion.OwnedHeader,
+    /// Response body bytes the WebView would have received.
     body: []u8,
 
+    /// Case-insensitive lookup of one response header, or `null`.
     pub fn header(self: CompletedSchemeRecord, name: []const u8) ?[]const u8 {
         for (self.headers) |h| {
             if (std.ascii.eqlIgnoreCase(h.name, name)) return h.value;
@@ -33,6 +42,8 @@ pub const CompletedSchemeRecord = struct {
         return null;
     }
 
+    /// Releases the uri, content type, headers and body. The mock also frees records it
+    /// still holds at `deinit()`, so only call this on a record you copied out.
     pub fn deinit(self: *CompletedSchemeRecord, allocator: Allocator) void {
         allocator.free(self.uri);
         allocator.free(self.content_type);
@@ -45,31 +56,55 @@ pub const CompletedSchemeRecord = struct {
     }
 };
 
+/// The in-memory window a `HeadlessMock` manages: title, geometry and flags, with no OS object
+/// behind it. Screenshot capture returns a deterministic PNG so parity tests stay reproducible.
 pub const MockWindow = struct {
+    /// Current title (what `title()` returns).
     title: []u8,
+    /// Client-area size in logical pixels.
     size: types.LogicalSize,
+    /// Minimum client size, or `null` when unconstrained.
     min_size: ?types.LogicalSize,
+    /// Maximum client size, or `null` when unconstrained.
     max_size: ?types.LogicalSize,
+    /// Top-left corner of the client area.
     position: types.LogicalPoint,
+    /// Whether the user may resize the window.
     resizable: bool,
+    /// Whether the window is currently minimized.
     minimized: bool = false,
+    /// Whether the window is currently maximized.
     maximized: bool = false,
+    /// Whether the window occupies the whole screen.
     fullscreen: bool,
+    /// Whether the window is mapped.
     visible: bool,
+    /// Whether the OS draws a title bar and border.
     decorations: bool,
+    /// Whether the window floats above the others.
     always_on_top: bool,
+    /// Set by `setFocus()`; the native backends report focus changes instead.
     focused: bool = false,
+    /// How many `startDrag()` calls landed on this window.
     drag_count: usize = 0,
+    /// Whether devtools were requested for this window.
     devtools_open: bool,
+    /// Background painted before the first frame, or `null` for the default.
     background_color: ?types.Color,
+    /// Parent handle for overlay embedding; non-null means the window supports `fitParent()`.
     parent_native_handle: ?*anyopaque,
     /// Number of `fitParent()` calls that targeted this window (`M3-03` embedding contract).
     fit_count: usize = 0,
+    /// URL the window last navigated to (owned copy).
     current_url: []u8,
+    /// HTML handed to `loadHtml()`, or `null` when the window shows a URL.
     last_html: ?[]u8 = null,
+    /// Scripts injected before the page loads, in registration order.
     init_scripts: std.ArrayList([]u8) = .empty,
+    /// Scripts passed to `evalJs()`, in call order.
     evaluated_scripts: std.ArrayList([]u8) = .empty,
 
+    /// Frees the title, URL, HTML and every script buffer.
     pub fn deinit(self: *MockWindow, allocator: Allocator) void {
         allocator.free(self.title);
         allocator.free(self.current_url);
@@ -90,21 +125,37 @@ const MockPendingPayload = struct {
     }
 };
 
+/// The pure-Zig backend used by CI and by every unit test that needs a window. It implements the same
+/// contract as the native backends (scheme routing, IPC, capture, close) but paints nothing, so it
+/// runs without a display server.
 pub const HeadlessMock = struct {
+    /// Allocator that owns windows, captures and the scheme table.
     allocator: Allocator,
+    /// IO reactor behind the mutex and the condition variable.
     io: Io,
+    /// Guards the window pool, pending table and capture list.
     mu: Io.Mutex = .init,
+    /// Signalled by `wakeup()`, waited on by `step(.blocking)`.
     cond: Io.Condition = .init,
+    /// Set by `wakeup()` so a parked `step(.blocking)` returns immediately.
     woken: bool = false,
+    /// Set by `requestQuit()`; cleared by `deinit()`.
     quit_requested: std.atomic.Value(bool) = .init(false),
 
+    /// Live mock windows.
     windows: foundation.HandlePool(MockWindow, .window) = .empty,
+    /// Registered scheme handlers (`tauri`, `ipc`, `asset`, …).
     schemes: std.StringHashMapUnmanaged(types.SchemeHandler) = .empty,
+    /// Scheme requests waiting for `completeRequest()`.
     pending: pending_mod.PendingTable(MockPendingPayload) = .{},
+    /// Completions queued from worker threads, drained by `step()`.
     completions: pending_mod.CompletionQueue,
+    /// Every answered request, so a test can assert on the response.
     completed_records: std.ArrayList(CompletedSchemeRecord) = .empty,
 
+    /// `window.__zts.postMessage(…)` receiver, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
     /// Screenshots produced by `captureWindow()` and not yet collected by `takeCapture()`.
@@ -112,11 +163,15 @@ pub const HeadlessMock = struct {
     /// keeps `Handle` hashing out of the mock's hot path.
     captures: std.ArrayList(CaptureSlot) = .empty,
 
+    /// One screenshot waiting to be collected, tagged with the window it came from.
     pub const CaptureSlot = struct {
+        /// Window the screenshot belongs to.
         window_id: types.WindowId,
+        /// PNG bytes; handed out (ownership transferred) by `takeCapture()`.
         capture: types.Capture,
     };
 
+    /// Creates a mock with no windows and no scheme handlers.
     pub fn init(allocator: Allocator, io: Io) HeadlessMock {
         return .{
             .allocator = allocator,
@@ -125,6 +180,7 @@ pub const HeadlessMock = struct {
         };
     }
 
+    /// Closes every window and frees the scheme table, pending requests and captures.
     pub fn deinit(self: *HeadlessMock) void {
         self.pending.deinitWith(self.allocator, MockPendingPayload.cancel);
         self.completions.deinit();
@@ -151,6 +207,8 @@ pub const HeadlessMock = struct {
         self.windows.deinit(self.allocator);
     }
 
+    /// Pumps one turn of the loop: `drainCompletions()` plus, in `.blocking` mode, sleeps until
+    /// `wakeup()`. Returns `false` once `requestQuit()` was called (the app should exit).
     pub fn step(self: *HeadlessMock, mode: types.StepMode) bool {
         if (self.quit_requested.load(.acquire)) {
             self.drainCompletions();
@@ -174,6 +232,7 @@ pub const HeadlessMock = struct {
         return !self.quit_requested.load(.acquire);
     }
 
+    /// Wakes a parked `step(.blocking)`. Safe from any thread.
     pub fn wakeup(self: *HeadlessMock) void {
         self.mu.lockUncancelable(self.io);
         self.woken = true;
@@ -181,6 +240,7 @@ pub const HeadlessMock = struct {
         self.mu.unlock(self.io);
     }
 
+    /// Asks the loop to stop; the next `step()` returns `false`.
     pub fn requestQuit(self: *HeadlessMock) void {
         self.quit_requested.store(true, .release);
         self.mu.lockUncancelable(self.io);
@@ -249,6 +309,7 @@ pub const HeadlessMock = struct {
         }
     }
 
+    /// Installs (or replaces) the handler for `scheme` (`tauri`, `ipc`, `asset`, …).
     pub fn registerScheme(self: *HeadlessMock, scheme: []const u8, handler: types.SchemeHandler) types.WebviewError!void {
         if (scheme.len == 0) return error.InvalidArgument;
         const gop = self.schemes.getOrPut(self.allocator, scheme) catch return error.OutOfMemory;
@@ -261,6 +322,8 @@ pub const HeadlessMock = struct {
         gop.value_ptr.* = handler;
     }
 
+    /// Answers a pending request. May be called from a worker thread; the reply is queued
+    /// and delivered by the next `step()`.
     pub fn completeRequest(self: *HeadlessMock, req_id: types.RequestId, resp: types.SchemeResponse) types.WebviewError!void {
         self.completions.push(req_id, resp) catch return error.OutOfMemory;
         self.wakeup();
@@ -309,6 +372,7 @@ pub const HeadlessMock = struct {
         }
     }
 
+    /// Records a window from `cfg` and returns its id.
     pub fn createWindow(self: *HeadlessMock, cfg: types.WindowConfig) types.WebviewError!types.WindowId {
         const title = self.allocator.dupe(u8, cfg.title) catch return error.OutOfMemory;
         errdefer self.allocator.free(title);
@@ -394,6 +458,7 @@ pub const HeadlessMock = struct {
         }
     }
 
+    /// Closes the window, cancels its pending requests and reports the close to the handler.
     pub fn closeWindow(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {
         _ = self.pending.cancelForWindow(self.allocator, win_id, MockPendingPayload.cancel);
         var win = self.windows.release(win_id) catch return error.WindowNotFound;
@@ -406,6 +471,7 @@ pub const HeadlessMock = struct {
         return self.windows.getPtr(win_id) orelse error.WindowNotFound;
     }
 
+    /// Replaces the window title.
     pub fn setTitle(self: *HeadlessMock, win_id: types.WindowId, title: []const u8) types.WebviewError!void {
         const w = try self.requireWin(win_id);
         const copy = self.allocator.dupe(u8, title) catch return error.OutOfMemory;
@@ -413,6 +479,7 @@ pub const HeadlessMock = struct {
         w.title = copy;
     }
 
+    /// Sets the client size.
     pub fn setSize(self: *HeadlessMock, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         (try self.requireWin(win_id)).size = size;
     }
@@ -426,54 +493,67 @@ pub const HeadlessMock = struct {
         w.fit_count += 1;
     }
 
+    /// Sets or clears the minimum client size.
     pub fn setMinSize(self: *HeadlessMock, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
         (try self.requireWin(win_id)).min_size = size;
     }
 
+    /// Sets or clears the maximum client size.
     pub fn setMaxSize(self: *HeadlessMock, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
         (try self.requireWin(win_id)).max_size = size;
     }
 
+    /// Moves the client area.
     pub fn setPosition(self: *HeadlessMock, win_id: types.WindowId, pos: types.LogicalPoint) types.WebviewError!void {
         (try self.requireWin(win_id)).position = pos;
     }
 
+    /// Toggles user resizing.
     pub fn setResizable(self: *HeadlessMock, win_id: types.WindowId, resizable: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).resizable = resizable;
     }
 
+    /// Records the minimized flag.
     pub fn setMinimized(self: *HeadlessMock, win_id: types.WindowId, minimized: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).minimized = minimized;
     }
 
+    /// Records the maximized flag.
     pub fn setMaximized(self: *HeadlessMock, win_id: types.WindowId, maximized: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).maximized = maximized;
     }
 
+    /// Records the fullscreen flag.
     pub fn setFullscreen(self: *HeadlessMock, win_id: types.WindowId, fullscreen: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).fullscreen = fullscreen;
     }
 
+    /// Shows or hides the window.
     pub fn setVisible(self: *HeadlessMock, win_id: types.WindowId, visible: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).visible = visible;
     }
 
+    /// Toggles the native title bar / border.
     pub fn setDecorations(self: *HeadlessMock, win_id: types.WindowId, decorations: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).decorations = decorations;
     }
 
+    /// Records the always-on-top flag.
     pub fn setAlwaysOnTop(self: *HeadlessMock, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).always_on_top = on_top;
     }
 
+    /// Marks the window focused.
     pub fn setFocus(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {
         (try self.requireWin(win_id)).focused = true;
     }
 
+    /// Counts one drag start (`data-tauri-drag-region`).
     pub fn startDrag(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {
         (try self.requireWin(win_id)).drag_count += 1;
     }
 
+    /// Appends a script that runs before the next document load.
     pub fn addInitScript(self: *HeadlessMock, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
         const w = try self.requireWin(win_id);
         const copy = self.allocator.dupe(u8, script) catch return error.OutOfMemory;
@@ -483,6 +563,7 @@ pub const HeadlessMock = struct {
         };
     }
 
+    /// Records a script, as if the page had evaluated it.
     pub fn evalJs(self: *HeadlessMock, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
         const w = try self.requireWin(win_id);
         const copy = self.allocator.dupe(u8, script) catch return error.OutOfMemory;
@@ -492,6 +573,7 @@ pub const HeadlessMock = struct {
         };
     }
 
+    /// Records the URL the window now shows.
     pub fn navigate(self: *HeadlessMock, win_id: types.WindowId, url: []const u8) types.WebviewError!void {
         const w = try self.requireWin(win_id);
         const copy = self.allocator.dupe(u8, url) catch return error.OutOfMemory;
@@ -499,6 +581,7 @@ pub const HeadlessMock = struct {
         w.current_url = copy;
     }
 
+    /// Records inline HTML (and the base URI used to resolve its relative links).
     pub fn loadHtml(self: *HeadlessMock, win_id: types.WindowId, html: []const u8, base_uri: ?[]const u8) types.WebviewError!void {
         const w = try self.requireWin(win_id);
         const html_copy = self.allocator.dupe(u8, html) catch return error.OutOfMemory;
@@ -511,6 +594,7 @@ pub const HeadlessMock = struct {
         }
     }
 
+    /// Records that devtools were requested.
     pub fn openDevtools(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {
         (try self.requireWin(win_id)).devtools_open = true;
     }

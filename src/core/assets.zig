@@ -26,6 +26,7 @@ const url = foundation.url;
 pub const StaticAsset = struct {
     /// Canonical leading-slash route path (e.g. `"/index.html"`, `"/assets/app.js"`).
     path: []const u8,
+    /// The file contents (embedded at build time).
     bytes: []const u8,
     /// Optional explicit MIME override; auto-detected from `path`/`bytes` when `null`.
     mime_type: ?[]const u8 = null,
@@ -33,24 +34,35 @@ pub const StaticAsset = struct {
 
 /// Pluggable backing loader for dynamic filesystem / dev-server asset resolution.
 pub const FallbackLoader = struct {
+    /// Opaque pointer handed back to `loadFn`.
     ctx: ?*anyopaque = null,
+    /// Loads a path the table does not hold (`null` = not found).
     loadFn: *const fn (ctx: ?*anyopaque, allocator: Allocator, canonical_path: []const u8) anyerror!?OwnedBytes,
 };
 
 /// HTTP-equivalent status codes returned by `Assets.resolve`.
 pub const AssetStatus = enum(u16) {
+    /// `200` — the whole asset.
     ok = 200,
+    /// `206` — one byte range, per the request's `Range` header.
     partial_content = 206,
+    /// `400` — the path or range could not be parsed.
     bad_request = 400,
+    /// `404` — no entry and no SPA fallback.
     not_found = 404,
+    /// `416` — the range starts past the end of the asset.
     range_not_satisfiable = 416,
+    /// `500` — the loader failed.
     internal_error = 500,
 };
 
 /// Complete, ownership-safe resolved HTTP/custom-protocol response.
 pub const AssetResponse = struct {
+    /// What the caller should answer with.
     status: AssetStatus,
+    /// `Content-Type`, detected from the path when the entry did not override it.
     mime_type: []const u8,
+    /// The bytes to send (owned by the response).
     body: OwnedBytes,
     /// Total uncompressed representation size (populates `Content-Range` on `206` and `416`).
     total_len: u64 = 0,
@@ -59,6 +71,7 @@ pub const AssetResponse = struct {
     /// `true` when `/users/42` fell back to `/index.html`.
     used_spa_fallback: bool = false,
 
+    /// Releases the body.
     pub fn deinit(self: *AssetResponse) void {
         self.body.deinit();
     }
@@ -78,6 +91,8 @@ pub const AssetResponse = struct {
     }
 };
 
+/// Per-request knobs for `Assets.resolve()`. Defaults serve a normal browser navigation; a range
+/// request, a disabled SPA fallback or a custom `<head>` injection are all opt-in.
 pub const ResolveOptions = struct {
     /// Incoming `Range` request header value (e.g. `"bytes=0-65535"`), if present.
     range_header: ?[]const u8 = null,
@@ -89,7 +104,9 @@ pub const ResolveOptions = struct {
 
 /// Zero-overhead asset table & protocol engine.
 pub const Assets = struct {
+    /// The embedded files, in lookup order.
     entries: []const StaticAsset = &.{},
+    /// Optional dynamic source, consulted after the table (dev server, disk).
     fallback_loader: ?FallbackLoader = null,
 
     /// Resolves `raw_url_path` into a ready-to-serve `AssetResponse`.

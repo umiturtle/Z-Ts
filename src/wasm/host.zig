@@ -46,17 +46,26 @@ pub fn reportPanic(msg: []const u8, first_trace_addr: ?usize) noreturn {
     @trap();
 }
 
+/// Where `eval()` sends the script when running natively: the WASM build calls the imported
+/// `zts_host_eval_js`, tests record it. One indirection keeps the runtime free of `if (builtin…)`.
 pub const EvalHook = struct {
+    /// Opaque pointer handed back to `callFn`.
     ctx: ?*anyopaque = null,
+    /// Evaluates a script; `null`-free by construction.
     callFn: *const fn (ctx: ?*anyopaque, script: []const u8) void,
 };
 
+/// `zts_core.Host` for the browser: it records everything (`RecordingHost`) except `eval`, which has
+/// to reach real JavaScript. That is what lets the same plugin code run in a tab and in a test.
 pub const WasmHost = struct {
+    /// Allocator for the backing host.
     allocator: Allocator,
+    /// Records window calls so plugin behaviour is observable in tests.
     backing: core.RecordingHost,
     /// Optional custom hook (used in native unit tests; defaults to `zts_host_eval_js` on Wasm).
     eval_hook: ?EvalHook = null,
 
+    /// Creates a host that records everything and evals through the default hook.
     pub fn init(allocator: Allocator) WasmHost {
         return .{
             .allocator = allocator,
@@ -64,10 +73,12 @@ pub const WasmHost = struct {
         };
     }
 
+    /// Frees the backing host's windows and eval log.
     pub fn deinit(self: *WasmHost) void {
         self.backing.deinit();
     }
 
+    /// The `core.Host` view of `self`.
     pub fn host(self: *WasmHost) core.Host {
         return .{
             .userdata = self,
@@ -75,6 +86,7 @@ pub const WasmHost = struct {
         };
     }
 
+    /// Whether a plugin asked the app to exit.
     pub fn quitRequested(self: *const WasmHost) bool {
         return self.backing.quit_requested;
     }
