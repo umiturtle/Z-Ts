@@ -93,7 +93,8 @@ SSR 済みの DOM で描画される（既知の挙動として [`../../examples
 push to main ──> build ──> ./zigw build docs            (リンク検査込み)
                         ├─ cd examples/counter && ../../zigw build dist
                         ├─ _site = docs + examples/counter + examples/frameworks
-                        └─ upload-pages-artifact ──> deploy-pages
+                        ├─ Pages の有無を確認（必要なら作成を試みる）
+                        └─ upload-pages-artifact ──> deploy-pages（main のみ）
 ```
 
 * `OK docsite pages=… links=… assets=… words=… demos=…` マーカーが出なければジョブは失敗する
@@ -101,10 +102,23 @@ push to main ──> build ──> ./zigw build docs            (リンク検査
 * `.nojekyll` を置くので Jekyll の処理は走らない（`_zts/` のようなアンダースコア始まりの
   ディレクトリもそのまま配信される）。
 * サイトは `https://umiturtle.github.io/Z-Ts/` に公開される。
-* **初回だけリポジトリ設定が必要**: Settings → Pages → Build and deployment → Source を
-  **GitHub Actions** にする（Pages API は Bot トークンからは叩けないので、リポジトリ管理者が
-  1 回だけ設定する）。未設定のまま `main` に push すると deploy ジョブが
-  `Get Pages site failed` で止まる — ビルド自体は成功しているので、設定後に再実行すればよい。
+* **初回の有効化は「あれば使う / 無ければ作ってみる / 作れなければ警告」**の 3 段構え
+  （`.github/workflows/pages.yml` の `Check whether GitHub Pages is enabled`）:
+
+  | 状況 | 動作 |
+  |---|---|
+  | Pages が既にある | そのまま公開 |
+  | 無いがトークンに作成権限がある | `POST /repos/{owner}/{repo}/pages` (`build_type=workflow`) で作成して公開 |
+  | 無く、作成もできない | **ビルドは緑のまま**、`::warning::` と Job Summary で設定箇所を案内し、公開だけスキップ |
+
+* **実測**: `GITHUB_TOKEN` は Pages サイトを**作成できない**
+  （`Create Pages site failed. Error: Resource not accessible by integration`。
+  作成には管理者権限が要り、`pages: write` では足りない）。したがって初回だけは
+  Settings → Pages → Build and deployment → Source を **GitHub Actions** にする人手の操作が要る。
+  設定後の次の `main` push で、コードを触らずに公開が始まる。
+* `actions/configure-pages@v5` の `enablement: true` も同じ理由で失敗する（この
+  `GITHUB_TOKEN` では `POST` が 403）。ワークフローは事前に API で状態を見てから呼ぶので、
+  赤いステップや失敗アノテーションは出ない。
 
 ## 7. ローカルで確認する
 

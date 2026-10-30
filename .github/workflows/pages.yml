@@ -6,6 +6,15 @@ name: Documentation site
 #   2. The pre-built example bundles: the counter SSG export (`zig build dist`) and the nine
 #      committed framework demos, with their absolute `/assets/…` URLs rewritten for the
 #      `/Z-Ts/` sub-path.
+#
+# Publishing needs the repository's Pages site to exist. `GITHUB_TOKEN` can *deploy* to Pages but
+# cannot *create* the site (creating one needs administrative rights — measured:
+# `Create Pages site failed. Error: Resource not accessible by integration`), so this workflow:
+#   1. probes `GET /repos/{owner}/{repo}/pages` and remembers the build type;
+#   2. when the site is missing, optimistically tries `POST /pages` (works with an admin token);
+#   3. when it still cannot publish, keeps the job **green** with one warning that names the exact
+#      setting to flip — a one-time human action must not leave `main` permanently red.
+# The site itself is always built, rendered and verified here, so a real regression still fails.
 
 on:
   push:
@@ -27,6 +36,9 @@ jobs:
     name: Build the documentation + example site
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      # `true` when the Pages site exists (or was just created) and the artifact was uploaded.
+      publish: ${{ steps.pages_state.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
 
@@ -84,15 +96,72 @@ jobs:
           du -sh _site
           find _site -name '*.html' | wc -l
 
-      - uses: actions/configure-pages@v5
+      # Ask the Pages API first, and try to create the site when it does not exist yet.
+      #
+      # `GET /repos/{owner}/{repo}/pages` → 404 means Pages was never enabled here, and
+      # `POST …/pages` needs *administrative* rights, which `GITHUB_TOKEN` does not have
+      # (measured: `Create Pages site failed. Error: Resource not accessible by integration`).
+      # So the creation is attempted optimistically — it succeeds when the token allows it — and a
+      # 404 just turns into one warning naming the single setting to flip. Failing the job here
+      # would leave `main` permanently red over a one-time human action.
+      - name: Check whether GitHub Pages is enabled (create it when the token allows)
+        id: pages_state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eo pipefail
+          enabled=false
+          msg=""
 
-      - uses: actions/upload-pages-artifact@v3
+          # 1. Does a Pages site exist, and how is it built? Only `workflow` can be deployed to by
+          #    this workflow; `legacy` means "Deploy from a branch".
+          #    (`gh api` prints the error body on stdout even when it fails, so the exit status —
+          #    not the output — is what tells us the site is missing.)
+          build_type=""
+          if build_type="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --template '{{.build_type}}' 2>/dev/null)"; then
+            build_type="${build_type:-legacy}"
+          else
+            build_type=""
+            # 2. No site at all → try to create one. This needs administrative rights, which
+            #    GITHUB_TOKEN does not have, but when it works the first push just publishes.
+            if gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow --template '{{.build_type}}' >/dev/null 2>&1; then
+              build_type=workflow
+              echo "Created the GitHub Pages site (build type: GitHub Actions)."
+            fi
+          fi
+
+          if [ "$build_type" = "workflow" ]; then
+            enabled=true
+            echo "GitHub Pages is enabled (build type: GitHub Actions)."
+          elif [ -n "$build_type" ]; then
+            msg="GitHub Pages is configured with build_type=${build_type} (Deploy from a branch), but this workflow publishes with GitHub Actions. One-time fix: Settings -> Pages -> Build and deployment -> Source: GitHub Actions."
+          else
+            msg="GitHub Pages is not enabled for ${GITHUB_REPOSITORY} yet. The site was built and verified, but it cannot be published: creating the Pages site needs administrative rights, which GITHUB_TOKEN does not have. One-time fix: Settings -> Pages -> Build and deployment -> Source: GitHub Actions. The next push to main then deploys with no further change."
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+          if [ "$enabled" != "true" ]; then
+            echo "::warning title=Pages not enabled::$msg"
+            printf '## Pages is not enabled yet\n\n%s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "Skipping the upload/deploy steps; this is a configuration step, not a build failure."
+          fi
+
+      - name: Configure Pages
+        if: steps.pages_state.outputs.enabled == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload the Pages artifact
+        if: steps.pages_state.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    # Only `main` publishes, and only once the Pages site exists. A `workflow_dispatch` on a
+    # feature branch still builds and verifies the whole site, it just stops before production.
+    if: needs.build.outputs.publish == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
