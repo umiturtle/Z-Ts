@@ -168,15 +168,18 @@ pub const WindowRegistry = struct {
     /// Every live window, in creation order.
     entries: std.ArrayList(TrackedWindow) = .empty,
 
+    /// Creates an empty registry. One per engine; `withCorePlugins()` owns it.
     pub fn init(allocator: Allocator, io: Io) WindowRegistry {
         return .{ .allocator = allocator, .io = io };
     }
 
+    /// Frees every tracked window's label and title.
     pub fn deinit(self: *WindowRegistry) void {
         for (self.entries.items) |*e| e.deinit(self.allocator);
         self.entries.deinit(self.allocator);
     }
 
+    /// Records a window the host just created. Called by the plugin before the first command can see it.
     pub fn registerWindow(self: *WindowRegistry, id: core.WindowId, spec: core.WindowSpec) Allocator.Error!void {
         const lbl = try self.allocator.dupe(u8, spec.label);
         errdefer self.allocator.free(lbl);
@@ -221,6 +224,7 @@ pub const WindowRegistry = struct {
         });
     }
 
+    /// Forgets a closed window. Safe to call for an id that is already gone.
     pub fn unregisterWindow(self: *WindowRegistry, id: core.WindowId) void {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
@@ -233,6 +237,7 @@ pub const WindowRegistry = struct {
         }
     }
 
+    /// How many `start_dragging()` calls are outstanding for `label` (0 = not being dragged).
     pub fn dragCount(self: *WindowRegistry, label: []const u8) usize {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
@@ -242,6 +247,7 @@ pub const WindowRegistry = struct {
         return 0;
     }
 
+    /// Maps a JS `label` (or `null` for the focused window) to a live `WindowId`, or `error.UnknownWindowLabel`.
     pub fn resolveId(self: *WindowRegistry, label: ?[]const u8, fallback_id: core.WindowId) ?core.WindowId {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
@@ -257,6 +263,7 @@ pub const WindowRegistry = struct {
         return if (self.entries.items.len > 0) self.entries.items[0].id else null;
     }
 
+    /// Returns an owned copy of the label for `id`, or `null` when the window is gone.
     pub fn labelForIdAlloc(self: *WindowRegistry, allocator: Allocator, id: core.WindowId) Allocator.Error!?[]u8 {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
@@ -302,6 +309,7 @@ pub const Commands = struct {
     pub const rpc_prefix = "plugin:window|";
     pub const RpcState = WindowRegistry;
 
+    /// `plugin:window|get_all_windows` — labels of every open window.
     pub fn get_all_windows(ctx: *rpc.Ctx, reg: *WindowRegistry) Allocator.Error![]const []const u8 {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
@@ -317,6 +325,7 @@ pub const Commands = struct {
         return out;
     }
 
+    /// `plugin:window|scale_factor` — device pixel ratio of the window (1.0 = no HiDPI).
     pub fn scale_factor(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) f64 {
         const call_ctx = ctx.getEnv(core.CallContext);
         const fb = if (call_ctx) |c| c.window_id else core.WindowId.invalid;
@@ -325,6 +334,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.scale_factor else 1.0;
     }
 
+    /// `plugin:window|inner_size` — client-area size in device pixels.
     pub fn inner_size(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) PhysicalSizeDto {
         const call_ctx = ctx.getEnv(core.CallContext);
         const fb = if (call_ctx) |c| c.window_id else core.WindowId.invalid;
@@ -339,10 +349,12 @@ pub const Commands = struct {
         return .{ .width = 800, .height = 600 };
     }
 
+    /// `plugin:window|outer_size` — size including the frame, in device pixels.
     pub fn outer_size(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) PhysicalSizeDto {
         return inner_size(ctx, reg, .{ .label = args.label });
     }
 
+    /// `plugin:window|inner_position` — client-area origin in device pixels.
     pub fn inner_position(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) PhysicalPosDto {
         const call_ctx = ctx.getEnv(core.CallContext);
         const fb = if (call_ctx) |c| c.window_id else core.WindowId.invalid;
@@ -357,10 +369,12 @@ pub const Commands = struct {
         return .{ .x = 0, .y = 0 };
     }
 
+    /// `plugin:window|outer_position` — window origin including the frame, in device pixels.
     pub fn outer_position(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) PhysicalPosDto {
         return inner_position(ctx, reg, .{ .label = args.label });
     }
 
+    /// `plugin:window|title` — current title.
     pub fn title(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) Allocator.Error![]const u8 {
         const call_ctx = ctx.getEnv(core.CallContext);
         const fb = if (call_ctx) |c| c.window_id else core.WindowId.invalid;
@@ -372,6 +386,7 @@ pub const Commands = struct {
         return "Z-Ts Application";
     }
 
+    /// `plugin:window|theme` — title-bar theme (`"dark"` / `"light"`).
     pub fn theme(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) []const u8 {
         const call_ctx = ctx.getEnv(core.CallContext);
         const fb = if (call_ctx) |c| c.window_id else core.WindowId.invalid;
@@ -380,6 +395,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.theme else "dark";
     }
 
+    /// `plugin:window|is_fullscreen`.
     pub fn is_fullscreen(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -387,6 +403,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.fullscreen else false;
     }
 
+    /// `plugin:window|is_minimized`.
     pub fn is_minimized(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -394,6 +411,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.minimized else false;
     }
 
+    /// `plugin:window|is_maximized`.
     pub fn is_maximized(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -401,6 +419,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.maximized else false;
     }
 
+    /// `plugin:window|is_focused`.
     pub fn is_focused(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -408,6 +427,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.focused else true;
     }
 
+    /// `plugin:window|is_decorated`.
     pub fn is_decorated(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -415,6 +435,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.decorated else true;
     }
 
+    /// `plugin:window|is_resizable`.
     pub fn is_resizable(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -422,6 +443,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.resizable else true;
     }
 
+    /// `plugin:window|is_maximizable`.
     pub fn is_maximizable(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -429,6 +451,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.maximizable else true;
     }
 
+    /// `plugin:window|is_minimizable`.
     pub fn is_minimizable(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -436,6 +459,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.minimizable else true;
     }
 
+    /// `plugin:window|is_closable`.
     pub fn is_closable(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -443,6 +467,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.closable else true;
     }
 
+    /// `plugin:window|is_visible`.
     pub fn is_visible(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -450,6 +475,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.visible else true;
     }
 
+    /// `plugin:window|is_enabled`.
     pub fn is_enabled(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -457,6 +483,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.enabled else true;
     }
 
+    /// `plugin:window|is_always_on_top`.
     pub fn is_always_on_top(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) bool {
         const fb = if (ctx.getEnv(core.CallContext)) |c| c.window_id else core.WindowId.invalid;
         reg.mu.lockUncancelable(reg.io);
@@ -464,6 +491,7 @@ pub const Commands = struct {
         return if (reg.findLocked(args.label, fb)) |e| e.always_on_top else false;
     }
 
+    /// `plugin:window|set_title` — replaces the title bar text.
     pub fn set_title(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -481,6 +509,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:window|set_size` — resizes to a `Logical` or `Physical` size.
     pub fn set_size(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -497,6 +526,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:window|set_min_size` — sets or clears (`null`) the lower resize bound.
     pub fn set_min_size(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -507,6 +537,7 @@ pub const Commands = struct {
         try t.host.setWindowMinSize(t.win_id, logical);
     }
 
+    /// `plugin:window|set_max_size` — sets or clears (`null`) the upper resize bound.
     pub fn set_max_size(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -517,6 +548,7 @@ pub const Commands = struct {
         try t.host.setWindowMaxSize(t.win_id, logical);
     }
 
+    /// `plugin:window|set_size_constraints` — sets both bounds at once; absent fields are cleared.
     pub fn set_size_constraints(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -531,6 +563,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:window|set_position` — moves the window (logical or physical).
     pub fn set_position(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -547,6 +580,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:window|set_fullscreen` — enters or leaves fullscreen.
     pub fn set_fullscreen(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -560,6 +594,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.fullscreen = args.value;
     }
 
+    /// `plugin:window|minimize` — minimises (iconifies) the window.
     pub fn minimize(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.setWindowMinimized(t.win_id, true);
@@ -568,6 +603,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.minimized = true;
     }
 
+    /// `plugin:window|unminimize` — restores a minimised window.
     pub fn unminimize(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.setWindowMinimized(t.win_id, false);
@@ -576,6 +612,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.minimized = false;
     }
 
+    /// `plugin:window|maximize` — maximises / zooms the window.
     pub fn maximize(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.setWindowMaximized(t.win_id, true);
@@ -584,6 +621,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.maximized = true;
     }
 
+    /// `plugin:window|unmaximize` — restores a maximised window.
     pub fn unmaximize(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.setWindowMaximized(t.win_id, false);
@@ -592,15 +630,18 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.maximized = false;
     }
 
+    /// `plugin:window|toggle_maximize` — flips the maximised state.
     pub fn toggle_maximize(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const is_max = is_maximized(ctx, reg, .{ .label = args.label });
         if (is_max) return unmaximize(ctx, reg, .{ .label = args.label }) else return maximize(ctx, reg, .{ .label = args.label });
     }
 
+    /// `plugin:window|internal_toggle_maximize` — the double-click-on-titlebar path; same effect as `toggle_maximize`, kept separate so the JS shim can call it with a different argument shape.
     pub fn internal_toggle_maximize(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         return toggle_maximize(ctx, reg, .{ .label = args.label });
     }
 
+    /// `plugin:window|show` — maps the window (and focuses it if it was hidden).
     pub fn show(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.setWindowVisible(t.win_id, true);
@@ -609,6 +650,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.visible = true;
     }
 
+    /// `plugin:window|hide` — unmaps the window without destroying it.
     pub fn hide(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.setWindowVisible(t.win_id, false);
@@ -617,15 +659,18 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.visible = false;
     }
 
+    /// `plugin:window|close` — asks the window to close (close handlers still run).
     pub fn close(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.closeWindow(t.win_id);
     }
 
+    /// `plugin:window|destroy` — closes the window unconditionally, skipping close handlers.
     pub fn destroy(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         return close(ctx, reg, .{ .label = args.label });
     }
 
+    /// `plugin:window|set_decorations` — adds or removes the native frame and title bar.
     pub fn set_decorations(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -638,6 +683,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.decorated = args.value;
     }
 
+    /// `plugin:window|set_always_on_top` — keeps the window above (or below) others.
     pub fn set_always_on_top(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -650,6 +696,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.always_on_top = args.value;
     }
 
+    /// `plugin:window|set_resizable` — toggles user resizing.
     pub fn set_resizable(
         ctx: *rpc.Ctx,
         reg: *WindowRegistry,
@@ -662,11 +709,13 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| e.resizable = args.value;
     }
 
+    /// `plugin:window|set_focus` — raises and focuses the window.
     pub fn set_focus(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.setWindowFocus(t.win_id);
     }
 
+    /// `plugin:window|start_dragging` — begins an OS window move from the current cursor position.
     pub fn start_dragging(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         {

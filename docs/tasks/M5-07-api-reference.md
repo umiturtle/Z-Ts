@@ -29,8 +29,8 @@
       内部資料（ADR・タスク・設計・ロードマップ・環境）は**個別ページとして並ばない**
 - [x] 検索は利用者向けページ + API 宣言だけを対象にする（内部資料は出さない）
 - [x] 主要 API の `///` カバレッジを引き上げ、生成ページに「未文書宣言」の一覧を出す
-      （公開面 2,119 宣言中 **988 件 = 46%**、トップレベルの宣言は未文書ゼロ。残りは主に
-      `plugin:*` のコマンドハンドラと `z_ts` の再エクスポート）
+      （公開面 1,932 宣言中 **1,079 件 = 55%**、トップレベルの宣言は未文書ゼロ。残りは主に
+      各 `Commands` ハンドラの内部ヘルパと `z_ts` の再エクスポート）
 - [x] `./zigw quick-test` / `./zigw build docs` / `python3 scripts/check-docs.py` が通る
 - [x] **追加**: 読者向け / 内部向けの層分け（`docs/guides/README.md`）と API の公開・内部分離
       （`Audience`）— 学習中に FFI 宣言へ暴露されない
@@ -56,8 +56,12 @@
     `JsImage` / FS の全 `*Options` と `FileInfo` / `FileHandle` / `FsState` / `TrayIconOptions` /
     `TrayEvent` / `MessageDialogButtons` ほかダイアログ / `SchemeRequest` / `Capture` /
     `WindowConfig` / `EventTarget` / `EventBus` / `HeadlessMock` / `ProtocolRouter`。
-  - 文書化率: `zts_tauri` 22% → **44%**、`zts_webview` 16% → **49%**、`zts_core` 17% → **41%**、
-    全体 21% → **46%**（2,119 宣言中 988 件。内部モジュールは分母から除外）。
+  - `plugin:*` のコマンドハンドラ（`plugin:window|*` 42 件ほか）と `MenuState` / `Node` /
+    `Options` / `TrackedWindow` / `WindowRegistry` のメソッドにも `///` を追加。
+  - 文書化率: `zts_tauri` 22% → **59%**、`zts_webview` 16% → **51%**、`zts_core` 17% → **41%**、
+    `zts_rpc` 39% → **54%**、全体 21% → **55%**（1,932 宣言中 1,079 件。内部モジュールは分母から除外）。
+  - **スキャナのバグ修正**: 複数行の引数リスト（`ctx: *Ctx,`）を構造体フィールドとして拾っていた
+    （幻のメンバ 187 件）。`parenDelta` を導入して括弧の深さを見るようにし、テストを 2 本追加。
   - カバレッジの「宣言 + 型メンバ」の内訳をパッケージページに明記（数値とページの食い違いを解消）。
   - `linux.zig` / `macos.zig` / `windows.zig`（各 OS バックエンドのネイティブハンドル）を内部扱いに。
 - **既知の（既存の）ノイズ**: `zig build test` のログに
@@ -66,7 +70,7 @@
 - **直前の検証値**:
   `OK docsite pages=183 links=324 assets=8159 words=344797 bytes=4185561 demos=60
   api_pages=90 api_decls=2119 api_internal=527` / `check-docs OK (74)` /
-  `docsite 44` / `quick-test 7` / `build test -Dgtk=false` 52/52。
+  `docsite 46` / `quick-test 7` / `build test -Dgtk=false` 52/52（184 tests）。
 - **Next Step**:
   - 残り 25 件の `///`（menu / tray / snapshot_wire / resources / wasm / windows / webview_host）。
   - 公開面の文書化率を上げる第 2 波（`zts_tauri` の DTO、`z_ts` の re-export 以外）。

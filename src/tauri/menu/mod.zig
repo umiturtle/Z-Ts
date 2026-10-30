@@ -250,7 +250,9 @@ pub const JsImage = union(enum) {
 
 /// `tauri::menu::Icon` — untagged between a stock icon name and a `JsImage`.
 pub const Icon = union(enum) {
+    /// A stock OS icon name.
     native: NativeIcon,
+    /// A caller-provided image (path, bytes or resource).
     image: JsImage,
 
     pub fn fromValue(value: std.json.Value) ?Icon {
@@ -277,7 +279,9 @@ pub const Icon = union(enum) {
 /// `MenuItemPayloadKind` — untagged: either `[rid, kind]` (an existing resource) or an inline
 /// options object. `zts_rpc` cannot express "array **or** object", so decoding is manual.
 pub const Spec = struct {
+    /// Attach an existing menu/submenu resource instead of building a new item.
     resource: ?ResourceRef = null,
+    /// Build a new item from options (mutually exclusive with `resource`).
     options: ?Options = null,
 
     pub const ResourceRef = struct {
@@ -303,14 +307,21 @@ pub const Spec = struct {
 /// `MenuItemOptions | SubmenuOptions | CheckMenuItemOptions | IconMenuItemOptions |
 /// PredefinedMenuItemOptions` — the superset that `plugin:menu|new` and nested `items` accept.
 pub const Options = struct {
+    /// Wire id; generated when omitted.
     id: ?[]const u8 = null,
+    /// Label, with GTK mnemonics (`_File`).
     text: ?[]const u8 = null,
+    /// Whether the item can be activated.
     enabled: ?bool = null,
+    /// Initial check state for `Check` items.
     checked: ?bool = null,
+    /// Shortcut string (`"CmdOrCtrl+K"`), parsed by `Accelerator.parse`.
     accelerator: ?[]const u8 = null,
     /// `Predefined` payload (the wire key is `item`, not `predefined`).
     item: ?Predefined = null,
+    /// Icon for `Icon` / `IconCheck` items.
     icon: ?Icon = null,
+    /// Children of a submenu (ignored for leaf items).
     items: ?[]const Spec = null,
     /// `Channel<string>` injected by `@tauri-apps/api/menu` for nested items with an `action`.
     handler: ?u32 = null,
@@ -420,7 +431,9 @@ pub const JsonArg = struct {
 
 /// `tauri_runtime::dpi::Position` — `{"Logical": {x, y}}` or `{"Physical": {x, y}}`.
 pub const Position = struct {
+    /// X in pixels.
     x: f64,
+    /// Y in pixels.
     y: f64,
     logical: bool = true,
 
@@ -477,12 +490,17 @@ pub const EntryKind = enum {
 /// `Node` tree, and `depth` encodes nesting because every native menu API wants a flat list plus an
 /// indent level.
 pub const Entry = struct {
+    /// What the backend should draw.
     kind: EntryKind,
     /// Wire `MenuId` (what `Channel<string>` reports on activation).
     id: []const u8,
+    /// Label with mnemonics.
     text: []const u8,
+    /// Whether the item can be activated.
     enabled: bool = true,
+    /// Check state (`Check` items only).
     checked: bool = false,
+    /// Keyboard shortcut shown next to the label, or `null`.
     accelerator: ?Accelerator = null,
     /// 0 for top-level entries, `parent.depth + 1` inside a submenu.
     depth: u16 = 0,
@@ -495,6 +513,7 @@ pub const Entry = struct {
 /// A complete menu at one instant, flattened. Built fresh on every `apply*` call rather than mutated
 /// in place, so a backend never observes a half-updated menu.
 pub const Snapshot = struct {
+    /// The flattened menu, in display order (pre-order over the tree).
     entries: []const Entry,
 
     pub fn len(self: Snapshot) usize {
@@ -535,15 +554,23 @@ fn appendEntries(allocator: Allocator, out: *std.ArrayListUnmanaged(Entry), node
 /// A menu tree node, stored inside the shared `plugin:resources` table so the JS side addresses it by
 /// handle (`rid`). Only menus mutate this; backends see `Snapshot`s instead.
 pub const Node = struct {
+    /// Owning state; needed to reach the resource table when this node is closed.
     state: *MenuState,
+    /// Allocator that owns `id` and `text`.
     allocator: Allocator,
     /// `plugin:resources` handle (set right after insertion; `0` while unregistered).
     rid: u53 = 0,
+    /// What the node renders as (plain item, check, icon, submenu, …).
     kind: ItemKind,
+    /// Wire id reported on activation, and the key the JS `Channel` is registered under.
     id: []const u8,
+    /// Label, including GTK mnemonics (`_File`).
     text: []const u8,
+    /// Whether the item can be activated.
     enabled: bool = true,
+    /// Check state for `Check` items.
     checked: bool = false,
+    /// Keyboard shortcut, or `null`.
     accelerator: ?Accelerator = null,
     predefined: ?Predefined = null,
     icon: ?Icon = null,
@@ -588,7 +615,9 @@ pub const Node = struct {
 /// `Channel<string>` (upstream `MenuChannels`). `Mock` stores it so the whole click → IPC path is
 /// exercisable without a toolkit.
 pub const Activator = struct {
+    /// Opaque pointer handed back to `activate`.
     ctx: ?*anyopaque = null,
+    /// Receives the wire id of the activated item. Defaults to a no-op.
     call: *const fn (ctx: ?*anyopaque, id: []const u8) void = noop,
 
     fn noop(_: ?*anyopaque, _: []const u8) void {}
@@ -597,7 +626,9 @@ pub const Activator = struct {
 /// A native menu backend: an Objective-C / Win32 / GTK implementation plus the function table that
 /// `MenuState` drives. The `Mock` backend records snapshots so all three OSes run the same assertions.
 pub const Backend = struct {
+    /// Opaque pointer handed back to every vtable entry.
     ctx: ?*anyopaque = null,
+    /// The native implementation. `StubBackend.vtable` records nothing and accepts everything.
     vtable: *const VTable,
 
     pub const VTable = struct {
@@ -632,14 +663,19 @@ pub const Backend = struct {
 /// `plugin:menu` state: the owned `Node` trees, the handle table that connects them to
 /// `plugin:resources`, and the active `Backend`. Every public command starts here.
 pub const MenuState = struct {
+    /// Allocator that owns the id map and channel entries.
     allocator: Allocator,
+    /// IO reactor used for the state mutex.
     io: Io,
     /// The shared `plugin:resources` table (menu `rid`s live there, like upstream).
     resources: *ResourceTable,
+    /// Native backend that applies the snapshots. Starts as `StubBackend`, which records nothing.
     backend: Backend,
     /// `muda::util::next_id` replacement: ids default to `"1"`, `"2"`, …
     next_id: u32 = 1,
+    /// Root of the app-wide menu bar, or `null` when none was set.
     app_menu: ?*Node = null,
+    /// Per-window menu bars, keyed by window label.
     window_menus: std.StringHashMapUnmanaged(*Node) = .empty,
     /// Menu id → activation channel. Values are fixed-size so the map never reallocates payloads.
     channels: std.StringHashMapUnmanaged(ChannelEntry) = .empty,
@@ -846,11 +882,17 @@ pub const StubBackend = struct {
 /// Recording backend used by the tests (and by `HeadlessMock` runs): it stores the last snapshot per
 /// window instead of drawing anything, so assertions can be written once against the native shape.
 pub const Mock = struct {
+    /// Allocator that owns the recorded snapshots.
     allocator: Allocator,
+    /// Last snapshot applied as the app menu.
     app_menu: ?[]Entry = null,
+    /// Last snapshot applied per window label.
     window_menus: std.StringHashMapUnmanaged([]Entry) = .empty,
+    /// Every context-menu popup that was requested.
     popups: std.ArrayListUnmanaged(Popup) = .empty,
+    /// How many apply calls were made (assertions on "applied exactly once").
     apply_count: usize = 0,
+    /// The activation receiver the state installed, if any.
     activator: ?Activator = null,
 
     pub const Popup = struct {

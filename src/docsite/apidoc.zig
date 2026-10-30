@@ -199,6 +199,65 @@ pub fn splitLines(arena: Allocator, text: []const u8) Error![][]const u8 {
     return list.toOwnedSlice(arena);
 }
 
+/// Net paren/bracket change of one source line, ignoring string literals, character literals and
+/// comments. Used to keep multi-line parameter lists from looking like struct fields: inside
+///
+/// ```zig
+/// pub fn setTitle(
+///     ctx: *Ctx,
+///     args: struct { label: []const u8 },
+/// ) void
+/// ```
+///
+/// `ctx: *Ctx,` sits at brace depth 1, exactly like a real field. The paren counter is what tells
+/// the two apart.
+pub fn parenDelta(line: []const u8) i32 {
+    const trimmed = std.mem.trimStart(u8, line, " \t");
+    if (trimmed.len == 0) return 0;
+    if (std.mem.startsWith(u8, trimmed, "//")) return 0;
+    if (std.mem.startsWith(u8, trimmed, "\\\\")) return 0;
+
+    const State = enum { code, string, char };
+    var state: State = .code;
+    var escaped = false;
+    var delta: i32 = 0;
+    var i: usize = 0;
+    while (i < line.len) : (i += 1) {
+        const ch = line[i];
+        switch (state) {
+            .string => {
+                if (escaped) {
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '"') {
+                    state = .code;
+                }
+            },
+            .char => {
+                if (escaped) {
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '\'') {
+                    state = .code;
+                }
+            },
+            .code => switch (ch) {
+                '"' => state = .string,
+                '\'' => state = .char,
+                '/' => {
+                    if (i + 1 < line.len and line[i + 1] == '/') return delta;
+                },
+                '(', '[' => delta += 1,
+                ')', ']' => delta -= 1,
+                else => {},
+            },
+        }
+    }
+    return delta;
+}
+
 /// Net brace change of one source line, ignoring string literals, character literals and comments.
 pub fn braceDelta(line: []const u8) i32 {
     const trimmed = std.mem.trimStart(u8, line, " \t");
@@ -552,10 +611,16 @@ pub fn scanModule(arena: Allocator, path: []const u8, source: []const u8) Error!
     const lines = try splitLines(arena, source);
 
     const depth = try arena.alloc(i32, lines.len);
+    // `paren` is non-zero while a declaration header is still open (multi-line parameter lists,
+    // tuple types written across lines). A line inside one can look exactly like a struct field.
+    const paren = try arena.alloc(i32, lines.len);
     var running: i32 = 0;
+    var open: i32 = 0;
     for (lines, 0..) |line, i| {
         depth[i] = running;
+        paren[i] = open;
         running += braceDelta(line);
+        open = @max(0, open + parenDelta(line));
     }
 
     const base = std.fs.path.basename(path);
@@ -563,7 +628,7 @@ pub fn scanModule(arena: Allocator, path: []const u8, source: []const u8) Error!
         .path = path,
         .name = if (std.mem.endsWith(u8, base, ".zig")) base[0 .. base.len - 4] else base,
         .doc = try moduleDoc(arena, lines),
-        .decls = try scanDecls(arena, lines, depth, 0, lines.len, 0),
+        .decls = try scanDecls(arena, lines, depth, paren, 0, lines.len, 0),
     };
 }
 
@@ -571,6 +636,7 @@ fn scanDecls(
     arena: Allocator,
     lines: []const []const u8,
     depth: []const i32,
+    paren: []const i32,
     from: usize,
     to: usize,
     at: i32,
@@ -583,6 +649,8 @@ fn scanDecls(
         const start = declStart(trimmed) orelse blk: {
             // Members of a type body: public struct fields and enum cases have no `pub`.
             if (at == 0) continue;
+            // Inside an open parameter list (`ctx: *Ctx,`) — not a field.
+            if (paren[i] != 0) continue;
             break :blk fieldStart(trimmed) orelse continue;
         };
 
@@ -590,7 +658,7 @@ fn scanDecls(
         if (start.kind == .type_ or start.kind == .namespace) {
             var end = i + 1;
             while (end < to and depth[end] > at) end += 1;
-            members = try scanDecls(arena, lines, depth, i + 1, end, at + 1);
+            members = try scanDecls(arena, lines, depth, paren, i + 1, end, at + 1);
         }
 
         const signature = if (start.kind == .field)
@@ -1531,4 +1599,48 @@ test "coverageOf keeps internal declarations out of the percentage" {
     // …but it is not hidden either.
     try std.testing.expectEqual(@as(usize, 1), coverage.internal_total);
     try std.testing.expectEqual(@as(usize, 0), coverage.internal_documented);
+}
+
+test "parenDelta keeps multi-line parameter lists out of the field list" {
+    try std.testing.expectEqual(@as(i32, 1), parenDelta("    pub fn setTitle("));
+    try std.testing.expectEqual(@as(i32, 0), parenDelta("    ctx: *Ctx,"));
+    // Braces do not count, and an argument line usually has no brackets of its own.
+    try std.testing.expectEqual(@as(i32, 0), parenDelta("    args: struct { label: []const u8 },"));
+    try std.testing.expectEqual(@as(i32, -1), parenDelta("    ) void {"));
+    // Braces and strings are not parens.
+    try std.testing.expectEqual(@as(i32, 0), parenDelta("pub const x = \"(\";"));
+    try std.testing.expectEqual(@as(i32, 0), parenDelta("// ( unbalanced in a comment"));
+    try std.testing.expectEqual(@as(i32, 0), parenDelta("pub const list = .{ 1, 2 };"));
+}
+
+test "scanModule does not report function parameters as struct fields" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const source =
+        \\pub const Commands = struct {
+        \\    pub const rpc_prefix = "plugin:x|";
+        \\
+        \\    pub fn setTitle(
+        \\        ctx: *Ctx,
+        \\        args: struct { label: []const u8 },
+        \\    ) void {
+        \\        _ = ctx;
+        \\        _ = args;
+        \\    }
+        \\};
+        \\
+    ;
+    const module = try scanModule(arena, "src/x.zig", source);
+    try std.testing.expectEqual(@as(usize, 1), module.decls.len);
+    const commands = module.decls[0];
+    try std.testing.expectEqualStrings("Commands", commands.name);
+
+    var names: std.ArrayListUnmanaged([]const u8) = .empty;
+    for (commands.members) |member| try names.append(arena, member.name);
+    // `ctx` / `args` are parameters of `setTitle`, not members of `Commands`.
+    try std.testing.expectEqual(@as(usize, 2), names.items.len);
+    try std.testing.expectEqualStrings("rpc_prefix", names.items[0]);
+    try std.testing.expectEqualStrings("setTitle", names.items[1]);
 }
