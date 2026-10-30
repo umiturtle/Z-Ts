@@ -17,6 +17,8 @@ const html_escape = foundation.html_escape;
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
+/// `plugin:event` failures. `IllegalEventName` rejects names Tauri reserves (`tauri://…`), which is
+/// what keeps a page from forging the framework's own lifecycle events.
 pub const EventError = core.HostError || error{
     IllegalEventName,
     MissingHostContext,
@@ -58,6 +60,8 @@ pub fn isValidEventName(name: []const u8) bool {
     return true;
 }
 
+/// Zig-side listener: receives the raw JSON payload exactly as the webview will see it, so a native
+/// subscriber and a JS subscriber can never observe different encodings.
 pub const NativeEventFn = *const fn (userdata: ?*anyopaque, event_name: []const u8, raw_json_payload: []const u8) void;
 
 const JsListener = struct {
@@ -82,6 +86,9 @@ const NativeListener = struct {
     cb: NativeEventFn,
 };
 
+/// The `plugin:event` registry: JS listeners (id per `listen()` call, filtered by target) and native
+/// listeners, plus the label resolver used to route `AnyLabel` / `Window` targets. Mutations are
+/// mutex-guarded because `emit()` may come from any thread.
 pub const EventBus = struct {
     allocator: Allocator,
     io: Io,

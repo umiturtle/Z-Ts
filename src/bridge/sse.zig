@@ -17,8 +17,12 @@ const testing = std.testing;
 const foundation = @import("zts_foundation");
 const html_escape = foundation.html_escape;
 
+/// Generational id of one connected browser tab. A tab that reconnects gets a new id, so a stale id
+/// can never address the wrong stream.
 pub const ClientId = foundation.Handle(.sse_client);
 
+/// One open `text/event-stream` connection: the socket, its pending frames, and the metadata needed
+/// to close it cleanly. Frames are queued (`RingQueue`) because a slow client must not block `emit()`.
 pub const ClientEntry = struct {
     allocator: Allocator,
     queue: foundation.RingQueue([]u8) = .empty,
@@ -65,6 +69,8 @@ pub fn formatSseFrameAlloc(allocator: Allocator, event_name: []const u8, data: [
     return out.toOwnedSlice(allocator);
 }
 
+/// The set of live SSE clients behind `emit()`. Thread-safe: the RPC handler runs on the event loop
+/// while the HTTP server threads write to the sockets.
 pub const SseHub = struct {
     allocator: Allocator,
     mu: Io.Mutex = .init,

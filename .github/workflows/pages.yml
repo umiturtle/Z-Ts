@@ -91,6 +91,8 @@ jobs:
           # `.nojekyll` must also exist at the artifact root for Pages to skip Jekyll.
           touch _site/.nojekyll
           test -f _site/index.html
+          test -f _site/docs/api/index.html
+          test -f _site/docs/api/zts_rpc/schema.html
           test -f _site/examples/counter/index.html
           test -f _site/examples/frameworks/index.html
           du -sh _site

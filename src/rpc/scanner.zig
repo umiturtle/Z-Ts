@@ -22,6 +22,8 @@ pub const ScanError = error{
     MaxDepthExceeded,
 };
 
+/// The lexical token a `Cursor` is sitting on. `eof` is a token, not an error, so a pull loop can
+/// terminate without a special case.
 pub const TokenKind = enum {
     object_begin,
     object_end,
@@ -34,12 +36,20 @@ pub const TokenKind = enum {
     eof,
 };
 
+/// How to turn a JSON string's bytes into a Zig slice.
+///
+/// * `.strict_utf8` — reject invalid UTF-8 (the default for request bodies).
+/// * `.lossy_utf8` — replace invalid sequences with U+FFFD.
+/// * `.wtf8` — keep unpaired surrogates as WTF-8, which is what a JS `JSON.stringify` can legally
+///   produce and what must be re-encoded unchanged when proxying.
 pub const StringDecodeMode = enum {
     strict_utf8,
     lossy_utf8,
     wtf8,
 };
 
+/// A decoded JSON string. `allocated` says whether the caller must free it (escapes force a copy;
+/// plain ASCII borrows the input), so the fast path costs nothing.
 pub const DecodedString = struct {
     slice: []const u8,
     allocated: bool,
@@ -52,6 +62,8 @@ pub const DecodedString = struct {
     }
 };
 
+/// A number as it appeared in the input, plus whether it used float syntax. Deciding integer vs
+/// float is left to the target type so `1` can fill an `f64` and `1.0` can be rejected by an `u32`.
 pub const NumberToken = struct {
     slice: []const u8,
     is_float_syntax: bool,
@@ -101,6 +113,8 @@ pub const ObjectIter = struct {
     }
 };
 
+/// A zero-copy pull scanner over a JSON document. It tracks byte position and nesting depth (so a
+/// crafted `[[[[…` body cannot blow the stack) but allocates nothing on its own.
 pub const Cursor = struct {
     input: []const u8,
     pos: usize = 0,

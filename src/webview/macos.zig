@@ -197,6 +197,8 @@ pub const CocoaFrame = struct {
     height: f64 = 0,
 };
 
+/// Cocoa (`NSApplication` / `NSWindow`) + `WKWebView` backend. The Objective-C side lives in
+/// `macos_shim.m` behind a C ABI, so Zig never needs the Objective-C runtime headers.
 pub const MacOsBackend = struct {
     allocator: Allocator,
     io: Io,

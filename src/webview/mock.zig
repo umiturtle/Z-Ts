@@ -18,6 +18,8 @@ const types = @import("types.zig");
 const pending_mod = @import("pending.zig");
 const png = @import("png.zig");
 
+/// Record of one answered scheme request, kept so a test can assert on the status, headers and body
+/// the engine would have handed the WebView.
 pub const CompletedSchemeRecord = struct {
     window_id: types.WindowId,
     uri: []u8,
@@ -45,6 +47,8 @@ pub const CompletedSchemeRecord = struct {
     }
 };
 
+/// The in-memory window a `HeadlessMock` manages: title, geometry and flags, with no OS object
+/// behind it. Screenshot capture returns a deterministic PNG so parity tests stay reproducible.
 pub const MockWindow = struct {
     title: []u8,
     size: types.LogicalSize,
@@ -90,6 +94,9 @@ const MockPendingPayload = struct {
     }
 };
 
+/// The pure-Zig backend used by CI and by every unit test that needs a window. It implements the same
+/// contract as the native backends (scheme routing, IPC, capture, close) but paints nothing, so it
+/// runs without a display server.
 pub const HeadlessMock = struct {
     allocator: Allocator,
     io: Io,

@@ -172,6 +172,8 @@ pub const Mock = struct {
     }
 };
 
+/// State behind `plugin:clipboard-manager`: the platform backend (X11/Wayland, `NSPasteboard`,
+/// Win32 clipboard) plus the allocator used for the strings it hands back.
 pub const ClipboardState = struct {
     allocator: Allocator,
     backend: Backend,

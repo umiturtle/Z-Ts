@@ -64,6 +64,22 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 
 ## リポジトリの歩き方
 
+**まず読むもの**（使う人向け）
+
+| 目的 | 行き先 |
+|---|---|
+| **学習の道筋（まずここ）** | [`docs/guides/README.md`](docs/guides/README.md) |
+| 5 分で動かす | [`docs/guides/getting-started.md`](docs/guides/getting-started.md) |
+| コマンドの書き方（`invoke`） | [`docs/guides/using-rpc.md`](docs/guides/using-rpc.md) |
+| Tauri 標準プラグイン | [`docs/guides/using-plugins.md`](docs/guides/using-plugins.md) |
+| 静的サイト書き出し（`dist/`） | [`docs/guides/using-ssg.md`](docs/guides/using-ssg.md) |
+| Tauri v2 からの移行 | [`docs/guides/migrating-from-tauri.md`](docs/guides/migrating-from-tauri.md) |
+| うまく動かないとき | [`docs/guides/troubleshooting.md`](docs/guides/troubleshooting.md) |
+| **API リファレンス**（ソースから自動生成） | <https://umiturtle.github.io/Z-Ts/docs/api/index.html>（`./zigw build docs` で手元にも生成） |
+| コマンド一覧 | [`docs/reference/cli.md`](docs/reference/cli.md) |
+
+**中を読む人向け**（実装の意図・経緯）
+
 | 目的 | 行き先 |
 |---|---|
 | 全体像・依存 DAG | [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md) |

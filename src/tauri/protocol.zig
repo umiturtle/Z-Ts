@@ -29,11 +29,14 @@ const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 const js_bootstrap = @import("js_bootstrap.zig");
 
+/// A request/response header. Values are borrowed slices, never NUL terminated.
 pub const HeaderPair = struct {
     name: []const u8,
     value: []const u8,
 };
 
+/// One `tauri://` / `ipc://` / `asset://` hit, already decoded from the WebView's callback. A
+/// `WindowId` of `0` means "no window" (a request that arrived before the first window existed).
 pub const IncomingSchemeRequest = struct {
     window_id: core.WindowId,
     method: []const u8,
@@ -49,6 +52,9 @@ pub const IncomingSchemeRequest = struct {
     }
 };
 
+/// What the router hands back to the WebView. `body` is owned by the response (see
+/// `core.OwnedBytes`), and `content_range_buf` avoids an allocation for the 206 case by formatting
+/// `bytes 0-1023/4096` into a fixed buffer.
 pub const RoutedResponse = struct {
     status_code: u16 = 200,
     content_type: []const u8 = "application/json",
@@ -80,6 +86,16 @@ pub const RoutedResponse = struct {
     }
 };
 
+/// Everything the protocol layer needs that is not per-request.
+///
+/// * `invoke_key` — per-run CSRF token; `ipc://` requests must echo it, and the comparison is
+///   constant-time.
+/// * `assets` — the embedded `dist/` bundle served from `tauri://localhost/`.
+/// * `inject_bootstrap_into_html` — inject `window.__TAURI_INTERNALS__` into every HTML response.
+/// * `default_window_label` — label used when a command omits `window` (Tauri v2 semantics).
+/// * `csp` — `Content-Security-Policy` header value; `null` disables the header.
+/// * `asset_root_dir` / `asset_allow_globs` — dev-mode serving from disk, restricted to the globs.
+/// * `extra_allowed_origins` — additional origins accepted for `ipc://` (dev servers).
 pub const ProtocolConfig = struct {
     invoke_key: []const u8,
     assets: ?*const web.Assets = null,
@@ -109,6 +125,9 @@ fn hexNibble(c: u8) ?u4 {
     };
 }
 
+/// Percent-decodes `input` into a new buffer, failing with `InvalidPercentEncoding` on a truncated
+/// `%`-escape. Unlike `decodeURIComponent` it also decodes `%2F`, because the router needs the
+/// *real* separators before it can apply a path scope.
 pub fn percentDecodeRawAlloc(allocator: Allocator, input: []const u8) error{ OutOfMemory, InvalidPercentEncoding }![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -135,6 +154,10 @@ const ParsedSchemeTarget = struct {
     path: []const u8,
 };
 
+/// Maps a request URI to the scheme it belongs to (`tauri` / `ipc` / `asset` / `unknown`) plus the
+/// path without query or fragment. Both the custom scheme (`tauri://localhost/x`) and the HTTP form
+/// (`http://tauri.localhost/x`) are recognised, because Windows resolves custom schemes through
+/// `http://<scheme>.localhost`.
 pub fn classifyUri(uri: []const u8) ParsedSchemeTarget {
     const scheme_sep = std.mem.indexOf(u8, uri, "://") orelse return .{ .kind = .unknown, .path = "/" };
     const raw_scheme = uri[0..scheme_sep];
@@ -158,6 +181,9 @@ pub fn classifyUri(uri: []const u8) ParsedSchemeTarget {
     return .{ .kind = .unknown, .path = clean_path };
 }
 
+/// Routes one WebView request: static asset, `ipc://` command, or a 404. Holds no mutable state —
+/// the only per-engine value is the CSRF `invoke_key` inside the config — so the same router serves
+/// every window.
 pub const ProtocolRouter = struct {
     allocator: Allocator,
     io: Io,

@@ -25,9 +25,15 @@ const auth = @import("auth.zig");
 const js_init = @import("js_init.zig");
 const sse = @import("sse.zig");
 
+/// Path prefix of the RPC endpoint (`POST /__zts_ipc__/<command>`). A distinct prefix means the
+/// router can never shadow a real asset.
 pub const ipc_prefix = "/__zts_ipc__/";
+/// Path of the Server-Sent-Events stream (`GET /__zts_events__`) that carries `emit()` traffic from
+/// the Zig side to the browser.
 pub const sse_path = "/__zts_events__";
 
+/// `BridgeServer` settings. `port = 0` asks the OS for a free port, which is what tests use to avoid
+/// collisions; the preview server binds `0.0.0.0` so a container can publish it.
 pub const Config = struct {
     /// Bind IP literal (`"127.0.0.1"` for local desktop/tests; `"0.0.0.0"` for container/cloud previews).
     host: []const u8 = "127.0.0.1",
@@ -64,6 +70,9 @@ const ExtractedHeaders = struct {
     range: ?[]const u8 = null,
 };
 
+/// The Live Preview server: static assets + `206` range + `ipc://` RPC + SSE, all in pure Zig with no
+/// libc. Runs the same command handlers as the desktop app, so `zig build preview` exercises the real
+/// code path.
 pub const BridgeServer = struct {
     allocator: Allocator,
     io: Io,

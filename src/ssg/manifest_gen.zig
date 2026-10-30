@@ -14,6 +14,8 @@ const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const testing = std.testing;
 
+/// What a manifest scan saw: how many files were embedded and how many bytes they add up to. Used
+/// by `build.zig` to print the `files=… raw=… gzip=…` line CI asserts on.
 pub const ManifestStats = struct {
     file_count: usize = 0,
     total_bytes: u64 = 0,

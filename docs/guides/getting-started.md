@@ -15,7 +15,7 @@ Z-Ts で最初のアプリをビルドし、3 つの成果物（デスクトッ�
 | Node.js | 22 系（**任意** — Live Preview の E2E とフロントエンドのビルドにだけ必要） |
 
 Linux の GTK 開発パッケージが無い場合は、同梱スクリプトで sysroot を入れられます
-（詳細は [`../environment/arena-and-caching.md`](../environment/arena-and-caching.md)）:
+（詳細は内部資料 [`../environment/arena-and-caching.md`](../environment/arena-and-caching.md)）:
 
 ```bash
 bash scripts/setup-toolchains.sh --sysroot
@@ -71,7 +71,7 @@ rm -rf zig-out .zig-cache web/bindings.gen.ts
 > `src/cli/` に `zts init` / `dev` / `build` の実装が入りつつあります（引数解析とテンプレートは
 > 完成・テスト済み）。雛形が出す `build.zig` は `M5-01` の共通エンベッダを
 > `dep.builder.path("src/build_tools/embed_main.zig")` で起動する形で、
-> このリポジトリのサンプルと同じ構成です。進捗は
+> このリポジトリのサンプルと同じ構成です。進捗は内部資料
 > [`../tasks/M5-02-cli.md`](../tasks/M5-02-cli.md)。
 
 ## 4. フロントエンドを埋め込む
@@ -95,7 +95,7 @@ const assets_dir = embed_run.addOutputDirectoryArg("frontend");
 ```
 
 生成されたモジュールは `@import("embedded_frontend")` として `assets.entries`（`zts_web` の
-静的アセット表）を公開します。仕組みは
+静的アセット表）を公開します。仕組みは内部資料
 [`../architecture/build-tools.md`](../architecture/build-tools.md)。
 
 ## 5. TypeScript の型を自動生成する
@@ -112,7 +112,7 @@ b.step("tsgen", "Regenerate the TypeScript bindings").dependOn(gen.step);
 ```
 
 `zig build test` は**生成物の鮮度**も検証します（古ければ落ちる）。生成と検証の 2 モードが
-ある理由は [`../architecture/build-tools.md`](../architecture/build-tools.md) §3。
+ある理由は内部資料 [`../architecture/build-tools.md`](../architecture/build-tools.md) §3。
 
 ## 6. ドキュメントサイトをビルドする
 
@@ -121,7 +121,7 @@ b.step("tsgen", "Regenerate the TypeScript bindings").dependOn(gen.step);
 python3 -m http.server --directory zig-out/docs 8137
 ```
 
-公開版は <https://umiturtle.github.io/Z-Ts/> です。仕組みは
+公開版は <https://umiturtle.github.io/Z-Ts/> です。仕組みは内部資料
 [`../architecture/documentation-site.md`](../architecture/documentation-site.md)。
 
 ---

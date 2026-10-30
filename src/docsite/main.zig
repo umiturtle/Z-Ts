@@ -46,6 +46,7 @@ pub const SiteReport = struct {
     api_pages: usize = 0,
     /// Public declarations that the API reference documented.
     api_decls: usize = 0,
+    api_internal: usize = 0,
 };
 
 pub fn main(init: std.process.Init) !u8 {
@@ -79,8 +80,8 @@ pub fn main(init: std.process.Init) !u8 {
     };
 
     std.debug.print(
-        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d}\n",
-        .{ report.pages, report.links, report.assets, report.words, report.bytes, report.demo_files, report.api_pages, report.api_decls },
+        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d} api_internal={d}\n",
+        .{ report.pages, report.links, report.assets, report.words, report.bytes, report.demo_files, report.api_pages, report.api_decls, report.api_internal },
     );
     return 0;
 }
@@ -202,7 +203,11 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         report.links = first_pass.checked;
     }
 
-    // 4. Write the pages.
+    // 4. Write the pages. The output tree is rebuilt from scratch: `verifyAssets` walks whatever is
+    //    on disk, so a stale page from an earlier generation would either mask a broken link (its
+    //    own links are never checked) or invent one (a page pointing at a file that has since been
+    //    renamed). Deleting first makes the tree a pure function of the corpus.
+    cwd.deleteTree(io, out_path) catch {};
     try cwd.createDirPath(io, out_path);
     const out_dir = try cwd.openDir(io, out_path, .{ .iterate = true });
     defer out_dir.close(io);
@@ -251,6 +256,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     }
     report.api_pages = api.pages.len;
     report.api_decls = api.decl_count;
+    report.api_internal = api.internal_count;
 
     // 4c. The one page that lists everything the sidebar deliberately no longer shows.
     {
@@ -298,6 +304,9 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     }
     for (api.packages) |pkg| {
         for (pkg.modules) |module| {
+            // Internal modules (FFI tables, contract tests) stay out of the reader's search results,
+            // exactly like the 内部資料 pages: the index is the learning surface.
+            if (module.audience == .internal) continue;
             for (module.decls) |decl| {
                 try search_list.append(arena, .{
                     .href = try std.fmt.allocPrint(arena, "docs/api/{s}/{s}.html#{s}", .{ pkg.spec.name, module.slug, decl.name }),
@@ -473,6 +482,7 @@ fn truncateChars(text: []const u8, max: usize) []const u8 {
 fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
     var checked: usize = 0;
     var missing: std.ArrayListUnmanaged([]const u8) = .empty;
+    var dangling_anchors: std.ArrayListUnmanaged([]const u8) = .empty;
 
     // Collect first, then read: a directory iterator and file reads on the same handle do not mix
     // (the walker seeks its descriptor to 0 on every `next`).
@@ -485,12 +495,40 @@ fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
         try pages.append(arena, try arena.dupe(u8, entry.path));
     }
 
-    for (pages.items) |page| {
+    // Pass 1: every `id="…"` of every page, id_list as `\x00id\x00id\x00`, so a fragment lookup is
+    // one substring search. This is what makes `[…](../api/zts_rpc/mod.html#Schema)` a checked
+    // link rather than a promise.
+    var ids: std.StringHashMapUnmanaged([]const u8) = .empty;
+    var contents = try arena.alloc([]const u8, pages.items.len);
+    for (pages.items, 0..) |page, i| {
         const html = try out_dir.readFileAlloc(io, page, arena, .limited(4 * 1024 * 1024));
+        contents[i] = html;
+
+        var id_list: std.ArrayListUnmanaged(u8) = .empty;
+        try id_list.append(arena, 0);
+        var cursor: usize = 0;
+        while (std.mem.find(u8, html[cursor..], "id=\"")) |offset| {
+            const start = cursor + offset + "id=\"".len;
+            const end = std.mem.findScalarPos(u8, html, start, '"') orelse break;
+            try id_list.appendSlice(arena, html[start..end]);
+            try id_list.append(arena, 0);
+            cursor = end + 1;
+        }
+        try ids.put(arena, page, try id_list.toOwnedSlice(arena));
+    }
+
+    for (pages.items, 0..) |page, i| {
+        const html = contents[i];
 
         var cursor: usize = 0;
         while (nextAssetUrl(html, &cursor)) |url| {
-            if (url.len == 0 or url[0] == '#') continue;
+            if (url.len == 0 or url[0] == '#') {
+                // Same-page fragment: `#main` and friends must exist too.
+                if (url.len > 1 and !hasFragment(ids.get(page) orelse "", url[1..])) {
+                    try dangling_anchors.append(arena, try std.fmt.allocPrint(arena, "{s}: {s}", .{ page, url }));
+                }
+                continue;
+            }
             if (std.mem.startsWith(u8, url, "http://") or std.mem.startsWith(u8, url, "https://") or
                 std.mem.startsWith(u8, url, "mailto:") or std.mem.startsWith(u8, url, "data:") or
                 std.mem.startsWith(u8, url, "//")) continue;
@@ -503,6 +541,16 @@ fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
             const resolved = try site.resolveRelative(arena, page, url);
             if (out_dir.statFile(io, resolved, .{})) |_| {} else |_| {
                 try missing.append(arena, try std.fmt.allocPrint(arena, "{s}: {s}", .{ page, url }));
+                continue;
+            }
+
+            // `page.html#anchor` — the anchor has to exist on the target page.
+            const hash = std.mem.findScalarPos(u8, url, 0, '#') orelse continue;
+            if (hash + 1 >= url.len) continue;
+            if (ids.get(resolved)) |id_list| {
+                if (!hasFragment(id_list, url[hash + 1 ..])) {
+                    try dangling_anchors.append(arena, try std.fmt.allocPrint(arena, "{s}: {s}", .{ page, url }));
+                }
             }
         }
     }
@@ -514,7 +562,29 @@ fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
         }
         return error.BrokenAssets;
     }
+
+    if (dangling_anchors.items.len > 0) {
+        std.debug.print("docsite: {d} anchor(s) point at nothing\n", .{dangling_anchors.items.len});
+        for (dangling_anchors.items[0..@min(dangling_anchors.items.len, 20)]) |line| {
+            std.debug.print("  {s}\n", .{line});
+        }
+        return error.DanglingAnchors;
+    }
     return checked;
+}
+
+/// `id_list` is `\x00id\x00id\x00`; a fragment matches only as a whole id (`abc` must not match
+/// `abc-def`).
+fn hasFragment(id_list: []const u8, fragment: []const u8) bool {
+    if (id_list.len == 0 or fragment.len == 0) return false;
+    var cursor: usize = 0;
+    while (std.mem.find(u8, id_list[cursor..], fragment)) |offset| {
+        const at = cursor + offset;
+        const after = at + fragment.len;
+        if (at > 0 and id_list[at - 1] == 0 and after < id_list.len and id_list[after] == 0) return true;
+        cursor = at + 1;
+    }
+    return false;
 }
 
 /// Yields the value of the next `src="…"` / `href="…"` attribute in `html`.
@@ -547,7 +617,10 @@ fn nextAssetUrl(html: []const u8, cursor: *usize) ?[]const u8 {
 fn collectSources(arena: Allocator, io: Io) ![]const Source {
     var list: std.ArrayListUnmanaged(Source) = .empty;
     try list.append(arena, .{ .path = "README.md", .group = "はじめに" });
-    try list.append(arena, .{ .path = "AGENTS.md", .group = "はじめに" });
+    // `AGENTS.md` is agent-facing: it belongs to the 内部資料 bucket like the design notes, not to
+    // the reader's はじめに. Ask `groupFor` instead of hardcoding, so the sidebar and the search
+    // index cannot disagree about it.
+    try list.append(arena, .{ .path = "AGENTS.md", .group = groupFor("AGENTS.md") });
 
     const cwd = Io.Dir.cwd();
     const docs_dir = cwd.openDir(io, "docs", .{ .iterate = true }) catch |err| {
@@ -665,7 +738,11 @@ fn pageTitle(arena: Allocator, headings: []const markdown.Heading, source_path: 
 const ApiSite = struct {
     pages: []const apidoc.Page,
     packages: []const apidoc.Package,
+    /// Declarations of the reader-facing modules (the number the coverage percentage uses).
     decl_count: usize,
+    /// Declarations of FFI tables and contract tests. Reported separately so a reader-facing number
+    /// never hides a hundred `extern` declarations, and CI can still notice when the scan breaks.
+    internal_count: usize,
 };
 
 /// Scans every package's import graph and renders the reference. A failure here fails the build:
@@ -675,12 +752,18 @@ fn buildApiPages(arena: Allocator, io: Io) !ApiSite {
     for (apidoc.packages, 0..) |spec, i| packages[i] = try apidoc.collectPackage(arena, io, spec);
 
     var decl_count: usize = 0;
-    for (packages) |pkg| decl_count += apidoc.coverageOf(pkg).total;
+    var internal_count: usize = 0;
+    for (packages) |pkg| {
+        const coverage = apidoc.coverageOf(pkg);
+        decl_count += coverage.total;
+        internal_count += coverage.internal_total;
+    }
 
     return .{
         .pages = try apidoc.buildPages(arena, packages),
         .packages = packages,
         .decl_count = decl_count,
+        .internal_count = internal_count,
     };
 }
 
@@ -838,8 +921,9 @@ fn renderLanding(arena: Allocator, groups: []const site.Group, api: ApiSite) ![]
     );
 
     try w.print(
-        "<section class=\"cards\"><article><h2>API リファレンス</h2><p><code>src/</code> の公開宣言 {d} 件を、" ++
-            "シグネチャ・<code>///</code> ドキュメント・ソース行へのリンクつきで生成しています。</p>" ++
+        "<section class=\"cards\"><article><h2>API リファレンス</h2><p>使う人のための公開宣言 {d} 件を、" ++
+            "シグネチャ・<code>///</code> ドキュメント・ソース行へのリンクつきで生成しています" ++
+            "（FFI 宣言などの内部モジュールは別扱い）。</p>" ++
             "<p><a href=\"docs/api/index.html\">全体索引を開く →</a></p></article></section>\n",
         .{api.decl_count},
     );
@@ -876,5 +960,59 @@ fn writeEscaped(w: *std.Io.Writer, text: []const u8) !void {
             '"' => try w.writeAll("&quot;"),
             else => try w.writeByte(ch),
         }
+    }
+}
+
+test "hasFragment matches whole ids only" {
+    const list = "\x00main\x00abc\x00abc-def\x00";
+    try std.testing.expect(hasFragment(list, "main"));
+    try std.testing.expect(hasFragment(list, "abc"));
+    try std.testing.expect(hasFragment(list, "abc-def"));
+    try std.testing.expect(!hasFragment(list, "ab"));
+    try std.testing.expect(!hasFragment(list, ""));
+    try std.testing.expect(!hasFragment("", "main"));
+}
+
+test "verifyAssets explains a dangling anchor" {
+    // `walk` needs an iterable handle, otherwise the walker and the file reads fight over the
+    // same descriptor (the `BADF` panic documented in docs/environment/arena-and-caching.md).
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(std.testing.io, "docs");
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "index.html",
+        .data = "<a href=\"docs/page.html#missing\">x</a><a href=\"docs/page.html#present\">y</a>",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "docs/page.html",
+        .data = "<h2 id=\"present\">ok</h2>",
+    });
+
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    try std.testing.expectError(error.DanglingAnchors, verifyAssets(arena_state.allocator(), std.testing.io, tmp.dir));
+}
+
+test "groupFor keeps the reader-facing sidebar reader-facing" {
+    const internals = internals_group;
+    // Root files and the landing pages.
+    try std.testing.expectEqualStrings("はじめに", groupFor("README.md"));
+    try std.testing.expectEqualStrings("はじめに", groupFor("docs/INDEX.md"));
+    // Guides are the front door.
+    try std.testing.expectEqualStrings("ガイド", groupFor("docs/guides/using-rpc.md"));
+    try std.testing.expectEqualStrings("ガイド", groupFor("docs/reference/cli.md"));
+    try std.testing.expectEqualStrings("サンプル", groupFor("examples/counter/README.md"));
+    // Everything about *why* the code looks the way it does is collapsed into one entry.
+    for ([_][]const u8{
+        "AGENTS.md",
+        "docs/architecture/documentation-site.md",
+        "docs/decisions/0019-api-reference.md",
+        "docs/roadmap/milestones.md",
+        "docs/tasks/M5-07-api-reference.md",
+        "docs/environment/arena-and-caching.md",
+        "docs/reference/tauri-internals.md",
+    }) |path| {
+        try std.testing.expectEqualStrings(internals, groupFor(path));
     }
 }

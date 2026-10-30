@@ -34,6 +34,8 @@ pub const StepMode = enum {
     poll,
 };
 
+/// What the OS tells the app about its title bar. `.system` means "not reported" — a page should
+/// then follow `prefers-color-scheme` instead of guessing.
 pub const WindowTheme = enum {
     system,
     light,

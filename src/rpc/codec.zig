@@ -31,22 +31,41 @@ const StringDecodeMode = scanner.StringDecodeMode;
 // Options & Error Types
 // ============================================================================
 
+/// How `zts_rpc.types.Bytes` (opaque binary) crosses the wire.
+///
+/// * `.base64` — a single JSON string. Compact, and what `ArrayBuffer` decoding in the generated
+///   TypeScript expects.
+/// * `.array` — a JSON array of numbers. Verbose, but readable in a log or a `curl` session.
 pub const BytesFormat = enum {
     base64,
     array,
 };
 
+/// What to do with an unpaired UTF-16 surrogate (`\uD800` with no low half).
+///
+/// `.reject` is the default because a lone surrogate cannot be re-encoded as UTF-8; `.replace_with_fffd`
+/// is for parsers that must accept hostile input without failing the whole request.
 pub const SurrogatePolicy = enum {
     reject,
     replace_with_fffd,
 };
 
+/// What to do when a JSON object repeats a field. The default is `.@"error"`: silently picking the
+/// first or the last occurrence is how request smuggling bugs get in.
 pub const DuplicateFieldBehavior = enum {
     use_first,
     use_last,
     @"error",
 };
 
+/// Knobs for the encoder. `.{}` (every default) is what the RPC router and `tsgen` assume.
+///
+/// * `html_safe` — escape `<`, `>` and `&` so the payload can be embedded in an inline `<script>`.
+/// * `bytes_format` — see `BytesFormat`.
+/// * `default_union_style` — wire shape used for `union(enum)` values that did not declare
+///   `pub const json_union`.
+/// * `emit_null_optional_fields` — emit `"field":null` instead of omitting the key. TypeScript
+///   optional properties decode both, but `exactOptionalPropertyTypes` users usually want `false`.
 pub const EncodeOptions = struct {
     html_safe: bool = false,
     bytes_format: BytesFormat = .base64,
@@ -54,6 +73,17 @@ pub const EncodeOptions = struct {
     emit_null_optional_fields: bool = true,
 };
 
+/// Knobs for the decoder. Every value is validated *before* it reaches a field, so a malformed body
+/// fails with a typed error instead of a half-populated struct.
+///
+/// * `allocate` — `std.json` allocation strategy for strings (`.alloc_if_needed` avoids copying when
+///   the input is already owned by the caller).
+/// * `surrogate_policy` — see `SurrogatePolicy`.
+/// * `ignore_unknown_fields` — tolerate extra keys (forward compatibility with a newer frontend).
+/// * `allow_snake_case_fallback` — accept `user_id` for a Zig field `userId`, which is what a
+///   hand-written client sends.
+/// * `duplicate_field_behavior` — see `DuplicateFieldBehavior`.
+/// * `max_depth` — recursion limit; a deeply nested body is a denial-of-service vector.
 pub const DecodeOptions = struct {
     allocate: std.json.AllocWhen = .alloc_if_needed,
     surrogate_policy: SurrogatePolicy = .reject,
@@ -73,6 +103,8 @@ pub const EncodeError = error{
     Overflow,
 };
 
+/// Every failure the decoder can report. `scanner.ScanError` covers syntax, the rest are semantic
+/// (a number too large for the field, an unknown enum tag, a duplicate key, …).
 pub const DecodeError = scanner.ScanError || error{
     Overflow,
     InvalidNumber,
@@ -102,6 +134,12 @@ pub fn Parsed(comptime T: type) type {
 // Compile-time Type Validation
 // ============================================================================
 
+/// Returns `null` when `T` may cross the Web/JSON boundary, or a human-readable reason why not.
+///
+/// This is the compile-time guard that keeps `usize`, `i64`, bare untagged unions and other
+/// JavaScript-hostile types out of a command signature: `usize` is 64-bit on the host but a JS
+/// `number` only holds 53 bits of integer, so a value would silently change. Use `u53` / `i53` /
+/// `types.BigInt(T)` instead. Called from `assertValidRpcType` at every encode/decode entry point.
 pub fn checkRpcType(comptime T: type) ?[]const u8 {
     return checkRpcTypeInner(T);
 }
@@ -184,10 +222,13 @@ fn checkUnionType(comptime U: type, comptime cfg: types.UnionConfig) ?[]const u8
     return null;
 }
 
+/// `true` when `checkRpcType(T) == null` — usable in `comptime if` to branch a generic API.
 pub fn isValidRpcType(comptime T: type) bool {
     return checkRpcType(T) == null;
 }
 
+/// `@compileError`s with the explanation from `checkRpcType`. Called by every public encode/decode
+/// function, so an invalid signature fails at the first instantiation rather than at runtime.
 pub fn assertValidRpcType(comptime T: type) void {
     if (comptime checkRpcType(T)) |err_msg| @compileError(err_msg);
 }
@@ -196,19 +237,24 @@ pub fn assertValidRpcType(comptime T: type) void {
 // Public Encode & Decode APIs
 // ============================================================================
 
+/// Encodes `value` as JSON into `writer`, using the default `EncodeOptions`.
 pub fn encode(writer: *std.Io.Writer, value: anytype) EncodeError!void {
     return encodeWithOptions(writer, value, .{});
 }
 
+/// Same as `encode`, with explicit options. Validates the type at compile time.
 pub fn encodeWithOptions(writer: *std.Io.Writer, value: anytype, options: EncodeOptions) EncodeError!void {
     comptime assertValidRpcType(@TypeOf(value));
     try encodeValue(writer, value, options);
 }
 
+/// Encodes `value` into a freshly allocated slice — the caller owns it and must free it with the
+/// same allocator. Convenient for tests and for `completeRequest()` bodies.
 pub fn encodeAlloc(allocator: Allocator, value: anytype) EncodeError![]u8 {
     return encodeAllocWithOptions(allocator, value, .{});
 }
 
+/// `encodeAlloc` with explicit options.
 pub fn encodeAllocWithOptions(allocator: Allocator, value: anytype, options: EncodeOptions) EncodeError![]u8 {
     comptime assertValidRpcType(@TypeOf(value));
     var aw: std.Io.Writer.Allocating = .init(allocator);
@@ -220,10 +266,13 @@ pub fn encodeAllocWithOptions(allocator: Allocator, value: anytype, options: Enc
     return aw.toOwnedSlice();
 }
 
+/// Decodes `input` into `T` and returns it inside a `Parsed(T)`, an arena that owns every string.
+/// Call `parsed.deinit()`; the value must not outlive it. This is the form to use for a request.
 pub fn decode(comptime T: type, allocator: Allocator, input: []const u8) DecodeError!Parsed(T) {
     return decodeWithOptions(T, allocator, input, .{});
 }
 
+/// `decode` with explicit options.
 pub fn decodeWithOptions(
     comptime T: type,
     allocator: Allocator,
@@ -237,10 +286,14 @@ pub fn decodeWithOptions(
     return .{ .arena = arena, .value = val };
 }
 
+/// Decodes into `T` using `allocator` directly, without an arena. Every string in the result is a
+/// separate allocation, so `T.deinit(allocator)` (or a manual walk) is required — prefer `decode`
+/// unless you are decoding into an arena you already own.
 pub fn decodeLeaky(comptime T: type, allocator: Allocator, input: []const u8) DecodeError!T {
     return decodeLeakyWithOptions(T, allocator, input, .{});
 }
 
+/// `decodeLeaky` with explicit options.
 pub fn decodeLeakyWithOptions(
     comptime T: type,
     allocator: Allocator,

@@ -13,6 +13,8 @@ const testing = std.testing;
 const core = @import("zts_core");
 const bridge = @import("zts_bridge");
 
+/// `zts_core.Host` implemented on top of a `BridgeServer`, so `zts_tauri` plugins (window, event,
+/// path, …) work unchanged when the same app is served to a browser instead of a native window.
 pub const BridgeHost = struct {
     allocator: Allocator,
     io: Io,

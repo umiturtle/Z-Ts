@@ -15,16 +15,21 @@ const testing = std.testing;
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
+/// `plugin:window` failures: the host blew up (`core.HostError`) or the request itself was wrong.
+/// `MissingHostContext` means the plugin was used without a `Host` (a unit test forgot `.withHost`),
+/// `UnknownWindowLabel` means the JS asked for a window that was never created.
 pub const WindowPluginError = core.HostError || error{
     MissingHostContext,
     UnknownWindowLabel,
 };
 
+/// Width/height pair as it arrives on the wire, in the unit named by the enclosing union arm.
 pub const RawDims = struct {
     width: f64,
     height: f64,
 };
 
+/// X/Y pair as it arrives on the wire.
 pub const RawPoint = struct {
     x: f64,
     y: f64,
@@ -62,16 +67,21 @@ pub const WirePosition = union(enum) {
     }
 };
 
+/// Physical (device) pixels as reported by the host — what `@tauri-apps/api` expects back from
+/// `innerSize()`. Divide by the scale factor to get the logical size the page was laid out in.
 pub const PhysicalSizeDto = struct {
     width: i32,
     height: i32,
 };
 
+/// Physical (device) pixel position of the window's outer top-left corner.
 pub const PhysicalPosDto = struct {
     x: i32,
     y: i32,
 };
 
+/// `null` means "no constraint on that side", which is different from `0` (a window may not be
+/// resized to 0×0 but the constraint itself is absent).
 pub const SizeConstraintsDto = struct {
     min_width: ?f64 = null,
     min_height: ?f64 = null,
@@ -79,6 +89,9 @@ pub const SizeConstraintsDto = struct {
     max_height: ?f64 = null,
 };
 
+/// The engine's mirror of one OS window. The WebView is the source of truth for pixels; this book
+/// keeping exists because `@tauri-apps/api` can read back properties (`isMaximized()`,
+/// `scaleFactor()`, …) that a WebView API cannot answer synchronously.
 pub const TrackedWindow = struct {
     id: core.WindowId,
     label: []u8,
@@ -107,6 +120,8 @@ pub const TrackedWindow = struct {
     }
 };
 
+/// Label ⇄ `WindowId` map for `plugin:window`. Guarded by a mutex because a command may be
+/// dispatched from the event loop while a worker thread reads a label.
 pub const WindowRegistry = struct {
     allocator: Allocator,
     io: Io,

@@ -84,11 +84,15 @@ fn mapIoError(err: anyerror) FsError {
 /// Largest single `read`/`write` payload accepted from (or sent to) the webview.
 pub const default_max_io_bytes: usize = 16 * 1024 * 1024;
 
+/// Common prefix of every option struct: which `BaseDirectory` the path is relative to.
+/// `null` means "already absolute", which the scope check then validates like any other path.
 pub const BaseOptions = struct {
     /// `@tauri-apps/api/path` `BaseDirectory` discriminant (`1..23`).
     base_dir: ?u8 = null,
 };
 
+/// `plugin:fs|write_file` options. `create_new` refuses to overwrite an existing file; `append`
+/// seeks to the end instead of truncating.
 pub const WriteOptions = struct {
     base_dir: ?u8 = null,
     append: bool = false,
@@ -96,6 +100,8 @@ pub const WriteOptions = struct {
     create_new: bool = false,
 };
 
+/// `plugin:fs|open` flags, mirroring Rust's `OpenOptions`. A combination that cannot be satisfied
+/// (`write` without `create` on a missing file) fails with the OS error, not a panic.
 pub const OpenOptions = struct {
     base_dir: ?u8 = null,
     read: bool = true,
@@ -106,25 +112,32 @@ pub const OpenOptions = struct {
     create_new: bool = false,
 };
 
+/// `plugin:fs|read_dir` options — only the base directory, kept as a struct so future fields (paging,
+/// depth) do not change the command signature.
 pub const ReadDirOptions = struct {
     base_dir: ?u8 = null,
 };
 
+/// `plugin:fs|mkdir` options. `recursive` creates missing parents, subject to the same scope check.
 pub const MkdirOptions = struct {
     base_dir: ?u8 = null,
     recursive: bool = false,
 };
 
+/// `plugin:fs|remove` options. `recursive` is required to delete a non-empty directory.
 pub const RemoveOptions = struct {
     base_dir: ?u8 = null,
     recursive: bool = false,
 };
 
+/// `plugin:fs|rename` options: each side may live under a different `BaseDirectory`, and both are
+/// checked independently against the scope.
 pub const RenameOptions = struct {
     old_path_base_dir: ?u8 = null,
     new_path_base_dir: ?u8 = null,
 };
 
+/// `plugin:fs|copy_file` options: source and destination may use different base directories.
 pub const CopyOptions = struct {
     from_path_base_dir: ?u8 = null,
     to_path_base_dir: ?u8 = null,
@@ -155,6 +168,7 @@ pub const FileInfo = struct {
     blocks: ?rpc.SafeInt = null,
 };
 
+/// One entry of `readDir()`, matching `@tauri-apps/api/fs`'s `DirEntry` shape.
 pub const DirEntry = struct {
     name: []const u8,
     is_directory: bool,

@@ -22,11 +22,22 @@ pub const WindowId = Handle(.window);
 /// Nominal 53-bit generational pending scheme request identifier (`foundation.Handle(.ipc_request)`).
 pub const RequestId = Handle(.ipc_request);
 
+/// How long `step()` is allowed to block.
+///
+/// * `.blocking` — park the calling thread until at least one event (input, navigation, pending
+///   scheme completion) arrives. Use it for a plain `while (running) try app.step(.blocking);`.
+/// * `.poll` — return immediately, even when nothing happened. Use it when the main thread has
+///   other work to do (a 60fps render loop, a game engine, an embedded host that owns the run loop).
 pub const StepMode = enum(u32) {
     blocking = 0,
     poll = 1,
 };
 
+/// Which engine `Backend.init()` should build.
+///
+/// `.auto` picks a native backend when one was compiled in **and** the platform can actually open a
+/// window (a GTK backend without `$DISPLAY` falls back), otherwise `HeadlessMock`. `.native` and
+/// `.headless_mock` are for tests that must not silently change engine.
 pub const BackendKind = enum(u32) {
     auto = 0,
     headless_mock = 1,
@@ -43,6 +54,7 @@ pub const WebviewError = error{
     PlatformFailure,
 };
 
+/// One HTTP header of a scheme request or response. Names are ASCII, values are opaque bytes.
 pub const HeaderPair = struct {
     name: []const u8,
     value: []const u8,
@@ -154,6 +166,11 @@ pub const QueuedCompletion = struct {
     }
 };
 
+/// Callback invoked (on the backend's main thread) for every `tauri://` / `ipc://` / `asset://` hit.
+///
+/// `onRequest` must either call `completeRequest()` before returning — synchronous handlers such as
+/// `zts_bridge` do exactly that — or keep the `RequestId` and complete it from a worker thread;
+/// the backend holds the request pending until then (`step()` keeps servicing the UI meanwhile).
 pub const SchemeHandler = struct {
     userdata: ?*anyopaque = null,
     onRequest: *const fn (userdata: ?*anyopaque, req: SchemeRequest) void,
@@ -163,6 +180,11 @@ pub const SchemeHandler = struct {
     }
 };
 
+/// Receives `window.__zts.postMessage(...)` payloads from the page (`ipc://` channel).
+///
+/// `message` is borrowed for the duration of the call; dupe it if the handler hands it to a queue.
+/// Returning is the only acknowledgement the page gets, so a handler that needs to reply should do
+/// so through the same IPC channel rather than through the return path.
 pub const MessageHandler = struct {
     userdata: ?*anyopaque = null,
     onMessage: *const fn (userdata: ?*anyopaque, window_id: WindowId, message: []const u8) void,
@@ -172,6 +194,10 @@ pub const MessageHandler = struct {
     }
 };
 
+/// Called after a window has been closed (user clicked the frame button, or the app called
+/// `closeWindow()`). By the time it runs the `WindowId` is already invalid, so the handler is for
+/// bookkeeping — dropping per-window state, decrementing a "quit when zero" counter — not for
+/// cancelling the close.
 pub const CloseHandler = struct {
     userdata: ?*anyopaque = null,
     onClose: *const fn (userdata: ?*anyopaque, window_id: WindowId) void,
@@ -220,6 +246,12 @@ pub const Capture = struct {
     }
 };
 
+/// Everything a window needs at creation time. Every field has a default, so
+/// `.{}` is a valid (and common) configuration.
+///
+/// String fields are borrowed only until `createWindow()` returns; the backend copies what it keeps.
+/// `size` / `min_size` / `position` are in **logical (CSS) pixels**, which is what a HiDPI screen
+/// scales for you — the same numbers produce the same layout on every OS.
 pub const WindowConfig = struct {
     title: []const u8 = "Z-Ts Window",
     size: LogicalSize = .wh(800, 600),

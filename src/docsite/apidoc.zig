@@ -55,6 +55,31 @@ pub const Decl = struct {
     members: []const Decl = &.{},
 };
 
+/// Who a module is *for*. The reference lists every file, but a reader learning the library must not
+/// have to walk past 42 GTK `extern` declarations to find `Engine`. Internal modules are still
+/// published (they are part of the source, and an embedder occasionally needs them) but they are
+/// separated in the index, excluded from the coverage figure and kept out of the site search.
+pub const Audience = enum { user, internal };
+
+/// File names that are plumbing rather than API: hand-written FFI tables and contract tests.
+/// Kept as an explicit list (not a heuristic) so the split is reviewable.
+const internal_modules = [_][]const u8{
+    "gtk_bindings.zig",
+    "win32.zig",
+    "webview2_com.zig",
+    "webview2_loader.zig",
+    "windows_util.zig",
+};
+
+pub fn audienceOf(path: []const u8) Audience {
+    if (std.mem.endsWith(u8, path, "_test.zig")) return .internal;
+    const base = std.fs.path.basename(path);
+    for (internal_modules) |name| {
+        if (std.mem.eql(u8, base, name)) return .internal;
+    }
+    return .user;
+}
+
 pub const Module = struct {
     /// Repository path (`src/tauri/fs/mod.zig`).
     path: []const u8,
@@ -69,6 +94,8 @@ pub const Module = struct {
     /// `//!` header text.
     doc: []const u8,
     decls: []const Decl,
+    /// `.internal` for FFI tables and contract tests — see [`audienceOf`].
+    audience: Audience = .user,
 };
 
 pub const PackageSpec = struct {
@@ -318,6 +345,10 @@ pub fn fieldStart(trimmed: []const u8) ?DeclStart {
         '=' => return .{ .kind = .field, .name = name },
         else => return null,
     }
+}
+
+fn isIdentStart(ch: u8) bool {
+    return std.ascii.isAlphabetic(ch) or ch == '_';
 }
 
 fn isIdentChar(ch: u8) bool {
@@ -633,6 +664,7 @@ pub fn collectPackage(arena: Allocator, io: std.Io, spec: PackageSpec) !Package 
         };
         var module = try scanModule(arena, path, source);
         module.slug = try moduleSlug(arena, spec.root, path);
+        module.audience = audienceOf(path);
         try modules.append(arena, module);
 
         const dir = std.fs.path.dirname(path) orelse "";
@@ -658,32 +690,72 @@ pub fn isAlias(decl: Decl) bool {
     const value = std.mem.trim(u8, decl.signature[eq + 1 ..], " \t;");
     if (value.len == 0) return false;
     if (std.mem.startsWith(u8, value, "@import(")) return true;
+    // A re-export names something (`types.WindowId`, `Ctx`); a literal (`1`, `1 << 0`, `"x"`) does
+    // not. Without the leading-character check `pub const limit = 16` looked like an alias and was
+    // silently dropped from the coverage figure.
+    if (!isIdentStart(value[0])) return false;
     for (value) |ch| {
         if (!isIdentChar(ch) and ch != '.') return false;
     }
     return true;
 }
 
-pub const Coverage = struct { total: usize = 0, documented: usize = 0 };
+/// Documentation-comment coverage of a package.
+///
+/// `total` / `documented` count the **user-facing** modules only: a percentage that includes 104
+/// hand-written FFI declarations says nothing about whether a reader can learn the API, and it
+/// would push authors to paste `///` lines onto `HWND_TOPMOST`. Internal modules are reported
+/// separately so the number stays honest in both directions.
+pub const Coverage = struct {
+    total: usize = 0,
+    documented: usize = 0,
+    internal_total: usize = 0,
+    internal_documented: usize = 0,
+
+    pub fn add(self: *Coverage, other: Coverage) void {
+        self.total += other.total;
+        self.documented += other.documented;
+        self.internal_total += other.internal_total;
+        self.internal_documented += other.internal_documented;
+    }
+};
 
 pub fn coverageOf(pkg: Package) Coverage {
     var total: usize = 0;
     var documented: usize = 0;
+    var internal_total: usize = 0;
+    var internal_documented: usize = 0;
     for (pkg.modules) |module| {
+        const internal = module.audience == .internal;
         for (module.decls) |decl| {
             // Re-exports point at documentation that lives elsewhere; counting them as
             // "undocumented" would make the number meaningless.
             if (!isAlias(decl)) {
-                total += 1;
-                if (decl.doc.len > 0) documented += 1;
+                if (internal) {
+                    internal_total += 1;
+                    if (decl.doc.len > 0) internal_documented += 1;
+                } else {
+                    total += 1;
+                    if (decl.doc.len > 0) documented += 1;
+                }
             }
             for (decl.members) |member| {
-                total += 1;
-                if (member.doc.len > 0) documented += 1;
+                if (internal) {
+                    internal_total += 1;
+                    if (member.doc.len > 0) internal_documented += 1;
+                } else {
+                    total += 1;
+                    if (member.doc.len > 0) documented += 1;
+                }
             }
         }
     }
-    return .{ .total = total, .documented = documented };
+    return .{
+        .total = total,
+        .documented = documented,
+        .internal_total = internal_total,
+        .internal_documented = internal_documented,
+    };
 }
 
 pub fn percent(part: usize, whole: usize) usize {
@@ -886,6 +958,35 @@ pub fn packageHref(arena: Allocator, package_name: []const u8) Error![]const u8 
     return std.fmt.allocPrint(arena, "docs/api/{s}/index.html", .{package_name});
 }
 
+fn userModuleCount(pkg: Package) usize {
+    var count: usize = 0;
+    for (pkg.modules) |module| {
+        if (module.audience == .user) count += 1;
+    }
+    return count;
+}
+
+/// One `<li>` of a package's module list, shared by the public block and the collapsed internal one.
+fn renderModuleEntry(
+    arena: Allocator,
+    writer: *std.Io.Writer,
+    module: Module,
+    page: []const u8,
+    source_path: []const u8,
+    links: *std.ArrayListUnmanaged(markdown.Link),
+) Error!void {
+    const summary = try firstParagraph(arena, module.doc);
+    try writer.print("<li><a href=\"{s}.html\">{s}.zig</a> <span class=\"api-count\">{d}</span>", .{
+        module.slug, module.slug, declCount(module),
+    });
+    if (summary.len > 0) {
+        try writer.writeAll("<div class=\"api-summary prose\">");
+        try writer.writeAll(try renderDocMarkdown(arena, summary, page, source_path, links));
+        try writer.writeAll("</div>");
+    }
+    try writer.writeAll("</li>\n");
+}
+
 /// Builds every API page: the A–Z index, one page per package and one page per module.
 pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const Page {
     var pages: std.ArrayListUnmanaged(Page) = .empty;
@@ -909,6 +1010,15 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
             });
 
             try writer.print("<h1>{s}<span class=\"api-pkg\">{s}</span></h1>\n", .{ module.name, pkg.spec.name });
+            if (module.audience == .internal) {
+                // Say it out loud: this page exists for completeness, not for learning.
+                try writer.writeAll("<p class=\"internal-banner\"><span>内部実装</span> ");
+                try writeInlineCode(writer, "このファイルは FFI 宣言・契約テストなどの内部実装です。ライブラリを使うだけなら読む必要はありません。");
+                try writer.print(
+                    " 使い方は <a href=\"{s}docs/guides/getting-started.html\">はじめかた</a> と API リファレンスの公開モジュールから入ってください。</p>\n",
+                    .{try relativePrefix(arena, href)},
+                );
+            }
             try writer.print("<p class=\"api-path\"><a href=\"{s}{s}\">{s}</a> · 公開宣言 {d} 件</p>\n", .{
                 repo_blob_base, module.path, module.path, declCount(module),
             });
@@ -958,27 +1068,38 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
         try writeInlineCode(writer, pkg.spec.blurb);
         try writer.writeAll("</p>\n");
         try writer.print(
-            "<p class=\"api-stats\">モジュール {d} 件 · 公開宣言 {d} 件 · ドキュメントコメント {d} 件（{d}%）</p>\n",
-            .{ pkg.modules.len, coverage.total, coverage.documented, percent(coverage.documented, coverage.total) },
+            "<p class=\"api-stats\">公開モジュール {d} 件 · 公開宣言 {d} 件 · ドキュメントコメント {d} 件（{d}%）</p>\n",
+            .{ userModuleCount(pkg), coverage.total, coverage.documented, percent(coverage.documented, coverage.total) },
         );
+        if (coverage.internal_total > 0) {
+            try writer.print(
+                "<p class=\"api-blurb\">このほかに内部モジュール（FFI 宣言・契約テスト）が {d} 件あります。" ++
+                    "読み手が使う API ではないため、下の一覧では畳んであり、文書化率の計算からも外しています。</p>\n",
+                .{pkg.modules.len - userModuleCount(pkg)},
+            );
+        }
 
         try writer.writeAll("<h2>モジュール</h2>\n<ul class=\"api-modules\">\n");
         for (pkg.modules) |module| {
-            const summary = try firstParagraph(arena, module.doc);
-            try writer.print("<li><a href=\"{s}.html\">{s}.zig</a> <span class=\"api-count\">{d}</span>", .{
-                module.slug, module.slug, declCount(module),
-            });
-            if (summary.len > 0) {
-                try writer.writeAll("<div class=\"api-summary prose\">");
-                try writer.writeAll(try renderDocMarkdown(arena, summary, pkg_href, pkg.spec.root, &links));
-                try writer.writeAll("</div>");
-            }
-            try writer.writeAll("</li>\n");
+            if (module.audience == .internal) continue;
+            try renderModuleEntry(arena, writer, module, pkg_href, pkg.spec.root, &links);
         }
         try writer.writeAll("</ul>\n");
 
+        if (pkg.modules.len > userModuleCount(pkg)) {
+            // Collapsed: an embedder can still find `gtk_bindings`, but the default reading path
+            // never shows it.
+            try writer.writeAll("<details class=\"api-internal\"><summary>内部モジュール（FFI バインディング・契約テスト）</summary>\n<ul class=\"api-modules\">\n");
+            for (pkg.modules) |module| {
+                if (module.audience != .internal) continue;
+                try renderModuleEntry(arena, writer, module, pkg_href, pkg.spec.root, &links);
+            }
+            try writer.writeAll("</ul>\n</details>\n");
+        }
+
         try writer.writeAll("<h2>宣言一覧</h2>\n<div class=\"api-index\">\n");
         for (pkg.modules) |module| {
+            if (module.audience == .internal) continue;
             for (module.decls) |decl| {
                 try writer.print("<a class=\"api-chip\" href=\"{s}.html#{s}\"><span class=\"api-kind\">{s}</span>{s}</a>\n", .{
                     module.slug, decl.name, kindGlyph(decl.kind), decl.name,
@@ -1002,22 +1123,26 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
         defer body.deinit();
         const writer = &body.writer;
 
-        var total: usize = 0;
-        var documented: usize = 0;
+        var all: Coverage = .{};
         var module_count: usize = 0;
         for (packages_in) |pkg| {
-            const coverage = coverageOf(pkg);
-            total += coverage.total;
-            documented += coverage.documented;
-            module_count += pkg.modules.len;
+            all.add(coverageOf(pkg));
+            module_count += userModuleCount(pkg);
         }
 
         try writer.writeAll("<h1>API リファレンス</h1>\n");
         try writer.print(
             "<p class=\"api-blurb\">{d} パッケージ / {d} モジュール / 公開宣言 {d} 件。すべて<b>このリポジトリのソースから生成</b>しています" ++
                 "（シグネチャ・<code>///</code> ドキュメント・ソース行へのリンク）。ドキュメントコメントが書かれているのは {d} 件（{d}%）。</p>\n",
-            .{ packages_in.len, module_count, total, documented, percent(documented, total) },
+            .{ packages_in.len, module_count, all.total, all.documented, percent(all.documented, all.total) },
         );
+        if (all.internal_total > 0) {
+            try writer.print(
+                "<p class=\"api-blurb\">FFI バインディングや契約テスト（内部モジュール {d} 宣言）は、この数値にも A–Z 索引にも含めていません。" ++
+                    "各パッケージのページで折り畳んであります。</p>\n",
+                .{all.internal_total},
+            );
+        }
 
         try writer.writeAll("<table class=\"api-packages\"><thead><tr><th>パッケージ</th><th>説明</th><th>宣言</th><th>文書化</th></tr></thead><tbody>\n");
         for (packages_in) |pkg| {
@@ -1028,9 +1153,10 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
         }
         try writer.writeAll("</tbody></table>\n");
 
-        try writer.writeAll("<h2 id=\"az\">A–Z 索引</h2>\n<p class=\"api-blurb\">全パッケージの公開宣言（型のメンバは含みません）。</p>\n<div class=\"api-index api-index-wide\">\n");
+        try writer.writeAll("<h2 id=\"az\">A–Z 索引</h2>\n<p class=\"api-blurb\">公開モジュールの宣言（型のメンバと内部モジュールは含みません）。</p>\n<div class=\"api-index api-index-wide\">\n");
         for (packages_in) |pkg| {
             for (pkg.modules) |module| {
+                if (module.audience == .internal) continue;
                 for (module.decls) |decl| {
                     try writer.print("<a class=\"api-chip\" href=\"{s}/{s}.html#{s}\"><span class=\"api-kind\">{s}</span>{s}<span class=\"api-where\">{s}</span></a>\n", .{
                         pkg.spec.name, module.slug, decl.name, kindGlyph(decl.kind), decl.name, module.slug,
@@ -1288,6 +1414,12 @@ test "fieldSignature drops the trailing comma and keeps the default" {
     try testing.expectEqualStrings("name: []const u8", try fieldSignature(arena_state.allocator(), "name: []const u8, // the label"));
 }
 
+test "isAlias treats numeric constants as declarations, not re-exports" {
+    // `pub const limit = 16` has no documentation site of its own; it must be counted.
+    const literal = Decl{ .kind = .constant, .name = "limit", .signature = "pub const limit = 16", .doc = "", .line = 1 };
+    try std.testing.expect(!isAlias(literal));
+}
+
 test "isAlias recognises re-exports and dotted paths but not values" {
     const alias_import = Decl{ .kind = .constant, .name = "codec", .signature = "pub const codec = @import(\"codec.zig\")", .doc = "", .line = 1 };
     try testing.expect(isAlias(alias_import));
@@ -1315,4 +1447,40 @@ test "moduleSlug keeps the path inside the package so plugin mod.zig files do no
     try testing.expectEqualStrings("fs/mod", try moduleSlug(arena, "src/tauri/mod.zig", "src/tauri/fs/mod.zig"));
     try testing.expectEqualStrings("codec", try moduleSlug(arena, "src/rpc/mod.zig", "src/rpc/codec.zig"));
     try testing.expectEqualStrings("root", try moduleSlug(arena, "src/root.zig", "src/root.zig"));
+}
+
+test "audienceOf separates FFI tables and contract tests from the reader-facing API" {
+    // Read by a learner.
+    try std.testing.expectEqual(Audience.user, audienceOf("src/rpc/mod.zig"));
+    try std.testing.expectEqual(Audience.user, audienceOf("src/webview/c_api.zig"));
+    try std.testing.expectEqual(Audience.user, audienceOf("src/tauri/fs/scope.zig"));
+    // Plumbing: hand-written extern tables and test-only helpers.
+    try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/gtk_bindings.zig"));
+    try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/win32.zig"));
+    try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/webview2_com.zig"));
+    try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/capture_test.zig"));
+}
+
+test "coverageOf keeps internal declarations out of the percentage" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const documented = Decl{ .kind = .function, .name = "visible", .signature = "pub fn visible() void", .doc = "/// Visible.", .line = 1 };
+    const undocumented = Decl{ .kind = .constant, .name = "hidden", .signature = "pub const hidden = 1", .doc = "", .line = 2 };
+    const pkg = Package{
+        .spec = .{ .name = "p", .root = "src/p/mod.zig", .blurb = "" },
+        .modules = try arena.dupe(Module, &.{
+            .{ .path = "src/p/mod.zig", .name = "mod", .slug = "mod", .doc = "", .decls = try arena.dupe(Decl, &.{documented}), .audience = .user },
+            .{ .path = "src/p/win32.zig", .name = "win32", .slug = "win32", .doc = "", .decls = try arena.dupe(Decl, &.{undocumented}), .audience = .internal },
+        }),
+    };
+
+    const coverage = coverageOf(pkg);
+    try std.testing.expectEqual(@as(usize, 1), coverage.total); // the FFI table is not "the API"
+    try std.testing.expectEqual(@as(usize, 1), coverage.documented);
+    try std.testing.expectEqual(@as(usize, 100), percent(coverage.documented, coverage.total));
+    // …but it is not hidden either.
+    try std.testing.expectEqual(@as(usize, 1), coverage.internal_total);
+    try std.testing.expectEqual(@as(usize, 0), coverage.internal_documented);
 }

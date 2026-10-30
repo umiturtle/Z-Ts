@@ -26,17 +26,24 @@ comptime {
 
 pub const coords = @import("coords.zig");
 
+/// `true` when this build contains the GTK3 + WebKit2GTK backend. `linux` is an empty struct
+/// otherwise, so `zts_webview.linux.LinuxGtkBackend` fails to compile on a host that cannot link GTK
+/// instead of failing at runtime.
 pub const has_native_gtk = (builtin.os.tag == .linux) and webview_options.enable_gtk;
+/// The GTK backend module, or an empty struct when GTK was not compiled in (`-Dgtk=false`, or a
+/// non-Linux target).
 pub const linux = if (has_native_gtk) @import("linux.zig") else struct {};
 
 /// Native macOS `NSApplication` + `WKWebView` backend availability (`M3-01`).
 pub const has_native_macos = (builtin.os.tag == .macos) and webview_options.enable_macos;
+/// The Cocoa + `WKWebView` module, or an empty struct when macOS support was not compiled in.
 pub const macos = if (has_native_macos) @import("macos.zig") else struct {};
 
 /// Native Windows `Win32` + Direct `WebView2` backend availability (`M3-02`).
 /// No `WebView2Loader.dll`: the Evergreen runtime is located in the registry and
 /// `EmbeddedBrowserWebView.dll` is loaded directly (see `webview2_loader.zig`).
 pub const has_native_windows = (builtin.os.tag == .windows) and webview_options.enable_windows;
+/// The Win32 + WebView2 module, or an empty struct when Windows support was not compiled in.
 pub const windows = if (has_native_windows) @import("windows.zig") else struct {};
 
 /// Hand-generated `ICoreWebView2*` COM vtables (`M3-02`). Pure declarations, so the vtable

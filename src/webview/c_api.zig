@@ -10,15 +10,30 @@ const testing = std.testing;
 const root = @import("mod.zig");
 const types = @import("types.zig");
 
+/// Status code returned by every fallible `zts_webview_*` function. Non-zero is a failure and the
+/// out-parameter (if any) is left untouched.
 pub const ZTS_WEBVIEW_OK: i32 = 0;
+/// A pointer/handle argument was null, or a length or enum value was out of range.
 pub const ZTS_WEBVIEW_ERR_INVALID_ARG: i32 = -1;
+/// An allocation for a request body, a C string copy or a capture buffer failed.
 pub const ZTS_WEBVIEW_ERR_OUT_OF_MEMORY: i32 = -2;
+/// The requested mode is not compiled into this build (e.g. `.native` on a `-Dgtk=false` host) or the
+/// feature does not exist on this OS.
 pub const ZTS_WEBVIEW_ERR_UNSUPPORTED: i32 = -3;
+/// The `window_id` was never created, or was already closed (handles are generational, so a stale id
+/// never resolves to a recycled window).
 pub const ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND: i32 = -4;
+/// The pending request was cancelled before the host answered it — typically because the window
+/// closed while the page was waiting.
 pub const ZTS_WEBVIEW_ERR_REQUEST_CANCELED: i32 = -5;
+/// No display/desktop session (headless CI without `$DISPLAY`, SSH without X forwarding). The
+/// headless mock backend is the way to run in that situation.
 pub const ZTS_WEBVIEW_ERR_DISPLAY_UNAVAILABLE: i32 = -6;
+/// The OS refused the operation: GTK/Win32 call failed, `NSWindow` could not be created, …
 pub const ZTS_WEBVIEW_ERR_PLATFORM_FAILURE: i32 = -7;
 
+/// One borrowed HTTP header: **not** NUL-terminated, use the explicit length. The bytes stay valid
+/// only for the duration of the callback that received them.
 pub const CHeader = extern struct {
     name: ?[*]const u8,
     name_len: usize,
@@ -26,6 +41,9 @@ pub const CHeader = extern struct {
     value_len: usize,
 };
 
+/// A custom-scheme request as seen from C. Every slice is borrowed for the duration of
+/// `CSchemeHandlerFn`; copy what you need before returning, then answer (possibly later, from another
+/// thread) with `zts_webview_complete_request(request_id, …)`.
 pub const CSchemeRequestView = extern struct {
     request_id: u64,
     window_id: u64,
@@ -51,11 +69,16 @@ pub const CCapture = extern struct {
     height: u32 = 0,
 };
 
+/// Called on the backend's main thread for every `tauri://` / `ipc://` / `asset://` request.
+/// Answering is mandatory: a request that is never completed keeps the page's `fetch()` pending until
+/// the window closes (`ZTS_WEBVIEW_ERR_REQUEST_CANCELED`).
 pub const CSchemeHandlerFn = *const fn (
     userdata: ?*anyopaque,
     request: *const CSchemeRequestView,
 ) callconv(.c) void;
 
+/// Called with the payload of `window.__zts.postMessage(…)`. `message` is borrowed and may contain
+/// arbitrary bytes (including NUL), so always use `message_len`.
 pub const CMessageHandlerFn = *const fn (
     userdata: ?*anyopaque,
     window_id: u64,
@@ -63,17 +86,23 @@ pub const CMessageHandlerFn = *const fn (
     message_len: usize,
 ) callconv(.c) void;
 
+/// Called after a window closed. `window_id` is already invalid at this point.
 pub const CWindowCloseFn = *const fn (
     userdata: ?*anyopaque,
     window_id: u64,
 ) callconv(.c) void;
 
+/// Destructor for bytes handed *to* the engine (request bodies). The engine calls it exactly once
+/// after the response has been written, so a host can stream a file straight from its own buffer.
 pub const CBytesReleaseFn = *const fn (
     release_ctx: ?*anyopaque,
     ptr: [*]const u8,
     len: usize,
 ) callconv(.c) void;
 
+/// Flat, POD mirror of `WindowConfig` for C hosts. Zero-initialise it and set only the fields you
+/// care about — the defaults below are the same as `WindowConfig`'s, except that `title == null`
+/// means "use `Z-Ts Window`".
 pub const CWindowDesc = extern struct {
     title: ?[*:0]const u8 = null,
     width: f64 = 800.0,
@@ -137,6 +166,9 @@ fn invokeCReleaseCallback(bytes: []const u8, ctx_ptr: ?*anyopaque, ctx_meta: ?*c
     cb(ctx_ptr, bytes.ptr, bytes.len);
 }
 
+/// Opaque engine box behind the `zts_webview_engine_*` functions. C callers only ever see `void *`;
+/// the struct lives in Zig so the allocator, the IO reactor and the per-window bookkeeping all stay
+/// in one place.
 pub const CEngineHandle = struct {
     allocator: Allocator,
     io_threaded: std.Io.Threaded,
@@ -180,6 +212,10 @@ inline fn reqFromU64(raw: u64) ?types.RequestId {
     return types.RequestId.fromU53(u53_val) catch null;
 }
 
+/// Creates an engine and writes it to `*out_engine`. `backend` is a `BackendKind` value
+/// (`0 = auto`, `1 = headless_mock`, `2 = native`). Returns `ZTS_WEBVIEW_ERR_UNSUPPORTED` when the
+/// requested backend was not compiled in and `ZTS_WEBVIEW_ERR_DISPLAY_UNAVAILABLE` when a native
+/// backend cannot open a display.
 pub export fn zts_webview_engine_create(backend: u32, out_engine: ?*?*CEngineHandle) callconv(.c) i32 {
     const out = out_engine orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const kind: types.BackendKind = switch (backend) {
@@ -209,6 +245,8 @@ pub export fn zts_webview_engine_create(backend: u32, out_engine: ?*?*CEngineHan
     return ZTS_WEBVIEW_OK;
 }
 
+/// Destroys the engine, closing every window it owns. Safe to call with `null`; the pointer must not
+/// be used afterwards.
 pub export fn zts_webview_engine_destroy(handle_opt: ?*CEngineHandle) callconv(.c) void {
     const h = handle_opt orelse return;
     const alloc = h.allocator;
@@ -219,6 +257,9 @@ pub export fn zts_webview_engine_destroy(handle_opt: ?*CEngineHandle) callconv(.
     alloc.destroy(h);
 }
 
+/// Runs one iteration of the event loop. `mode_raw` is a `StepMode` value (`0 = blocking`,
+/// `1 = poll`). Returns `true` while the loop should keep running, `false` once the last window has
+/// closed or `zts_webview_request_quit()` was called.
 pub export fn zts_webview_step(handle_opt: ?*CEngineHandle, mode_raw: u32) callconv(.c) bool {
     const h = handle_opt orelse return false;
     const mode: types.StepMode = if (mode_raw == 0) .blocking else .poll;
@@ -235,14 +276,20 @@ pub export fn zts_webview_poll(handle_opt: ?*CEngineHandle) callconv(.c) bool {
     return h.engine.step(.poll);
 }
 
+/// Wakes a `step(blocking)` that is parked in another thread. Call it after a worker thread has
+/// queued work (typically a completed scheme request) so the main loop notices immediately.
 pub export fn zts_webview_wakeup(handle_opt: ?*CEngineHandle) callconv(.c) void {
     if (handle_opt) |h| h.engine.wakeup();
 }
 
+/// Asks the loop to exit: the next `zts_webview_step()` returns `false`. Windows are not closed by
+/// this call, so handlers still see their close callbacks.
 pub export fn zts_webview_request_quit(handle_opt: ?*CEngineHandle) callconv(.c) void {
     if (handle_opt) |h| h.engine.requestQuit();
 }
 
+/// Registers `cb` for a URL scheme (`"tauri"`, `"ipc"`, `"asset"`, …). The scheme string is copied.
+/// `cb == null` unregisters it and makes every later request fail with 404.
 pub export fn zts_webview_register_scheme(
     handle_opt: ?*CEngineHandle,
     scheme_c: ?[*:0]const u8,
@@ -264,6 +311,7 @@ pub export fn zts_webview_register_scheme(
     return ZTS_WEBVIEW_OK;
 }
 
+/// Installs the `window.__zts.postMessage(…)` receiver. `cb == null` detaches it.
 pub export fn zts_webview_set_message_handler(
     handle_opt: ?*CEngineHandle,
     cb: ?CMessageHandlerFn,
@@ -274,6 +322,7 @@ pub export fn zts_webview_set_message_handler(
     h.msg_ud = userdata;
 }
 
+/// Installs the window-closed notification. `cb == null` detaches it.
 pub export fn zts_webview_set_close_handler(
     handle_opt: ?*CEngineHandle,
     cb: ?CWindowCloseFn,
@@ -284,6 +333,9 @@ pub export fn zts_webview_set_close_handler(
     h.close_ud = userdata;
 }
 
+/// Answers a pending scheme request. `body` is borrowed until `release_fn` is called (pass
+/// `null`/`0` for an empty body); the engine calls `release_fn(release_ctx, body, len)` exactly once
+/// after the response is written, possibly on another thread.
 pub export fn zts_webview_complete_request(
     handle_opt: ?*CEngineHandle,
     request_id_raw: u64,
@@ -333,6 +385,9 @@ pub export fn zts_webview_complete_request(
     return ZTS_WEBVIEW_OK;
 }
 
+/// Opens a window described by `desc` and writes its 53-bit id to `*out_win`. The id is
+/// generational: a closed id never becomes valid again, so stale ids fail with
+/// `ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND` instead of hitting an unrelated window.
 pub export fn zts_webview_window_create(
     handle_opt: ?*CEngineHandle,
     desc_ptr: ?*const CWindowDesc,
@@ -365,6 +420,7 @@ pub export fn zts_webview_window_create(
     return ZTS_WEBVIEW_OK;
 }
 
+/// Closes a window and frees everything it owns (pending requests are cancelled).
 pub export fn zts_webview_window_close(h_opt: ?*CEngineHandle, win: u64) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -372,6 +428,8 @@ pub export fn zts_webview_window_close(h_opt: ?*CEngineHandle, win: u64) callcon
     return ZTS_WEBVIEW_OK;
 }
 
+/// Returns the underlying `GtkWidget *` / `NSWindow *` / `HWND` so a C host can reparent or embed the
+/// window. `null` for the headless mock and for ids that no longer exist.
 pub export fn zts_webview_window_native_handle(h_opt: ?*CEngineHandle, win: u64) callconv(.c) ?*anyopaque {
     const h = h_opt orelse return null;
     const id = winFromU64(win) orelse return null;
@@ -387,6 +445,7 @@ pub export fn zts_webview_window_fit_parent(h_opt: ?*CEngineHandle, win: u64) ca
     return ZTS_WEBVIEW_OK;
 }
 
+/// Replaces the window title. `title` is copied; `null` resets it to the default.
 pub export fn zts_webview_window_set_title(h_opt: ?*CEngineHandle, win: u64, title: ?[*:0]const u8) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -395,6 +454,7 @@ pub export fn zts_webview_window_set_title(h_opt: ?*CEngineHandle, win: u64, tit
     return ZTS_WEBVIEW_OK;
 }
 
+/// Resizes the window to `width` x `height` **logical** pixels (the OS applies the DPI scale).
 pub export fn zts_webview_window_set_size(h_opt: ?*CEngineHandle, win: u64, width: f64, height: f64) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -402,6 +462,7 @@ pub export fn zts_webview_window_set_size(h_opt: ?*CEngineHandle, win: u64, widt
     return ZTS_WEBVIEW_OK;
 }
 
+/// Enables (`enabled = true`) or clears the minimum size, in logical pixels.
 pub export fn zts_webview_window_set_min_size(h_opt: ?*CEngineHandle, win: u64, enabled: bool, w: f64, ht: f64) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -409,6 +470,7 @@ pub export fn zts_webview_window_set_min_size(h_opt: ?*CEngineHandle, win: u64, 
     return ZTS_WEBVIEW_OK;
 }
 
+/// Enables (`enabled = true`) or clears the maximum size, in logical pixels.
 pub export fn zts_webview_window_set_max_size(h_opt: ?*CEngineHandle, win: u64, enabled: bool, w: f64, ht: f64) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -416,6 +478,7 @@ pub export fn zts_webview_window_set_max_size(h_opt: ?*CEngineHandle, win: u64, 
     return ZTS_WEBVIEW_OK;
 }
 
+/// Moves the window's top-left corner to `(x, y)`, in logical pixels relative to the screen.
 pub export fn zts_webview_window_set_position(h_opt: ?*CEngineHandle, win: u64, x: f64, y: f64) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -423,6 +486,7 @@ pub export fn zts_webview_window_set_position(h_opt: ?*CEngineHandle, win: u64, 
     return ZTS_WEBVIEW_OK;
 }
 
+/// Toggles user resizing (the OS still honours programmatic `set_size`).
 pub export fn zts_webview_window_set_resizable(h_opt: ?*CEngineHandle, win: u64, v: bool) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -430,6 +494,7 @@ pub export fn zts_webview_window_set_resizable(h_opt: ?*CEngineHandle, win: u64,
     return ZTS_WEBVIEW_OK;
 }
 
+/// Minimises (iconifies) or restores the window.
 pub export fn zts_webview_window_set_minimized(h_opt: ?*CEngineHandle, win: u64, v: bool) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -437,6 +502,7 @@ pub export fn zts_webview_window_set_minimized(h_opt: ?*CEngineHandle, win: u64,
     return ZTS_WEBVIEW_OK;
 }
 
+/// Maximises or restores the window.
 pub export fn zts_webview_window_set_maximized(h_opt: ?*CEngineHandle, win: u64, v: bool) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -444,6 +510,7 @@ pub export fn zts_webview_window_set_maximized(h_opt: ?*CEngineHandle, win: u64,
     return ZTS_WEBVIEW_OK;
 }
 
+/// Enters or leaves fullscreen.
 pub export fn zts_webview_window_set_fullscreen(h_opt: ?*CEngineHandle, win: u64, v: bool) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -451,6 +518,7 @@ pub export fn zts_webview_window_set_fullscreen(h_opt: ?*CEngineHandle, win: u64
     return ZTS_WEBVIEW_OK;
 }
 
+/// Shows or hides the window without destroying it.
 pub export fn zts_webview_window_set_visible(h_opt: ?*CEngineHandle, win: u64, v: bool) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -458,6 +526,8 @@ pub export fn zts_webview_window_set_visible(h_opt: ?*CEngineHandle, win: u64, v
     return ZTS_WEBVIEW_OK;
 }
 
+/// Adds or removes the native title bar and frame. Removing decorations is how a custom title bar is
+/// built; pair it with `zts_webview_window_start_drag()`.
 pub export fn zts_webview_window_set_decorations(h_opt: ?*CEngineHandle, win: u64, v: bool) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -465,6 +535,7 @@ pub export fn zts_webview_window_set_decorations(h_opt: ?*CEngineHandle, win: u6
     return ZTS_WEBVIEW_OK;
 }
 
+/// Keeps the window above (or no longer above) all other windows.
 pub export fn zts_webview_window_set_always_on_top(h_opt: ?*CEngineHandle, win: u64, v: bool) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -472,6 +543,7 @@ pub export fn zts_webview_window_set_always_on_top(h_opt: ?*CEngineHandle, win: 
     return ZTS_WEBVIEW_OK;
 }
 
+/// Raises and focuses the window (and its WebView, so keystrokes reach the page).
 pub export fn zts_webview_window_set_focus(h_opt: ?*CEngineHandle, win: u64) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -479,6 +551,8 @@ pub export fn zts_webview_window_set_focus(h_opt: ?*CEngineHandle, win: u64) cal
     return ZTS_WEBVIEW_OK;
 }
 
+/// Starts an OS window move from the current mouse position — call it from the `mousedown` handler
+/// of a custom title bar in an undecorated window.
 pub export fn zts_webview_window_start_drag(h_opt: ?*CEngineHandle, win: u64) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -486,6 +560,8 @@ pub export fn zts_webview_window_start_drag(h_opt: ?*CEngineHandle, win: u64) ca
     return ZTS_WEBVIEW_OK;
 }
 
+/// Registers JavaScript that runs at `DOCUMENT_START`, before any page script. `js` must be
+/// NUL-terminated UTF-8 and is copied. Scripts are injected in registration order, per window.
 pub export fn zts_webview_add_init_script(h_opt: ?*CEngineHandle, win: u64, js: ?[*:0]const u8) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -494,6 +570,8 @@ pub export fn zts_webview_add_init_script(h_opt: ?*CEngineHandle, win: u64, js: 
     return ZTS_WEBVIEW_OK;
 }
 
+/// Evaluates `js` in the page's main world. Fire-and-forget: the return value is discarded, so use
+/// a custom scheme or the message channel to get data back.
 pub export fn zts_webview_eval_js(h_opt: ?*CEngineHandle, win: u64, js: ?[*:0]const u8) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -502,6 +580,8 @@ pub export fn zts_webview_eval_js(h_opt: ?*CEngineHandle, win: u64, js: ?[*:0]co
     return ZTS_WEBVIEW_OK;
 }
 
+/// Navigates to an absolute URL. The request goes through the registered scheme handlers, which is
+/// why `tauri://localhost/index.html` never touches the network.
 pub export fn zts_webview_navigate(h_opt: ?*CEngineHandle, win: u64, url: ?[*:0]const u8) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -510,6 +590,8 @@ pub export fn zts_webview_navigate(h_opt: ?*CEngineHandle, win: u64, url: ?[*:0]
     return ZTS_WEBVIEW_OK;
 }
 
+/// Loads an HTML string with `base_uri` as the document base (so relative assets resolve). Handy for
+/// a splash screen or a unit test that does not want a file on disk.
 pub export fn zts_webview_load_html(
     h_opt: ?*CEngineHandle,
     win: u64,
@@ -523,6 +605,8 @@ pub export fn zts_webview_load_html(
     return ZTS_WEBVIEW_OK;
 }
 
+/// Opens the WebView inspector. Only meaningful when devtools are enabled in the build
+/// (`-Ddevtools`) and by the platform; returns `ZTS_WEBVIEW_ERR_UNSUPPORTED` otherwise.
 pub export fn zts_webview_open_devtools(h_opt: ?*CEngineHandle, win: u64) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;

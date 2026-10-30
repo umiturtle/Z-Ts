@@ -10,6 +10,9 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+/// A byte buffer plus its destructor, so the same value can carry bytes from Zig, from a WebView
+/// callback (WebKitGTK's `GDestroyNotify`) or from a C host without the consumer knowing which.
+/// `.empty` is a valid, allocation-free value.
 pub const OwnedBytes = struct {
     bytes: []const u8 = "",
     ctx_ptr: ?*anyopaque = null,

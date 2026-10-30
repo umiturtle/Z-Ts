@@ -17,6 +17,7 @@ const testing = std.testing;
 /// The 8-byte PNG magic (`\x89PNG\r\n\x1A\n`).
 pub const signature = [8]u8{ 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n' };
 
+/// Dimensions parsed out of a PNG's IHDR chunk.
 pub const Size = struct {
     width: u32,
     height: u32,

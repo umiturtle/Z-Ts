@@ -11,6 +11,9 @@ const testing = std.testing;
 
 const rpc = @import("zts_rpc");
 
+/// Which platform's path grammar to use. The plugin must be *host independent*: a `path.join`
+/// invoked by a Windows client has to use Windows rules even when the test runs on Linux, so every
+/// function below takes the style explicitly and `.current()` only appears at the OS boundary.
 pub const PathStyle = enum {
     posix,
     windows,
@@ -117,6 +120,8 @@ fn isSep(style: PathStyle, c: u8) bool {
     };
 }
 
+/// `true` for `/x` (posix) and `C:\\x`, `\\\\server\\share` (windows). Drive-relative `C:x` is *not*
+/// absolute — treating it as such is how a scope check gets bypassed.
 pub fn isAbsoluteWithStyle(style: PathStyle, p: []const u8) bool {
     if (p.len == 0) return false;
     return switch (style) {
@@ -129,6 +134,9 @@ pub fn isAbsoluteWithStyle(style: PathStyle, p: []const u8) bool {
     };
 }
 
+/// Collapses `.`/`..`, drops duplicate separators and guarantees a non-empty result (`"."`), keeping
+/// the drive/UNC prefix. This is the first step of every `plugin:fs` scope check: the engine never
+/// compares a raw string with a root.
 pub fn normalizeWithStyle(allocator: Allocator, style: PathStyle, raw_path: []const u8) Allocator.Error![]u8 {
     if (raw_path.len == 0) return allocator.dupe(u8, ".");
 
@@ -189,6 +197,8 @@ pub fn normalizeWithStyle(allocator: Allocator, style: PathStyle, raw_path: []co
     return aw.toOwnedSlice();
 }
 
+/// Joins `parts` with the platform separator, then normalises. Empty parts are skipped so
+/// `join(&.{ base, "", "x" })` still yields `<base>/x`.
 pub fn joinWithStyle(allocator: Allocator, style: PathStyle, parts: []const []const u8) Allocator.Error![]u8 {
     if (parts.len == 0) return allocator.dupe(u8, ".");
     const sep_char = style.sep();
@@ -206,6 +216,8 @@ pub fn joinWithStyle(allocator: Allocator, style: PathStyle, parts: []const []co
     return normalizeWithStyle(allocator, style, aw.written());
 }
 
+/// Resolves `parts` against `cwd` — the pure half of `path.resolve`. An absolute part restarts the
+/// walk (a later absolute component wins, exactly like the Node API).
 pub fn resolveWithStyle(
     allocator: Allocator,
     style: PathStyle,
@@ -229,6 +241,8 @@ pub fn resolveWithStyle(
     return normalizeWithStyle(allocator, style, acc);
 }
 
+/// Directory part of `p`, without allocating. Trailing separators are ignored and a bare file name
+/// yields `"."` (the Node behaviour, which is what JS callers expect).
 pub fn dirnameWithStyle(style: PathStyle, p: []const u8) []const u8 {
     if (p.len == 0) return ".";
     var end = p.len;
@@ -242,6 +256,8 @@ pub fn dirnameWithStyle(style: PathStyle, p: []const u8) []const u8 {
     return trimmed[0 .. idx - 1];
 }
 
+/// Final component of `p`, optionally with `ext` stripped (`"/a/b.html", ".html"` → `"b"`). The
+/// comparison is exact, case-sensitive and only strips one extension.
 pub fn basenameWithStyle(style: PathStyle, p: []const u8, ext: ?[]const u8) []const u8 {
     if (p.len == 0) return "";
     var end = p.len;

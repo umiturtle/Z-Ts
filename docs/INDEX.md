@@ -4,6 +4,19 @@
 
 ---
 
+## 読み手ごとの 3 層（+ 内部資料）
+
+| 層 | 正本 | 読むもの |
+|---|---|---|
+| ① 学ぶ | 手順と最小例 | [`guides/`](guides/README.md) — はじめかた → RPC → プラグイン → SSG |
+| ② 引く | **Zig のソース**（`///`） | API リファレンス（生成物・非コミット。`./zigw build docs`） |
+| ③ 確かめる | 振る舞いの約束 | [`reference/cli.md`](reference/cli.md) / [`reference/tauri-usage.md`](reference/tauri-usage.md) |
+| ④ 中を読む | ADR・設計メモ・タスク | 下の `architecture/` `decisions/` `roadmap/` `tasks/` `environment/`（任意） |
+
+**①〜③ だけでライブラリは使えます。** ④ は実装の意図と経緯の記録で、公開サイトでは
+`内部資料` 1 エントリに畳み、検索索引からも外しています
+（[`guides/README.md`](guides/README.md) §2・§4）。
+
 ## ディレクトリマップ
 
 | パス | 役割 | 更新頻度・競合リスク |
@@ -24,7 +37,11 @@
 | [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
 | [`roadmap/m1-foundation-packages.md`](roadmap/m1-foundation-packages.md) | M1 詳細仕様（コア 5 パッケージのファイル境界・公開型・DoD） | 実装仕様リファレンス |
 | [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
+| [`guides/README.md`](guides/README.md) | **学習の道筋**: 学ぶ / 引く / 確かめる / 中を読む の 4 層と「何を読みたいか」索引 | 入門（ガイドの入口） |
 | [`guides/getting-started.md`](guides/getting-started.md) | はじめかた（5 分）: テスト → サンプル → 埋め込み → 型生成 → サイト生成 | 入門（最初に読む） |
+| [`guides/using-rpc.md`](guides/using-rpc.md) | RPC 層の使い方: コマンド定義 → `Schema` → `bind` → `dispatch` → TypeScript 生成 | 入門（コマンドを書く前に） |
+| [`guides/using-plugins.md`](guides/using-plugins.md) | Tauri 標準プラグイン（window/event/path/fs/dialog/clipboard/menu/tray）と capability | 入門（プラグイン利用時） |
+| [`guides/using-ssg.md`](guides/using-ssg.md) | 静的サイト書き出し（`exportStaticSite` / `ExportOptions` / WASM） | 入門（`dist/` を出すとき） |
 | [`guides/migrating-from-tauri.md`](guides/migrating-from-tauri.md) | Tauri v2 からの移行（`tauri.conf.json` / ACL / コマンド / プラグイン対応表） | 移行時 |
 | [`guides/troubleshooting.md`](guides/troubleshooting.md) | トラブルシューティング（実際に踏んだエラーと 0.17 の API 差分） | 困ったとき |
 | [`tasks/TEMPLATE.md`](tasks/TEMPLATE.md) | 1タスク＝1ファイルの作業計画＆記憶チェックポイント標準テンプレート | テンプレート |
@@ -36,6 +53,7 @@
 | [`../examples/frameworks/README.md`](../examples/frameworks/README.md) | 9 フレームワーク（Angular/Solid/Svelte/SolidStart/Next/Nuxt/Astro/SvelteKit/React）の同一画面デモと再生成手順（`M5-05`） | 実装サンプル（追記のみ） |
 | [`environment/arena-and-caching.md`](environment/arena-and-caching.md) | 毎チャットキャッシュ揮発対策・LLVM 同梱検証・高速ビルド規約 | 環境変更時のみ |
 | [`environment/github-actions.md`](environment/github-actions.md) | GitHub Actions 3 OS マトリクス・キャッシュ自動配信・ベンチ/差分テスト運用 | CI 変更時のみ |
+| `api/**`（生成物・非コミット） | **API リファレンス** — `src/**.zig` の公開宣言から自動生成（`./zigw build docs`）。`docs/api/index.html` が入口 | 自動生成（手で編集しない） |
 | [`reference/cli.md`](reference/cli.md) | コマンドリファレンス（`./zigw` / `zig build` ステップ / スクリプト / `zts` 設計面） | リファレンス（追記のみ） |
 | [`reference/tauri-usage.md`](reference/tauri-usage.md) | Tauri v2 の使い方リファレンス（Rust/JS API・設定・Capabilities） | リファレンス（追記のみ） |
 | [`reference/tauri-internals.md`](reference/tauri-internals.md) | Tauri v2 内部実装の完全解剖（IPC プロトコル・マクロ・10個の内蔵 Plugin・OS 層） | リファレンス（追記のみ） |

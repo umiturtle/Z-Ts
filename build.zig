@@ -633,15 +633,16 @@ pub fn build(b: *std.Build) void {
     });
     const run_docsite = b.addRunArtifact(docsite_exe);
     run_docsite.has_side_effects = true;
+    // Written **in place**, not into a cache directory + `addInstallDirectory`.
+    // `InstallDir` never deletes anything, so a page that stopped being generated survived every
+    // later build (`zts_tauri/commands.html` outlived the module-slug fix and kept serving stale
+    // signatures). `zts_docsite` clears its output tree first, which only helps if it is pointed at
+    // the tree the reader actually opens. std.Build 0.17 has no RemoveDir step to do it for us.
+    run_docsite.setCwd(b.path("."));
     run_docsite.addArg("--out");
-    const docs_dir = run_docsite.addOutputDirectoryArg("docs");
-    const install_docs = b.addInstallDirectory(.{
-        .source_dir = docs_dir,
-        .install_dir = .prefix,
-        .install_subdir = "docs",
-    });
+    run_docsite.addArg("zig-out/docs");
     const docs_step = b.step("docs", "Render the documentation site into zig-out/docs");
-    docs_step.dependOn(&install_docs.step);
+    docs_step.dependOn(&run_docsite.step);
 
     // `zts` CLI (`M5-02`): argument parsing + the `init` template are std-only pure functions.
     const cli_tests = b.addTest(.{

@@ -10,11 +10,16 @@ const testing = std.testing;
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
+/// Application-level theme, as returned by `app.theme()` and accepted by `app.setTheme()`.
+/// `null` in `AppState.theme` means "follow the OS", which is the Tauri default.
 pub const Theme = enum {
     light,
     dark,
 };
 
+/// Identity of the running app, surfaced to `@tauri-apps/api/app` (`getName()`, `getVersion()`,
+/// `getIdentifier()`, `getTauriVersion()`). These values are only ever read back — nothing in the
+/// engine keys behaviour off them.
 pub const AppConfig = struct {
     name: []const u8 = "z-ts-app",
     version: []const u8 = "0.1.0",
@@ -24,6 +29,9 @@ pub const AppConfig = struct {
     supports_multiple_windows: bool = true,
 };
 
+/// Mutable application state behind `plugin:app` / `plugin:webview` / `plugin:window`-independent
+/// calls. Every mutation takes `mu`, because commands can be dispatched from the event loop while a
+/// worker thread reads.
 pub const AppState = struct {
     io: Io,
     mu: Io.Mutex = .init,

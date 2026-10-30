@@ -129,6 +129,15 @@ jobs:
             echo "::error::no asset URL was verified - the output walk is broken."
             exit 1
           fi
+          # `M5-07`: the API reference is generated from the sources. `api_pages=0` / `api_decls=0`
+          # means the scanner silently found nothing, which must not pass as a green build.
+          if grep -q "OK docsite .* api_pages=0 " ci-output.log || grep -q "api_decls=0$" ci-output.log; then
+            echo "::error::the API reference is empty - src/docsite/apidoc.zig scanned nothing."
+            exit 1
+          fi
+          test -f zig-out/docs/docs/api/index.html
+          test -f zig-out/docs/docs/api/zts_rpc/schema.html
+          test -f zig-out/docs/docs/internals/index.html
           test -f zig-out/docs/index.html
           test -f zig-out/docs/docs/INDEX.html
           test -f zig-out/docs/assets/search-index.js

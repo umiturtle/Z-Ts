@@ -25,6 +25,8 @@ const path = @import("../path.zig");
 /// Hard upper bound on chained symlink rewrites (`a -> b -> c -> ...`).
 pub const max_symlink_hops: usize = 40;
 
+/// Why a path could not be admitted. `OutOfScope` is the normal answer for `../../etc/passwd`;
+/// `SymLinkLoop` and `CannotVerify` are the fail-closed cases — an unverifiable path is denied.
 pub const ResolveError = Allocator.Error || error{
     /// The canonical path is outside every configured root.
     OutOfScope,
@@ -232,6 +234,9 @@ pub fn allowsPath(style: path.PathStyle, roots: []const Root, canonical: []const
     return false;
 }
 
+/// The allow-list of directories a `plugin:fs` call may touch, plus the runtime grants that
+/// `plugin:dialog` appends when the user picks a file. Every command resolves its path through this
+/// type before opening anything.
 pub const Scope = struct {
     allocator: Allocator,
     style: path.PathStyle,

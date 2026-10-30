@@ -14,7 +14,11 @@ const testing = std.testing;
 const foundation = @import("zts_foundation");
 const html_escape = foundation.html_escape;
 
+/// Replaced in the emitted `Content-Security-Policy` with a fresh nonce (or with the inline hash
+/// list when hashes are preferred). Written into the header *and* into the injected `<script
+/// nonce="…">`, so both sides must use this exact token.
 pub const SCRIPT_NONCE_PLACEHOLDER = "__TAURI_SCRIPT_NONCE__";
+/// Same as `SCRIPT_NONCE_PLACEHOLDER`, for `<style nonce="…">` and `style-src`.
 pub const STYLE_NONCE_PLACEHOLDER = "__TAURI_STYLE_NONCE__";
 
 /// Exact byte length of `'sha256-<44-char base64>'` (`8 + 44 + 1 = 53`).

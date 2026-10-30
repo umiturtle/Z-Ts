@@ -83,6 +83,9 @@ pub const Key = union(enum) {
     };
 };
 
+/// A parsed keyboard shortcut: modifiers plus one key. `Accelerator.parse("CmdOrCtrl+Shift+K")`
+/// resolves `CmdOrCtrl` to Command on macOS and Control elsewhere, which is how one menu definition
+/// stays native on all three platforms.
 pub const Accelerator = struct {
     mods: Mods = .{},
     key: Key,
@@ -178,6 +181,8 @@ pub const FSHIFT: u8 = 0x04;
 pub const FCONTROL: u8 = 0x08;
 pub const FALT: u8 = 0x10;
 
+/// `ACCEL` entry for `CreateAcceleratorTableW`: `virt` holds the `fVirt` flags, `key` the virtual-key
+/// code (or `0` to use `ascii`).
 pub const Win32Accel = struct {
     virt: u8,
     /// `wVk`; `0` means "literal character" (use `wAsciiChar` instead).
@@ -189,7 +194,10 @@ pub const Win32Accel = struct {
     }
 };
 
+/// `NSEventModifierFlags` bits used by the Objective-C shim: Shift (`1 << 17` in AppKit, folded to this
+/// compact mask before crossing the ABI).
 pub const MAC_SHIFT: u8 = 1 << 0;
+/// `NSEventModifierFlags` bit for Control, folded into the shim's compact mask.
 pub const MAC_CONTROL: u8 = 1 << 1;
 pub const MAC_OPTION: u8 = 1 << 2;
 pub const MAC_COMMAND: u8 = 1 << 3;

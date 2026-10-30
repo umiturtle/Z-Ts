@@ -54,6 +54,8 @@ pub const ScaleFactor = struct {
     }
 };
 
+/// A point in **logical (CSS) pixels**, Y-down from the top-left corner — the coordinate system the
+/// page itself uses. Multiply by a `ScaleFactor` to reach device pixels.
 pub const LogicalPoint = struct {
     x: LogicalPx,
     y: LogicalPx,
@@ -78,6 +80,8 @@ pub const LogicalPoint = struct {
     }
 };
 
+/// A point in **physical (device) pixels**, Y-down. This is what Win32 and X11 report, and what a
+/// screenshot's pixel coordinates mean.
 pub const PhysicalPoint = struct {
     x: PhysicalPx,
     y: PhysicalPx,
@@ -94,6 +98,8 @@ pub const PhysicalPoint = struct {
     }
 };
 
+/// Width/height in logical (CSS) pixels — the unit `WindowConfig.size` and CSS `px` share, so the
+/// same number produces the same layout on a 1x and a 2x screen.
 pub const LogicalSize = struct {
     width: LogicalPx,
     height: LogicalPx,
@@ -110,6 +116,7 @@ pub const LogicalSize = struct {
     }
 };
 
+/// Width/height in physical (device) pixels, as reported by the OS window manager.
 pub const PhysicalSize = struct {
     width: PhysicalPx,
     height: PhysicalPx,
@@ -126,6 +133,8 @@ pub const PhysicalSize = struct {
     }
 };
 
+/// A rectangle in logical pixels: origin is the top-left corner. `flipY` converts to and from the
+/// Bottom-Left Y-up system AppKit uses (the mapping is its own inverse).
 pub const LogicalRect = struct {
     origin: LogicalPoint,
     size: LogicalSize,
@@ -155,6 +164,7 @@ pub const LogicalRect = struct {
     }
 };
 
+/// A rectangle in physical pixels, used for capture regions and hit testing.
 pub const PhysicalRect = struct {
     origin: PhysicalPoint,
     size: PhysicalSize,

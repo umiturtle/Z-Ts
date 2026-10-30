@@ -62,6 +62,8 @@ pub const Error = error{
 // Capability model (upstream `tauri_utils::acl::capability`)
 // ============================================================================
 
+/// The three desktop platforms a `capabilities/*.json` file can restrict itself to. Parsing accepts
+/// the upstream spellings (`Linux`, `macOS`, `Windows`) case-insensitively.
 pub const Platform = enum {
     linux,
     macos,
@@ -101,6 +103,10 @@ pub const Permission = struct {
     scope_json: ?[]const u8 = null,
 };
 
+/// One `capabilities/*.json` file: which windows/webviews it applies to, which permissions it
+/// grants, and on which platforms/URLs. `windows` and `webviews` are matched as globs; leaving both
+/// empty means "every window", and a capability that matches no window is a no-op rather than an
+/// error (upstream behaviour).
 pub const Capability = struct {
     identifier: []const u8,
     description: []const u8 = "",

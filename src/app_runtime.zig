@@ -18,6 +18,8 @@ const webview = @import("zts_webview");
 const tauri = @import("zts_tauri");
 const webview_host = @import("webview_host.zig");
 
+/// Everything `DesktopRuntime.init()` needs: which backend to build, the app identity, the embedded
+/// asset bundle, and the protocol knobs. `.{}` is a runnable app (headless-capable, no assets).
 pub const DesktopConfig = struct {
     backend: webview.BackendKind = .auto,
     app: tauri.AppConfig = .{},
@@ -39,6 +41,9 @@ fn noopRpcDispatch(
     return rpc.Responses.unknown_command;
 }
 
+/// The whole desktop app in one struct: a WebView engine, the Tauri protocol router, the plugin
+/// registry and the per-window state. `run()` is `init` → `step` loop → `deinit`; tests can drive
+/// `step(.poll)` by hand against `HeadlessMock` and never touch a window.
 pub const DesktopRuntime = struct {
     allocator: Allocator,
     io: Io,

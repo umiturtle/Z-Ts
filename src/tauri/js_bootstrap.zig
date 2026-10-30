@@ -23,6 +23,9 @@ const testing = std.testing;
 const foundation = @import("zts_foundation");
 const html_escape = foundation.html_escape;
 
+/// Which OS convention the injected bootstrap script should follow. Windows resolves custom schemes
+/// through `http://<scheme>.localhost/…`, the other two use `<scheme>://localhost/…`; the page must be
+/// told which one it is talking to.
 pub const OsTarget = enum {
     linux,
     macos,
@@ -59,6 +62,8 @@ pub const OsTarget = enum {
     }
 };
 
+/// Inputs for the injected `window.__TAURI_INTERNALS__` script. `invoke_key` is the per-launch CSRF
+/// secret; everything else adapts the script to the current window and OS.
 pub const BootstrapOptions = struct {
     /// Window / Webview label reported through `getCurrentWindow().label`.
     label: []const u8 = "main",

@@ -40,6 +40,8 @@ pub const DialogError = error{
 // Wire types
 // ============================================================================
 
+/// One entry of a file-type dropdown (`{ name: "Images", extensions: ["png", "jpg"] }`). Extensions
+/// are given without the dot, exactly as `@tauri-apps/plugin-dialog` expects.
 pub const DialogFilter = struct {
     name: []const u8,
     extensions: []const []const u8,
@@ -61,6 +63,7 @@ pub const OpenDialogOptions = struct {
     file_access_mode: ?[]const u8 = null,
 };
 
+/// `@tauri-apps/plugin-dialog` `SaveDialogOptions` (`camelCase` on the wire).
 pub const SaveDialogOptions = struct {
     title: ?[]const u8 = null,
     filters: []const DialogFilter = &.{},
@@ -68,6 +71,8 @@ pub const SaveDialogOptions = struct {
     can_create_directories: ?bool = null,
 };
 
+/// Icon/severity of a message box. Parsing is case-insensitive and unknown values fall back to
+/// `.info`, matching the upstream deserializer instead of rejecting the request.
 pub const MessageDialogKind = enum {
     info,
     warning,
@@ -233,6 +238,7 @@ pub const MessageDialogButtons = struct {
     }
 };
 
+/// A message box: title, body, severity and which buttons to show.
 pub const MessageRequest = struct {
     title: ?[]const u8 = null,
     message: []const u8,
@@ -366,6 +372,9 @@ pub const Mock = struct {
 // RPC state & commands
 // ============================================================================
 
+/// State behind `plugin:dialog`. Holds the platform backend and, optionally, the FS scope that every
+/// picked path is granted to — that grant is what lets `plugin:fs` open the file the user chose
+/// without widening the static scope.
 pub const DialogState = struct {
     allocator: Allocator,
     io: Io,

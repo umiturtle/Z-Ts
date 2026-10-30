@@ -94,6 +94,9 @@ fn parseNamespaceSpec(comptime ns_name: [:0]const u8, comptime entry: anytype) N
     };
 }
 
+/// `true` when a command with this argument type may be called with no arguments at all — `void`,
+/// or a struct whose every field is optional. The generated TypeScript uses it to make the last
+/// parameter optional.
 pub fn canOmitArgs(comptime Args: type) bool {
     if (Args == void) return true;
     const info = @typeInfo(Args);

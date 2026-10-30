@@ -106,6 +106,9 @@ fn cancelWebKitRequest(req_ptr: *c.WebKitURISchemeRequest) void {
     c.g_object_unref(req_ptr);
 }
 
+/// GTK3 + WebKit2GTK 4.1 backend, bound through hand-written `extern` declarations (no `@cImport`, so
+/// the build needs no clang at compile time). Requires a display; without one `Backend.init` falls back
+/// to `HeadlessMock` unless `.native` was requested explicitly.
 pub const LinuxGtkBackend = struct {
     allocator: Allocator,
     io: Io,

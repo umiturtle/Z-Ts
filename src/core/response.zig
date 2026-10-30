@@ -6,6 +6,8 @@
 const owned_bytes = @import("owned_bytes.zig");
 pub const OwnedBytes = owned_bytes.OwnedBytes;
 
+/// The `"ok" / "error"` discriminant of a Tauri v2 IPC response, so `@tauri-apps/api`'s `invoke()`
+/// can reject a promise without parsing the body.
 pub const IpcStatus = enum {
     ok,
     err,

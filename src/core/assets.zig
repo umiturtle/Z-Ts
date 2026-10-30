@@ -78,6 +78,8 @@ pub const AssetResponse = struct {
     }
 };
 
+/// Per-request knobs for `Assets.resolve()`. Defaults serve a normal browser navigation; a range
+/// request, a disabled SPA fallback or a custom `<head>` injection are all opt-in.
 pub const ResolveOptions = struct {
     /// Incoming `Range` request header value (e.g. `"bytes=0-65535"`), if present.
     range_header: ?[]const u8 = null,

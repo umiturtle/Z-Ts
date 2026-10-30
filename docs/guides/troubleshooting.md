@@ -30,7 +30,7 @@ export HTTPS_PROXY=http://…   # 必要なら
 ```
 
 `/tmp` はコンテナごとに消えます。**チャットをまたぐと毎回 4 秒の再導入が走る**のは仕様です
-（[`../environment/arena-and-caching.md`](../environment/arena-and-caching.md)）。
+（内部資料 [`../environment/arena-and-caching.md`](../environment/arena-and-caching.md)）。
 
 ### `zig build` が異様に遅い（コールドで 90 秒以上）
 
@@ -70,7 +70,7 @@ test_step.dependOn(check_bindings.step);   // ← & を付けない
 ```
 
 `--check` はキャッシュされると「常に緑」になるため、検証 Run には
-`has_side_effects = true` を付けています（[`../architecture/build-tools.md`](../architecture/build-tools.md) §3）。
+`has_side_effects = true` を付けています（内部資料 [`../architecture/build-tools.md`](../architecture/build-tools.md) §3）。
 
 ### `error: invalid fingerprint: 0x…`（`build.zig.zon`）
 
@@ -196,4 +196,4 @@ bash scripts/ci-logs.sh <run_id>     # Check Run API 経由で Step Summary を�
 `OK parity …` の行に `layout` と `pixels=max:…% mad:…` が出ます。許容差は
 「レイアウト 1px + 0.5px×文字数、背景 ±4/255、平均輝度 ≤3.0、画素 ≤12%、MAD ≤8」。
 フォント同梱と `--require-native` を確認してください
-（[`../architecture/screenshot-parity.md`](../architecture/screenshot-parity.md)）。
+（内部資料 [`../architecture/screenshot-parity.md`](../architecture/screenshot-parity.md)）。

@@ -39,7 +39,7 @@ const allowed = policy.allows("plugin:fs|read_text_file", .{ .window_label = "ma
 ```
 
 **fail-closed** です。capability に書かれていないコマンドは拒否されます（上流と同じ）。
-仕様の詳細は [`../architecture/tauri-config-import-acl.md`](../architecture/tauri-config-import-acl.md)。
+仕様の詳細は内部資料 [`../architecture/tauri-config-import-acl.md`](../architecture/tauri-config-import-acl.md)。
 
 ## 3. コマンドを写す
 
