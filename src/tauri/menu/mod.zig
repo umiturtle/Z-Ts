@@ -227,6 +227,7 @@ pub const Predefined = union(enum) {
         };
     }
 
+    /// Maps a wire name (`"quit"`, `"copy"`, …) to its role, or `null`.
     pub fn fromName(name: []const u8) ?Predefined {
         inline for (@typeInfo(Predefined).@"union".field_names) |field_name| {
             if (std.mem.eql(u8, name, field_name)) {
@@ -255,6 +256,7 @@ pub const Icon = union(enum) {
     /// A caller-provided image (path, bytes or resource).
     image: JsImage,
 
+    /// Decodes an `ImageResource`-style JSON value into a native name or an image.
     pub fn fromValue(value: std.json.Value) ?Icon {
         switch (value) {
             .string => |s| {
@@ -284,11 +286,15 @@ pub const Spec = struct {
     /// Build a new item from options (mutually exclusive with `resource`).
     options: ?Options = null,
 
+    /// Reference to an already-created menu or submenu.
     pub const ResourceRef = struct {
+        /// Handle in the `plugin:resources` table.
         rid: u53,
+        /// What the handle is (a menu or a submenu).
         kind: ItemKind,
     };
 
+    /// Decodes one entry of the `items` array.
     pub fn decodeZtsJson(allocator: Allocator, raw: []const u8) rpc.DecodeError!Spec {
         const value = parseValue(allocator, raw) catch |err| return toDecodeError(err);
         switch (value) {
@@ -326,6 +332,7 @@ pub const Options = struct {
     /// `Channel<string>` injected by `@tauri-apps/api/menu` for nested items with an `action`.
     handler: ?u32 = null,
 
+    /// Decodes the options object `plugin:menu|new` receives.
     pub fn decodeZtsJson(allocator: Allocator, raw: []const u8) rpc.DecodeError!Options {
         const value = parseValue(allocator, raw) catch |err| return toDecodeError(err);
         const obj = switch (value) {
@@ -421,8 +428,10 @@ pub const Options = struct {
 /// `plugin:menu|popup`'s `at` and `set_icon`'s `icon` are untagged shapes owned by `@tauri-apps/api`,
 /// so they are decoded lazily through this hook instead of a rigid Zig struct.
 pub const JsonArg = struct {
+    /// Raw JSON the wire supplied, or `null` when the key was absent.
     value: ?std.json.Value = null,
 
+    /// Decodes a raw JSON value, or `null` when the wire sent `null`.
     pub fn decodeZtsJson(allocator: Allocator, raw: []const u8) rpc.DecodeError!JsonArg {
         const value = parseValue(allocator, raw) catch |err| return toDecodeError(err);
         return .{ .value = if (value == .null) null else value };
@@ -435,8 +444,10 @@ pub const Position = struct {
     x: f64,
     /// Y in pixels.
     y: f64,
+    /// Whether `x`/`y` are logical (DPI-independent) rather than physical pixels.
     logical: bool = true,
 
+    /// Decodes `{ Logical: [x, y] }` / `{ Physical: [x, y] }`, or `null` when malformed.
     pub fn fromJsonValue(value: std.json.Value) ?Position {
         const obj = switch (value) {
             .object => |o| o,
@@ -479,6 +490,7 @@ pub const EntryKind = enum {
     /// A `Predefined::Separator`.
     separator,
 
+    /// Classifies an `ItemKind` as a leaf, a submenu or a separator.
     pub fn of(kind: ItemKind, predefined: ?Predefined) EntryKind {
         if (kind == .Submenu) return .submenu;
         if (predefined) |p| if (p == .Separator) return .separator;
@@ -516,6 +528,7 @@ pub const Snapshot = struct {
     /// The flattened menu, in display order (pre-order over the tree).
     entries: []const Entry,
 
+    /// How many entries the backend will draw.
     pub fn len(self: Snapshot) usize {
         return self.entries.len;
     }
@@ -572,15 +585,20 @@ pub const Node = struct {
     checked: bool = false,
     /// Keyboard shortcut, or `null`.
     accelerator: ?Accelerator = null,
+    /// Set when the item is a predefined (native) role rather than user text.
     predefined: ?Predefined = null,
+    /// Icon override, if any.
     icon: ?Icon = null,
     /// `Channel<string>` for this item's activation (`action` in JS).
     handler: ?u32 = null,
+    /// Owning container; `null` for a root menu.
     parent: ?*Node = null,
+    /// Sub-items in display order (containers only).
     children: std.ArrayListUnmanaged(*Node) = .empty,
     /// Every string this node owns (freed in `deinit`).
     owned: std.ArrayListUnmanaged([]u8) = .empty,
 
+    /// Frees the id, text and child list. Children are owned by `resources`, not by this call.
     pub fn deinit(self: *Node) void {
         // Detach from the parent so a closed node never leaves a dangling child pointer.
         self.state.detach(self);
@@ -631,6 +649,7 @@ pub const Backend = struct {
     /// The native implementation. `StubBackend.vtable` records nothing and accepts everything.
     vtable: *const VTable,
 
+    /// The four operations a native menu backend must provide.
     pub const VTable = struct {
         /// Installs `snapshot` as the app-wide (menu bar) menu.
         apply_app_menu: *const fn (ctx: ?*anyopaque, snapshot: Snapshot) MenuError!void,
@@ -642,15 +661,19 @@ pub const Backend = struct {
         set_activator: *const fn (ctx: ?*anyopaque, activator: Activator) void,
     };
 
+    /// Installs `snapshot` as the app menu.
     pub fn applyAppMenu(self: Backend, snapshot: Snapshot) MenuError!void {
         return self.vtable.apply_app_menu(self.ctx, snapshot);
     }
+    /// Installs `snapshot` as the menu bar of `window` (`null` = every window).
     pub fn applyWindowMenu(self: Backend, window: ?[]const u8, snapshot: Snapshot) MenuError!void {
         return self.vtable.apply_window_menu(self.ctx, window, snapshot);
     }
+    /// Shows `snapshot` as a context menu at `at` (`null` = the cursor position).
     pub fn popup(self: Backend, window: ?[]const u8, snapshot: Snapshot, at: ?Position) MenuError!void {
         return self.vtable.popup(self.ctx, window, snapshot, at);
     }
+    /// Registers the activation receiver. `MenuState` calls this before every apply.
     pub fn setActivator(self: Backend, activator: Activator) void {
         self.vtable.set_activator(self.ctx, activator);
     }
@@ -680,15 +703,20 @@ pub const MenuState = struct {
     /// Menu id → activation channel. Values are fixed-size so the map never reallocates payloads.
     channels: std.StringHashMapUnmanaged(ChannelEntry) = .empty,
 
+    /// Activation route for one menu id.
     pub const ChannelEntry = struct {
+        /// Channel the frontend listens on; the payload is the menu id.
         channel: Channel([]const u8),
+        /// Caller context captured when the item was created, so the event carries its window.
         call_ctx: ?core.CallContext = null,
     };
 
+    /// Creates empty state that applies menus through `StubBackend`.
     pub fn init(allocator: Allocator, io: Io, resources: *ResourceTable) MenuState {
         return .{ .allocator = allocator, .io = io, .resources = resources, .backend = Backend{ .vtable = &StubBackend.vtable } };
     }
 
+    /// Returns a copy of `self` that draws through `backend` (the handle is not updated).
     pub fn withBackend(self: MenuState, backend: Backend) MenuState {
         var copy = self;
         copy.backend = backend;
@@ -857,6 +885,7 @@ fn inferKind(opts: Options) ItemKind {
 /// Fallback backend: every operation reports `error.Unavailable` (headless / unsupported OS).
 /// Keeps `plugin:menu` importable without any native toolkit, so DCE still removes it entirely.
 pub const StubBackend = struct {
+    /// The do-nothing backend used until `withBackend()` installs a real one.
     pub const vtable = Backend.VTable{
         .apply_app_menu = unavailableApp,
         .apply_window_menu = unavailableWindow,
@@ -895,16 +924,22 @@ pub const Mock = struct {
     /// The activation receiver the state installed, if any.
     activator: ?Activator = null,
 
+    /// One recorded context menu.
     pub const Popup = struct {
+        /// Window the popup was opened for, or `null` for "the current one".
         window: ?[]const u8,
+        /// Requested position, or `null` for the cursor.
         at: ?Position,
+        /// What the backend was asked to draw.
         entries: []Entry,
     };
 
+    /// Creates a backend that records what it is asked to draw.
     pub fn init(allocator: Allocator) Mock {
         return .{ .allocator = allocator };
     }
 
+    /// Frees the recorded snapshots and popups.
     pub fn deinit(self: *Mock) void {
         if (self.app_menu) |entries| freeEntries(self.allocator, entries);
         var it = self.window_menus.iterator();
@@ -920,6 +955,7 @@ pub const Mock = struct {
         self.popups.deinit(self.allocator);
     }
 
+    /// The `Backend` view of `self`, ready to hand to `MenuState.withBackend`.
     pub fn backend(self: *Mock) Backend {
         return .{ .ctx = self, .vtable = &vtable };
     }
@@ -996,7 +1032,9 @@ pub const Mock = struct {
 
 /// `plugin:menu|*` command namespace (`Schema` key: `.menu`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:menu|";
+    /// The state type `zts_rpc` resolves per app; identical to `MenuState` here.
     pub const RpcState = MenuState;
 
     const Created = struct { u53, []const u8, ItemKind };
@@ -1036,6 +1074,7 @@ pub const Commands = struct {
         return .{ root.rid, root.id };
     }
 
+    /// `append` — adds `items` to the end of a menu or submenu.
     pub fn append(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1044,6 +1083,7 @@ pub const Commands = struct {
         return insertMany(ctx, state, args.rid, args.kind, args.items, null);
     }
 
+    /// `prepend` — adds `items` at the front.
     pub fn prepend(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1052,6 +1092,7 @@ pub const Commands = struct {
         return insertMany(ctx, state, args.rid, args.kind, args.items, 0);
     }
 
+    /// `insert` — adds `items` at `position` (0-based).
     pub fn insert(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1084,6 +1125,7 @@ pub const Commands = struct {
         try state.refresh(ctx.scratch);
     }
 
+    /// `remove` — detaches one child item, by rid.
     pub fn remove(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1102,6 +1144,7 @@ pub const Commands = struct {
         return error.NotFound;
     }
 
+    /// `remove_at` — detaches the child at `position`; `null` when out of range.
     pub fn remove_at(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1117,6 +1160,7 @@ pub const Commands = struct {
         return .{ child.rid, child.id, child.kind };
     }
 
+    /// `items` — lists the direct children as `[rid, id, kind]` triples.
     pub fn items(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1128,6 +1172,7 @@ pub const Commands = struct {
         return out;
     }
 
+    /// `get` — finds one direct child by wire id, or `null`.
     pub fn get(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1142,6 +1187,7 @@ pub const Commands = struct {
         return null;
     }
 
+    /// `popup` — shows the menu as a context menu on `window`, at `at` when given.
     pub fn popup(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1155,6 +1201,7 @@ pub const Commands = struct {
         return state.backend.popup(args.window, .{ .entries = entries }, at);
     }
 
+    /// `set_as_app_menu` — installs the menu as the app menu; returns the menu it replaced.
     pub fn set_as_app_menu(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53 }) MenuError!?struct { u53, []const u8 } {
         const node = state.lookup(args.rid, .Menu) orelse return error.BadResourceId;
         // Upstream returns the menu that was replaced (`Option<(ResourceId, MenuId)>`), not the new
@@ -1167,6 +1214,7 @@ pub const Commands = struct {
         return null;
     }
 
+    /// `set_as_window_menu` — installs the menu as `window`'s menu bar; returns the menu it replaced.
     pub fn set_as_window_menu(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         window: ?[]const u8 = null,
@@ -1183,11 +1231,13 @@ pub const Commands = struct {
         return null;
     }
 
+    /// `text` — the item's current label.
     pub fn text(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53, kind: ItemKind }) MenuError![]const u8 {
         _ = ctx;
         return (try nodeOf(state, args.rid, args.kind)).text;
     }
 
+    /// `set_text` — replaces the label and re-applies the menus.
     pub fn set_text(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1198,11 +1248,13 @@ pub const Commands = struct {
         try state.refresh(ctx.scratch);
     }
 
+    /// `is_enabled` — whether the item can currently be activated.
     pub fn is_enabled(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53, kind: ItemKind }) MenuError!bool {
         _ = ctx;
         return (try nodeOf(state, args.rid, args.kind)).enabled;
     }
 
+    /// `set_enabled` — greys the item out (or re-enables it).
     pub fn set_enabled(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1213,6 +1265,7 @@ pub const Commands = struct {
         try state.refresh(ctx.scratch);
     }
 
+    /// `set_accelerator` — parses and installs a shortcut, or clears it with `null`.
     pub fn set_accelerator(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
@@ -1233,12 +1286,14 @@ pub const Commands = struct {
         _ = args;
     }
 
+    /// `set_as_help_menu_for_nsapp` — macOS-only upstream; a no-op that still succeeds here.
     pub fn set_as_help_menu_for_nsapp(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53 }) MenuError!void {
         _ = ctx;
         _ = state;
         _ = args;
     }
 
+    /// `is_checked` — the check state of a check item.
     pub fn is_checked(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53 }) MenuError!bool {
         _ = ctx;
         const node = state.resources.getPtr(Node, args.rid) catch return error.BadResourceId;
@@ -1246,6 +1301,7 @@ pub const Commands = struct {
         return node.checked;
     }
 
+    /// `set_checked` — ticks or unticks a check item.
     pub fn set_checked(ctx: *rpc.Ctx, state: *MenuState, args: struct { rid: u53, checked: bool }) MenuError!void {
         const node = state.resources.getPtr(Node, args.rid) catch return error.BadResourceId;
         if (node.state != state) return error.BadResourceId;
@@ -1253,6 +1309,7 @@ pub const Commands = struct {
         try state.refresh(ctx.scratch);
     }
 
+    /// `set_icon` — replaces the item's icon, or clears it.
     pub fn set_icon(ctx: *rpc.Ctx, state: *MenuState, args: struct {
         rid: u53,
         kind: ItemKind,
