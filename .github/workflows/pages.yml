@@ -6,11 +6,20 @@ name: Documentation site
 #   2. The pre-built example bundles: the counter SSG export (`zig build dist`) and the nine
 #      committed framework demos, with their absolute `/assets/…` URLs rewritten for the
 #      `/Z-Ts/` sub-path.
+#
+# Publishing needs the repository's Pages site to exist. `GITHUB_TOKEN` can *deploy* to Pages but
+# cannot reliably *create* the site (creating one is an administrative action), so this workflow:
+#   * asks `actions/configure-pages` to enable it (`enablement: true`) — succeeds when the token is
+#     allowed to, which makes the very first run work without any manual step;
+#   * otherwise keeps the job **green** with a single warning naming the exact setting to flip,
+#     instead of leaving `main` permanently red over a one-time human action.
+# The site itself is always built, rendered and verified here, so a real regression still fails.
 
 on:
   push:
     branches:
       - main
+      - arena/c823e754-z-ts   # TEMPORARY: validate this workflow on a branch (deploy stays gated)
   workflow_dispatch:
 
 permissions:
@@ -27,6 +36,9 @@ jobs:
     name: Build the documentation + example site
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      # `true` when the Pages site exists (or was just created) and the artifact was uploaded.
+      publish: ${{ steps.pages_status.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
 
@@ -85,25 +97,44 @@ jobs:
           find _site -name '*.html' | wc -l
 
       # `enablement: true` creates the Pages site (build type = GitHub Actions) when the
-      # repository has never had Pages on. Without it the very first deployment fails with
-      # `Get Pages site failed ... Error: Not Found`, because the action only *reads* the site.
+      # repository has never had Pages on. Without `continue-on-error` a token that is not allowed
+      # to create the site would turn every push to `main` red for a one-time configuration step.
       - name: Configure Pages (enable it on the first run)
         id: pages
         uses: actions/configure-pages@v5
+        continue-on-error: true
         with:
           enablement: true
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Decide whether this run can publish
+        id: pages_status
+        env:
+          OUTCOME: ${{ steps.pages.outcome }}
+        run: |
+          set -eo pipefail
+          if [ "$OUTCOME" = "success" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Pages is enabled — the artifact will be published." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          msg="GitHub Pages is not enabled for ${GITHUB_REPOSITORY} yet. The site was built and verified, but it cannot be published. One-time fix: Settings -> Pages -> Build and deployment -> Source: GitHub Actions. The next push to main deploys with no further change."
+          echo "::warning title=Pages not enabled::$msg"
+          printf '## Pages is not enabled yet\n\n%s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+          echo "Skipping the upload/deploy steps; this is a configuration step, not a build failure."
+
+      - name: Upload the Pages artifact
+        if: steps.pages_status.outputs.ready == 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    # Only `main` publishes. A `workflow_dispatch` on a feature branch still builds the whole
-    # site (so the generator, the link check and the demo rewrite are verified), it just stops
-    # before touching the production site.
-    if: github.ref == 'refs/heads/main'
+    # Only `main` publishes, and only once the Pages site exists. A `workflow_dispatch` on a
+    # feature branch still builds and verifies the whole site, it just stops before production.
+    if: needs.build.outputs.publish == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
