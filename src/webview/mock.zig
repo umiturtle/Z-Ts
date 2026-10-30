@@ -21,9 +21,13 @@ const png = @import("png.zig");
 /// Record of one answered scheme request, kept so a test can assert on the status, headers and body
 /// the engine would have handed the WebView.
 pub const CompletedSchemeRecord = struct {
+    /// Window the request came from.
     window_id: types.WindowId,
+    /// Requested URI, owned copy.
     uri: []u8,
+    /// Status the handler answered with.
     status_code: u16,
+    /// `Content-Type` the handler answered with.
     content_type: []u8,
     headers: []types.QueuedCompletion.OwnedHeader,
     body: []u8,
@@ -50,7 +54,9 @@ pub const CompletedSchemeRecord = struct {
 /// The in-memory window a `HeadlessMock` manages: title, geometry and flags, with no OS object
 /// behind it. Screenshot capture returns a deterministic PNG so parity tests stay reproducible.
 pub const MockWindow = struct {
+    /// Current title (what `title()` returns).
     title: []u8,
+    /// Client-area size in logical pixels.
     size: types.LogicalSize,
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
@@ -98,20 +104,33 @@ const MockPendingPayload = struct {
 /// contract as the native backends (scheme routing, IPC, capture, close) but paints nothing, so it
 /// runs without a display server.
 pub const HeadlessMock = struct {
+    /// Allocator that owns windows, captures and the scheme table.
     allocator: Allocator,
+    /// IO reactor behind the mutex and the condition variable.
     io: Io,
+    /// Guards the window pool, pending table and capture list.
     mu: Io.Mutex = .init,
+    /// Signalled by `wakeup()`, waited on by `step(.blocking)`.
     cond: Io.Condition = .init,
+    /// Set by `wakeup()` so a parked `step(.blocking)` returns immediately.
     woken: bool = false,
+    /// Set by `requestQuit()`; cleared by `deinit()`.
     quit_requested: std.atomic.Value(bool) = .init(false),
 
+    /// Live mock windows.
     windows: foundation.HandlePool(MockWindow, .window) = .empty,
+    /// Registered scheme handlers (`tauri`, `ipc`, `asset`, …).
     schemes: std.StringHashMapUnmanaged(types.SchemeHandler) = .empty,
+    /// Scheme requests waiting for `completeRequest()`.
     pending: pending_mod.PendingTable(MockPendingPayload) = .{},
+    /// Completions queued from worker threads, drained by `step()`.
     completions: pending_mod.CompletionQueue,
+    /// Every answered request, so a test can assert on the response.
     completed_records: std.ArrayList(CompletedSchemeRecord) = .empty,
 
+    /// `window.__zts.postMessage(…)` receiver, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
     /// Screenshots produced by `captureWindow()` and not yet collected by `takeCapture()`.

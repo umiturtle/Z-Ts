@@ -12,6 +12,8 @@ const testing = std.testing;
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
+/// Generational handle to a server-side resource — the same value `@tauri-apps/api/core`'s
+/// `Resource` carries, so `res.close()` maps onto `plugin:resources|close`.
 pub const ResourceHandle = core.Handle(.resource);
 
 pub const ResourceError = error{
@@ -24,6 +26,9 @@ const Entry = struct {
     destroy_fn: ?*const fn (Allocator, ?*anyopaque) void,
 };
 
+/// Thread-safe table of objects owned by the webview (menus, tray icons, children of
+/// `plugin:resources`). Forged or double-closed ids resolve to `error.BadResourceId` instead of
+/// use-after-free, because handles carry a generation counter.
 pub const ResourceTable = struct {
     allocator: Allocator,
     io: Io,

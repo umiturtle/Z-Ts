@@ -77,11 +77,17 @@ pub const MenuError = error{
 
 /// `muda::ItemKind` — serde serializes the unit variants as their names.
 pub const ItemKind = enum {
+    /// The root handle returned by `plugin:menu|new`; never rendered on its own.
     Menu,
+    /// A container: its children form a nested menu.
     Submenu,
+    /// A plain clickable item (`MenuItem`) or a checkable one (`CheckMenuItem`).
     MenuItem,
+    /// An OS-defined role; the backend maps it to a native action instead of an id.
     Predefined,
+    /// An item whose checked state is stored by the menu (`CheckMenuItem`).
     Check,
+    /// An item that draws an `Icon` (`IconMenuItem`).
     Icon,
 
     /// Only containers (`Menu` / `Submenu`) hold children.
@@ -92,61 +98,109 @@ pub const ItemKind = enum {
 
 /// `muda::NativeIcon` — the platform-provided stock icons.
 pub const NativeIcon = enum {
+    /// A plus sign (`NSImageNameAddTemplate`).
     Add,
+    /// A minus sign.
     Remove,
+    /// The application icon, for an `About` item.
     About,
+    /// The gear used by the Services submenu.
     Services,
+    /// A vertical separator, for toolbars.
     Separator,
+    /// The Copy glyph.
     Copy,
+    /// The Cut glyph.
     Cut,
+    /// The Paste glyph.
     Paste,
+    /// The Select All glyph.
     SelectAll,
+    /// The Undo arrow.
     Undo,
+    /// The Redo arrow.
     Redo,
+    /// The minimise (yellow) button glyph.
     Minimize,
+    /// The zoom (green) button glyph.
     Maximize,
+    /// The fullscreen arrows.
     Fullscreen,
+    /// An eye with a slash.
     Hide,
+    /// Hide-others (macOS).
     HideOthers,
+    /// Show-all (macOS).
     ShowAll,
+    /// The close (red) button glyph.
     CloseWindow,
+    /// The power symbol.
     Quit,
+    /// Bring-all-to-front (macOS).
     BringAllToFront,
 };
 
 /// `tauri::menu::AboutMetadata` (`camelCase` on the wire).
 pub const AboutMetadata = struct {
+    /// Application name shown as the panel's title.
     name: ?[]const u8 = null,
+    /// Version string (`0.1.0`).
     version: ?[]const u8 = null,
+    /// Marketing version, when it differs from `version`.
     short_version: ?[]const u8 = null,
+    /// Author line, one entry per author.
     authors: ?[]const []const u8 = null,
+    /// Free-form description under the title.
     comments: ?[]const u8 = null,
+    /// Copyright line at the bottom.
     copyright: ?[]const u8 = null,
+    /// License name.
     license: ?[]const u8 = null,
+    /// Project URL.
     website: ?[]const u8 = null,
+    /// Text for the `website` link.
     website_label: ?[]const u8 = null,
+    /// Credits line (icons, contributors, …).
     credits: ?[]const u8 = null,
 };
 
 /// `tauri::menu::PredefinedMenuItem` payload (`serde` externally tagged).
 pub const Predefined = union(enum) {
+    /// A horizontal rule between groups of items.
     Separator,
+    /// The OS-defined `Copy` role (selection-aware on macOS).
     Copy,
+    /// The OS-defined `Cut` role.
     Cut,
+    /// The OS-defined `Paste` role.
     Paste,
+    /// The OS-defined `Select All` role.
     SelectAll,
+    /// The OS-defined `Undo` role; the OS keeps the undo stack.
     Undo,
+    /// The OS-defined `Redo` role.
     Redo,
+    /// Minimise the focused window.
     Minimize,
+    /// Zoom / maximise the focused window.
     Maximize,
+    /// Toggle fullscreen for the focused window.
     Fullscreen,
+    /// Hide the application (macOS).
     Hide,
+    /// Hide every other application (macOS).
     HideOthers,
+    /// Un-hide every hidden application (macOS).
     ShowAll,
+    /// Close the focused window.
     CloseWindow,
+    /// Quit the application.
     Quit,
+    /// The `About` panel; the payload customises its contents or `null` uses the OS default.
     About: ?AboutMetadata,
+    /// The macOS Services submenu.
     Services,
+    /// Raise all of the application's windows (macOS).
     BringAllToFront,
 
     /// Human-readable fallback label used when the frontend did not pass `text`.
@@ -186,8 +240,11 @@ pub const Predefined = union(enum) {
 
 /// `tauri::image::JsImage` — untagged: path string, raw ICO/PNG bytes, or an `plugin:image` `rid`.
 pub const JsImage = union(enum) {
+    /// A filesystem path (resolved through the asset protocol scope).
     path: []const u8,
+    /// Encoded image bytes (PNG / JPEG / …), decoded by the backend.
     bytes: []const u8,
+    /// A `plugin:resources` handle to an image already loaded in the engine.
     resource: u53,
 };
 
@@ -398,6 +455,9 @@ pub const Position = struct {
 // Snapshot — the only thing a backend ever sees
 // ============================================================================
 
+/// What a backend has to draw for one flattened entry: a submenu, a leaf item, or a separator.
+/// Deciding this once (instead of at every backend) is what keeps Cocoa, Win32 and GTK menus
+/// structurally identical.
 pub const EntryKind = enum {
     /// A `Submenu`: opens its children (`depth + 1`).
     submenu,
@@ -413,6 +473,9 @@ pub const EntryKind = enum {
     }
 };
 
+/// One flattened menu entry — the *only* shape a backend ever sees. Strings are borrowed from the
+/// `Node` tree, and `depth` encodes nesting because every native menu API wants a flat list plus an
+/// indent level.
 pub const Entry = struct {
     kind: EntryKind,
     /// Wire `MenuId` (what `Channel<string>` reports on activation).
@@ -429,6 +492,8 @@ pub const Entry = struct {
     item_kind: ItemKind = .MenuItem,
 };
 
+/// A complete menu at one instant, flattened. Built fresh on every `apply*` call rather than mutated
+/// in place, so a backend never observes a half-updated menu.
 pub const Snapshot = struct {
     entries: []const Entry,
 
@@ -467,6 +532,8 @@ fn appendEntries(allocator: Allocator, out: *std.ArrayListUnmanaged(Entry), node
 // Tree node (stored inside the shared `plugin:resources` table)
 // ============================================================================
 
+/// A menu tree node, stored inside the shared `plugin:resources` table so the JS side addresses it by
+/// handle (`rid`). Only menus mutate this; backends see `Snapshot`s instead.
 pub const Node = struct {
     state: *MenuState,
     allocator: Allocator,
@@ -527,6 +594,8 @@ pub const Activator = struct {
     fn noop(_: ?*anyopaque, _: []const u8) void {}
 };
 
+/// A native menu backend: an Objective-C / Win32 / GTK implementation plus the function table that
+/// `MenuState` drives. The `Mock` backend records snapshots so all three OSes run the same assertions.
 pub const Backend = struct {
     ctx: ?*anyopaque = null,
     vtable: *const VTable,
@@ -560,6 +629,8 @@ pub const Backend = struct {
 // State
 // ============================================================================
 
+/// `plugin:menu` state: the owned `Node` trees, the handle table that connects them to
+/// `plugin:resources`, and the active `Backend`. Every public command starts here.
 pub const MenuState = struct {
     allocator: Allocator,
     io: Io,
@@ -772,6 +843,8 @@ pub const StubBackend = struct {
 // Mock backend — records every snapshot so all 3 OS run the same assertions
 // ============================================================================
 
+/// Recording backend used by the tests (and by `HeadlessMock` runs): it stores the last snapshot per
+/// window instead of drawing anything, so assertions can be written once against the native shape.
 pub const Mock = struct {
     allocator: Allocator,
     app_menu: ?[]Entry = null,

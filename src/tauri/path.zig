@@ -32,28 +32,51 @@ pub const PathStyle = enum {
 
 /// Exact wire integer discriminants matching `@tauri-apps/api/path` `enum BaseDirectory`.
 pub const BaseDirectory = enum(u8) {
+    /// User's audio library (`$XDG_MUSIC_DIR` / `~/Music` / `%USERPROFILE%\Music`).
     audio = 1,
+    /// Per-user cache (`$XDG_CACHE_HOME` / `~/Library/Caches` / `%LOCALAPPDATA%`). Safe to delete.
     cache = 2,
+    /// Per-user configuration (`$XDG_CONFIG_HOME` / `~/Library/Application Support` / `%APPDATA%`).
     config = 3,
+    /// Per-user data (`$XDG_DATA_HOME` / `~/Library/Application Support` / `%APPDATA%`).
     data = 4,
+    /// Per-user, machine-local data that must not roam (`%LOCALAPPDATA%` on Windows).
     local_data = 5,
+    /// The user's Documents folder.
     document = 6,
+    /// The user's Downloads folder.
     download = 7,
+    /// The user's Pictures folder.
     picture = 8,
+    /// The shared Public folder (Windows `%PUBLIC%`, macOS `~/Public`).
     public = 9,
+    /// The user's Videos folder.
     video = 10,
+    /// The app's bundled resources (`<exe dir>/resources`). Read-only in a released build.
     resource = 11,
+    /// The OS temporary directory. Everything here may vanish between runs.
     temp = 12,
+    /// `<config>/<bundle identifier>` — this application's own configuration.
     app_config = 13,
+    /// `<data>/<bundle identifier>` — this application's own data.
     app_data = 14,
+    /// `<local_data>/<bundle identifier>` — machine-local application data.
     app_local_data = 15,
+    /// `<cache>/<bundle identifier>` — this application's cache.
     app_cache = 16,
+    /// `<data>/<bundle identifier>/logs` — where `tauri-plugin-log` writes.
     app_log = 17,
+    /// The user's Desktop folder.
     desktop = 18,
+    /// The directory containing the running executable.
     executable = 19,
+    /// The user's font directory (`~/.local/share/fonts` / `~/Library/Fonts`).
     font = 20,
+    /// The user's home directory.
     home = 21,
+    /// The runtime directory (`$XDG_RUNTIME_DIR`); falls back to `temp` where the OS has none.
     runtime = 22,
+    /// A scratch directory for templates shipped with the app.
     template = 23,
 };
 

@@ -176,9 +176,14 @@ pub const Accelerator = struct {
     }
 };
 
+/// `ACCEL` flag: `key` is a virtual-key code (`VK_*`) rather than a character. Every non-alphanumeric
+/// key needs it, hence the default for parsed accelerators.
 pub const FVIRTKEY: u8 = 0x01;
+/// `ACCEL` flag: Shift is part of the shortcut (`CmdOrCtrl+Shift+K`).
 pub const FSHIFT: u8 = 0x04;
+/// `ACCEL` flag: Control is part of the shortcut.
 pub const FCONTROL: u8 = 0x08;
+/// `ACCEL` flag: Alt (`Option`) is part of the shortcut.
 pub const FALT: u8 = 0x10;
 
 /// `ACCEL` entry for `CreateAcceleratorTableW`: `virt` holds the `fVirt` flags, `key` the virtual-key
@@ -199,9 +204,13 @@ pub const Win32Accel = struct {
 pub const MAC_SHIFT: u8 = 1 << 0;
 /// `NSEventModifierFlags` bit for Control, folded into the shim's compact mask.
 pub const MAC_CONTROL: u8 = 1 << 1;
+/// `NSEventModifierFlags` bit for Option/Alt, folded into the shim's compact mask.
 pub const MAC_OPTION: u8 = 1 << 2;
+/// `NSEventModifierFlags` bit for Command — the modifier `CmdOrCtrl` resolves to on macOS.
 pub const MAC_COMMAND: u8 = 1 << 3;
 
+/// `NSMenuItem` shortcut: a modifier mask plus either a literal `keyEquivalent` character or a
+/// virtual key code for keys that have no printable equivalent.
 pub const MacosAccel = struct {
     modifier_mask: u8,
     /// Single-character `keyEquivalent`, or an empty string when the key has no direct equivalent

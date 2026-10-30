@@ -64,12 +64,19 @@ pub const HeaderPair = struct {
 /// Lifetime of slice fields is valid for the duration of `SchemeHandler.call`; handlers that dispatch
 /// asynchronously onto worker threads simply dupe the slices they need and complete later via `RequestId`.
 pub const SchemeRequest = struct {
+    /// Token to answer with (`completeRequest` / `zts_webview_complete_request`).
     request_id: RequestId,
+    /// Window the request came from.
     window_id: WindowId,
+    /// Scheme without `://` (`tauri`, `ipc`, `asset`).
     scheme: []const u8,
+    /// HTTP method (`GET`, `POST`, …).
     method: []const u8,
+    /// Full request URI, still percent-encoded.
     uri: []const u8,
+    /// Request headers, borrowed for the duration of the handler call.
     headers: []const HeaderPair = &.{},
+    /// Request body bytes (empty for `GET`).
     body: []const u8 = "",
 
     pub fn header(self: SchemeRequest, target_name: []const u8) ?[]const u8 {
@@ -83,9 +90,12 @@ pub const SchemeRequest = struct {
 /// Custom response envelope supporting full HTTP status, extra headers (e.g. `Content-Range`,
 /// `Tauri-Response`), and zero-copy `OwnedBytes` payload completion.
 pub const SchemeResponse = struct {
+    /// HTTP status (`200`, `404`, …).
     status_code: u16 = 200,
+    /// `Content-Type` header value.
     content_type: []const u8 = "application/octet-stream",
     extra_headers: []const HeaderPair = &.{},
+    /// Response bytes; ownership transfers to the engine.
     body: OwnedBytes,
 
     pub fn fromOutgoing(out: OutgoingResponse) SchemeResponse {
@@ -211,6 +221,7 @@ pub const CloseHandler = struct {
 /// (cairo, `NSBitmapImageRep`, WebView2 `CapturePreview` all encode it natively); the enum exists so
 /// a future `.jpeg` can be added without changing the ABI.
 pub const CaptureFormat = enum(u32) {
+    /// PNG — the only format every backend can encode natively.
     png = 0,
 };
 
@@ -220,9 +231,13 @@ pub const CaptureFormat = enum(u32) {
 /// never frees bytes it has already handed out, and `closeWindow()` / `deinit()` free anything the
 /// caller left behind (verified with `std.testing.allocator`).
 pub const Capture = struct {
+    /// PNG bytes. Freed by `deinit()`, never by the backend.
     bytes: []u8,
+    /// Width parsed from the PNG's IHDR chunk.
     width: u32,
+    /// Height parsed from the PNG's IHDR chunk.
     height: u32,
+    /// Allocator that owns `bytes`.
     allocator: Allocator,
 
     /// Takes ownership of `bytes`; returns `error.PlatformFailure` (and frees them) when the buffer
@@ -255,16 +270,27 @@ pub const Capture = struct {
 pub const WindowConfig = struct {
     title: []const u8 = "Z-Ts Window",
     size: LogicalSize = .wh(800, 600),
+    /// Lower bound for user resizing.
     min_size: ?LogicalSize = null,
+    /// Upper bound for user resizing.
     max_size: ?LogicalSize = null,
+    /// Initial top-left corner; `null` lets the window manager place it.
     position: ?LogicalPoint = null,
+    /// Whether the user may resize the window.
     resizable: bool = true,
+    /// Draw the native title bar and frame.
     decorations: bool = true,
+    /// Transparent background; needs a compositor.
     transparent: bool = false,
+    /// Keep the window above others.
     always_on_top: bool = false,
+    /// Map the window immediately; `false` creates it hidden.
     visible: bool = true,
+    /// Start fullscreen.
     fullscreen: bool = false,
+    /// Allow the WebView inspector for this window.
     devtools: bool = false,
+    /// Painted before the first frame, so a dark theme does not flash white.
     background_color: ?Color = null,
     /// Optional native parent widget/view handle (`*GtkWidget` / `NSView*` / `HWND`) for embedding
     /// a WebView inside an existing game engine / broadcast dock window!

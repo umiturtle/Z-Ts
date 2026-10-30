@@ -762,3 +762,12 @@ html[data-theme="dark"] .zk-n { color: #d2a8ff; }
 }
 .internals-list a { font-weight: 500; }
 .internals-list p { margin: .15rem 0 0; color: var(--fg-muted); font-size: .84rem; }
+
+/* API: member caption — the coverage figure counts struct fields and enum cases, so each type says
+   how many members it has and how many of them lack a `///` line. */
+.api-members-cap {
+  margin: 0.5rem 0 0.35rem;
+  font-size: .78rem;
+  color: var(--fg-muted);
+  letter-spacing: 0.01em;
+}

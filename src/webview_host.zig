@@ -10,6 +10,8 @@ const testing = std.testing;
 const core = @import("zts_core");
 const webview = @import("zts_webview");
 
+/// `zts_core.Host` implemented on a `zts_webview.Engine`: windows, IPC, eval and capture all go
+/// through the WebView backend, so `zts_tauri` plugins run unchanged on top of it.
 pub const WebviewHost = struct {
     engine: *webview.Engine,
 

@@ -94,85 +94,124 @@ pub const BaseOptions = struct {
 /// `plugin:fs|write_file` options. `create_new` refuses to overwrite an existing file; `append`
 /// seeks to the end instead of truncating.
 pub const WriteOptions = struct {
+    /// `BaseDirectory` the path is relative to; `null` = already absolute.
     base_dir: ?u8 = null,
+    /// Seek to the end instead of truncating an existing file.
     append: bool = false,
+    /// Create the file when it does not exist.
     create: bool = true,
+    /// Fail (`AlreadyExists`) instead of overwriting an existing file.
     create_new: bool = false,
 };
 
 /// `plugin:fs|open` flags, mirroring Rust's `OpenOptions`. A combination that cannot be satisfied
 /// (`write` without `create` on a missing file) fails with the OS error, not a panic.
 pub const OpenOptions = struct {
+    /// `BaseDirectory` the path is relative to; `null` = already absolute.
     base_dir: ?u8 = null,
+    /// Open for reading.
     read: bool = true,
+    /// Open for writing.
     write: bool = false,
+    /// Start writes at the end of the file.
     append: bool = false,
+    /// Discard existing contents on open.
     truncate: bool = false,
+    /// Create the file when it does not exist.
     create: bool = false,
+    /// Fail (`AlreadyExists`) instead of reusing an existing file.
     create_new: bool = false,
 };
 
 /// `plugin:fs|read_dir` options — only the base directory, kept as a struct so future fields (paging,
 /// depth) do not change the command signature.
 pub const ReadDirOptions = struct {
+    /// `BaseDirectory` the directory path is relative to; `null` = already absolute.
     base_dir: ?u8 = null,
 };
 
 /// `plugin:fs|mkdir` options. `recursive` creates missing parents, subject to the same scope check.
 pub const MkdirOptions = struct {
+    /// `BaseDirectory` the path is relative to.
     base_dir: ?u8 = null,
+    /// Create missing parent directories; no error when the directory already exists.
     recursive: bool = false,
 };
 
 /// `plugin:fs|remove` options. `recursive` is required to delete a non-empty directory.
 pub const RemoveOptions = struct {
+    /// `BaseDirectory` the path is relative to.
     base_dir: ?u8 = null,
+    /// Delete a non-empty directory and everything below it.
     recursive: bool = false,
 };
 
 /// `plugin:fs|rename` options: each side may live under a different `BaseDirectory`, and both are
 /// checked independently against the scope.
 pub const RenameOptions = struct {
+    /// `BaseDirectory` the source path is relative to.
     old_path_base_dir: ?u8 = null,
+    /// `BaseDirectory` the destination path is relative to (checked separately).
     new_path_base_dir: ?u8 = null,
 };
 
 /// `plugin:fs|copy_file` options: source and destination may use different base directories.
 pub const CopyOptions = struct {
+    /// `BaseDirectory` the source path is relative to.
     from_path_base_dir: ?u8 = null,
+    /// `BaseDirectory` the destination path is relative to (checked separately).
     to_path_base_dir: ?u8 = null,
 };
 
 /// Mirrors `plugins-workspace/plugins/fs/src/commands.rs` `FileInfo` (camelCase on the wire).
 pub const FileInfo = struct {
+    /// The path is a regular file.
     is_file: bool,
+    /// The path is a directory.
     is_directory: bool,
+    /// The path itself is a symlink (the other flags then describe its target).
     is_symlink: bool,
+    /// Size in bytes (`0` for directories on most platforms).
     size: rpc.SafeInt,
     /// Milliseconds since the Unix epoch, like JavaScript's `Date.now()`.
     mtime: ?rpc.SafeInt = null,
+    /// Last access time in milliseconds since the Unix epoch.
     atime: ?rpc.SafeInt = null,
     /// `Io.File.Stat` exposes no birth time; always `null` until a backend provides one.
     birthtime: ?rpc.SafeInt = null,
+    /// The file has no write permission for the current user.
     readonly: bool = false,
     /// Upstream v2 still spells this field `fileAttribues` (sic); kept verbatim for compatibility.
     file_attribues: ?u32 = null,
+    /// Device id (POSIX).
     dev: ?rpc.SafeInt = null,
+    /// Inode number (POSIX).
     ino: ?rpc.SafeInt = null,
+    /// Permission bits (POSIX `st_mode`).
     mode: ?u32 = null,
+    /// Hard-link count (POSIX).
     nlink: ?rpc.SafeInt = null,
+    /// Owner user id (POSIX).
     uid: ?u32 = null,
+    /// Owner group id (POSIX).
     gid: ?u32 = null,
+    /// Device id for special files (POSIX).
     rdev: ?rpc.SafeInt = null,
+    /// Preferred I/O block size, in bytes (POSIX).
     blksize: ?rpc.SafeInt = null,
+    /// Number of 512-byte blocks allocated (POSIX).
     blocks: ?rpc.SafeInt = null,
 };
 
 /// One entry of `readDir()`, matching `@tauri-apps/api/fs`'s `DirEntry` shape.
 pub const DirEntry = struct {
+    /// Entry name only, without the parent path.
     name: []const u8,
+    /// Whether the entry is a directory.
     is_directory: bool,
+    /// Whether the entry is a regular file.
     is_file: bool,
+    /// Whether the entry is a symlink; the other flags then describe its target.
     is_symlink: bool,
 };
 
@@ -217,8 +256,11 @@ pub fn toFileInfo(stat: Io.File.Stat) FileInfo {
 
 /// An open file, stored in the shared [`resources.ResourceTable`].
 pub const FileHandle = struct {
+    /// Allocator that owns `path`.
     allocator: Allocator,
+    /// IO reactor used for reads, writes and the final close.
     io: Io,
+    /// The open OS file. Closed by `deinit()`.
     file: Io.File,
     /// Logical cursor, advanced by `read`/`write` and repositioned by `seek`.
     pos: u64 = 0,
@@ -237,12 +279,17 @@ pub const FileHandle = struct {
 
 /// RPC state for the `plugin:fs|*` namespace.
 pub const FsState = struct {
+    /// Allocator that owns the scope roots and handle table.
     allocator: Allocator,
+    /// IO reactor used for every filesystem call.
     io: Io,
+    /// Allow-list every path is resolved through. An empty scope denies everything.
     scope: Scope,
+    /// Shared `plugin:resources` table: an open file is handed to JS as a closeable resource.
     resources: *resources.ResourceTable,
     /// Resolves relative paths and `BaseDirectory` discriminants (`plugin:path|*`).
     paths: *path.PathState,
+    /// Largest single read/write payload; bigger requests fail with `TooLarge`.
     max_io_bytes: usize = default_max_io_bytes,
 
     pub fn init(

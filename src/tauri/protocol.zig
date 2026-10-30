@@ -185,9 +185,13 @@ pub fn classifyUri(uri: []const u8) ParsedSchemeTarget {
 /// the only per-engine value is the CSRF `invoke_key` inside the config — so the same router serves
 /// every window.
 pub const ProtocolRouter = struct {
+    /// Allocator for per-request scratch (paths, bodies).
     allocator: Allocator,
+    /// IO reactor used for disk reads of dev-mode assets.
     io: Io,
+    /// CSRF key, asset bundle and CSP for this run.
     config: ProtocolConfig,
+    /// Command table consulted for every `ipc://` request.
     rpc_handler: rpc.Handler,
 
     pub fn init(

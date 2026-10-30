@@ -25,19 +25,25 @@ pub const WindowPluginError = core.HostError || error{
 
 /// Width/height pair as it arrives on the wire, in the unit named by the enclosing union arm.
 pub const RawDims = struct {
+    /// Width in the unit named by the caller (logical for `.Logical`, device pixels for `.Physical`).
     width: f64,
+    /// Height in the same unit as `width`.
     height: f64,
 };
 
 /// X/Y pair as it arrives on the wire.
 pub const RawPoint = struct {
+    /// X position in the unit named by the caller.
     x: f64,
+    /// Y position in the same unit as `x`.
     y: f64,
 };
 
 /// Wire-compatible with `@tauri-apps/api/dpi` `new Size(...)` (`{"Logical":{...}} | {"Physical":{...}}`).
 pub const WireSize = union(enum) {
+    /// Size in logical (CSS) pixels — the unit a page lays out in.
     Logical: RawDims,
+    /// Size in device pixels; scaled by the window's factor before use.
     Physical: RawDims,
 
     pub const json_union: rpc.UnionConfig = .{ .style = .external };
@@ -53,7 +59,9 @@ pub const WireSize = union(enum) {
 
 /// Wire-compatible with `@tauri-apps/api/dpi` `new Position(...)` (`{"Logical":{...}} | {"Physical":{...}}`).
 pub const WirePosition = union(enum) {
+    /// Position in logical (CSS) pixels.
     Logical: RawPoint,
+    /// Position in device pixels.
     Physical: RawPoint,
 
     pub const json_union: rpc.UnionConfig = .{ .style = .external };
@@ -70,22 +78,30 @@ pub const WirePosition = union(enum) {
 /// Physical (device) pixels as reported by the host — what `@tauri-apps/api` expects back from
 /// `innerSize()`. Divide by the scale factor to get the logical size the page was laid out in.
 pub const PhysicalSizeDto = struct {
+    /// Width in device pixels.
     width: i32,
+    /// Height in device pixels.
     height: i32,
 };
 
 /// Physical (device) pixel position of the window's outer top-left corner.
 pub const PhysicalPosDto = struct {
+    /// X in device pixels, relative to the screen origin.
     x: i32,
+    /// Y in device pixels, relative to the screen origin.
     y: i32,
 };
 
 /// `null` means "no constraint on that side", which is different from `0` (a window may not be
 /// resized to 0×0 but the constraint itself is absent).
 pub const SizeConstraintsDto = struct {
+    /// Smallest allowed width in logical pixels; `null` = unconstrained.
     min_width: ?f64 = null,
+    /// Smallest allowed height; `null` = unconstrained.
     min_height: ?f64 = null,
+    /// Largest allowed width; `null` = unconstrained.
     max_width: ?f64 = null,
+    /// Largest allowed height; `null` = unconstrained.
     max_height: ?f64 = null,
 };
 
@@ -93,25 +109,45 @@ pub const SizeConstraintsDto = struct {
 /// keeping exists because `@tauri-apps/api` can read back properties (`isMaximized()`,
 /// `scaleFactor()`, …) that a WebView API cannot answer synchronously.
 pub const TrackedWindow = struct {
+    /// Live `WindowId`; `0` once the window is gone.
     id: core.WindowId,
+    /// Stable JS-visible label (`"main"`, `"settings"`, …). Owned copy, never borrowed.
     label: []u8,
+    /// Last title set through the API (the OS may have been changed externally).
     title: []u8,
+    /// Client-area size in logical pixels, as last reported by the backend.
     size: core.LogicalSize = .wh(800, 600),
+    /// Outer top-left corner in logical pixels.
     position: core.LogicalPoint = .xy(0, 0),
+    /// Device pixel ratio last reported by the backend (1.0 = no HiDPI).
     scale_factor: f64 = 1.0,
+    /// Whether the window is fullscreen.
     fullscreen: bool = false,
+    /// Whether the window is minimised.
     minimized: bool = false,
+    /// Whether the window is maximised.
     maximized: bool = false,
+    /// Whether the window currently has keyboard focus.
     focused: bool = true,
+    /// Whether the native title bar is drawn.
     decorated: bool = true,
+    /// Whether the user may resize the window.
     resizable: bool = true,
+    /// Whether the maximise button is enabled.
     maximizable: bool = true,
+    /// Whether the minimise button is enabled.
     minimizable: bool = true,
+    /// Whether the close button is enabled.
     closable: bool = true,
+    /// Whether the window is mapped.
     visible: bool = true,
+    /// Whether the window accepts input (`setEnabled`).
     enabled: bool = true,
+    /// Whether the window stays above others.
     always_on_top: bool = false,
+    /// How many `startDragging()` calls are outstanding; the OS drag ends when it returns to 0.
     drag_count: usize = 0,
+    /// Title-bar theme requested for this window.
     theme: []const u8 = "dark",
 
     fn deinit(self: *TrackedWindow, allocator: Allocator) void {
@@ -123,9 +159,13 @@ pub const TrackedWindow = struct {
 /// Label ⇄ `WindowId` map for `plugin:window`. Guarded by a mutex because a command may be
 /// dispatched from the event loop while a worker thread reads a label.
 pub const WindowRegistry = struct {
+    /// Allocator that owns the labels, titles and entry array.
     allocator: Allocator,
+    /// IO reactor used for the mutex.
     io: Io,
+    /// Guards `entries`: commands run on the event loop while worker threads may read.
     mu: Io.Mutex = .init,
+    /// Every live window, in creation order.
     entries: std.ArrayList(TrackedWindow) = .empty,
 
     pub fn init(allocator: Allocator, io: Io) WindowRegistry {

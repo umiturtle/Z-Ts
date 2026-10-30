@@ -44,21 +44,37 @@ pub const WindowTheme = enum {
 
 /// Declarative initial window creation specification.
 pub const WindowSpec = struct {
+    /// Window label the page and `@tauri-apps/api` address it by. Two windows must not share one.
     label: []const u8 = "main",
+    /// Initial title-bar text. Empty is allowed; the OS then shows the app name.
     title: []const u8 = "Z-Ts Application",
+    /// Initial client-area size in logical (CSS) pixels.
     size: LogicalSize = .wh(800, 600),
+    /// Lower bound for user resizing; `null` leaves it to the OS.
     min_size: ?LogicalSize = null,
+    /// Upper bound for user resizing; `null` leaves it to the OS.
     max_size: ?LogicalSize = null,
+    /// Top-left corner in logical pixels; `null` lets the window manager place the window.
     position: ?LogicalPoint = null,
+    /// Whether the user may resize the window (programmatic resizes still work).
     resizable: bool = true,
+    /// Draw the native title bar and frame. `false` is how a custom title bar is built.
     decorations: bool = true,
+    /// Make the window background transparent. Requires a compositor.
     transparent: bool = false,
+    /// Keep the window above other windows.
     always_on_top: bool = false,
+    /// Map the window immediately. `false` creates it hidden (splash → main window flows).
     visible: bool = true,
+    /// Start fullscreen.
     fullscreen: bool = false,
+    /// Allow opening the WebView inspector for this window.
     devtools: bool = false,
+    /// Painted behind the page, so the first frame is not white on a dark theme.
     background_color: ?Color = null,
+    /// Which title-bar appearance to request.
     theme: WindowTheme = .system,
+    /// First navigation target. The default is the embedded `dist/` bundle, not a URL.
     initial_url: []const u8 = "tauri://localhost/",
 };
 

@@ -398,6 +398,9 @@ const close_vtable = CloseIface.VTable{
 // The backend
 // ---------------------------------------------------------------------------
 
+/// Win32 + Direct `WebView2` backend. The COM vtables are declared by hand
+/// (`webview2_com.zig`) and the runtime is found through the registry, so no
+/// `WebView2Loader.dll` ships with the app.
 pub const WindowsWebView2Backend = struct {
     allocator: Allocator,
     io: Io,

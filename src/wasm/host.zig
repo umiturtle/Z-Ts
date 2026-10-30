@@ -46,11 +46,15 @@ pub fn reportPanic(msg: []const u8, first_trace_addr: ?usize) noreturn {
     @trap();
 }
 
+/// Where `eval()` sends the script when running natively: the WASM build calls the imported
+/// `zts_host_eval_js`, tests record it. One indirection keeps the runtime free of `if (builtin…)`.
 pub const EvalHook = struct {
     ctx: ?*anyopaque = null,
     callFn: *const fn (ctx: ?*anyopaque, script: []const u8) void,
 };
 
+/// `zts_core.Host` for the browser: it records everything (`RecordingHost`) except `eval`, which has
+/// to reach real JavaScript. That is what lets the same plugin code run in a tab and in a test.
 pub const WasmHost = struct {
     allocator: Allocator,
     backing: core.RecordingHost,

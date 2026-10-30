@@ -26,11 +26,17 @@ pub const EventError = core.HostError || error{
 
 /// Wire-compatible with Tauri v2 `#[serde(tag = "kind")] enum EventTarget`.
 pub const EventTarget = union(enum) {
+    /// Every listener, whatever window it belongs to. Used for app-wide broadcasts.
     Any: void,
+    /// Application-level listeners only (the `listen()` calls that passed no target).
     App: void,
+    /// Every window whose label matches the pattern (glob).
     AnyLabel: struct { label: []const u8 },
+    /// The window with exactly this label.
     Window: struct { label: []const u8 },
+    /// The webview with this label (same set as `Window` today, kept for v2 wire parity).
     Webview: struct { label: []const u8 },
+    /// The window/webview pair with this label (`@tauri-apps/api`'s default target).
     WebviewWindow: struct { label: []const u8 },
 
     pub const json_union: rpc.UnionConfig = .{
@@ -90,13 +96,21 @@ const NativeListener = struct {
 /// listeners, plus the label resolver used to route `AnyLabel` / `Window` targets. Mutations are
 /// mutex-guarded because `emit()` may come from any thread.
 pub const EventBus = struct {
+    /// Allocator that owns listener names and labels.
     allocator: Allocator,
+    /// IO reactor used for the mutex.
     io: Io,
+    /// Guards the listener lists: `emit()` may be called from any thread.
     mu: Io.Mutex = .init,
+    /// Counter behind the ids `listen()` returns.
     next_id: u32 = 1,
+    /// Listeners registered from the page.
     js_listeners: std.ArrayList(JsListener) = .empty,
+    /// Listeners registered from Zig.
     native_listeners: std.ArrayList(NativeListener) = .empty,
+    /// Resolves a `WindowId` to its label, so `AnyLabel` / `Window` targeting can match.
     window_labels: ?*const fn (userdata: ?*anyopaque, Allocator, core.WindowId) Allocator.Error!?[]u8 = null,
+    /// Opaque pointer passed to `window_labels`.
     window_labels_ctx: ?*anyopaque = null,
 
     pub fn init(allocator: Allocator, io: Io) EventBus {

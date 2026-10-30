@@ -64,11 +64,18 @@ pub const Audience = enum { user, internal };
 /// File names that are plumbing rather than API: hand-written FFI tables and contract tests.
 /// Kept as an explicit list (not a heuristic) so the split is reviewable.
 const internal_modules = [_][]const u8{
+    // Hand-written FFI tables: every line is a `extern fn` or a `*const fn` signature.
     "gtk_bindings.zig",
     "win32.zig",
     "webview2_com.zig",
     "webview2_loader.zig",
     "windows_util.zig",
+    // Per-OS backend implementations. They are public so an embedder *can* reach them, but the
+    // documented entry point is `mod.zig` (`Engine` + `BackendKind`); their fields are native handles
+    // (`*GtkWidget`, `*ICoreWebView2`, …) that no reader sets by hand.
+    "linux.zig",
+    "macos.zig",
+    "windows.zig",
 };
 
 pub fn audienceOf(path: []const u8) Audience {
@@ -709,12 +716,19 @@ pub fn isAlias(decl: Decl) bool {
 pub const Coverage = struct {
     total: usize = 0,
     documented: usize = 0,
+    /// Struct fields and enum cases, already included in `total` / `documented`. Kept separately so
+    /// the page can explain a low percentage instead of just showing it: a `WindowConfig` with 24
+    /// fields is one declaration and 24 members.
+    member_total: usize = 0,
+    member_documented: usize = 0,
     internal_total: usize = 0,
     internal_documented: usize = 0,
 
     pub fn add(self: *Coverage, other: Coverage) void {
         self.total += other.total;
         self.documented += other.documented;
+        self.member_total += other.member_total;
+        self.member_documented += other.member_documented;
         self.internal_total += other.internal_total;
         self.internal_documented += other.internal_documented;
     }
@@ -723,6 +737,8 @@ pub const Coverage = struct {
 pub fn coverageOf(pkg: Package) Coverage {
     var total: usize = 0;
     var documented: usize = 0;
+    var member_total: usize = 0;
+    var member_documented: usize = 0;
     var internal_total: usize = 0;
     var internal_documented: usize = 0;
     for (pkg.modules) |module| {
@@ -745,7 +761,11 @@ pub fn coverageOf(pkg: Package) Coverage {
                     if (member.doc.len > 0) internal_documented += 1;
                 } else {
                     total += 1;
-                    if (member.doc.len > 0) documented += 1;
+                    member_total += 1;
+                    if (member.doc.len > 0) {
+                        documented += 1;
+                        member_documented += 1;
+                    }
                 }
             }
         }
@@ -753,6 +773,8 @@ pub fn coverageOf(pkg: Package) Coverage {
     return .{
         .total = total,
         .documented = documented,
+        .member_total = member_total,
+        .member_documented = member_documented,
         .internal_total = internal_total,
         .internal_documented = internal_documented,
     };
@@ -931,7 +953,17 @@ fn renderDecl(
     }
 
     if (decl.members.len > 0) {
-        try writer.writeAll("<div class=\"api-members\">\n");
+        var undocumented: usize = 0;
+        for (decl.members) |member| {
+            if (member.doc.len == 0) undocumented += 1;
+        }
+        // The coverage figure counts fields and enum cases, so say so right where they appear:
+        // otherwise "24% documented" reads like the page is half-empty when only the prose is missing.
+        try writer.print("<p class=\"api-members-cap\">メンバ {d} 件", .{decl.members.len});
+        if (undocumented > 0) {
+            try writer.print(" · うち {d} 件はドキュメントコメント未記述", .{undocumented});
+        }
+        try writer.writeAll("</p>\n<div class=\"api-members\">\n");
         for (decl.members) |member| {
             const anchor = try std.fmt.allocPrint(arena, "{s}.{s}", .{ decl.name, member.name });
             try writer.print("<div class=\"api-member\" id=\"{s}\">\n<div class=\"api-member-sig\"><span class=\"api-kind\">{s}</span><code>", .{ anchor, kindGlyph(member.kind) });
@@ -1071,6 +1103,13 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
             "<p class=\"api-stats\">公開モジュール {d} 件 · 公開宣言 {d} 件 · ドキュメントコメント {d} 件（{d}%）</p>\n",
             .{ userModuleCount(pkg), coverage.total, coverage.documented, percent(coverage.documented, coverage.total) },
         );
+        if (coverage.member_total > 0) {
+            try writer.print(
+                "<p class=\"api-blurb\">内訳: 宣言 {d} 件 + 型メンバ・enum ケース {d} 件 = {d} 件。" ++
+                    "文書化率は両者の合計に対して数えています。</p>\n",
+                .{ coverage.total - coverage.member_total, coverage.member_total, coverage.total },
+            );
+        }
         if (coverage.internal_total > 0) {
             try writer.print(
                 "<p class=\"api-blurb\">このほかに内部モジュール（FFI 宣言・契約テスト）が {d} 件あります。" ++
@@ -1136,6 +1175,12 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
                 "（シグネチャ・<code>///</code> ドキュメント・ソース行へのリンク）。ドキュメントコメントが書かれているのは {d} 件（{d}%）。</p>\n",
             .{ packages_in.len, module_count, all.total, all.documented, percent(all.documented, all.total) },
         );
+        if (all.member_total > 0) {
+            try writer.print(
+                "<p class=\"api-blurb\">内訳: 宣言 {d} 件 + 型メンバ・enum ケース {d} 件 = {d} 件。</p>\n",
+                .{ all.total - all.member_total, all.member_total, all.total },
+            );
+        }
         if (all.internal_total > 0) {
             try writer.print(
                 "<p class=\"api-blurb\">FFI バインディングや契約テスト（内部モジュール {d} 宣言）は、この数値にも A–Z 索引にも含めていません。" ++
@@ -1459,6 +1504,9 @@ test "audienceOf separates FFI tables and contract tests from the reader-facing 
     try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/win32.zig"));
     try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/webview2_com.zig"));
     try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/capture_test.zig"));
+    // Per-OS backends: reachable, but the documented door is `mod.zig`.
+    try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/linux.zig"));
+    try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/windows.zig"));
 }
 
 test "coverageOf keeps internal declarations out of the percentage" {

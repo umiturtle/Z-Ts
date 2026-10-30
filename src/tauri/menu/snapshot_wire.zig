@@ -45,8 +45,11 @@ pub const max_depth = 8;
 /// 16-bit id, so the useful range is `1..0xEFFF` (the top of the word is reserved by the system).
 pub const max_command = 0xEFFF;
 
+/// Which native encoding `encode()` should produce. The snapshot itself is platform-neutral; only
+/// mnemonics (`_` vs `&`) and the accelerator representation differ.
 pub const Platform = enum { gtk, macos, windows };
 
+/// Entry discriminant in the C ABI struct (`ZtsMenuEntry.kind`). Values are fixed by the shims.
 pub const Kind = enum(u8) {
     submenu = 0,
     item = 1,
@@ -102,6 +105,7 @@ pub const Role = enum(u8) {
 
 /// Bit flags in `WireEntry.flags`.
 pub const flag_enabled: u8 = 1 << 0;
+/// `WireEntry.flags` bit 1: the menu item is checked.
 pub const flag_checked: u8 = 1 << 1;
 
 /// `ZtsMenuEntry` on the C side (`src/tauri/menu/native_macos_shim.m`). Field order, padding and
