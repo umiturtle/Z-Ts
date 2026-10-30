@@ -25,6 +25,7 @@ const Allocator = std.mem.Allocator;
 const markdown = @import("markdown.zig");
 const site = @import("site.zig");
 const demos = @import("demos.zig");
+const apidoc = @import("apidoc.zig");
 
 /// One Markdown file of the corpus plus the sidebar group it belongs to.
 const Source = struct {
@@ -41,6 +42,10 @@ pub const SiteReport = struct {
     demo_files: usize = 0,
     /// Asset URLs (`src=` / `href=`) verified to exist in the output tree.
     assets: usize = 0,
+    /// Pages of the generated API reference (`M5-07`).
+    api_pages: usize = 0,
+    /// Public declarations that the API reference documented.
+    api_decls: usize = 0,
 };
 
 pub fn main(init: std.process.Init) !u8 {
@@ -74,8 +79,8 @@ pub fn main(init: std.process.Init) !u8 {
     };
 
     std.debug.print(
-        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d}\n",
-        .{ report.pages, report.links, report.assets, report.words, report.bytes, report.demo_files },
+        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d}\n",
+        .{ report.pages, report.links, report.assets, report.words, report.bytes, report.demo_files, report.api_pages, report.api_decls },
     );
     return 0;
 }
@@ -111,8 +116,12 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         report.words += countWords(out.document.plain);
     }
 
+    // 1b. API reference, generated from the Zig sources themselves (`M5-07`). It is built before
+    //     the sidebar because the sidebar lists one entry per package.
+    const api = try buildApiPages(arena, io);
+
     // 2. Sidebar: fixed group order, entries sorted by source path.
-    const groups = try buildGroups(arena, rendered);
+    const groups = try buildGroups(arena, rendered, api.packages);
 
     // 2b. Section landing pages: `docs/tasks/index.html` lists every task with a one-line teaser,
     //     so a link to `docs/tasks/` (a directory) still works on the published site.
@@ -123,12 +132,17 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     //    site (`.zig` sources, workflows, C files) — those are pointed at GitHub instead.
     var written: std.ArrayListUnmanaged([]const u8) = .empty;
     try written.append(arena, "index.html");
+    try written.append(arena, internals_href);
     for (rendered) |page| try written.append(arena, page.href);
     for (sections) |section| try written.append(arena, try std.fmt.allocPrint(arena, "{s}/index.html", .{section.dir}));
+    for (api.pages) |page| try written.append(arena, page.href);
 
     var refs: std.ArrayListUnmanaged(site.LinkRef) = .empty;
     for (rendered) |page| {
         for (page.document.links) |link| try refs.append(arena, .{ .from = page.href, .href = link.href });
+    }
+    for (api.pages) |page| {
+        for (page.links) |link| try refs.append(arena, .{ .from = page.href, .href = link.href });
     }
     const first_pass = try site.checkLinks(arena, written.items, refs.items);
 
@@ -172,6 +186,9 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         for (rendered) |page| {
             for (page.document.links) |link| try refs.append(arena, .{ .from = page.href, .href = link.href });
         }
+        for (api.pages) |page| {
+            for (page.links) |link| try refs.append(arena, .{ .from = page.href, .href = link.href });
+        }
         const second_pass = try site.checkLinks(arena, written.items, refs.items);
         if (second_pass.broken.len > 0) {
             std.debug.print("docsite: {d} broken link(s) after rewriting\n", .{second_pass.broken.len});
@@ -191,10 +208,15 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     defer out_dir.close(io);
 
     for (rendered) |page| {
+        const body = if (std.mem.eql(u8, page.group, internals_group))
+            try std.fmt.allocPrint(arena, "{s}{s}", .{ try internalsBanner(arena, page.href), page.document.html })
+        else
+            page.document.html;
         const html = try site.renderPage(arena, .{
+            .title = page.title,
             .active_href = page.href,
             .groups = groups,
-            .body = page.document.html,
+            .body = body,
             .toc = page.toc,
             .plain = page.document.plain,
         }, page.href);
@@ -215,8 +237,37 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         report.bytes += html.len;
     }
 
+    // 4b. The API reference pages (`docs/api/…`).
+    for (api.pages) |page| {
+        const html = try site.renderPage(arena, .{
+            .title = page.title,
+            .active_href = page.href,
+            .groups = groups,
+            .body = page.body,
+        }, page.href);
+        try writeInDir(io, arena, out_dir, page.href, html);
+        report.pages += 1;
+        report.bytes += html.len;
+    }
+    report.api_pages = api.pages.len;
+    report.api_decls = api.decl_count;
+
+    // 4c. The one page that lists everything the sidebar deliberately no longer shows.
+    {
+        const body = try renderInternalsBody(arena, rendered);
+        const html = try site.renderPage(arena, .{
+            .title = "内部資料（設計・ADR・タスク）",
+            .active_href = internals_href,
+            .groups = groups,
+            .body = body,
+        }, internals_href);
+        try writeInDir(io, arena, out_dir, internals_href, html);
+        report.pages += 1;
+        report.bytes += html.len;
+    }
+
     // 5. Landing page, assets, `.nojekyll` and the search index.
-    const landing = try renderLanding(arena, groups);
+    const landing = try renderLanding(arena, groups, api);
     try writeInDir(io, arena, out_dir, "index.html", landing);
     report.bytes += landing.len;
     report.pages += 1;
@@ -235,10 +286,29 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         report.bytes += bytes.len;
     }
 
-    const search_entries = try arena.alloc(site.SearchEntry, rendered.len);
-    for (rendered, search_entries) |page, *entry| {
-        entry.* = .{ .href = page.href, .title = page.title, .group = page.group, .text = page.document.plain };
+    // Search is for readers: the internals (design notes, ADRs, task sheets) are deliberately not
+    // indexed, and the API reference is indexed down to the individual declaration.
+    var search_list: std.ArrayListUnmanaged(site.SearchEntry) = .empty;
+    for (rendered) |page| {
+        if (std.mem.eql(u8, page.group, internals_group)) continue;
+        try search_list.append(arena, .{ .href = page.href, .title = page.title, .group = page.group, .text = page.document.plain });
     }
+    for (api.pages) |page| {
+        try search_list.append(arena, .{ .href = page.href, .title = page.title, .group = "API", .text = page.plain });
+    }
+    for (api.packages) |pkg| {
+        for (pkg.modules) |module| {
+            for (module.decls) |decl| {
+                try search_list.append(arena, .{
+                    .href = try std.fmt.allocPrint(arena, "docs/api/{s}/{s}.html#{s}", .{ pkg.spec.name, module.name, decl.name }),
+                    .title = try std.fmt.allocPrint(arena, "{s}.{s}", .{ module.name, decl.name }),
+                    .group = "API",
+                    .text = try apidoc.firstParagraph(arena, decl.doc),
+                });
+            }
+        }
+    }
+    const search_entries = search_list.items;
     const index_js = try site.renderSearchIndex(arena, search_entries);
     try writeInDir(io, arena, out_dir, "assets/search-index.js", index_js);
     report.bytes += index_js.len;
@@ -514,31 +584,64 @@ fn collectSources(arena: Allocator, io: Io) ![]const Source {
     return list.toOwnedSlice(arena);
 }
 
+/// Design notes, ADRs, task sheets, the roadmap and the CI/environment notes. They are the
+/// project's memory, not the reader's manual: they stay published (other pages link to them) but
+/// they are collapsed into a single sidebar entry, served behind an "内部資料" banner, and kept out
+/// of the search index. The landing point is [`internals_href`].
+const internals_group = "内部資料";
+const internals_href = "docs/internals/index.html";
+
 fn groupFor(path: []const u8) []const u8 {
-    if (std.mem.startsWith(u8, path, "docs/tasks/")) return "タスク";
-    if (std.mem.startsWith(u8, path, "docs/decisions/")) return "決定（ADR）";
-    if (std.mem.startsWith(u8, path, "docs/architecture/")) return "アーキテクチャ";
-    if (std.mem.startsWith(u8, path, "docs/roadmap/")) return "ロードマップ";
-    if (std.mem.startsWith(u8, path, "docs/reference/")) return "リファレンス";
-    if (std.mem.startsWith(u8, path, "docs/environment/")) return "環境";
+    // `tauri-internals.md` is an implementation autopsy — it belongs with the design notes even
+    // though it lives in `docs/reference/`.
+    if (std.mem.eql(u8, path, "docs/reference/tauri-internals.md")) return internals_group;
+    if (std.mem.eql(u8, path, "AGENTS.md")) return internals_group;
+    if (std.mem.startsWith(u8, path, "docs/tasks/")) return internals_group;
+    if (std.mem.startsWith(u8, path, "docs/decisions/")) return internals_group;
+    if (std.mem.startsWith(u8, path, "docs/architecture/")) return internals_group;
+    if (std.mem.startsWith(u8, path, "docs/roadmap/")) return internals_group;
+    if (std.mem.startsWith(u8, path, "docs/environment/")) return internals_group;
+    if (std.mem.startsWith(u8, path, "docs/reference/")) return "ガイド";
     if (std.mem.startsWith(u8, path, "docs/guides/")) return "ガイド";
-    return "ドキュメント";
+    if (std.mem.startsWith(u8, path, "docs/INDEX.md")) return "はじめに";
+    if (std.mem.startsWith(u8, path, "examples/")) return "サンプル";
+    return "はじめに";
 }
 
-const group_order = [_][]const u8{ "はじめに", "ガイド", "ロードマップ", "アーキテクチャ", "決定（ADR）", "リファレンス", "環境", "タスク", "サンプル", "ドキュメント" };
+const group_order = [_][]const u8{ "はじめに", "ガイド", "API", "サンプル", internals_group };
 
-fn buildGroups(arena: Allocator, rendered: anytype) ![]const site.Group {
+fn buildGroups(arena: Allocator, rendered: anytype, packages: []const apidoc.Package) ![]const site.Group {
     var groups: std.ArrayListUnmanaged(site.Group) = .empty;
     for (group_order) |heading| {
         var entries: std.ArrayListUnmanaged(site.NavEntry) = .empty;
-        for (rendered) |page| {
-            if (!std.mem.eql(u8, page.group, heading)) continue;
+
+        if (std.mem.eql(u8, heading, "API")) {
+            try entries.append(arena, .{ .href = "docs/api/index.html", .title = "全体索引（A–Z）", .source = "src/" });
+            for (packages) |pkg| {
+                try entries.append(arena, .{
+                    .href = try std.fmt.allocPrint(arena, "docs/api/{s}/index.html", .{pkg.spec.name}),
+                    .title = pkg.spec.name,
+                    .source = pkg.spec.root,
+                });
+            }
+        } else if (std.mem.eql(u8, heading, internals_group)) {
+            // One entry, not thirty: the whole point is that the sidebar stays reader-facing.
             try entries.append(arena, .{
-                .href = page.href,
-                .title = page.title,
-                .source = page.source,
+                .href = internals_href,
+                .title = "設計メモ・ADR・タスク",
+                .source = "docs/",
             });
+        } else {
+            for (rendered) |page| {
+                if (!std.mem.eql(u8, page.group, heading)) continue;
+                try entries.append(arena, .{
+                    .href = page.href,
+                    .title = page.title,
+                    .source = page.source,
+                });
+            }
         }
+
         if (entries.items.len == 0) continue;
         try groups.append(arena, .{ .heading = heading, .entries = try entries.toOwnedSlice(arena) });
     }
@@ -557,6 +660,104 @@ fn pageTitle(arena: Allocator, headings: []const markdown.Heading, source_path: 
     // Fall back to the file name so the sidebar always has something readable.
     const base = std.fs.path.basename(source_path);
     return arena.dupe(u8, base[0 .. base.len - 3]);
+}
+
+const ApiSite = struct {
+    pages: []const apidoc.Page,
+    packages: []const apidoc.Package,
+    decl_count: usize,
+};
+
+/// Scans every package's import graph and renders the reference. A failure here fails the build:
+/// an API page that silently disappears is worse than a red CI run.
+fn buildApiPages(arena: Allocator, io: Io) !ApiSite {
+    const packages = try arena.alloc(apidoc.Package, apidoc.packages.len);
+    for (apidoc.packages, 0..) |spec, i| packages[i] = try apidoc.collectPackage(arena, io, spec);
+
+    var decl_count: usize = 0;
+    for (packages) |pkg| decl_count += apidoc.coverageOf(pkg).total;
+
+    return .{
+        .pages = try apidoc.buildPages(arena, packages),
+        .packages = packages,
+        .decl_count = decl_count,
+    };
+}
+
+const InternalsSection = struct { heading: []const u8, prefix: []const u8 };
+
+const internals_sections = [_]InternalsSection{
+    .{ .heading = "アーキテクチャ（設計メモ）", .prefix = "docs/architecture/" },
+    .{ .heading = "設計判断（ADR）", .prefix = "docs/decisions/" },
+    .{ .heading = "ロードマップ", .prefix = "docs/roadmap/" },
+    .{ .heading = "タスクシート", .prefix = "docs/tasks/" },
+    .{ .heading = "環境・CI", .prefix = "docs/environment/" },
+};
+
+/// The one page that lists everything the sidebar deliberately stopped showing, with teasers so it
+/// stays navigable. Every entry keeps working — this de-emphasises the internals, it does not hide
+/// them.
+/// Shown at the top of every internal page: keeps the "this is not the manual" signal visible even
+/// when the page is reached from an old link or a search engine.
+fn internalsBanner(arena: Allocator, href: []const u8) ![]const u8 {
+    const root = try site.rootPrefix(arena, href);
+    return std.fmt.allocPrint(
+        arena,
+        "<p class=\"internal-banner\"><span>内部資料</span> 実装の意図と経緯の記録です。使うためのドキュメントは " ++
+            "<a href=\"{s}docs/INDEX.html\">ドキュメント索引</a> / <a href=\"{s}docs/api/index.html\">API リファレンス</a> にあります。</p>\n",
+        .{ root, root },
+    );
+}
+
+fn renderInternalsBody(arena: Allocator, rendered: anytype) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    const w = &out.writer;
+
+    try w.writeAll("<h1>内部資料</h1>\n<p class=\"api-blurb\">実装の<strong>意図・経緯・作業記録</strong>です。");
+    try w.writeAll("「どう使うか」は <a href=\"../INDEX.html\">ドキュメント索引</a> と ");
+    try w.writeAll("<a href=\"../api/index.html\">API リファレンス</a> にあります。ここは「なぜそうなっているか」を");
+    try w.writeAll("知りたいときだけ読む場所で、サイトのナビゲーションと検索からは意図的に外しています。</p>\n");
+
+    for (internals_sections) |section| {
+        var count: usize = 0;
+        for (rendered) |page| {
+            if (std.mem.startsWith(u8, page.source, section.prefix)) count += 1;
+        }
+        if (count == 0) continue;
+
+        try w.writeAll("<h2>");
+        try writeEscaped(w, section.heading);
+        try w.print(" <span class=\"api-count\">{d}</span></h2>\n<ul class=\"internals-list\">\n", .{count});
+        for (rendered) |page| {
+            if (!std.mem.startsWith(u8, page.source, section.prefix)) continue;
+            try w.writeAll("<li><a href=\"");
+            try writeEscaped(w, try site.relativeHref(arena, internals_href, page.href));
+            try w.writeAll("\">");
+            try writeEscaped(w, page.title);
+            try w.writeAll("</a>");
+            const text = teaser(page.document.plain, page.title);
+            if (text.len > 0) {
+                try w.writeAll("<p>");
+                try writeEscaped(w, text);
+                try w.writeAll("</p>");
+            }
+            try w.writeAll("</li>\n");
+        }
+        try w.writeAll("</ul>\n");
+    }
+
+    // `AGENTS.md` sits at the repository root but is agent-facing like the rest of this page.
+    for (rendered) |page| {
+        if (!std.mem.eql(u8, page.source, "AGENTS.md")) continue;
+        try w.writeAll("<h2>エージェント運用</h2>\n<ul class=\"internals-list\">\n<li><a href=\"");
+        try writeEscaped(w, try site.relativeHref(arena, internals_href, page.href));
+        try w.writeAll("\">");
+        try writeEscaped(w, page.title);
+        try w.writeAll("</a><p>新規チャット・記憶リセット直後に読む運用ハブ（開発憲法）。</p></li>\n</ul>\n");
+    }
+
+    return out.toOwnedSlice();
 }
 
 fn countWords(plain: []const u8) usize {
@@ -589,7 +790,7 @@ fn writeInDir(io: Io, arena: Allocator, dir: Io.Dir, sub_path: []const u8, data:
     _ = arena;
 }
 
-fn renderLanding(arena: Allocator, groups: []const site.Group) ![]const u8 {
+fn renderLanding(arena: Allocator, groups: []const site.Group, api: ApiSite) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
     const w = &out.writer;
@@ -619,8 +820,9 @@ fn renderLanding(arena: Allocator, groups: []const site.Group) ![]const u8 {
         \\  <h1>デスクトップも、WebAssembly も、<br />静的サイトも。<span class="accent">1 言語で。</span></h1>
         \\  <p class="lede">Z-Ts は Tauri v2 のプロトコルとプラグインを Zig で再実装したツールキットです。同じアプリコードからネイティブ WebView・ブラウザ Live Preview・静的 SSG の 3 つの成果物を生成し、3 OS で同じピクセルを描きます。</p>
         \\  <div class="cta">
-        \\    <a class="button primary" href="docs/INDEX.html">ドキュメントを読む</a>
-        \\    <a class="button" href="examples/counter/README.html">サンプルを見る</a>
+        \\    <a class="button primary" href="docs/guides/getting-started.html">はじめかた（5 分）</a>
+        \\    <a class="button" href="docs/api/index.html">API リファレンス</a>
+        \\    <a class="button" href="examples/counter/README.html">サンプル</a>
         \\    <a class="button" href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener">ソース</a>
         \\  </div>
         \\  <pre class="code"><code>zig build            # デスクトップ / Live / SSG をまとめて zig-out/ へ
@@ -633,6 +835,13 @@ fn renderLanding(arena: Allocator, groups: []const site.Group) ![]const u8 {
         \\  </section>
         \\</main>
         \\
+    );
+
+    try w.print(
+        "<section class=\"cards\"><article><h2>API リファレンス</h2><p><code>src/</code> の公開宣言 {d} 件を、" ++
+            "シグネチャ・<code>///</code> ドキュメント・ソース行へのリンクつきで生成しています。</p>" ++
+            "<p><a href=\"docs/api/index.html\">全体索引を開く →</a></p></article></section>\n",
+        .{api.decl_count},
     );
 
     try w.writeAll("<footer class=\"landing-footer\"><nav class=\"landing-nav\">");

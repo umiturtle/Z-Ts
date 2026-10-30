@@ -37,6 +37,10 @@ pub const Layout = struct {
     site_title: []const u8 = "Z-Ts",
     /// Currently rendered page; `""` for the landing page.
     active_href: []const u8 = "",
+    /// Explicit `<title>`. Pages that are not listed in the sidebar (the generated API reference,
+    /// the internals index, every page while the sidebar collapses its group) would otherwise fall
+    /// back to the site title; passing it keeps the browser tab meaningful.
+    title: []const u8 = "",
     /// Sidebar groups, already sorted.
     groups: []const Group = &.{},
     /// Page body HTML.
@@ -112,16 +116,21 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
     const writer = &out.writer;
 
     const root = try rootPrefix(arena, href);
-    const title = if (href.len == 0) layout.site_title else try std.fmt.allocPrint(arena, "{s} — {s}", .{
-        blk: {
-            // The first nav entry that matches this page supplies the title.
-            for (layout.groups) |group| for (group.entries) |entry| {
-                if (std.mem.eql(u8, entry.href, href)) break :blk entry.title;
-            };
-            break :blk layout.site_title;
-        },
-        layout.site_title,
-    });
+    const title = if (layout.title.len > 0)
+        try std.fmt.allocPrint(arena, "{s} — {s}", .{ layout.title, layout.site_title })
+    else if (href.len == 0)
+        layout.site_title
+    else
+        try std.fmt.allocPrint(arena, "{s} — {s}", .{
+            blk: {
+                // The first nav entry that matches this page supplies the title.
+                for (layout.groups) |group| for (group.entries) |entry| {
+                    if (std.mem.eql(u8, entry.href, href)) break :blk entry.title;
+                };
+                break :blk layout.site_title;
+            },
+            layout.site_title,
+        });
 
     try writeTemplate(writer, head_template, title, root);
 
@@ -180,9 +189,19 @@ pub fn relativeHref(arena: Allocator, from: []const u8, to: []const u8) Allocato
         if (from_dir[probe] != to[probe]) break;
         if (to[probe] == '/') shared = probe + 1;
     }
-    // `from_dir` entirely consumed means the target sits in the same directory (or below it).
-    if (from_dir.len > 0 and probe == from_dir.len) {
-        shared = if (to.len == from_dir.len) to.len else from_dir.len + 1;
+    // `from_dir` entirely consumed means the target may sit in the same directory — but only when
+    // the next character of `to` is a separator (or the paths are equal). Matching `from_dir` as a
+    // *string* is not enough: `docs/api/zts_web` is a prefix of `docs/api/zts_webview`, and an
+    // unguarded branch here turned that into `href="iew/index.html"`.
+    if (probe == from_dir.len) {
+        if (to.len == from_dir.len) {
+            shared = from_dir.len;
+        } else if (to[from_dir.len] == '/') {
+            shared = from_dir.len + 1; // the target lives in the same directory
+        } else {
+            // `from_dir` matched as a string but not as a path segment: keep the last boundary.
+            shared = @min(shared, from_dir.len);
+        }
     }
 
     // `shared` indexes both strings; when the whole directory is shared it overshoots by one.
@@ -500,6 +519,15 @@ test "relativeHref walks up from the page directory" {
     try testing.expectEqualStrings("tasks/M5-01-build-tools.html", try relativeHref(arena, "index.html", "tasks/M5-01-build-tools.html"));
     try testing.expectEqualStrings("../../index.html", try relativeHref(arena, "docs/tasks/x.html", "index.html"));
     try testing.expectEqualStrings("../decisions/0017.html", try relativeHref(arena, "docs/tasks/x.html", "docs/decisions/0017.html"));
+
+    // Same directory: no `../` at all.
+    try testing.expectEqualStrings("y.html", try relativeHref(arena, "docs/tasks/x.html", "docs/tasks/y.html"));
+    try testing.expectEqualStrings("mime.html", try relativeHref(arena, "docs/api/zts_web/index.html", "docs/api/zts_web/mime.html"));
+
+    // A directory whose name is a prefix of a sibling directory must not be treated as shared:
+    // `zts_web` is a prefix of `zts_webview` as a *string*, not as a path segment.
+    try testing.expectEqualStrings("../zts_webview/index.html", try relativeHref(arena, "docs/api/zts_web/mime.html", "docs/api/zts_webview/index.html"));
+    try testing.expectEqualStrings("../zts_web/index.html", try relativeHref(arena, "docs/api/zts_webview/mod.html", "docs/api/zts_web/index.html"));
 }
 
 test "rootPrefix counts directories for asset URLs" {
