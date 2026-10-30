@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Z-Ts — DPI ruler</title>
+<style>
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body { font-family:ZTSMono, monospace;
+         background:#fff; color:#111827; padding:18px 20px; }
+  h1 { font:600 13px ZTSSans, sans-serif; margin:0 0 4px; letter-spacing:0.52px; }
+  .row { display:flex; gap:24px; font-size:12px; color:#374151; margin-bottom:12px; }
+  .row b { color:#111827; }
+  /* Tick marks are real elements: the 1px lines of a `repeating-linear-gradient` are
+     anti-aliased differently per engine (7% pixel diff even at identical positions). */
+  .ruler { display:flex; height:26px; align-items:stretch; }
+  .ruler.thin { display:flex; height:16px; align-items:stretch; }
+  .ruler i { width:1px; flex:0 0 1px; background:#111827; }
+  .ruler.thin i { background:#6b7280; }
+  .bands { display:flex; margin-top:14px; height:56px; }
+  .bands div { flex:1; }
+  .grid { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; margin-top:16px; }
+  .grid i { height:26px; border-radius:4px; display:block; }
+  .note { margin-top:16px; font-size:11px; line-height:21px; color:#6b7280; }
+  .note code { background:#f3f4f6; border-radius:4px; padding:1px 5px; }
+</style>
+</head>
+<body>
+  <h1>DPI / スケーリング確認用ルーラー</h1>
+  <div class="row">
+    <div>devicePixelRatio <b id="dpr">–</b></div>
+    <div>innerSize <b id="inner">–</b></div>
+    <div>screen <b id="screen">–</b></div>
+    <div>src <b>1px 定規 (10px 間隔)</b></div>
+  </div>
+  <div class="ruler" id="ruler"></div>
+  <div style="height:6px"></div>
+  <div class="ruler thin" id="ruler-thin"></div>
+  <div class="bands">
+    <div style="background:#ef4444"></div><div style="background:#f97316"></div>
+    <div style="background:#eab308"></div><div style="background:#22c55e"></div>
+    <div style="background:#06b6d4"></div><div style="background:#3b82f6"></div>
+    <div style="background:#6366f1"></div><div style="background:#a855f7"></div>
+  </div>
+  <div class="grid">
+    <i style="background:#111827"></i><i style="background:#1f2937"></i><i style="background:#374151"></i><i style="background:#4b5563"></i>
+    <i style="background:#6b7280"></i><i style="background:#9ca3af"></i><i style="background:#d1d5db"></i><i style="background:#f3f4f6"></i>
+  </div>
+  <div class="note">
+    1 デバイスピクセルの線が滲まずに描けているか、CSS px と物理 px の比が正しいかを目視で確認します。<br>
+    キャプチャ PNG のピクセル幅 = <code>innerWidth × devicePixelRatio</code> になります。
+  </div>
+<script>
+  // Build the ticks as real elements (10px / 5px spacing). Integer positions, so every OS
+  // rasterises them identically.
+  (function () {
+    var build = function (id, step) {
+      var host = document.getElementById(id);
+      // Fixed 520px content width (body padding excluded). `clientWidth` is 0 before layout in
+      // some engines, which made the tick count (and therefore the pixels) differ per OS.
+      var width = 520;
+      var count = Math.floor(width / step);
+      var frag = document.createDocumentFragment();
+      for (var i = 0; i < count; i++) {
+        var tick = document.createElement('i');
+        tick.style.marginRight = (step - 1) + 'px';
+        frag.appendChild(tick);
+      }
+      host.appendChild(frag);
+    };
+    build('ruler', 10);
+    build('ruler-thin', 5);
+  })();
+  document.getElementById('dpr').textContent = String(window.devicePixelRatio || 1);
+  document.getElementById('inner').textContent = window.innerWidth + '×' + window.innerHeight;
+  document.getElementById('screen').textContent = screen.width + '×' + screen.height;
+</script>
+</body>
+</html>

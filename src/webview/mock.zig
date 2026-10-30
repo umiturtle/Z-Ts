@@ -16,6 +16,7 @@ const testing = std.testing;
 const foundation = @import("zts_foundation");
 const types = @import("types.zig");
 const pending_mod = @import("pending.zig");
+const png = @import("png.zig");
 
 pub const CompletedSchemeRecord = struct {
     window_id: types.WindowId,
@@ -62,6 +63,8 @@ pub const MockWindow = struct {
     devtools_open: bool,
     background_color: ?types.Color,
     parent_native_handle: ?*anyopaque,
+    /// Number of `fitParent()` calls that targeted this window (`M3-03` embedding contract).
+    fit_count: usize = 0,
     current_url: []u8,
     last_html: ?[]u8 = null,
     init_scripts: std.ArrayList([]u8) = .empty,
@@ -104,6 +107,16 @@ pub const HeadlessMock = struct {
     message_handler: ?types.MessageHandler = null,
     close_handler: ?types.CloseHandler = null,
 
+    /// Screenshots produced by `captureWindow()` and not yet collected by `takeCapture()`.
+    /// A plain list (not a hash map) because a process has a handful of windows at most and this
+    /// keeps `Handle` hashing out of the mock's hot path.
+    captures: std.ArrayList(CaptureSlot) = .empty,
+
+    pub const CaptureSlot = struct {
+        window_id: types.WindowId,
+        capture: types.Capture,
+    };
+
     pub fn init(allocator: Allocator, io: Io) HeadlessMock {
         return .{
             .allocator = allocator,
@@ -126,6 +139,10 @@ pub const HeadlessMock = struct {
             self.allocator.free(k.*);
         }
         self.schemes.deinit(self.allocator);
+
+        // Uncollected screenshots are owned by the backend until `takeCapture()` moves them out.
+        for (self.captures.items) |*slot| slot.capture.deinit();
+        self.captures.deinit(self.allocator);
 
         var win_it = self.windows.iterator();
         while (win_it.next()) |slot| {
@@ -332,9 +349,55 @@ pub const HeadlessMock = struct {
         return self.windows.acquire(self.allocator, win) catch return error.OutOfMemory;
     }
 
+    // -----------------------------------------------------------------------
+    // Screenshot capture (`M5-04`) — synchronous on the mock: no renderer to wait for.
+    // -----------------------------------------------------------------------
+
+    /// Produces a deterministic PNG of the requested window (a diagonal gradient + corner marker).
+    /// Calling it again before `takeCapture()` replaces the previous image instead of leaking it.
+    pub fn captureWindow(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {
+        const w = try self.requireWin(win_id);
+        const width: u32 = @intFromFloat(@max(1.0, w.size.width.v));
+        const height: u32 = @intFromFloat(@max(1.0, w.size.height.v));
+
+        const bytes = png.testImage(self.allocator, width, height) catch return error.OutOfMemory;
+        const capture = try types.Capture.initOwned(self.allocator, bytes);
+
+        self.dropCaptures(win_id);
+        self.captures.append(self.allocator, .{ .window_id = win_id, .capture = capture }) catch {
+            var c = capture;
+            c.deinit();
+            return error.OutOfMemory;
+        };
+    }
+
+    /// Moves a finished capture to the caller (`null` while none is pending / already collected).
+    pub fn takeCapture(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!?types.Capture {
+        _ = try self.requireWin(win_id);
+        for (self.captures.items, 0..) |slot, idx| {
+            if (slot.window_id.index != win_id.index or slot.window_id.generation != win_id.generation) continue;
+            return self.captures.swapRemove(idx).capture;
+        }
+        return null;
+    }
+
+    fn dropCaptures(self: *HeadlessMock, win_id: types.WindowId) void {
+        var idx: usize = 0;
+        while (idx < self.captures.items.len) {
+            const slot = &self.captures.items[idx];
+            if (slot.window_id.index == win_id.index and slot.window_id.generation == win_id.generation) {
+                var removed = self.captures.swapRemove(idx);
+                removed.capture.deinit();
+                continue;
+            }
+            idx += 1;
+        }
+    }
+
     pub fn closeWindow(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {
         _ = self.pending.cancelForWindow(self.allocator, win_id, MockPendingPayload.cancel);
         var win = self.windows.release(win_id) catch return error.WindowNotFound;
+        self.dropCaptures(win_id);
         win.deinit(self.allocator);
         if (self.close_handler) |ch| ch.call(win_id);
     }
@@ -352,6 +415,15 @@ pub const HeadlessMock = struct {
 
     pub fn setSize(self: *HeadlessMock, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         (try self.requireWin(win_id)).size = size;
+    }
+
+    /// Overlay embedding (`M3-03`): a mock has no real parent to measure, so it only records the
+    /// request — the *contract* (embedded windows support it, toplevel windows do not) is what the
+    /// cross-platform unit tests assert.
+    pub fn fitParent(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {
+        const w = try self.requireWin(win_id);
+        if (w.parent_native_handle == null) return error.Unsupported;
+        w.fit_count += 1;
     }
 
     pub fn setMinSize(self: *HeadlessMock, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {

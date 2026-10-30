@@ -23,6 +23,8 @@ jobs:
   ci-linux:
     name: Linux (Ubuntu 24.04 + Xvfb + WebKit2GTK 4.1)
     runs-on: ubuntu-24.04
+    # Hard ceiling: a stuck browser/native test must not hold the runner for the 360-min default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -37,7 +39,7 @@ jobs:
             ~/.cache/zig
             .zig-cache
             tests/tauri/node_modules
-          key: linux-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
+          key: linux-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig', 'examples/**/*.zig', 'examples/**/*.ts', 'examples/**/*.mjs') }}
           restore-keys: |
             linux-zig-0.17.0-m107-
             linux-zig-0.17.0-ts7-
@@ -63,13 +65,213 @@ jobs:
           chmod +x ./zigw
           {
             python3 scripts/check-docs.py
+            node scripts/check-font-coverage.mjs
             npx -y -p typescript tsc --noEmit --strict --target esnext --module esnext --moduleResolution bundler tests/bridge/verify_bridge_e2e.ts
-            ./zigw fmt --check src/ tests/ build.zig build.zig.zon
+            ./zigw fmt --check src/ tests/ examples/ build.zig build.zig.zon examples/counter/build.zig.zon
             WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
               xvfb-run -a ./zigw build test -Dgtk=true --summary all
             WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
               xvfb-run -a ./zigw build test -Dgtk=true -Doptimize=ReleaseFast --summary all
           } 2>&1 | tee ci-output.log
+
+      - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
+        run: |
+          set -eo pipefail
+          # `zig build test` builds and executes `examples/c_embed` (a pure C99 host that owns its
+          # own GtkWindow/GtkBox and drives Z-Ts through `zts_webview_poll`). The marker only appears
+          # when the WebView was really mounted inside the host container and the fetch round trip
+          # completed, so a headless skip cannot pass this gate.
+          if ! grep -q "OK c-embed" ci-output.log; then
+            echo "::error::C overlay embedding marker missing — examples/c_embed was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK c-embed .*" ci-output.log | tail -n 1
+          # The GTK unit-level contract test (real GtkBox, Xvfb) must have really run too.
+          if ! grep -q "OK embed-gtk structural=1" ci-output.log; then
+            echo "::error::GTK embed contract test marker missing — it was skipped (no display?) or failed."
+            exit 1
+          fi
+          grep -o "OK embed-gtk .*" ci-output.log | tail -n 1
+
+      - name: Verify the build-tools embedder and the generated bindings (M5-01 gate)
+        run: |
+          set -eo pipefail
+          # The M5-01 embedder runs as part of `zig build test` (the generated module backs
+          # `tests/ssg/embedded_consumer.zig`). The marker only appears when the walk, the gzip
+          # twins, the CSP hashes and the manifest were really produced, so a silent skip fails.
+          if ! grep -q "OK build-tools embed" ci-output.log; then
+            echo "::error::build-tools embed marker missing - the embedder was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK build-tools embed .*" ci-output.log | tail -n 1
+          # `zig build test` also depends on `zig build check-bindings`: a stale
+          # `examples/counter/web/bindings.gen.ts` would already have failed the build above.
+          echo "bindings freshness is enforced by the check-bindings build step."
+
+      - name: Render the documentation site and verify every internal link (M5-06 gate)
+        run: |
+          set -eo pipefail
+          {
+            ./zigw build docs --summary all
+          } 2>&1 | tee -a ci-output.log
+          # `zts_docsite` fails the build itself when a relative link points nowhere; the marker
+          # proves the walk, the Markdown renderer, the link check and the demo copy all ran.
+          if ! grep -q "OK docsite pages=" ci-output.log; then
+            echo "::error::docsite marker missing - the documentation site was not rendered."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK docsite .*" ci-output.log | tail -n 1
+          # `assets=0` would mean the asset verification silently did nothing.
+          if grep -q "OK docsite .* assets=0 " ci-output.log; then
+            echo "::error::no asset URL was verified - the output walk is broken."
+            exit 1
+          fi
+          test -f zig-out/docs/index.html
+          test -f zig-out/docs/docs/INDEX.html
+          test -f zig-out/docs/assets/search-index.js
+          # The nine framework demos are published next to the docs, with rewritten asset URLs.
+          test -f zig-out/docs/examples/frameworks/index.html
+          test -f zig-out/docs/examples/frameworks/react/index.html
+          if grep -q 'src="/assets/' zig-out/docs/examples/frameworks/react/index.html; then
+            echo "::error::absolute asset URL survived the rewrite - the demo would 404 on Pages."
+            exit 1
+          fi
+
+      - name: Cross-compile the Windows Win32 + Direct WebView2 backend from Linux (M3-02 gate)
+        run: |
+          set -o pipefail
+          {
+            rm -rf zig-out
+            ./zigw build -Dtarget=x86_64-windows-gnu --summary all
+            test -f zig-out/bin/zts_webview2_smoke.exe
+            # A single self-contained PE: no `WebView2Loader.dll` next to it, and the loader
+            # resolves the OS-installed runtime through `EmbeddedBrowserWebView.dll` directly.
+            if ls zig-out/bin/*.dll >/dev/null 2>&1; then
+              echo "::error::cross-compile shipped a DLL next to the executable"
+              exit 1
+            fi
+            grep -c "EmbeddedBrowserWebView.dll" zig-out/bin/zts_webview2_smoke.exe
+            if grep -q "WebView2Loader.dll" zig-out/bin/zts_webview2_smoke.exe; then
+              echo "::error::the binary still references WebView2Loader.dll"
+              exit 1
+            fi
+            ls -l zig-out/bin/zts_webview2_smoke.exe
+          } 2>&1 | tee -a ci-output.log
+
+      - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
+        run: |
+          set -o pipefail
+          {
+            cd examples/counter
+            ../../zigw build test --summary all
+            ../../zigw build --summary all
+          } 2>&1 | tee -a ci-output.log
+
+      - name: Screenshot gallery — native captures under Xvfb (M5-04)
+        run: |
+          set -o pipefail
+          {
+            ( cd examples/gallery && ../../zigw build test --summary all && ../../zigw build install --summary all )
+            WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
+              xvfb-run -a examples/gallery/zig-out/bin/zts_gallery \
+                --out "$RUNNER_TEMP/shots" --require-native
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
+          } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
+
+      - name: Gate on the screenshot markers (M5-04)
+        run: |
+          set -eo pipefail
+          # `--require-native` makes a HeadlessMock fallback fail outright, so a missing marker can
+          # only mean the GTK backend never produced a real image.
+          if ! grep -q "OK gallery host=" ci-output.log; then
+            echo "::error::gallery marker missing — no native screenshot was captured."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK gallery .*" ci-output.log | tail -n 1
+          if ! grep -q "OK screenshots host=" ci-output.log; then
+            echo "::error::pixel-verification marker missing — the PNG gate did not run."
+            exit 1
+          fi
+          grep -o "OK screenshots .*" ci-output.log | tail -n 1
+
+      - name: Browser captures of the Live Preview & SSG builds (M5-04)
+        run: |
+          set -o pipefail
+          {
+            ( cd examples/counter && ../../zigw build --summary all )
+            CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+            if [ -z "$CHROME" ]; then
+              echo "SKIP browser-shots no chrome/chromium on this runner"
+            else
+              echo "browser-shots using $CHROME"
+              mkdir -p "$RUNNER_TEMP/shots"
+              # 1) Static SSG output served like a real static host (file:// would block the wasm fetch).
+              ( cd examples/counter/zig-out/dist && python3 -m http.server 8792 --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > /tmp/zts_ssg_http.pid )
+              # 2) Live Preview (BridgeServer + SSE) on its own port.
+              ( cd examples/counter && ./zig-out/bin/counter-live --port 8791 --host 127.0.0.1 >/tmp/zts_live.log 2>&1 & echo $! > /tmp/zts_live.pid )
+              for _ in $(seq 1 100); do
+                curl -sf -o /dev/null http://127.0.0.1:8791/ && break
+                sleep 0.2
+              done
+
+              # Every capture is wrapped in `timeout`: `--virtual-time-budget` never expires while the
+              # page holds a long-lived connection open (the Live Preview's EventSource), and a hung
+              # Chrome would otherwise burn the whole job budget (observed on run #40519060481).
+              # A missing PNG is reported as an explicit `SKIP browser-shot` marker, never silently.
+              shoot() {
+                local name="$1" url="$2"; shift 2
+                rm -f "$RUNNER_TEMP/shots/$name.png"
+                if timeout 90 "$CHROME" --headless=new --disable-gpu --no-sandbox \
+                    --disable-dev-shm-usage --hide-scrollbars --window-size=900,640 \
+                    "$@" --screenshot="$RUNNER_TEMP/shots/$name.png" "$url"; then
+                  :
+                else
+                  echo "SKIP browser-shot $name (chrome exited $?)"
+                fi
+                if [ -s "$RUNNER_TEMP/shots/$name.png" ]; then
+                  echo "browser-shot $name $(wc -c < "$RUNNER_TEMP/shots/$name.png") bytes"
+                else
+                  echo "SKIP browser-shot $name (no png written)"
+                fi
+              }
+
+              # Live Preview keeps an SSE connection open, so it is captured at `load` (the page is
+              # already styled by the render-blocking stylesheet) instead of with a virtual-time budget.
+              shoot live-counter "http://127.0.0.1:8791/"
+              # The SSG bundle is fully static: virtual time lets the wasm render settle first.
+              shoot ssg-counter "http://127.0.0.1:8792/" --virtual-time-budget=6000
+
+              kill "$(cat /tmp/zts_live.pid)" 2>/dev/null || true
+              kill "$(cat /tmp/zts_ssg_http.pid)" 2>/dev/null || true
+              sleep 0.3
+              ls -l "$RUNNER_TEMP/shots"
+              captured=0
+              for name in live-counter ssg-counter; do
+                if [ -s "$RUNNER_TEMP/shots/$name.png" ]; then captured=$((captured + 1)); fi
+              done
+              if [ "$captured" -lt 1 ]; then
+                echo "::error::browser-shots produced no PNG at all"
+                exit 1
+              fi
+              echo "OK browser-shots captured=$captured/2"
+            fi
+            # Loose PNGs (no manifest entry) still go through structure + non-blank checks.
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots"
+          } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
+          grep -o "OK screenshots .*" ci-output.log | tail -n 1
+
+      - name: Upload screenshots (Linux)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-linux
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()
@@ -99,6 +301,8 @@ jobs:
   ci-macos:
     name: macOS (arm64 + WKWebView)
     runs-on: macos-latest
+    # Hard ceiling: a stuck browser/native test must not hold the runner for the 360-min default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -113,7 +317,7 @@ jobs:
             ~/.cache/zig
             .zig-cache
             tests/tauri/node_modules
-          key: macos-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
+          key: macos-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig', 'examples/**/*.zig', 'examples/**/*.ts', 'examples/**/*.mjs') }}
           restore-keys: |
             macos-zig-0.17.0-m107-
             macos-zig-0.17.0-ts7-
@@ -126,6 +330,102 @@ jobs:
             chmod +x ./zigw
             ./zigw build test --summary all
           } 2>&1 | tee ci-output.log
+          # 同梱フォントに無い文字を書くと Linux だけ豆腐になる — 最後に必ず踏む。
+          node scripts/check-font-coverage.mjs
+
+      - name: Verify the native Cocoa + WKWebView E2E actually ran (M3-01 gate)
+        run: |
+          set -euo pipefail
+          # The E2E prints `OK macos-wk checks=10 ...` only when a real NSWindow + WKWebView was
+          # created and the JS/IPC round trip completed. Absence => skipped or silently degraded.
+          if ! grep -q "OK macos-wk checks=" ci-output.log; then
+            echo "::error::macOS WKWebView E2E marker missing — the native backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK macos-wk .*" ci-output.log | tail -n 1
+
+      - name: Verify the native AppKit menu backend actually ran (M4-05 gate)
+        run: |
+          set -euo pipefail
+          # `native_macos.zig` prints `OK menu-cocoa checks=N` only after a real `NSMenu` was built
+          # from the flattened snapshot and an item activation round-tripped through the bridge
+          # object. Absence means AppKit was never reached (the old fail-closed stub was used).
+          if ! grep -q "OK menu-cocoa checks=" ci-output.log; then
+            echo "::error::AppKit menu marker missing — the Cocoa backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK menu-cocoa .*" ci-output.log | tail -n 1
+
+      - name: Verify the native AppKit tray backend actually ran (M4-06 gate)
+        run: |
+          set -euo pipefail
+          # `tray/native_macos.zig` prints `OK tray-cocoa checks=N` only after real `NSStatusItem`s
+          # were created, a bounded menu was attached, and a click round-tripped through
+          # `target`/`action` back into the tray's emitter.
+          if ! grep -q "OK tray-cocoa checks=" ci-output.log; then
+            echo "::error::AppKit tray marker missing — the Cocoa tray backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK tray-cocoa .*" ci-output.log | tail -n 1
+
+      - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
+        run: |
+          set -eo pipefail
+          # `examples/c_embed` is a plain C99 host: `NSWindow` + `contentView` created through the
+          # Objective-C runtime, then Z-Ts mounts its WKWebView inside it and the host drives the
+          # loop with `zts_webview_poll`.
+          if ! grep -q "OK c-embed host=cocoa" ci-output.log; then
+            echo "::error::C overlay embedding marker missing on macOS — examples/c_embed was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK c-embed .*" ci-output.log | tail -n 1
+
+      - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
+        run: |
+          set -o pipefail
+          {
+            cd examples/counter
+            ../../zigw build test --summary all
+            ../../zigw build --summary all
+          } 2>&1 | tee -a ci-output.log
+
+      - name: Screenshot gallery — native WKWebView captures (M5-04)
+        run: |
+          set -o pipefail
+          {
+            ( cd examples/gallery && ../../zigw build install --summary all )
+            examples/gallery/zig-out/bin/zts_gallery --out "$RUNNER_TEMP/shots" --require-native
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
+          } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
+
+      - name: Gate on the screenshot markers (M5-04)
+        run: |
+          set -eo pipefail
+          # A `host=cocoa` marker proves the images came from `WKWebView.takeSnapshot…`, not the mock.
+          grep -q "OK gallery host=cocoa" ci-output.log || {
+            echo "::error::Cocoa gallery marker missing — WKWebView snapshot did not run."
+            tail -n 200 ci-output.log
+            exit 1
+          }
+          grep -o "OK gallery .*" ci-output.log | tail -n 1
+          grep -q "OK screenshots host=cocoa" ci-output.log || {
+            echo "::error::pixel-verification marker missing (cocoa)."
+            exit 1
+          }
+          grep -o "OK screenshots .*" ci-output.log | tail -n 1
+
+      - name: Upload screenshots (macOS)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-macos
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()
@@ -155,6 +455,8 @@ jobs:
   ci-windows:
     name: Windows (x86_64 + WebView2)
     runs-on: windows-latest
+    # Hard ceiling: a stuck browser/native test must not hold the runner for the 360-min default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -169,7 +471,7 @@ jobs:
             ${{ env.LOCALAPPDATA }}\zig
             .zig-cache
             tests/tauri/node_modules
-          key: windows-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig') }}
+          key: windows-zig-0.17.0-m107-${{ hashFiles('build.zig', 'build.zig.zon', 'tests/tauri/package-lock.json', 'src/**/*.zig', 'examples/**/*.zig', 'examples/**/*.ts', 'examples/**/*.mjs') }}
           restore-keys: |
             windows-zig-0.17.0-m107-
             windows-zig-0.17.0-ts7-
@@ -180,14 +482,185 @@ jobs:
         with:
           version: 0.17.0
 
+      # `windows-latest` ships Edge but NOT the Evergreen WebView2 Runtime (see
+      # Windows2025-Readme.md -> Browsers). Without it the native backend degrades to a skip, so the
+      # M3-02 gates below would "pass" without ever exercising a real WebView2 controller.
+      # The registry probe is authoritative and mirrors `webview2_loader.zig` exactly
+      # (`EdgeUpdate\Clients\{GUID}` -> `pv`), so the check can never disagree with the backend.
+      - name: Install Evergreen WebView2 Runtime (M3-02 prerequisite)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $log = 'ci-output.log'
+          function Write-Log([string]$msg) {
+            $line = "webview2-install: $msg"
+            Write-Host $line
+            Add-Content -Path $log -Value $line
+          }
+          $guid = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          function Get-WebView2Version {
+            foreach ($p in @(
+              "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$guid",
+              "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$guid",
+              "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$guid"
+            )) {
+              if (Test-Path $p) {
+                $pv = (Get-ItemProperty -Path $p -Name pv -ErrorAction SilentlyContinue).pv
+                if ($pv -and $pv -ne '0.0.0.0') { return $pv }
+              }
+            }
+            return $null
+          }
+          try {
+            $version = Get-WebView2Version
+            if (-not $version) {
+              Write-Log 'not installed -> downloading the Evergreen bootstrapper'
+              $setup = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebView2Setup.exe'
+              Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $setup
+              Write-Log "downloaded $setup"
+              Start-Process -FilePath $setup -ArgumentList '/silent', '/install' -Wait
+              Start-Sleep -Seconds 5
+              $version = Get-WebView2Version
+            }
+            if (-not $version) { throw 'registry key still missing after install' }
+            Write-Log "OK version=$version"
+            Get-ChildItem '${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application' -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Log "  $($_.Name)" }
+          } catch {
+            Add-Content -Path $log -Value "webview2-install: FAIL $($_.Exception.Message)"
+            throw
+          }
       - name: Build & test on Windows
         shell: bash
         run: |
           set -o pipefail
           {
             zig version
-            zig build test --summary all
-          } 2>&1 | tee ci-output.log
+            # `ZTS_WEBVIEW_TRACE=1` prints every COM stage (`zts.windows: …`) so a silent crash
+            # inside WebView2 on a headless runner still leaves a readable trail in the log.
+            ZTS_WEBVIEW_TRACE=1 zig build test --summary all
+          } 2>&1 | tee -a ci-output.log
+          node scripts/check-font-coverage.mjs
+
+      - name: Verify the native Win32 + Direct WebView2 E2E actually ran (M3-02 gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The backend prints `OK windows-wv2 checks=12 ...` only after a real HWND + WebView2
+          # controller served `tauri://` + `ipc://` traffic (incl. a real CORS preflight) and a
+          # JS/IPC round trip completed; absence means the native backend was skipped or failed.
+          if ! grep -q "OK windows-wv2 checks=" ci-output.log; then
+            echo "::error::Windows WebView2 E2E marker missing — the native backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK windows-wv2 .*" ci-output.log | tail -n 1
+
+      - name: Verify the native Win32 menu backend actually ran (M4-05 gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `native_windows.zig` prints `OK menu-win32 checks=N` only after a real `HMENU` was
+          # installed with `SetMenu` on a real `HWND` and a `WM_COMMAND` round-tripped through the
+          # window subclass into the item's `Channel<string>`.
+          if ! grep -q "OK menu-win32 checks=" ci-output.log; then
+            echo "::error::Win32 menu marker missing — the Win32 backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK menu-win32 .*" ci-output.log | tail -n 1
+
+      - name: Verify the native Win32 tray backend actually ran (M4-06 gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `tray/native_windows.zig` prints `OK tray-win32 checks=N` only after real
+          # `NOTIFYICONDATAW`s were registered through a message-only window, the shell callback
+          # message was dispatched into the tray emitter, and a menu was attached to the popup.
+          if ! grep -q "OK tray-win32 checks=" ci-output.log; then
+            echo "::error::Win32 tray marker missing — the Win32 tray backend was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK tray-win32 .*" ci-output.log | tail -n 1
+
+      - name: Verify the pure-C overlay embedding host ran (M3-03 gate)
+        shell: bash
+        run: |
+          set -eo pipefail
+          # `examples/c_embed` creates its own Win32 host window + child "dock area" in plain C99,
+          # then Z-Ts mounts the WebView2 child HWND inside it and the host drives the loop with
+          # `zts_webview_poll`. `GetParent(child) == host area` is asserted from the host side.
+          if ! grep -q "OK c-embed host=win32" ci-output.log; then
+            echo "::error::C overlay embedding marker missing on Windows — examples/c_embed was skipped or failed."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK c-embed .*" ci-output.log | tail -n 1
+
+      - name: Build & run the single-`.exe` WebView2 deployment smoke (M3-02 gate)
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            # Same cross-compile command Arena uses from Linux: one self-contained `.exe`, no
+            # `WebView2Loader.dll` and no CRT/MSVC redistributable is installed next to it.
+            zig build -Dtarget=x86_64-windows-gnu --summary all
+            ls -la zig-out/bin
+            if ls zig-out/bin/*.dll >/dev/null 2>&1; then
+              echo "::error::a runtime DLL was shipped next to the executable"
+              exit 1
+            fi
+            ./zig-out/bin/zts_webview2_smoke.exe
+          } 2>&1 | tee -a ci-output.log
+
+      - name: Build & E2E-test the M2-02 counter showcase (desktop / live / SSG)
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cd examples/counter
+            ../../zigw build test --summary all
+            ../../zigw build --summary all
+          } 2>&1 | tee -a ci-output.log
+
+      - name: Screenshot gallery — native WebView2 captures (M5-04)
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            ( cd examples/gallery && ../../zigw build install --summary all )
+            ZTS_WEBVIEW_TRACE=1 examples/gallery/zig-out/bin/zts_gallery.exe \
+              --out "$RUNNER_TEMP/shots" --require-native
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
+          } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
+
+      - name: Gate on the screenshot markers (M5-04)
+        shell: bash
+        run: |
+          set -eo pipefail
+          # `CapturePreview` only fires for a visible controller, so `host=win32` means a real
+          # WebView2 surface rendered the page — not a mock, not a blank stream.
+          grep -q "OK gallery host=win32" ci-output.log || {
+            echo "::error::Win32 gallery marker missing — WebView2 CapturePreview did not run."
+            tail -n 300 ci-output.log
+            exit 1
+          }
+          grep -o "OK gallery .*" ci-output.log | tail -n 1
+          grep -q "OK screenshots host=win32" ci-output.log || {
+            echo "::error::pixel-verification marker missing (win32)."
+            exit 1
+          }
+          grep -o "OK screenshots .*" ci-output.log | tail -n 1
+
+      - name: Upload screenshots (Windows)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Publish captured output to Check Run API for Arena agents
         if: always()
@@ -208,5 +681,90 @@ jobs:
                 repo: context.repo.repo,
                 check_run_id: me.id,
                 output: { title: 'Windows CI Output', summary: '```text\n' + log + '\n```' },
+              });
+            }
+
+  ci-parity:
+    name: Cross-OS parity (same pixels, same layout)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Runs even when a platform job failed: the comparison report is the most useful artifact in
+    # that case. It still *fails* unless all three artifacts are present and identical enough.
+    if: always() && !cancelled()
+    needs: [ci-linux, ci-macos, ci-windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download every OS gallery
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: screenshots-*
+
+      - name: Compare the three OS captures
+        run: |
+          set -o pipefail
+          {
+            ls -l artifacts
+            for os in linux macos windows; do
+              if [ ! -f "artifacts/screenshots-$os/manifest.json" ]; then
+                echo "::error::missing artifacts/screenshots-$os/manifest.json — that OS captured nothing"
+                exit 1
+              fi
+            done
+            # Every OS must have decoded the *bundled* fonts (see docs/environment/github-actions.md).
+            for os in linux macos windows; do
+              node scripts/verify-screenshots.mjs "artifacts/screenshots-$os" --require-native --require-counts 17
+            done
+            # Layout fingerprints must be identical (≤1px) and rasters close (≤6% of pixels differ).
+            node scripts/compare-screenshots.mjs \
+              artifacts/screenshots-linux artifacts/screenshots-macos artifacts/screenshots-windows \
+              --max-diff 0.12 --max-mad 8 --json parity.json
+          } 2>&1 | tee parity.log
+
+      - name: Gate on the parity marker
+        if: always()
+        run: |
+          if ! grep -q "OK parity hosts=" parity.log; then
+            echo "::error::no OK parity marker — the 3 OS captures were not compared"
+            tail -n 120 parity.log || true
+            exit 1
+          fi
+          grep -o "OK parity .*" parity.log | tail -n 1
+
+      - name: Upload the parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-report
+          path: |
+            parity.json
+            parity.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Publish the parity report to the Check Run API
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('parity.log') ? fs.readFileSync('parity.log', 'utf8').slice(-60000) : '(no output)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name.startsWith('Cross-OS parity'));
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'Cross-OS parity', summary: '```text\n' + log + '\n```' },
               });
             }

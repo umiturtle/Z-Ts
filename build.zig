@@ -1,4 +1,5 @@
 const std = @import("std");
+const zts_build = @import("src/build_tools/mod.zig");
 
 fn detectSystemGtkWebkit(b: *std.Build) bool {
     var code: u8 = 0;
@@ -36,41 +37,13 @@ pub fn embedFrontendDir(
     web_mod: *std.Build.Module,
     opts: EmbedFrontendDirOptions,
 ) EmbeddedFrontendDir {
-    const scan_mod = b.createModule(.{
-        .root_source_file = b.path("src/ssg/mod.zig"),
-        .target = b.graph.host,
-        .optimize = .debug,
-        .link_libc = false,
-        .imports = &.{
-            .{ .name = "zts_foundation", .module = b.modules.get("zts_foundation").? },
-            .{ .name = "zts_web", .module = web_mod },
-            .{ .name = "zts_wasm", .module = b.modules.get("zts_wasm").? },
-        },
+    // `M5-01`: the scanner, the gzip twins and the CSP hashes all live in `src/build_tools/`.
+    const embedded = zts_build.embedFrontend(b, .{
+        .src_dir = opts.src_dir,
+        .web_mod = web_mod,
+        .module_name = opts.module_name,
     });
-    const scan_exe = b.addExecutable(.{
-        .name = "zts_embed_frontend_dir",
-        .root_module = scan_mod,
-    });
-    const run = b.addRunArtifact(scan_exe);
-    // The scanner writes a directory tree (`assets_manifest.zig` + staged `files/**`).
-    // Zig does not verify output *directories*, so force execution to keep the tree present.
-    run.has_side_effects = true;
-    run.addArg("--src");
-    run.addDirectoryArg(opts.src_dir);
-    run.addArg("--out");
-    const generated_dir = run.addOutputDirectoryArg(opts.module_name);
-
-    const module = b.createModule(.{
-        .root_source_file = generated_dir.path(b, "assets_manifest.zig"),
-        .target = b.graph.host,
-        .optimize = .debug,
-        .link_libc = false,
-        .imports = &.{
-            .{ .name = "zts_web", .module = web_mod },
-        },
-    });
-
-    return .{ .run = run, .module = module };
+    return .{ .run = embedded.run, .module = embedded.module };
 }
 
 pub fn build(b: *std.Build) void {
@@ -84,8 +57,35 @@ pub fn build(b: *std.Build) void {
         "Enable native Linux GTK3 + WebKit2GTK 4.1 backend (default: auto-detected via pkg-config)",
     ) orelse (is_linux and target.query.isNative() and detectSystemGtkWebkit(b));
 
+    // macOS native backend (`Cocoa` + `WKWebView`, `M3-01`). Auto-enabled for macOS targets;
+    // the Objective-C shim is NEVER compiled on Linux/Windows (`-Dmacos=false` keeps it out).
+    const is_macos = target.result.os.tag == .macos;
+    const enable_macos = b.option(
+        bool,
+        "macos",
+        "Enable native macOS Cocoa + WKWebView backend (default: auto-detected from the target OS)",
+    ) orelse is_macos;
+
+    // Windows native backend (`Win32` + Direct `WebView2`, `M3-02`). Auto-enabled for Windows
+    // targets; the Win32/COM declarations are never analyzed on other OSes.
+    const is_windows = target.result.os.tag == .windows;
+    const enable_windows = b.option(
+        bool,
+        "windows",
+        "Enable native Windows Win32 + Direct WebView2 backend (default: auto-detected from the target OS)",
+    ) orelse is_windows;
+
     const webview_opts = b.addOptions();
     webview_opts.addOption(bool, "enable_gtk", is_linux and enable_gtk);
+    webview_opts.addOption(bool, "enable_macos", is_macos and enable_macos);
+    webview_opts.addOption(bool, "enable_windows", is_windows and enable_windows);
+
+    // `M4-01`: native dialog & clipboard backends reuse the same per-OS switches. Keeping them in
+    // a separate option module means `zts_tauri` never sees the flag and stays GUI-free.
+    const native_opts = b.addOptions();
+    native_opts.addOption(bool, "enable_gtk", is_linux and enable_gtk);
+    native_opts.addOption(bool, "enable_macos", is_macos and enable_macos);
+    native_opts.addOption(bool, "enable_windows", is_windows and enable_windows);
 
     // -------------------------------------------------------------------------
     // 1. Standalone Public Modules (independently importable via `b.dependency`)
@@ -141,11 +141,14 @@ pub fn build(b: *std.Build) void {
 
     // Level 1d: `zts_webview` — Standalone minimal native WebView (`GTK3 + WebKit2GTK 4.1`),
     // `HeadlessMock`, and flat C ABI (`include/zts_webview.h`). Zero JSON / RPC / Tauri coupling!
+    const native_linux_gtk = is_linux and enable_gtk;
+    const native_macos = is_macos and enable_macos;
+    const native_windows = is_windows and enable_windows;
     const webview_mod = b.addModule("zts_webview", .{
         .root_source_file = b.path("src/webview/mod.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = is_linux and enable_gtk,
+        .link_libc = (is_linux and enable_gtk) or native_macos or native_windows,
         .imports = &.{
             .{ .name = "zts_foundation", .module = foundation_mod },
             .{ .name = "webview_options", .module = webview_opts.createModule() },
@@ -157,6 +160,48 @@ pub fn build(b: *std.Build) void {
         webview_mod.linkSystemLibrary("libsoup-3.0", .{});
         webview_mod.linkSystemLibrary("javascriptcoregtk-4.1", .{});
     }
+    if (native_macos) {
+        // Pure C ABI Objective-C shim: no `@cImport`, no `addTranslateC`, ~2s cold link.
+        webview_mod.addCSourceFile(.{
+            .file = b.path("src/webview/macos_shim.m"),
+            .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
+        });
+        webview_mod.linkFramework("Cocoa", .{});
+        webview_mod.linkFramework("WebKit", .{});
+        webview_mod.linkFramework("Foundation", .{});
+    }
+    if (native_windows) {
+        // Same import libraries Microsoft's `WebView2Loader.lib` declares — resolved from the
+        // Zig 0.17 toolchain's bundled `x86_64-windows-gnu` import libs (no SDK / MSVC needed).
+        // `use_pkg_config = .no` is mandatory: the GitHub-hosted Windows runners have no
+        // `pkg-config` executable, and Zig's default (`.yes`) turns every `kernel32` lookup into a
+        // hard configure error before the linker ever runs.
+        for ([_][]const u8{
+            "user32", "kernel32", "ole32", "oleaut32", "shlwapi",
+            "dwmapi", "advapi32", "gdi32", "shell32",  "comdlg32",
+        }) |lib| webview_mod.linkSystemLibrary(lib, .{ .use_pkg_config = .no });
+    }
+
+    // A static archive does not propagate the OS libraries its objects need, so every *consumer* of
+    // `libzts_webview` (the strict C99 ABI check and `examples/c_embed`) declares them itself.
+    const linkWebviewNativeDeps = struct {
+        fn apply(mod: *std.Build.Module, b_inner: *std.Build, linux: bool, macos: bool, windows: bool) void {
+            if (linux) {
+                for ([_][]const u8{ "gtk+-3.0", "webkit2gtk-4.1", "libsoup-3.0", "javascriptcoregtk-4.1" }) |lib|
+                    mod.linkSystemLibrary(lib, .{});
+            }
+            if (macos) {
+                mod.linkFramework("Cocoa", .{});
+                mod.linkFramework("WebKit", .{});
+                mod.linkFramework("Foundation", .{});
+            }
+            if (windows) {
+                for ([_][]const u8{ "user32", "kernel32", "ole32", "oleaut32", "shlwapi", "dwmapi", "advapi32", "gdi32", "shell32", "comdlg32" }) |lib|
+                    mod.linkSystemLibrary(lib, .{ .use_pkg_config = .no });
+            }
+            _ = b_inner;
+        }
+    }.apply;
 
     // Level 1e: `zts_core` — Desktop framework core (`zts_foundation` + `zts_web` + Window `Host` VTable).
     const core_mod = b.addModule("zts_core", .{
@@ -184,6 +229,56 @@ pub fn build(b: *std.Build) void {
             .{ .name = "zts_rpc", .module = rpc_mod },
         },
     });
+
+    // Level 1f-bis: `zts_tauri_native` — OS dialog & clipboard backends for `zts_tauri` plugins
+    // (`M4-01`). This is the ONLY module that links GTK / Cocoa / Win32 on behalf of `zts_tauri`;
+    // the plugin wire layer and its `Mock` backends stay Pure Zig.
+    const tauri_native_mod = b.addModule("zts_tauri_native", .{
+        .root_source_file = b.path("src/tauri/native.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = (is_linux and enable_gtk) or native_macos or native_windows,
+        .imports = &.{
+            .{ .name = "zts_foundation", .module = foundation_mod },
+            .{ .name = "zts_web", .module = web_mod },
+            .{ .name = "zts_core", .module = core_mod },
+            .{ .name = "zts_rpc", .module = rpc_mod },
+            .{ .name = "zts_tauri", .module = tauri_mod },
+            .{ .name = "native_options", .module = native_opts.createModule() },
+        },
+    });
+    if (is_linux and enable_gtk) {
+        tauri_native_mod.linkSystemLibrary("gtk+-3.0", .{});
+        tauri_native_mod.linkSystemLibrary("gdk-3.0", .{});
+        tauri_native_mod.linkSystemLibrary("glib-2.0", .{});
+    }
+    if (native_macos) {
+        tauri_native_mod.addCSourceFile(.{
+            .file = b.path("src/tauri/native_macos_shim.m"),
+            .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
+        });
+        tauri_native_mod.addCSourceFile(.{
+            .file = b.path("src/tauri/menu/native_macos_shim.m"),
+            .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
+        });
+        // `NSStatusItem` tray shim (`M4-06`); reuses the menu shim's `zts_menu_init`.
+        tauri_native_mod.addCSourceFile(.{
+            .file = b.path("src/tauri/tray/native_macos_shim.m"),
+            .flags = &.{ "-fobjc-arc", "-fno-objc-arc-exceptions", "-Wall", "-Wextra" },
+        });
+        tauri_native_mod.linkFramework("Cocoa", .{});
+        tauri_native_mod.linkFramework("Foundation", .{});
+        // `native_macos_shim.m` maps filter extensions to UTIs (`UTType`), not the deprecated
+        // LaunchServices APIs.
+        tauri_native_mod.linkFramework("UniformTypeIdentifiers", .{});
+    }
+    if (native_windows) {
+        for ([_][]const u8{
+            // `comctl32` provides `SetWindowSubclass`, which is how `plugin:menu` learns about
+            // `WM_COMMAND` without the webview having to know about menus.
+            "user32", "kernel32", "comctl32", "ole32", "oleaut32", "shlwapi", "shell32",
+        }) |lib| tauri_native_mod.linkSystemLibrary(lib, .{ .use_pkg_config = .no });
+    }
 
     // Level 1g: `zts_wasm` — Isomorphic `wasm32-freestanding` runtime (`WasmHost`, `Instance`, C ABI exports).
     // Zero libc / OS GUI / socket dependencies; compiles identically for native unit tests & `.wasm`.
@@ -364,10 +459,77 @@ pub fn build(b: *std.Build) void {
         .root_module = webview_mod,
     });
     c_abi_mod.linkLibrary(c_abi_lib);
+    linkWebviewNativeDeps(c_abi_mod, b, native_linux_gtk, native_macos, native_windows);
     const c_abi_exe = b.addExecutable(.{
         .name = "verify_webview_c_abi",
         .root_module = c_abi_mod,
     });
+
+    // `M3-03`: a **pure C99** host that owns its own window + event loop and mounts `zts_webview`
+    // as an overlay child. Only built where a native backend exists (it opens a real window).
+    var c_embed_run: ?*std.Build.Step.Run = null;
+    if (native_linux_gtk or native_macos or native_windows) {
+        const c_embed_mod = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        c_embed_mod.addIncludePath(b.path("include"));
+        c_embed_mod.addCSourceFile(.{
+            .file = b.path("examples/c_embed/main.c"),
+            .flags = &.{ "-std=c99", "-Wall", "-Wextra", "-Werror" },
+        });
+        c_embed_mod.linkLibrary(c_abi_lib);
+        linkWebviewNativeDeps(c_embed_mod, b, native_linux_gtk, native_macos, native_windows);
+        const c_embed_exe = b.addExecutable(.{
+            .name = "zts_c_embed",
+            .root_module = c_embed_mod,
+        });
+        b.installArtifact(c_embed_exe);
+        c_embed_run = b.addRunArtifact(c_embed_exe);
+    }
+
+    // Declared outside the Windows block so the `test` step can depend on it conditionally.
+    var windows_e2e_run: ?*std.Build.Step.Run = null;
+
+    // `M3-02` deployment proof: a **single** self-contained `.exe` (no `WebView2Loader.dll`).
+    // Built for every Windows target — including Linux -> `-Dtarget=x86_64-windows-gnu` — and
+    // installed so `ci-windows` can execute the exact shipped binary.
+    if (native_windows) {
+        const smoke_mod = b.createModule(.{
+            .root_source_file = b.path("tests/webview/windows_smoke.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "zts_webview", .module = webview_mod },
+            },
+        });
+        const smoke_exe = b.addExecutable(.{
+            .name = "zts_webview2_smoke",
+            .root_module = smoke_mod,
+        });
+        b.installArtifact(smoke_exe);
+
+        // The E2E runs as a *standalone executable*, not as a `test` block: a crash inside a COM or
+        // browser callback must surface as plain stderr in the CI log (and not as an opaque
+        // "1 crash" in the test runner's accounting). `zig build test` depends on it below.
+        const e2e_mod = b.createModule(.{
+            .root_source_file = b.path("tests/webview/windows_e2e.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "zts_webview", .module = webview_mod },
+            },
+        });
+        const e2e_exe = b.addExecutable(.{
+            .name = "zts_webview2_e2e",
+            .root_module = e2e_mod,
+        });
+        const run_e2e = b.addRunArtifact(e2e_exe);
+        windows_e2e_run = run_e2e;
+    }
 
     const foundation_tests = b.addTest(.{ .root_module = foundation_mod });
     const web_tests = b.addTest(.{ .root_module = web_mod });
@@ -376,6 +538,7 @@ pub fn build(b: *std.Build) void {
     const webview_tests = b.addTest(.{ .root_module = webview_mod });
     const core_tests = b.addTest(.{ .root_module = core_mod });
     const tauri_tests = b.addTest(.{ .root_module = tauri_mod });
+    const tauri_native_tests = b.addTest(.{ .root_module = tauri_native_mod });
     const wasm_tests = b.addTest(.{ .root_module = wasm_mod });
     const ssg_tests = b.addTest(.{ .root_module = ssg_mod });
     const standalone_tests = b.addTest(.{ .root_module = standalone_consumer_mod });
@@ -407,6 +570,89 @@ pub fn build(b: *std.Build) void {
 
     const tauri_e2e_tests = b.addTest(.{ .root_module = tauri_e2e_mod });
 
+    // -------------------------------------------------------------------------
+    // `M5-01`: `bindings.gen.ts` is generated from the counter schema at build time.
+    //   `zig build tsgen`           -> writes `examples/counter/web/bindings.gen.ts`
+    //   `zig build check-bindings`  -> fails when the committed file is stale (CI runs this)
+    // -------------------------------------------------------------------------
+    const counter_schema_mod = b.createModule(.{
+        .root_source_file = b.path("examples/counter/src/bindings_schema.zig"),
+        .target = b.graph.host,
+        .optimize = .debug,
+        .imports = &.{
+            .{ .name = "zts_core", .module = core_mod },
+            .{ .name = "zts_rpc", .module = rpc_mod },
+            .{ .name = "zts_tauri", .module = tauri_mod },
+            .{ .name = "zts_wasm", .module = wasm_mod },
+        },
+    });
+    const bindings_path = "examples/counter/web/bindings.gen.ts";
+
+    const tsgen = zts_build.tsgenBindings(b, .{
+        .schema_mod = counter_schema_mod,
+        .output_path = bindings_path,
+    });
+    const tsgen_step = b.step("tsgen", "Regenerate examples/counter/web/bindings.gen.ts from the counter schema");
+    tsgen_step.dependOn(tsgen.step);
+
+    const check_bindings = zts_build.tsgenBindings(b, .{
+        .schema_mod = counter_schema_mod,
+        .output_path = bindings_path,
+        .check = true,
+    });
+    const check_bindings_step = b.step("check-bindings", "Fail when bindings.gen.ts is out of date");
+    check_bindings_step.dependOn(check_bindings.step);
+
+    // `src/build_tools/assets.zig` is std-only, so its tests run on every host.
+    const build_tools_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/build_tools/assets.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = false,
+        }),
+    });
+
+    // Documentation site (`M5-06`): the Markdown renderer and the site builder are std-only, so
+    // their tests run everywhere; `zig build docs` renders docs/**/*.md into zig-out/docs.
+    const docsite_mod = b.createModule(.{
+        .root_source_file = b.path("src/docsite/mod.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = false,
+    });
+    const docsite_tests = b.addTest(.{ .root_module = docsite_mod });
+    const docsite_exe = b.addExecutable(.{
+        .name = "zts_docsite",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/docsite/main.zig"),
+            .target = b.graph.host,
+            .optimize = .debug,
+            .link_libc = false,
+        }),
+    });
+    const run_docsite = b.addRunArtifact(docsite_exe);
+    run_docsite.has_side_effects = true;
+    run_docsite.addArg("--out");
+    const docs_dir = run_docsite.addOutputDirectoryArg("docs");
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = docs_dir,
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+    const docs_step = b.step("docs", "Render the documentation site into zig-out/docs");
+    docs_step.dependOn(&install_docs.step);
+
+    // `zts` CLI (`M5-02`): argument parsing + the `init` template are std-only pure functions.
+    const cli_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/cli/mod.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = false,
+        }),
+    });
+
     const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full Z-Ts & Tauri v2 E2E suite");
     test_step.dependOn(&b.addRunArtifact(foundation_tests).step);
     test_step.dependOn(&b.addRunArtifact(web_tests).step);
@@ -415,13 +661,22 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(webview_tests).step);
     test_step.dependOn(&b.addRunArtifact(core_tests).step);
     test_step.dependOn(&b.addRunArtifact(tauri_tests).step);
+    test_step.dependOn(&b.addRunArtifact(tauri_native_tests).step);
     test_step.dependOn(&b.addRunArtifact(wasm_tests).step);
     test_step.dependOn(&b.addRunArtifact(ssg_tests).step);
+    test_step.dependOn(&b.addRunArtifact(build_tools_tests).step);
+    test_step.dependOn(&b.addRunArtifact(cli_tests).step);
+    test_step.dependOn(&b.addRunArtifact(docsite_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);
     test_step.dependOn(&b.addRunArtifact(c_abi_exe).step);
     test_step.dependOn(&b.addRunArtifact(umbrella_tests).step);
     test_step.dependOn(&b.addRunArtifact(tauri_e2e_tests).step);
     test_step.dependOn(&b.addRunArtifact(wasm_app_native_tests).step);
+    // Generated typings must match the schema (a stale `bindings.gen.ts` fails the build).
+    test_step.dependOn(check_bindings.step);
     test_step.dependOn(&b.addRunArtifact(embedded_consumer_tests).step);
     test_step.dependOn(&run_wasm_e2e.step);
+    // Native Windows E2E (`M3-02`): real HWND + WebView2 round trip, `OK windows-wv2 …` marker.
+    if (windows_e2e_run) |run_e2e| test_step.dependOn(&run_e2e.step);
+    if (c_embed_run) |run_embed| test_step.dependOn(&run_embed.step);
 }

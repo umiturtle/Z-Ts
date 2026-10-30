@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Z-Ts Counter</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header class="card__head">
+        <div>
+          <h1>Z-Ts Counter</h1>
+          <p class="subtitle">1 つの Zig 実装 → 3 つの成果物</p>
+        </div>
+        <span id="mode" class="badge" data-mode="unknown">detecting</span>
+      </header>
+
+      <section class="counter" aria-live="polite">
+        <p id="count" class="count" data-sign="zero">0</p>
+        <p class="meta">
+          step <b id="step">1</b> ・ mutations <b id="mutations">0</b>
+        </p>
+      </section>
+
+      <div class="row">
+        <button id="decrement" type="button" class="btn" title="decrement">−</button>
+        <button id="increment" type="button" class="btn btn--primary" title="increment">＋</button>
+        <button id="reset" type="button" class="btn btn--ghost" title="reset">Reset</button>
+      </div>
+
+      <div class="row row--step">
+        <label for="step-input">step</label>
+        <input id="step-input" type="number" min="1" max="100" step="1" value="1" />
+        <button id="apply-step" type="button" class="btn btn--ghost">Apply</button>
+      </div>
+
+      <p id="status" class="status" data-state="idle">booting…</p>
+
+      <footer class="foot">
+        <span>backend event: <code>counter:changed</code></span>
+        <span>received: <b id="events">0</b></span>
+      </footer>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

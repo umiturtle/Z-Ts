@@ -249,6 +249,8 @@ test "DesktopRuntime + HeadlessMock runs end-to-end Tauri v2 custom commands, Ch
         .tauri_path = &rt.plugins.paths,
         .tauri_app = &rt.plugins.app_state,
         .tauri_resources = &rt.plugins.resources,
+        .tauri_menu = &rt.plugins.menu_state,
+        .tauri_tray = &rt.plugins.tray_state,
     });
     rt.setRpcHandler(bound.handler());
 

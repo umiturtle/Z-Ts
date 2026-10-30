@@ -309,6 +309,10 @@ pub fn Schema(comptime specs: anytype) type {
         pub const Router = struct {
             states: StatePtrTuple,
             authorize_fn: ?AuthorizeFn = null,
+            /// Stateful authorizer (`M4-04` ACL): takes the caller's opaque pointer, so an app can
+            /// hand its policy to `withAuthCtx` without a global variable.
+            authorize_ctx: ?*anyopaque = null,
+            authorize_ctx_fn: ?*const fn (userdata: ?*anyopaque, ctx: *const Ctx, command: []const u8) bool = null,
             encode_options: codec.EncodeOptions = .{},
 
             /// Returns a lightweight 2-word `Handler` fat pointer pointing to `self`.
@@ -326,6 +330,18 @@ pub fn Schema(comptime specs: anytype) type {
                 return copy;
             }
 
+            /// Stateful variant of `withAuth` (see `tauri.acl.Policy.guard`).
+            pub fn withAuthCtx(
+                self: Router,
+                userdata: ?*anyopaque,
+                auth_fn: *const fn (userdata: ?*anyopaque, ctx: *const Ctx, command: []const u8) bool,
+            ) Router {
+                var copy = self;
+                copy.authorize_ctx = userdata;
+                copy.authorize_ctx_fn = auth_fn;
+                return copy;
+            }
+
             fn typeErasedDispatch(
                 userdata: ?*anyopaque,
                 resp_allocator: Allocator,
@@ -335,7 +351,9 @@ pub fn Schema(comptime specs: anytype) type {
             ) core.OutgoingResponse {
                 const self: *Router = @ptrCast(@alignCast(userdata.?));
 
-                if (self.authorize_fn) |auth| {
+                if (self.authorize_ctx_fn) |auth| {
+                    if (!auth(self.authorize_ctx, ctx, command)) return ctx_mod.Responses.forbidden;
+                } else if (self.authorize_fn) |auth| {
                     if (!auth(ctx, command)) return ctx_mod.Responses.forbidden;
                 }
 

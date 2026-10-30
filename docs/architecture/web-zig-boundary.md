@@ -40,3 +40,20 @@
 | `enum { a, b }` | `"a"` / `"b"` | `"a" \| "b"` | `erasableSyntaxOnly: true` 準拠 |
 | `union(enum)` | `{ kind: "a", ... }` 等 | `{ kind: "a"; ... } \| ...` | TS `switch (x.kind)` 直結 |
 | `zts.core.Handle(Tag)` | `u53` 数値 | ` Branded<number, Tag>` | 世代番号付き + TS 側でも異種ハンドル誤渡しを型エラー化！ |
+
+---
+
+## macOS 実装メモ（`M3-01`: Cocoa + `WKWebView`）
+
+ルール 6（座標系）と 10（ドラッグ領域）は、macOS では `src/webview/coords.zig` と
+`src/webview/macos_shim.m` の 2 箇所だけで完結する。**アプリコードには一切漏れない。**
+
+| 論点 | Linux GTK3 | macOS Cocoa |
+|---|---|---|
+| ネイティブバックエンド | `LinuxGtkBackend`（`src/webview/linux.zig`） | `MacOsBackend`（`src/webview/macos.zig` + `macos_shim.m`） |
+| 座標系 | GTK も左上原点なので変換不要 | `cssToCocoaY(screen_top, y, h) = screen_top - y - h`（`coords.zig`、全 OS で単体テスト） |
+| CORS | `webkit_security_manager_register_uri_scheme_as_cors_enabled` | 応答ヘッダ自動付与 + `OPTIONS` プリフライトをシムが 204 で吸収 |
+| スキーム応答の中断 | `finish_with_response` は中断後 no-op | `stopURLSchemeTask:` でトークン削除 + `@try` 防御 |
+| ドラッグ開始 | `gtk_window_begin_move_drag` | `performWindowDragWithEvent:`（直前の `mouseDown` を保持） |
+| イベントループ | `g_main_context_iteration` | `nextEventMatchingMask:untilDate:inMode:dequeue:`（blocking は 1 秒上限） |
+| Objective-C | 無し（純 C ABI） | **`macos_shim.m` 1 ファイルのみ**。Zig 側は `zts_macos_*` の `extern fn` だけ |

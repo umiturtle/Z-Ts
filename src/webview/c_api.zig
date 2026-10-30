@@ -1,6 +1,6 @@
 //! Standalone C ABI Implementation matching `include/zts_webview.h` (`src/webview/c_api.zig`).
 //!
-//! Exports 26 flat C functions (`zts_webview_*`) with zero Zig-specific types in signatures,
+//! Exports flat C functions (`zts_webview_*`) with zero Zig-specific types in signatures,
 //! enabling direct linking from C/C++, Rust, SDL3/GLFW engines, or dynamic FFI hosts.
 
 const std = @import("std");
@@ -39,6 +39,16 @@ pub const CSchemeRequestView = extern struct {
     body_len: usize,
     headers: ?[*]const CHeader,
     headers_len: usize,
+};
+
+/// `zts_capture_t` — a finished PNG screenshot. `data` is owned by the caller once
+/// `zts_webview_capture_take()` returns `ZTS_WEBVIEW_OK`; release it with
+/// `zts_webview_capture_free()`. `data == NULL && len == 0` means "still rendering".
+pub const CCapture = extern struct {
+    data: ?[*]u8 = null,
+    len: usize = 0,
+    width: u32 = 0,
+    height: u32 = 0,
 };
 
 pub const CSchemeHandlerFn = *const fn (
@@ -215,6 +225,16 @@ pub export fn zts_webview_step(handle_opt: ?*CEngineHandle, mode_raw: u32) callc
     return h.engine.step(mode);
 }
 
+/// Host-loop convenience wrapper around `zts_webview_step(engine, ZTS_STEP_POLL)` (`M3-03`).
+///
+/// Embedding hosts (SDL3 / GLFW / GTK / Win32 `WM_TIMER` …) call this once per frame from *their*
+/// own loop: it pumps one non-blocking engine iteration and returns `false` once the engine has
+/// quit or its last window is gone.
+pub export fn zts_webview_poll(handle_opt: ?*CEngineHandle) callconv(.c) bool {
+    const h = handle_opt orelse return false;
+    return h.engine.step(.poll);
+}
+
 pub export fn zts_webview_wakeup(handle_opt: ?*CEngineHandle) callconv(.c) void {
     if (handle_opt) |h| h.engine.wakeup();
 }
@@ -358,6 +378,15 @@ pub export fn zts_webview_window_native_handle(h_opt: ?*CEngineHandle, win: u64)
     return h.engine.nativeHandle(id);
 }
 
+/// Resizes an **embedded** window to fill its host container's client area (`M3-03`).
+/// Toplevel windows return `ZTS_WEBVIEW_ERR_UNSUPPORTED`.
+pub export fn zts_webview_window_fit_parent(h_opt: ?*CEngineHandle, win: u64) callconv(.c) i32 {
+    const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
+    const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
+    h.engine.fitParent(id) catch |err| return statusFromError(err);
+    return ZTS_WEBVIEW_OK;
+}
+
 pub export fn zts_webview_window_set_title(h_opt: ?*CEngineHandle, win: u64, title: ?[*:0]const u8) callconv(.c) i32 {
     const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
@@ -499,6 +528,63 @@ pub export fn zts_webview_open_devtools(h_opt: ?*CEngineHandle, win: u64) callco
     const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
     h.engine.openDevtools(id) catch |err| return statusFromError(err);
     return ZTS_WEBVIEW_OK;
+}
+
+// --- 5. Screenshot capture (`M5-04`) ---------------------------------------
+//
+// Host loop shape:
+//
+//     zts_webview_window_capture(engine, win);        // queue
+//     while (running) {
+//         zts_webview_poll(engine);                   // drive the renderer
+//         zts_capture_t shot = {0};
+//         if (zts_webview_capture_take(engine, win, &shot) == ZTS_WEBVIEW_OK) {
+//             write_png(shot.data, shot.len);         // 0 bytes => not ready yet
+//             zts_webview_capture_free(engine, &shot);
+//         }
+//     }
+
+/// Starts an asynchronous PNG capture of the window's visible viewport.
+/// Returns `ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND` for an unknown window.
+pub export fn zts_webview_window_capture(h_opt: ?*CEngineHandle, win: u64) callconv(.c) i32 {
+    const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
+    const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
+    h.engine.captureWindow(id) catch |err| return statusFromError(err);
+    return ZTS_WEBVIEW_OK;
+}
+
+/// Moves a finished capture into `out`.
+/// - `ZTS_WEBVIEW_OK` with `out.len > 0`: the caller now owns `out.data`.
+/// - `ZTS_WEBVIEW_OK` with `out.len == 0`: still rendering, poll again.
+/// - any error: the render failed (`ZTS_WEBVIEW_ERR_PLATFORM_FAILURE`) or the window is gone.
+pub export fn zts_webview_capture_take(h_opt: ?*CEngineHandle, win: u64, out: ?*CCapture) callconv(.c) i32 {
+    const h = h_opt orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
+    const slot = out orelse return ZTS_WEBVIEW_ERR_INVALID_ARG;
+    slot.* = .{};
+    const id = winFromU64(win) orelse return ZTS_WEBVIEW_ERR_WINDOW_NOT_FOUND;
+
+    const maybe = h.engine.takeCapture(id) catch |err| return statusFromError(err);
+    const capture = maybe orelse return ZTS_WEBVIEW_OK; // not ready yet
+
+    // Ownership transfer: the bytes were allocated by this engine's allocator, so the pointer stays
+    // valid until `zts_webview_capture_free()` hands it back. `capture` is deliberately *not*
+    // deinitialised — C now owns the buffer.
+    slot.data = capture.bytes.ptr;
+    slot.len = capture.bytes.len;
+    slot.width = capture.width;
+    slot.height = capture.height;
+    return ZTS_WEBVIEW_OK;
+}
+
+/// Releases a capture previously handed out by `zts_webview_capture_take()`.
+/// Safe to call twice, and safe on a zero-initialised struct.
+pub export fn zts_webview_capture_free(h_opt: ?*CEngineHandle, capture: ?*CCapture) callconv(.c) void {
+    const h = h_opt orelse return;
+    const c = capture orelse return;
+    if (c.data) |ptr| {
+        if (c.len > 0) h.allocator.free(ptr[0..c.len]);
+    }
+    c.* = .{};
 }
 
 test "C ABI (`zts_webview_*`) executes full engine, window, scheme & zero-copy destructor callback roundtrip" {

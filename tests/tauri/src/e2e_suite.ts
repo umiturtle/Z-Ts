@@ -35,6 +35,14 @@ import {
   getTauriVersion,
   getVersion,
 } from "@tauri-apps/api/app";
+import {
+  CheckMenuItem,
+  Menu,
+  Submenu,
+  type MenuItem as MenuItemType,
+} from "@tauri-apps/api/menu";
+import { LogicalPosition as MenuLogicalPosition } from "@tauri-apps/api/dpi";
+import { TrayIcon } from "@tauri-apps/api/tray";
 import { createIpcTransport, createRpcClient } from "./generated_api";
 
 export interface SuiteOptions {
@@ -263,6 +271,100 @@ export async function runSuite(opts: SuiteOptions): Promise<SuiteSummary> {
       // Even in non-WebKit mode, verify `emit` roundtrip via `EventBus`
       await emit("bridge:smoke", { ok: true });
     }
+
+    // 10. `@tauri-apps/api/menu` (`M4-03`) — unmodified upstream `plugin:menu|*` wire.
+    //     Covering the whole resource graph: nested submenus, predefined items, check state,
+    //     text/enabled setters, `items()` readback and `close()`.
+    const activations: string[] = [];
+    const fileMenu = await Submenu.new({
+      id: "zts-file",
+      text: "File",
+      items: [
+        {
+          id: "zts-open",
+          text: "Open",
+          accelerator: "CmdOrCtrl+O",
+          action: (id: string) => {
+            activations.push(id);
+          },
+        },
+        { item: "Separator" },
+        { item: "Quit" },
+      ],
+    });
+    const gridItem = await CheckMenuItem.new({ id: "zts-grid", text: "Grid", checked: true });
+    const menu = await Menu.new({ id: "zts-menu", items: [fileMenu, gridItem] });
+
+    check(menu.id === "zts-menu", `Menu.id expected zts-menu, got ${menu.id}`);
+    const listed = await menu.items();
+    check(listed.length === 2, `menu.items() returned ${listed.length}, expected 2`);
+    check(listed[0]?.kind === "Submenu", `items()[0].kind got ${listed[0]?.kind}`);
+    check(listed[1]?.kind === "Check", `items()[1].kind got ${listed[1]?.kind}`);
+
+    const nested = await fileMenu.items();
+    check(nested.length === 3, `submenu.items() returned ${nested.length}, expected 3`);
+    check(nested[1]?.kind === "Predefined", `items()[1].kind got ${nested[1]?.kind}`);
+
+    check((await gridItem.isChecked()) === true, "CheckMenuItem.isChecked() must be true");
+    await gridItem.setChecked(false);
+    check((await gridItem.isChecked()) === false, "CheckMenuItem.setChecked(false)");
+    await gridItem.setText("Grid + rulers");
+    check((await gridItem.text()) === "Grid + rulers", "MenuItem.text()/setText()");
+    await gridItem.setEnabled(false);
+    check((await gridItem.isEnabled()) === false, "MenuItem.setEnabled(false)");
+    await gridItem.setEnabled(true);
+    const openItem = nested[0] as MenuItemType;
+    check((await openItem.text()) === "Open", "MenuItem.text() for a nested item");
+    await openItem.setAccelerator("CmdOrCtrl+Shift+O");
+    await openItem.setAccelerator(null);
+
+    // Setting the app / window menu and popping a context menu need a native backend: the desktop
+    // gates run a `Mock` that records what the JS asked for, while the serverless `wasm` build has
+    // no toolkit and must **fail closed** instead of pretending the menu is on screen.
+    const contextMenu = await Menu.new({ items: [{ id: "zts-copy", text: "Copy" }] });
+    if (opts.mode === "wasm") {
+      let rejected = false;
+      try {
+        await menu.setAsAppMenu();
+      } catch {
+        rejected = true;
+      }
+      check(rejected, "setAsAppMenu() must fail closed without a native backend");
+      let trayRejected = false;
+      try {
+        await TrayIcon.new({ id: "zts-tray", tooltip: "Z-Ts Studio" });
+      } catch {
+        trayRejected = true;
+      }
+      check(trayRejected, "TrayIcon.new() must fail closed without a native backend");
+    } else {
+      const previousAppMenu = await menu.setAsAppMenu();
+      check(previousAppMenu === null, "setAsAppMenu() must report no previous menu");
+      await menu.setAsWindowMenu(win);
+      await contextMenu.popup(new MenuLogicalPosition(12, 24));
+      await menu.setAsAppMenu();
+
+      // 11. `@tauri-apps/api/tray` (`M4-03`)
+      const tray = await TrayIcon.new({
+        id: "zts-tray",
+        menu,
+        tooltip: "Z-Ts Studio",
+        title: "ZTS",
+      });
+      await tray.setTooltip("2 unread messages");
+      await tray.setTitle("42");
+      await tray.setVisible(false);
+      await tray.setVisible(true);
+      const foundTray = await TrayIcon.getById("zts-tray");
+      check(foundTray !== null, "TrayIcon.getById() must find the tray created above");
+      await TrayIcon.removeById("zts-tray");
+      check((await TrayIcon.getById("zts-tray")) === null, "TrayIcon.removeById()");
+    }
+    await contextMenu.close();
+
+    // Resources are released through the shared `plugin:resources` table.
+    await menu.close();
+    check(activations.length === 0, "no menu action may fire without a real activation");
 
     const summary: SuiteSummary = {
       ok: true,

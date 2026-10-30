@@ -8,6 +8,14 @@
  * - Window & DOM creation/mutation functions run on the main UI thread (or enqueue automatically).
  * - `zts_webview_wakeup`, `zts_webview_request_quit`, and `zts_webview_complete_request` are
  *   100% thread-safe and lock-free/wait-free from ANY worker thread.
+ *
+ * Embedding (Overlay) Contract (`M3-03`):
+ * - Pass an existing container as `zts_window_desc_t.parent_native_handle` and the WebView becomes
+ *   a child of it: `GtkContainer*` (GTK3), `NSView*` (AppKit), `HWND` (Win32).
+ * - The child fills the host's client area; call `zts_webview_window_fit_parent()` after a host
+ *   resize, or let the native layout do it (expanding GtkBox / autoresizing NSView / WS_CHILD).
+ * - Drive everything from *your* loop with `zts_webview_poll()`; closing the embedded window never
+ *   destroys the host container.
  */
 
 #ifndef ZTS_WEBVIEW_H
@@ -120,6 +128,8 @@ typedef struct zts_window_desc {
 int32_t zts_webview_engine_create(uint32_t backend, zts_webview_engine_t **out_engine);
 void zts_webview_engine_destroy(zts_webview_engine_t *engine);
 bool zts_webview_step(zts_webview_engine_t *engine, uint32_t mode);
+/* Non-blocking single iteration for hosts that own the loop (`== zts_webview_step(engine, ZTS_STEP_POLL)`). */
+bool zts_webview_poll(zts_webview_engine_t *engine);
 void zts_webview_wakeup(zts_webview_engine_t *engine);
 void zts_webview_request_quit(zts_webview_engine_t *engine);
 
@@ -164,6 +174,8 @@ int32_t zts_webview_window_create(
 );
 
 int32_t zts_webview_window_close(zts_webview_engine_t *engine, zts_window_id_t win);
+/* Resizes an embedded window to fill its host container. Toplevel windows: ZTS_WEBVIEW_ERR_UNSUPPORTED. */
+int32_t zts_webview_window_fit_parent(zts_webview_engine_t *engine, zts_window_id_t win);
 void *zts_webview_window_native_handle(zts_webview_engine_t *engine, zts_window_id_t win);
 int32_t zts_webview_window_set_title(zts_webview_engine_t *engine, zts_window_id_t win, const char *title);
 int32_t zts_webview_window_set_size(zts_webview_engine_t *engine, zts_window_id_t win, double width, double height);
@@ -180,7 +192,33 @@ int32_t zts_webview_window_set_always_on_top(zts_webview_engine_t *engine, zts_w
 int32_t zts_webview_window_set_focus(zts_webview_engine_t *engine, zts_window_id_t win);
 int32_t zts_webview_window_start_drag(zts_webview_engine_t *engine, zts_window_id_t win);
 
-/* --- 4. Script Injection, Evaluation, Navigation & DevTools --- */
+/* --- 4. Screenshot Capture (PNG) --- */
+/*
+ * Capture is asynchronous on every backend (WebKit snapshot / WKWebView snapshot / WebView2
+ * CapturePreview), so it integrates with the same host loop as everything else:
+ *
+ *     zts_webview_window_capture(engine, win);
+ *     for (;;) {
+ *         zts_webview_poll(engine);
+ *         zts_capture_t shot = {0};
+ *         if (zts_webview_capture_take(engine, win, &shot) != ZTS_WEBVIEW_OK) break;  // failed
+ *         if (shot.len > 0) { write(shot.data, shot.len); zts_webview_capture_free(engine, &shot); break; }
+ *         host_sleep_ms(1);                       // still rendering
+ *     }
+ */
+typedef struct zts_capture {
+    uint8_t *data;   /* PNG bytes, owned by the caller after `capture_take` returns 0/len>0 */
+    size_t len;      /* 0 == not ready yet */
+    uint32_t width;  /* pixels, parsed from the PNG IHDR (may be 2x on hi-DPI displays) */
+    uint32_t height;
+} zts_capture_t;
+
+int32_t zts_webview_window_capture(zts_webview_engine_t *engine, zts_window_id_t win);
+/* ZTS_WEBVIEW_OK + len == 0 => still rendering; ZTS_WEBVIEW_OK + len > 0 => caller owns `data`. */
+int32_t zts_webview_capture_take(zts_webview_engine_t *engine, zts_window_id_t win, zts_capture_t *out);
+void zts_webview_capture_free(zts_webview_engine_t *engine, zts_capture_t *capture);
+
+/* --- 5. Script Injection, Evaluation, Navigation & DevTools --- */
 int32_t zts_webview_add_init_script(zts_webview_engine_t *engine, zts_window_id_t win, const char *js_source);
 int32_t zts_webview_eval_js(zts_webview_engine_t *engine, zts_window_id_t win, const char *js_source);
 int32_t zts_webview_navigate(zts_webview_engine_t *engine, zts_window_id_t win, const char *url);

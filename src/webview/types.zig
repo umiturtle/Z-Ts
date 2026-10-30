@@ -6,6 +6,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const foundation = @import("zts_foundation");
+const png = @import("png.zig");
 
 pub const Handle = foundation.Handle;
 pub const OwnedBytes = foundation.OwnedBytes;
@@ -177,6 +178,45 @@ pub const CloseHandler = struct {
 
     pub inline fn call(self: CloseHandler, window_id: WindowId) void {
         self.onClose(self.userdata, window_id);
+    }
+};
+
+/// Image format requested from `captureWindow()`. All backends are required to support `.png`
+/// (cairo, `NSBitmapImageRep`, WebView2 `CapturePreview` all encode it natively); the enum exists so
+/// a future `.jpeg` can be added without changing the ABI.
+pub const CaptureFormat = enum(u32) {
+    png = 0,
+};
+
+/// A finished screen capture: PNG bytes plus the dimensions parsed back out of the IHDR chunk.
+///
+/// Ownership: `takeCapture()` moves the value to the caller, who must call `deinit()`. The backend
+/// never frees bytes it has already handed out, and `closeWindow()` / `deinit()` free anything the
+/// caller left behind (verified with `std.testing.allocator`).
+pub const Capture = struct {
+    bytes: []u8,
+    width: u32,
+    height: u32,
+    allocator: Allocator,
+
+    /// Takes ownership of `bytes`; returns `error.PlatformFailure` (and frees them) when the buffer
+    /// is not a readable PNG, so a broken encoder can never surface as a "0×0 screenshot".
+    pub fn initOwned(allocator: Allocator, bytes: []u8) WebviewError!Capture {
+        const size = png.parseSize(bytes) catch {
+            allocator.free(bytes);
+            return error.PlatformFailure;
+        };
+        return .{
+            .bytes = bytes,
+            .width = size.width,
+            .height = size.height,
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: *Capture) void {
+        self.allocator.free(self.bytes);
+        self.* = undefined;
     }
 };
 

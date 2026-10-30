@@ -86,6 +86,9 @@ pub fn snakeToCamelBuf(snake: []const u8, out: []u8) []const u8 {
 pub fn snakeToCamel(comptime snake: []const u8) *const [snakeToCamelLen(snake):0]u8 {
     const out_len = comptime snakeToCamelLen(snake);
     const result = comptime blk: {
+        // Structs with many fields (e.g. `plugin:fs` `FileInfo`) exceed the default
+        // 1000-branch comptime quota; the loop is O(len) so this is a safe ceiling.
+        @setEvalBranchQuota(20_000);
         var buf: [out_len:0]u8 = undefined;
         _ = snakeToCamelBuf(snake, &buf);
         buf[out_len] = 0;

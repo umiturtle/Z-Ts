@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Z-Ts — CJK typography</title>
+<style>
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body { background:#fbfaf7; color:#1c1917; padding:40px 56px;
+         font-family:ZTSSerif, serif; }
+  .kicker { font-family:ZTSSans, sans-serif;
+            font-size:11px; letter-spacing:3.08px; text-transform:uppercase; color:#a8a29e; }
+  h1 { font-size:38px; line-height:55px; margin:14px 0 6px; letter-spacing:0.38px; }
+  .sub { color:#78716c; font-size:14px; letter-spacing:0.84px; }
+  hr { border:0; border-top:1px solid #e7e5e4; margin:26px 0; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:0 40px; font-size:15px; line-height:30px;
+          text-align:left; }
+  .cols > div p { margin:0 0 17px; }
+  .ruby { font-size:13px; color:#57534e; }
+  .mono { font-family:ZTSMono, monospace; font-size:12px; background:#f5f5f4;
+          border:1px solid #e7e5e4; border-radius:8px; padding:14px 16px; margin-top:24px; color:#44403c; }
+  .glyphs { display:flex; gap:10px; flex-wrap:wrap; margin-top:22px; font-family:ZTSSans, sans-serif; }
+  .glyphs span { padding:6px 10px; border:1px solid #e7e5e4; border-radius:8px; font-size:15px; background:#fff; }
+</style>
+</head>
+<body>
+  <div class="kicker">Typography / 組版</div>
+  <h1>日本語とラテン文字が混ざる画面で、<br>行間と字面が破綻しないこと。</h1>
+  <div class="sub">同梱 ZTS Serif / ZTS Sans / ZTS Mono のみ · letter-spacing 0.38px · line-height 30px</div>
+  <hr>
+  <div class="cols">
+    <div>
+      <p>WebView は OS ごとにフォントスタックが異なります。Z-Ts はその差異を吸収するのではなく、
+         「同じ HTML が同じように組まれる」ことを CI のスクリーンショットで確認します。</p>
+      <p>かな漢字交じり文では、句読点の詰め（約物半角）と行頭禁則が破綻すると一気に素人っぽく見えます。
+         ここでは <span class="ruby">「、」「。」</span> を含む段落を 2 段組みにして、禁則処理の効きを見ます。</p>
+    </div>
+    <div>
+      <p>数字と英単語は <code>font-variant-numeric</code> とカーニングの確認用です:
+         0123456789 · AVATAR · Typography · kerning · ligature fi fl。</p>
+      <p>行長は 44 文字前後を上限にし、両端揃えは使いません。素の折返しで比較します。最終行の処理が
+         プラットフォーム間で揃っているかを目視で比較できます。</p>
+    </div>
+  </div>
+  <div class="glyphs">
+    <span>あ い う え お</span><span>アイウエオ</span><span>漢字直交</span>
+    <span>™ © ® § ¶</span><span>→ ← ↑ ↓</span><span>①②③</span><span>± × ÷ ≈</span>
+  </div>
+  <div class="mono">const greeting = "こんにちは、世界"; // Z-Ts · zts_webview · 33 exports</div>
+</body>
+</html>

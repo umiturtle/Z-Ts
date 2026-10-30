@@ -182,6 +182,14 @@ test "2. Live BridgeServer + BridgeHost + Node 22 runs unmodified @tauri-apps/ap
     );
     defer plugins.destroy();
 
+    // `M4-03`: the `Mock` menu/tray backends let `plugin:menu` / `plugin:tray` be exercised on every
+    // OS (no toolkit in the Node gate), and record what the JS actually asked for.
+    var menu_mock = tauri.menu.Mock.init(testing.allocator);
+    defer menu_mock.deinit();
+    var tray_mock = tauri.tray.Mock.init(testing.allocator);
+    defer tray_mock.deinit();
+    _ = plugins.withMenuBackend(menu_mock.backend()).withTrayBackend(tray_mock.backend());
+
     var app_state: DemoAppState = .{
         .allocator = testing.allocator,
         .plugins = plugins,
@@ -195,6 +203,8 @@ test "2. Live BridgeServer + BridgeHost + Node 22 runs unmodified @tauri-apps/ap
         .tauri_path = &plugins.paths,
         .tauri_app = &plugins.app_state,
         .tauri_resources = &plugins.resources,
+        .tauri_menu = &plugins.menu_state,
+        .tauri_tray = &plugins.tray_state,
     });
 
     const srv = try bridge.BridgeServer.start(testing.allocator, testing.io, .{
@@ -243,6 +253,31 @@ test "2. Live BridgeServer + BridgeHost + Node 22 runs unmodified @tauri-apps/ap
     try testing.expectEqual(@as(u32, 2), app_state.listen_hits);
     try testing.expectEqual(@as(usize, 1), app_state.closed_packs.load(.acquire));
     try testing.expectEqualStrings("Z-Ts Verified Window", bh.backing.windows.get(main_win).?.title);
+
+    // `M4-03`: the menu the frontend built really reached the backend — with the submenu flattened
+    // in pre-order and `depth` set (the exact structure every native renderer consumes).
+    const applied = menu_mock.app_menu orelse return error.NoAppMenuApplied;
+    try testing.expectEqual(@as(usize, 5), applied.len);
+    try testing.expectEqualStrings("zts-file", applied[0].id);
+    try testing.expectEqual(@as(u16, 0), applied[0].depth);
+    try testing.expectEqual(tauri.menu.EntryKind.submenu, applied[0].kind);
+    try testing.expectEqual(@as(u16, 1), applied[1].depth);
+    try testing.expectEqualStrings("zts-open", applied[1].id);
+    try testing.expectEqual(tauri.menu.EntryKind.separator, applied[2].kind);
+    try testing.expectEqualStrings("zts-grid", applied[4].id);
+    try testing.expectEqual(@as(u16, 0), applied[4].depth);
+    try testing.expectEqual(tauri.menu.ItemKind.Check, applied[4].item_kind);
+    // The suite flipped it to `false` through `CheckMenuItem.setChecked` before re-applying.
+    try testing.expectEqual(false, applied[4].checked);
+    try testing.expect(menu_mock.apply_count >= 2);
+
+    // The tray was created with that menu attached, updated, hidden/shown and removed.
+    var saw_create_with_menu = false;
+    for (tray_mock.calls.items) |call| {
+        if (call.kind == .create and call.menu_ids.len == 5) saw_create_with_menu = true;
+    }
+    try testing.expect(saw_create_with_menu);
+    try testing.expectEqual(tauri.tray.Mock.CallKind.remove, tray_mock.lastCall().?.kind);
 }
 
 test "3. Native WebKit2GTK 4.1 DesktopRuntime runs unmodified @tauri-apps/api v2 over tauri://, ipc://, and asset://" {
@@ -303,6 +338,12 @@ test "3. Native WebKit2GTK 4.1 DesktopRuntime runs unmodified @tauri-apps/api v2
     };
     defer rt.destroy();
 
+    var menu_mock = tauri.menu.Mock.init(testing.allocator);
+    defer menu_mock.deinit();
+    var tray_mock = tauri.tray.Mock.init(testing.allocator);
+    defer tray_mock.deinit();
+    _ = rt.plugins.withMenuBackend(menu_mock.backend()).withTrayBackend(tray_mock.backend());
+
     var app_state: DemoAppState = .{
         .allocator = testing.allocator,
         .plugins = rt.plugins,
@@ -317,6 +358,8 @@ test "3. Native WebKit2GTK 4.1 DesktopRuntime runs unmodified @tauri-apps/api v2
         .tauri_path = &rt.plugins.paths,
         .tauri_app = &rt.plugins.app_state,
         .tauri_resources = &rt.plugins.resources,
+        .tauri_menu = &rt.plugins.menu_state,
+        .tauri_tray = &rt.plugins.tray_state,
     });
     rt.setRpcHandler(bound.handler());
 
@@ -350,4 +393,16 @@ test "3. Native WebKit2GTK 4.1 DesktopRuntime runs unmodified @tauri-apps/api v2
     try testing.expectEqual(@as(u32, 2), app_state.listen_hits);
     try testing.expect(app_state.drag_triggered);
     try testing.expectEqual(@as(usize, 1), app_state.closed_packs.load(.acquire));
+
+    // `M4-03` inside the real WebKit process: same flattened menu, same tray lifecycle.
+    const applied = menu_mock.app_menu orelse return error.NoAppMenuApplied;
+    try testing.expectEqual(@as(usize, 5), applied.len);
+    try testing.expectEqualStrings("zts-file", applied[0].id);
+    try testing.expectEqual(@as(u16, 1), applied[1].depth);
+    try testing.expectEqualStrings("zts-grid", applied[4].id);
+    var saw_create_with_menu = false;
+    for (tray_mock.calls.items) |call| {
+        if (call.kind == .create and call.menu_ids.len == 5) saw_create_with_menu = true;
+    }
+    try testing.expect(saw_create_with_menu);
 }
