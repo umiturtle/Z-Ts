@@ -117,7 +117,7 @@ b.step("tsgen", "Regenerate the TypeScript bindings").dependOn(gen.step);
 ## 6. ドキュメントサイトをビルドする
 
 ```bash
-./zigw build docs                     # zig-out/docs/（81 ページ・リンク検査つき）
+./zigw build docs                     # zig-out/docs/（リンク検査・アセット検査つき）
 python3 -m http.server --directory zig-out/docs 8137
 ```
 

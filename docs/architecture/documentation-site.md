@@ -101,7 +101,8 @@ push to main ──> build ──> ./zigw build docs            (リンク検査
   （＝ページが 0 枚でも「成功」しない）。
 * `.nojekyll` を置くので Jekyll の処理は走らない（`_zts/` のようなアンダースコア始まりの
   ディレクトリもそのまま配信される）。
-* サイトは `https://umiturtle.github.io/Z-Ts/` に公開される。
+* サイトは <https://umiturtle.github.io/Z-Ts/> に公開済み（2026-10-30 初回デプロイ、`main` `01132a6`）。
+  `main` に push するたびに自動で更新される。
 * **初回の有効化は「あれば使う / 無ければ作ってみる / 作れなければ警告」**の 3 段構え
   （`.github/workflows/pages.yml` の `Check whether GitHub Pages is enabled`）:
 

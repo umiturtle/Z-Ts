@@ -1,8 +1,7 @@
 # Task M5-06: ドキュメントの充実 + GitHub Pages 公開（Markdown → 静的サイト）
 
-- **Status**: `in_progress`（生成器・テンプレート・サンプル公開・Pages ワークフローまで実装し、
-  CI の M5-06 ゲートは green。残りはスクリーンショット画廊の取り込みと、Pages の初回有効化
-  = リポジトリ設定の 1 クリック）
+- **Status**: `in_progress`（**2026-10-30 に GitHub Pages へ初回公開済み** —
+  <https://umiturtle.github.io/Z-Ts/>。残りはスクリーンショット画廊の取り込みのみ）
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/docsite/`（新規）, `build.zig`, `zigw`, `.github/workflows/pages.yml`（新規）,
   `docs/architecture/documentation-site.md`, `docs/decisions/0018-documentation-site.md`,
@@ -41,7 +40,11 @@
 - [x] `./zigw quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
 - [x] Pages ワークフローが**未設定でも緑**になる（run `40999281238` / `41000081966` で実証。
       失敗アノテーション 0 件・`Pages not enabled` の警告 1 件）
-- [ ] リポジトリ設定（Pages → Source: GitHub Actions）後に初回デプロイを確認
+- [x] リポジトリ設定（Pages → Source: GitHub Actions）後の初回デプロイを確認
+      （run [`41004100950`](https://github.com/umiturtle/Z-Ts/actions/runs/41004100950) /
+      `main` `01132a6` = success、Deploy ジョブも success。
+      `GET /repos/umiturtle/Z-Ts/pages` → `build_type: workflow`、
+      公開 URL <https://umiturtle.github.io/Z-Ts/>）
 
 ---
 
