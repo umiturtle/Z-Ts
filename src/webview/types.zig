@@ -29,7 +29,9 @@ pub const RequestId = Handle(.ipc_request);
 /// * `.poll` — return immediately, even when nothing happened. Use it when the main thread has
 ///   other work to do (a 60fps render loop, a game engine, an embedded host that owns the run loop).
 pub const StepMode = enum(u32) {
+    /// Park until at least one event arrives (the plain `while (running) step(...)` loop).
     blocking = 0,
+    /// Return immediately; use when the host owns the run loop.
     poll = 1,
 };
 
@@ -39,8 +41,11 @@ pub const StepMode = enum(u32) {
 /// window (a GTK backend without `$DISPLAY` falls back), otherwise `HeadlessMock`. `.native` and
 /// `.headless_mock` are for tests that must not silently change engine.
 pub const BackendKind = enum(u32) {
+    /// Native when it was compiled in and a display is available, else the mock.
     auto = 0,
+    /// Force the in-memory engine (tests never silently switch backends).
     headless_mock = 1,
+    /// Force the native engine; `error.DisplayUnavailable` when there is none.
     native = 2,
 };
 
@@ -56,7 +61,9 @@ pub const WebviewError = error{
 
 /// One HTTP header of a scheme request or response. Names are ASCII, values are opaque bytes.
 pub const HeaderPair = struct {
+    /// Header name (ASCII).
     name: []const u8,
+    /// Header value (opaque bytes).
     value: []const u8,
 };
 
@@ -79,6 +86,7 @@ pub const SchemeRequest = struct {
     /// Request body bytes (empty for `GET`).
     body: []const u8 = "",
 
+    /// Case-insensitive header lookup, or `null`.
     pub fn header(self: SchemeRequest, target_name: []const u8) ?[]const u8 {
         for (self.headers) |h| {
             if (std.ascii.eqlIgnoreCase(h.name, target_name)) return h.value;
@@ -94,10 +102,12 @@ pub const SchemeResponse = struct {
     status_code: u16 = 200,
     /// `Content-Type` header value.
     content_type: []const u8 = "application/octet-stream",
+    /// Additional headers (`Tauri-Response`, `Content-Range`, …).
     extra_headers: []const HeaderPair = &.{},
     /// Response bytes; ownership transfers to the engine.
     body: OwnedBytes,
 
+    /// Converts an `OutgoingResponse`, folding its status into `Tauri-Response`.
     pub fn fromOutgoing(out: OutgoingResponse) SchemeResponse {
         const status_hdr: HeaderPair = .{
             .name = "Tauri-Response",
@@ -115,6 +125,7 @@ pub const SchemeResponse = struct {
         };
     }
 
+    /// Releases `body`. Headers are borrowed and are not freed.
     pub fn deinit(self: *SchemeResponse) void {
         self.body.deinit();
     }
@@ -122,17 +133,26 @@ pub const SchemeResponse = struct {
 
 /// Owned heap copy of `SchemeResponse` queued safely across worker -> main UI thread boundaries.
 pub const QueuedCompletion = struct {
+    /// Request this reply belongs to.
     request_id: RequestId,
+    /// Owned copy of the HTTP status.
     status_code: u16,
+    /// Owned `Content-Type`.
     content_type: []u8,
+    /// Owned copies of the extra headers.
     extra_headers: []OwnedHeader,
+    /// Owned response bytes, moved from the `SchemeResponse`.
     body: OwnedBytes,
 
+    /// One header, copied so the completion can outlive the handler call.
     pub const OwnedHeader = struct {
+        /// Owned header name.
         name: []u8,
+        /// Owned header value.
         value: []u8,
     };
 
+    /// Deep-copies `resp` (except the body, which is moved) so it can cross a thread boundary.
     pub fn cloneFrom(allocator: Allocator, request_id: RequestId, resp: SchemeResponse) Allocator.Error!QueuedCompletion {
         // Note: on OOM caller still owns `resp.body` until moved at the very end!
         const ct_copy = try allocator.dupe(u8, resp.content_type);
@@ -165,6 +185,7 @@ pub const QueuedCompletion = struct {
         };
     }
 
+    /// Frees the copies and the body.
     pub fn deinit(self: *QueuedCompletion, allocator: Allocator) void {
         allocator.free(self.content_type);
         for (self.extra_headers) |h| {
@@ -182,9 +203,12 @@ pub const QueuedCompletion = struct {
 /// `zts_bridge` do exactly that — or keep the `RequestId` and complete it from a worker thread;
 /// the backend holds the request pending until then (`step()` keeps servicing the UI meanwhile).
 pub const SchemeHandler = struct {
+    /// Opaque pointer passed back on every call.
     userdata: ?*anyopaque = null,
+    /// Handles one request; must complete it now or keep the id for later.
     onRequest: *const fn (userdata: ?*anyopaque, req: SchemeRequest) void,
 
+    /// Invokes `onRequest` with `userdata`.
     pub inline fn call(self: SchemeHandler, req: SchemeRequest) void {
         self.onRequest(self.userdata, req);
     }
@@ -196,9 +220,12 @@ pub const SchemeHandler = struct {
 /// Returning is the only acknowledgement the page gets, so a handler that needs to reply should do
 /// so through the same IPC channel rather than through the return path.
 pub const MessageHandler = struct {
+    /// Opaque pointer passed back on every call.
     userdata: ?*anyopaque = null,
+    /// Receives one page message; `message` is only valid during the call.
     onMessage: *const fn (userdata: ?*anyopaque, window_id: WindowId, message: []const u8) void,
 
+    /// Invokes `onMessage` with `userdata`.
     pub inline fn call(self: MessageHandler, window_id: WindowId, message: []const u8) void {
         self.onMessage(self.userdata, window_id, message);
     }
@@ -209,9 +236,12 @@ pub const MessageHandler = struct {
 /// bookkeeping — dropping per-window state, decrementing a "quit when zero" counter — not for
 /// cancelling the close.
 pub const CloseHandler = struct {
+    /// Opaque pointer passed back on every call.
     userdata: ?*anyopaque = null,
+    /// Bookkeeping only: the window is already gone when this runs.
     onClose: *const fn (userdata: ?*anyopaque, window_id: WindowId) void,
 
+    /// Invokes `onClose` with `userdata`.
     pub inline fn call(self: CloseHandler, window_id: WindowId) void {
         self.onClose(self.userdata, window_id);
     }
@@ -255,6 +285,7 @@ pub const Capture = struct {
         };
     }
 
+    /// Frees the PNG bytes and poisons the value.
     pub fn deinit(self: *Capture) void {
         self.allocator.free(self.bytes);
         self.* = undefined;
@@ -268,7 +299,9 @@ pub const Capture = struct {
 /// `size` / `min_size` / `position` are in **logical (CSS) pixels**, which is what a HiDPI screen
 /// scales for you — the same numbers produce the same layout on every OS.
 pub const WindowConfig = struct {
+    /// Title bar text.
     title: []const u8 = "Z-Ts Window",
+    /// Initial client size in logical pixels.
     size: LogicalSize = .wh(800, 600),
     /// Lower bound for user resizing.
     min_size: ?LogicalSize = null,
@@ -297,6 +330,8 @@ pub const WindowConfig = struct {
     parent_native_handle: ?*anyopaque = null,
     /// UserScripts injected at `DOCUMENT_START` before any page `<script>` executes.
     init_scripts: []const []const u8 = &.{},
+    /// URL to open first; `null` means `about:blank` until `navigate()`.
     initial_url: ?[]const u8 = null,
+    /// Inline HTML to load first; overrides `initial_url` when set.
     initial_html: ?[]const u8 = null,
 };
