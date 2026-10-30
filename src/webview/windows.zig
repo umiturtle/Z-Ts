@@ -402,39 +402,62 @@ const close_vtable = CloseIface.VTable{
 /// (`webview2_com.zig`) and the runtime is found through the registry, so no
 /// `WebView2Loader.dll` ships with the app.
 pub const WindowsWebView2Backend = struct {
+    /// Allocator for windows, handlers and pending tables.
     allocator: Allocator,
+    /// IO reactor behind the wakeup event reuse.
     io: Io,
 
+    /// Loaded `WebView2Loader.dll` entry points.
     runtime: loader.Runtime,
+    /// Whether `CoInitializeEx` was called on this thread by `init()`.
     com_initialized: bool = false,
+    /// Registered window class atom (`0` before `init()`).
     class_atom: win32.ATOM = 0,
+    /// Generated window class name; must outlive every window.
     class_name: []u8 = &.{},
+    /// Auto-reset event `step(.blocking)` waits on.
     wakeup_event: win32.HANDLE,
 
+    /// Shared WebView2 environment (one per process), or `null` until created.
     env: ?*com.ICoreWebView2Environment = null,
+    /// Set when environment creation failed, so it is not retried every window.
     env_failed: bool = false,
 
+    /// Live windows, keyed by handle.
     windows: foundation.HandlePool(*WinWindow, .window) = .empty,
+    /// Running `AddWebResourceRequestedFilter` slots; they must stay alive.
     scheme_slots: std.ArrayList(*SchemeSlot) = .empty,
+    /// Scheme requests waiting for `completeRequest`.
     pending: pending_mod.PendingTable(PendingToken) = .{},
+    /// Replies queued from worker threads, drained by `step()`.
     completions: pending_mod.CompletionQueue,
+    /// Callbacks postponed until the message loop is pumping.
     deferred: std.AutoHashMapUnmanaged(u64, Deferred) = .empty,
+    /// Counter behind COM event tokens, so `RemoveHandler` can find them.
     next_token: u64 = 1,
+    /// Allocated COM event handlers (`*Handler`), freed at `deinit()`.
     handlers: std.ArrayList(*Handler) = .empty,
 
+    /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
     /// Screenshot slots (`M5-04`): pending renders and finished images not yet collected.
     captures: std.ArrayList(*CaptureSlot) = .empty,
 
+    /// Set by `requestQuit()`.
     quit: bool = false,
+    /// Whether any window was ever created (a zero-window app must not exit at once).
     had_windows: bool = false,
+    /// Set while `deinit()` runs, so callbacks stop touching torn-down state.
     shutting_down: bool = false,
+    /// How many environment preflights ran (tests assert it is not repeated).
     preflight_count: u64 = 0,
 
     // -- lifecycle ---------------------------------------------------------
 
+    /// Registers the window class, loads the loader DLL and creates the shared environment.
     pub fn init(allocator: Allocator, io: Io) types.WebviewError!*WindowsWebView2Backend {
         _ = win32.SetProcessDpiAwarenessContext(win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
@@ -538,6 +561,7 @@ pub const WindowsWebView2Backend = struct {
         return self.env != null;
     }
 
+    /// Destroys the windows, drops COM references and unregisters the class.
     pub fn deinit(self: *WindowsWebView2Backend) void {
         self.shutting_down = true;
         self.message_handler = null;
@@ -659,6 +683,7 @@ pub const WindowsWebView2Backend = struct {
 
     // -- event loop --------------------------------------------------------
 
+    /// Pumps messages; `.blocking` waits on the wakeup event.
     pub fn step(self: *WindowsWebView2Backend, mode: types.StepMode) bool {
         self.drainCompletions();
         if (self.quit) return false;
@@ -675,15 +700,18 @@ pub const WindowsWebView2Backend = struct {
         return true;
     }
 
+    /// Signals the wakeup event from any thread.
     pub fn wakeup(self: *WindowsWebView2Backend) void {
         _ = win32.SetEvent(self.wakeup_event);
     }
 
+    /// Marks the app for exit and wakes the loop.
     pub fn requestQuit(self: *WindowsWebView2Backend) void {
         self.quit = true;
         self.wakeup();
     }
 
+    /// Whether `requestQuit()` was called.
     pub fn quitRequested(self: *WindowsWebView2Backend) bool {
         return self.quit;
     }
@@ -1199,6 +1227,7 @@ pub const WindowsWebView2Backend = struct {
 
     // -- custom URI schemes ------------------------------------------------
 
+    /// Adds a `WebResourceRequested` filter for `scheme`.
     pub fn registerScheme(
         self: *WindowsWebView2Backend,
         scheme: []const u8,
@@ -1216,16 +1245,19 @@ pub const WindowsWebView2Backend = struct {
         self.scheme_slots.append(self.allocator, slot) catch return error.OutOfMemory;
     }
 
+    /// Registers the page-message receiver.
     pub fn setMessageHandler(self: *WindowsWebView2Backend, handler: ?types.MessageHandler) void {
         self.message_handler = handler;
     }
 
+    /// Registers the window-closed receiver.
     pub fn setCloseHandler(self: *WindowsWebView2Backend, handler: ?types.CloseHandler) void {
         self.close_handler = handler;
     }
 
     // -- windows -----------------------------------------------------------
 
+    /// Creates the Win32 window, the WebView2 controller and the view.
     pub fn createWindow(self: *WindowsWebView2Backend, cfg: types.WindowConfig) types.WebviewError!types.WindowId {
         if (self.env == null) return error.PlatformFailure;
 
@@ -1375,12 +1407,14 @@ pub const WindowsWebView2Backend = struct {
         _ = win32.DwmSetWindowAttribute(w.hwnd, win32.DWMWA_WINDOW_CORNER_PREFERENCE, &round, @sizeOf(i32));
     }
 
+    /// Applies the dark-mode media query override.
     pub fn setDarkMode(self: *WindowsWebView2Backend, win_id: types.WindowId, enabled: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.dark = enabled;
         self.applyDarkMode(w);
     }
 
+    /// Destroys the window and its controller.
     pub fn closeWindow(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         self.beginClose(w);
@@ -1586,6 +1620,7 @@ pub const WindowsWebView2Backend = struct {
         return buf;
     }
 
+    /// The `HWND` for `win_id`, or `null`.
     pub fn nativeHandle(self: *WindowsWebView2Backend, win_id: types.WindowId) ?*anyopaque {
         const w = self.windows.get(win_id) orelse return null;
         return w.*.hwnd;
@@ -1635,6 +1670,7 @@ pub const WindowsWebView2Backend = struct {
         return @bitCast(@as(i32, @truncate(raw)));
     }
 
+    /// Calls `SetWindowTextW`.
     pub fn setTitle(self: *WindowsWebView2Backend, win_id: types.WindowId, title: []const u8) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const z = win32.toWide(self.allocator, title) catch return error.OutOfMemory;
@@ -1645,6 +1681,7 @@ pub const WindowsWebView2Backend = struct {
         w.title = copy;
     }
 
+    /// Resizes the window and the WebView bounds (DPI-scaled).
     pub fn setSize(self: *WindowsWebView2Backend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         var rect = win32.RECT{
@@ -1666,16 +1703,19 @@ pub const WindowsWebView2Backend = struct {
         self.resizeWebView(w);
     }
 
+    /// Updates the `WM_GETMINMAXINFO` minimum.
     pub fn setMinSize(self: *WindowsWebView2Backend, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.min_size = size;
     }
 
+    /// Updates the `WM_GETMINMAXINFO` maximum.
     pub fn setMaxSize(self: *WindowsWebView2Backend, win_id: types.WindowId, size: ?types.LogicalSize) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.max_size = size;
     }
 
+    /// Calls `SetWindowPos` with the DPI-scaled origin.
     pub fn setPosition(self: *WindowsWebView2Backend, win_id: types.WindowId, pos: types.LogicalPoint) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         _ = win32.SetWindowPos(
@@ -1689,22 +1729,26 @@ pub const WindowsWebView2Backend = struct {
         );
     }
 
+    /// Toggles `WS_THICKFRAME`.
     pub fn setResizable(self: *WindowsWebView2Backend, win_id: types.WindowId, resizable: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.resizable = resizable;
         self.applyStyle(w);
     }
 
+    /// Calls `ShowWindow(SW_MINIMIZE)` / `SW_RESTORE`.
     pub fn setMinimized(self: *WindowsWebView2Backend, win_id: types.WindowId, minimized: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         _ = win32.ShowWindow(w.hwnd, if (minimized) win32.SW_MINIMIZE else win32.SW_RESTORE);
     }
 
+    /// Calls `ShowWindow(SW_MAXIMIZE)` / `SW_RESTORE`.
     pub fn setMaximized(self: *WindowsWebView2Backend, win_id: types.WindowId, maximized: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         _ = win32.ShowWindow(w.hwnd, if (maximized) win32.SW_MAXIMIZE else win32.SW_RESTORE);
     }
 
+    /// Removes the frame and covers the monitor, or restores the saved style.
     pub fn setFullscreen(self: *WindowsWebView2Backend, win_id: types.WindowId, fullscreen: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         if (w.fullscreen == fullscreen) return;
@@ -1733,6 +1777,7 @@ pub const WindowsWebView2Backend = struct {
         self.resizeWebView(w);
     }
 
+    /// Calls `ShowWindow(SW_SHOW)` / `SW_HIDE`.
     pub fn setVisible(self: *WindowsWebView2Backend, win_id: types.WindowId, visible: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.visible = visible;
@@ -1740,12 +1785,14 @@ pub const WindowsWebView2Backend = struct {
         if (w.controller) |c| _ = c.vtable.put_IsVisible(c, if (visible) win32.TRUE else win32.FALSE);
     }
 
+    /// Toggles `WS_CAPTION` and recomputes the frame.
     pub fn setDecorations(self: *WindowsWebView2Backend, win_id: types.WindowId, decorations: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.decorations = decorations;
         self.applyStyle(w);
     }
 
+    /// Calls `SetWindowPos(HWND_TOPMOST)`.
     pub fn setAlwaysOnTop(self: *WindowsWebView2Backend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.always_on_top = on_top;
@@ -1760,6 +1807,7 @@ pub const WindowsWebView2Backend = struct {
         );
     }
 
+    /// Calls `SetForegroundWindow`.
     pub fn setFocus(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         _ = win32.SetForegroundWindow(w.hwnd);
@@ -1767,6 +1815,7 @@ pub const WindowsWebView2Backend = struct {
         if (w.controller) |c| _ = c.vtable.MoveFocus(c, 0);
     }
 
+    /// Sends `WM_NCLBUTTONDOWN` with `HTCAPTION`, so Windows runs the drag.
     pub fn startDrag(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         // Hand the caption hit-test to the window manager: it then runs the native modal move loop,
@@ -1805,6 +1854,7 @@ pub const WindowsWebView2Backend = struct {
 
     // -- web content -------------------------------------------------------
 
+    /// Runs `AddScriptToExecuteOnDocumentCreated`.
     pub fn addInitScript(self: *WindowsWebView2Backend, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         if (w.webview != null) {
@@ -1818,6 +1868,7 @@ pub const WindowsWebView2Backend = struct {
         };
     }
 
+    /// Calls `ExecuteScript`.
     pub fn evalJs(self: *WindowsWebView2Backend, win_id: types.WindowId, script: []const u8) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const wv = w.webview orelse return error.PlatformFailure;
@@ -1826,6 +1877,7 @@ pub const WindowsWebView2Backend = struct {
         _ = wv.vtable.ExecuteScript(wv, z.ptr, null);
     }
 
+    /// Calls `Navigate`.
     pub fn navigate(self: *WindowsWebView2Backend, win_id: types.WindowId, url: []const u8) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const wv = w.webview orelse {
@@ -1843,6 +1895,7 @@ pub const WindowsWebView2Backend = struct {
         _ = wv.vtable.Navigate(wv, z.ptr);
     }
 
+    /// Calls `NavigateToString` (with a base URI when one is given).
     pub fn loadHtml(
         self: *WindowsWebView2Backend,
         win_id: types.WindowId,
@@ -1864,6 +1917,7 @@ pub const WindowsWebView2Backend = struct {
         _ = wv.vtable.NavigateToString(wv, z.ptr);
     }
 
+    /// Opens the WebView2 DevTools window.
     pub fn openDevtools(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         const wv = w.webview orelse return error.PlatformFailure;
