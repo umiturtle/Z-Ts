@@ -58,10 +58,22 @@ Markdown を二重管理しない。GitHub 上での見え方と Pages 上での
 GitHub Pages のサブパス（`/Z-Ts/`）では 404 になる。`demos.zig` が相対 URL に書き換える
 （規則と根拠は [`../architecture/documentation-site.md`](../architecture/documentation-site.md) §5）。
 
-### 2.5 公開は `main` への push 時のみ
+### 2.5 公開は `main` への push 時のみ、Pages の初回有効化で CI を赤くしない
 
-`.github/workflows/pages.yml` が `main` で走り、`configure-pages` → `upload-pages-artifact` →
-`deploy-pages` で公開する。PR ブランチからは公開しない（`github-pages` 環境を汚さないため）。
+`.github/workflows/pages.yml` が `main` で走り、Pages の有無を確認 → `configure-pages` →
+`upload-pages-artifact` → `deploy-pages` で公開する。PR ブランチからは公開しない。
+
+初回だけは Pages サイトが存在せず、**作成には管理者権限が要る**（`GITHUB_TOKEN` では
+`Resource not accessible by integration` で 403。`actions/configure-pages` の
+`enablement: true` も同じ理由で失敗する — 実測）。したがって次の順で判定する:
+
+1. `GET /repos/{owner}/{repo}/pages` が通れば公開する（設定済み）。
+2. 404 なら `POST …/pages`（`build_type=workflow`）を試す（管理者トークンなら成功）。
+3. それも駄目なら **警告だけ出して公開をスキップ**し、ジョブは緑のままにする。
+
+「一度きりの人手の設定」で `main` を恒久的に赤くすると、赤が常態化して本物の失敗が埋もれる。
+ビルド（レンダリング・リンク検査・アセット検査・サンプル生成）は毎回実行されるので、
+**サイトの退行は今まで通り落ちる**。
 
 ## 3. 検討した代替案
 

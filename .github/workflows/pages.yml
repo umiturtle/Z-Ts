@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       # `true` when the Pages site exists (or was just created) and the artifact was uploaded.
-      publish: ${{ steps.pages_status.outputs.ready }}
+      publish: ${{ steps.pages_state.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
 
@@ -96,35 +96,43 @@ jobs:
           du -sh _site
           find _site -name '*.html' | wc -l
 
-      # `enablement: true` creates the Pages site (build type = GitHub Actions) when the
-      # repository has never had Pages on. Without `continue-on-error` a token that is not allowed
-      # to create the site would turn every push to `main` red for a one-time configuration step.
-      - name: Configure Pages (enable it on the first run)
-        id: pages
-        uses: actions/configure-pages@v5
-        continue-on-error: true
-        with:
-          enablement: true
-
-      - name: Decide whether this run can publish
-        id: pages_status
+      # Ask the Pages API first, and try to create the site when it does not exist yet.
+      #
+      # `GET /repos/{owner}/{repo}/pages` → 404 means Pages was never enabled here, and
+      # `POST …/pages` needs *administrative* rights, which `GITHUB_TOKEN` does not have
+      # (measured: `Create Pages site failed. Error: Resource not accessible by integration`).
+      # So the creation is attempted optimistically — it succeeds when the token allows it — and a
+      # 404 just turns into one warning naming the single setting to flip. Failing the job here
+      # would leave `main` permanently red over a one-time human action.
+      - name: Check whether GitHub Pages is enabled (create it when the token allows)
+        id: pages_state
         env:
-          OUTCOME: ${{ steps.pages.outcome }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eo pipefail
-          if [ "$OUTCOME" = "success" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "Pages is enabled — the artifact will be published." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
+          enabled=false
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            echo "GitHub Pages site already exists."
+            enabled=true
+          elif gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow >/dev/null 2>&1; then
+            echo "Created the GitHub Pages site (build type: GitHub Actions)."
+            enabled=true
           fi
-          echo "ready=false" >> "$GITHUB_OUTPUT"
-          msg="GitHub Pages is not enabled for ${GITHUB_REPOSITORY} yet. The site was built and verified, but it cannot be published. One-time fix: Settings -> Pages -> Build and deployment -> Source: GitHub Actions. The next push to main deploys with no further change."
-          echo "::warning title=Pages not enabled::$msg"
-          printf '## Pages is not enabled yet\n\n%s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
-          echo "Skipping the upload/deploy steps; this is a configuration step, not a build failure."
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+          if [ "$enabled" != "true" ]; then
+            msg="GitHub Pages is not enabled for ${GITHUB_REPOSITORY} yet. The site was built and verified, but it cannot be published. One-time fix: Settings -> Pages -> Build and deployment -> Source: GitHub Actions. The next push to main deploys with no further change."
+            echo "::warning title=Pages not enabled::$msg"
+            printf '## Pages is not enabled yet\n\n%s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "Skipping the upload/deploy steps; this is a configuration step, not a build failure."
+          fi
+
+      - name: Configure Pages
+        if: steps.pages_state.outputs.enabled == 'true'
+        uses: actions/configure-pages@v5
 
       - name: Upload the Pages artifact
-        if: steps.pages_status.outputs.ready == 'true'
+        if: steps.pages_state.outputs.enabled == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site

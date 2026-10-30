@@ -150,10 +150,17 @@ blob URL に差し替わります。
 ブラウザによっては `script` の読み込みが制限されます。`python3 -m http.server` 経由で確認して
 ください。
 
-### GitHub Pages の deploy が `Get Pages site failed` で落ちる
+### GitHub Pages の公開だけがスキップされる（`Pages not enabled` の警告）
 
-Settings → Pages → Build and deployment → Source を **GitHub Actions** にしてください
-（初回のみ・リポジトリ管理者の操作）。
+ビルドは成功していて、**公開だけ**が止まっています。初回のみ、リポジトリ管理者が
+Settings → Pages → Build and deployment → Source を **GitHub Actions** にしてください。
+次の `main` push で、コードを変えずに公開が始まります。
+
+> **`enablement: true` では作れない** — `GITHUB_TOKEN` は Pages サイトを**作成できません**
+> （実測: `Create Pages site failed. Error: Resource not accessible by integration`）。
+> 作成は管理者権限の操作なので、Bot からは `GET` しか通りません。ワークフローは
+> `GET` → 失敗時のみ `POST` → それも失敗なら警告、という順で判定しているため、
+> CI が赤くなることはありません。
 
 ---
 

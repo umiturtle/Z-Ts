@@ -37,7 +37,9 @@
 - [ ] スクリーンショット（`M5-04`）をサイトに載せる
 - [ ] 各フレームワークのデモへのリンクを `examples/frameworks/README.md` から張る（現在は
       生成サイトの `/examples/frameworks/index.html` が入口）
-- [ ] `./zigw quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
+- [x] `./zigw quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
+- [x] Pages ワークフローが**未設定でも緑**になる（run `40999281238` で実証）
+- [ ] リポジトリ設定（Pages → Source: GitHub Actions）後に初回デプロイを確認
 
 ---
 
@@ -59,7 +61,10 @@
   - `zig build test -Dgtk=false`: **52/52 steps, 289/291 tests**（2 skipped）
 - **作業中・直前の状態**: CI run `40979757166`（`81a2447`）で **4/4 green**、
   Linux の `Render the documentation site and verify every internal link (M5-06 gate)` も success。
-  Pages への初回デプロイは `main` へのマージ後（リポジトリ設定で Source = GitHub Actions が必要）。
+  Pages の初回有効化はワークフローが試みるが、`GITHUB_TOKEN` では Pages サイトを作成できない
+  ことを実測で確認済み（`Create Pages site failed. Error: Resource not accessible by integration`）。
+  その場合は `::warning::` を出して**公開だけスキップ**し、ジョブは緑のまま。
+  リポジトリ管理者が Settings → Pages → Source = GitHub Actions にすれば、次の push で公開される。
 - **再開するとき**: `./zigw build docs` が `OK docsite pages=…` を出すことを確認し、
   `python3 -m http.server --directory zig-out/docs` で目視 → 次の増分（スクショ）へ。
 
