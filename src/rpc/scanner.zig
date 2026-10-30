@@ -25,14 +25,23 @@ pub const ScanError = error{
 /// The lexical token a `Cursor` is sitting on. `eof` is a token, not an error, so a pull loop can
 /// terminate without a special case.
 pub const TokenKind = enum {
+    /// `{` — start of an object.
     object_begin,
+    /// `}` — end of an object.
     object_end,
+    /// `[` — start of an array.
     array_begin,
+    /// `]` — end of an array.
     array_end,
+    /// A quoted string.
     string,
+    /// A number, integer or float syntax.
     number,
+    /// `true` / `false`.
     boolean,
+    /// `null`.
     null,
+    /// No more input (end of buffer, not an error).
     eof,
 };
 
@@ -43,18 +52,25 @@ pub const TokenKind = enum {
 /// * `.wtf8` — keep unpaired surrogates as WTF-8, which is what a JS `JSON.stringify` can legally
 ///   produce and what must be re-encoded unchanged when proxying.
 pub const StringDecodeMode = enum {
+    /// Reject invalid UTF-8 (the default for request bodies).
     strict_utf8,
+    /// Replace invalid sequences with U+FFFD.
     lossy_utf8,
+    /// Keep unpaired surrogates as WTF-8, so JS-produced strings survive a round trip.
     wtf8,
 };
 
 /// A decoded JSON string. `allocated` says whether the caller must free it (escapes force a copy;
 /// plain ASCII borrows the input), so the fast path costs nothing.
 pub const DecodedString = struct {
+    /// The decoded bytes: a borrow of the input, or an owned copy when escapes forced one.
     slice: []const u8,
+    /// Whether `slice` is owned and must be freed.
     allocated: bool,
+    /// Whether a lone surrogate was kept instead of rejected.
     had_wtf8_surrogate: bool = false,
 
+    /// Frees `slice` only when it was copied; the common (borrowed) path is a no-op.
     pub fn freeIfAllocated(self: DecodedString, allocator: Allocator) void {
         if (self.allocated and self.slice.len > 0) {
             allocator.free(self.slice);
@@ -65,18 +81,25 @@ pub const DecodedString = struct {
 /// A number as it appeared in the input, plus whether it used float syntax. Deciding integer vs
 /// float is left to the target type so `1` can fill an `f64` and `1.0` can be rejected by an `u32`.
 pub const NumberToken = struct {
+    /// The number exactly as written, borrowed from the input.
     slice: []const u8,
+    /// Whether it used `.`, `e` or `E` — lets the caller reject `1.0` for an integer field.
     is_float_syntax: bool,
 };
 
 /// Stateful pull-iterator over `{ "key": value, ... }` members with zero-copy key borrowing.
 pub const ObjectIter = struct {
+    /// Scanner this iterator pulls from.
     cursor: *Cursor,
+    /// Whether the next call reads the first member (no leading comma).
     first: bool = true,
+    /// Set once `}` was consumed; further calls return `null`.
     done: bool = false,
 
     /// Reads the next member's key and consumes the following `':'`, or consumes `'}'` and returns `null`.
     /// Caller MUST call `key.freeIfAllocated(allocator)` (typically via `defer`).
+    /// Reads the next key and consumes its `:`; `null` once `}` was reached.
+    /// The returned key must be released with `freeIfAllocated`.
     pub fn nextKey(self: *ObjectIter, allocator: Allocator) ScanError!?DecodedString {
         if (self.done) return null;
 
@@ -116,10 +139,14 @@ pub const ObjectIter = struct {
 /// A zero-copy pull scanner over a JSON document. It tracks byte position and nesting depth (so a
 /// crafted `[[[[…` body cannot blow the stack) but allocates nothing on its own.
 pub const Cursor = struct {
+    /// The document being scanned; never copied.
     input: []const u8,
+    /// Byte offset of the next unread character.
     pos: usize = 0,
+    /// Current container nesting, checked against `max_depth`.
     depth: usize = 0,
 
+    /// Advances past spaces, tabs and newlines.
     pub fn skipWhitespace(self: *Cursor) void {
         while (self.pos < self.input.len) {
             switch (self.input[self.pos]) {
@@ -129,6 +156,7 @@ pub const Cursor = struct {
         }
     }
 
+    /// Which token starts here, without consuming it.
     pub fn peekKind(self: *Cursor) ScanError!TokenKind {
         self.skipWhitespace();
         if (self.pos >= self.input.len) return .eof;
@@ -145,11 +173,13 @@ pub const Cursor = struct {
         };
     }
 
+    /// Bumps the nesting counter, failing with `error.MaxDepthExceeded` past `max_depth`.
     pub fn enterContainer(self: *Cursor, max_depth: usize) ScanError!void {
         if (self.depth >= max_depth) return error.MaxDepthExceeded;
         self.depth += 1;
     }
 
+    /// Undoes `enterContainer` (always call it with `defer`).
     pub fn leaveContainer(self: *Cursor) void {
         self.depth -= 1;
     }
@@ -166,6 +196,7 @@ pub const Cursor = struct {
         return .{ .cursor = self };
     }
 
+    /// Consumes `true` / `false`.
     pub fn readBool(self: *Cursor) ScanError!bool {
         self.skipWhitespace();
         if (self.pos >= self.input.len) return error.UnexpectedEndOfInput;
@@ -183,6 +214,7 @@ pub const Cursor = struct {
         };
     }
 
+    /// Consumes `null`.
     pub fn readNull(self: *Cursor) ScanError!void {
         self.skipWhitespace();
         if (self.pos >= self.input.len) return error.UnexpectedEndOfInput;
@@ -196,6 +228,7 @@ pub const Cursor = struct {
         };
     }
 
+    /// Consumes a number and reports whether it used float syntax.
     pub fn readNumberToken(self: *Cursor) ScanError!NumberToken {
         self.skipWhitespace();
         if (self.pos >= self.input.len) return error.UnexpectedEndOfInput;
@@ -252,6 +285,8 @@ pub const Cursor = struct {
         return .{ .slice = self.input[start..i], .is_float_syntax = is_float_syntax };
     }
 
+    /// Decodes a string, borrowing the input unless escapes force a copy.
+    /// `mode` decides what happens to invalid UTF-8 and lone surrogates.
     pub fn readString(
         self: *Cursor,
         allocator: Allocator,
@@ -374,6 +409,7 @@ pub const Cursor = struct {
         return error.UnexpectedEndOfInput;
     }
 
+    /// Skips a string without decoding it (used for values the caller does not need).
     pub fn skipString(self: *Cursor) ScanError!void {
         self.skipWhitespace();
         if (self.pos >= self.input.len) return error.UnexpectedEndOfInput;
@@ -405,6 +441,7 @@ pub const Cursor = struct {
         return error.UnexpectedEndOfInput;
     }
 
+    /// Skips any JSON value, tracking depth so nested arrays cannot overflow the stack.
     pub fn skipValue(self: *Cursor, max_depth: usize) ScanError!void {
         switch (try self.peekKind()) {
             .eof => return error.UnexpectedEndOfInput,
