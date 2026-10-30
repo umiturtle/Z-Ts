@@ -131,6 +131,10 @@ pub const Page = struct {
     /// Links the Markdown renderer saw in the documentation comments, so the site-wide link check
     /// covers the API pages too.
     links: []const markdown.Link = &.{},
+    /// Mirrors the module's audience. The site search reads it: a page whose audience is
+    /// `.internal` must not turn up between `Engine` and `WindowConfig`, or the last step out of
+    /// the learning path is one anonymous search hit away.
+    audience: Audience = .user,
 };
 
 /// The public surface, mirroring the modules declared in `build.zig` (one root file per package).
@@ -790,6 +794,27 @@ fn importAlias(module: Module, spec_path: []const u8) ?[]const u8 {
     return null;
 }
 
+/// True when `decl` is a plain re-export of a file the package classifies as internal, i.e.
+/// `pub const webview2_com = @import("webview2_com.zig");` — a COM vtable table on a reader-facing
+/// page. The page itself is hidden from search, so indexing the alias would still hand a reader a
+/// hit that leads to `extern fn` declarations. Architecture and design notes stay reachable
+/// through 内部資料; this is only about not advertising them.
+pub fn reexportsInternal(module: Module, pkg: Package, decl: Decl) bool {
+    if (decl.kind != .constant) return false;
+    const at = std.mem.find(u8, decl.signature, "@import(\"") orelse return false;
+    const rest = decl.signature[at + "@import(\"".len ..];
+    const close = std.mem.findScalar(u8, rest, '"') orelse return false;
+    const dir = std.fs.path.dirname(module.path) orelse "";
+    var storage: [1024]u8 = undefined;
+    var fixed = std.heap.FixedBufferAllocator.init(&storage);
+    const target = joinPath(fixed.allocator(), dir, rest[0..close]) catch return false;
+    for (pkg.modules) |candidate| {
+        if (!std.mem.eql(u8, candidate.path, target)) continue;
+        return candidate.audience == .internal;
+    }
+    return false;
+}
+
 /// `pub const Ctx = ctx.Ctx;` or `pub const codec = @import("codec.zig");` — the documentation
 /// lives where the target is declared, so a re-export is not "undocumented", it is a pointer.
 pub fn isAlias(decl: Decl) bool {
@@ -1195,6 +1220,7 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
                 .body = try body.toOwnedSlice(),
                 .plain = try searchText(arena, module),
                 .links = try links.toOwnedSlice(arena),
+                .audience = module.audience,
             });
         }
 
@@ -1626,6 +1652,30 @@ test "audienceOf separates FFI tables and contract tests from the reader-facing 
     // Per-OS backends: reachable, but the documented door is `mod.zig`.
     try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/linux.zig"));
     try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/windows.zig"));
+}
+
+test "reexportsInternal flags an alias into an FFI table but not into a public module" {
+    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const source =
+        \\pub const Engine = @import("engine.zig");
+        \\pub const win32 = @import("win32.zig");
+        \\pub const typo = @import("missing.zig");
+    ;
+    const module = try scanModule(arena, "src/webview/mod.zig", source);
+    const modules = [_]Module{
+        module,
+        .{ .path = "src/webview/engine.zig", .name = "engine", .doc = "", .decls = &.{} },
+        .{ .path = "src/webview/win32.zig", .name = "win32", .doc = "", .decls = &.{}, .audience = .internal },
+    };
+    const pkg = Package{ .spec = .{ .name = "p", .root = "src/webview/mod.zig", .blurb = "" }, .modules = &modules };
+
+    try testing.expect(!reexportsInternal(module, pkg, module.decls[0]));
+    try testing.expect(reexportsInternal(module, pkg, module.decls[1]));
+    // An unresolvable target is not silently treated as internal: the page stays indexable.
+    try testing.expect(!reexportsInternal(module, pkg, module.decls[2]));
 }
 
 test "importAlias resolves the name a parent binds to a relative import" {

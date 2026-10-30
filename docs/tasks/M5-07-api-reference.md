@@ -86,11 +86,14 @@
     `const window = @import("zts_tauri").window;` / `const scope = @import("zts_tauri").fs.scope;`。
     ルートの `pub const x = @import("…")` を 1 段ずつ辿って解決する（`importAlias`）。型の再エクスポート
     （`@import("ctx.zig").Ctx`）は追わない。再エクスポートされていないファイルには行を出さない。
-  - `/tmp/which.py` 相当の未文書一覧は **1 件も出なくなった**（`api-undoc` マーカー 0）。
+  - `/tmp/which.py` 相当の未文書一覧は **1 件も出なくなった**（公開モジュール上は 0。
+    残る `api-undoc` マーカーは内部モジュールのページだけ）。
+  - 検索索引から**内部モジュールのページと、内部を指す再エクスポート**を除外
+    （`Page.audience` / `reexportsInternal`）。ページを隠したまま検索で差し出す状態を解消。
 - **直前の検証値**:
   `OK docsite pages=184 links=328 assets=8377 words=350343 bytes=4253223 demos=60
   api_pages=90 api_decls=455 api_members=1477 api_undoc=0 api_internal=452` / `check-docs OK (75)` /
-  `docsite 47` / `quick-test 7` / `build test -Dgtk=false` 52/52。
+  `docsite 48` / `quick-test 7` / `build test -Dgtk=false` 52/52。
   パッケージ別（内部モジュール除外、宣言ベース）: **10 パッケージすべて 100%**
   （`zts_tauri` 168 / `zts_webview` 91 / `zts_rpc` 78 / `zts_web` 33 / `zts_foundation` 31 /
   `zts_bridge` 21 / `zts_wasm` 11 / `zts_ssg` 10 / `zts_core` 8 / `z_ts` 4）。

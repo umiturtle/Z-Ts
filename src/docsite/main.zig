@@ -312,6 +312,11 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         try search_list.append(arena, .{ .href = page.href, .title = page.title, .group = page.group, .text = page.document.plain });
     }
     for (api.pages) |page| {
+        // An internal module page (FFI table, contract test) is generated so old links keep
+        // working, but it is not part of the learning surface: indexing it would put
+        // `gtk_bindings` in the same result list as `Engine`, which is exactly what the
+        // 公開/内部 split exists to prevent.
+        if (page.audience == .internal) continue;
         try search_list.append(arena, .{ .href = page.href, .title = page.title, .group = "API", .text = page.plain });
     }
     for (api.packages) |pkg| {
@@ -320,6 +325,9 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
             // exactly like the 内部資料 pages: the index is the learning surface.
             if (module.audience == .internal) continue;
             for (module.decls) |decl| {
+                // `mod.webview2_com` is a re-export of an FFI table: the page is hidden, so the
+                // declaration must be too, or the search offers a door that the sidebar locked.
+                if (apidoc.reexportsInternal(module, pkg, decl)) continue;
                 try search_list.append(arena, .{
                     .href = try std.fmt.allocPrint(arena, "docs/api/{s}/{s}.html#{s}", .{ pkg.spec.name, module.slug, decl.name }),
                     .title = try std.fmt.allocPrint(arena, "{s}.{s}", .{ module.slug, decl.name }),
