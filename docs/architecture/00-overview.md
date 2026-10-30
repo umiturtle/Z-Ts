@@ -65,6 +65,8 @@ Z-Ts の下位レイヤは、デスクトップ WebView フレームワーク以
 | **`zts_wasm`** | `src/wasm/{mod,io_stub,host,runtime,js_bootstrap}.zig` | `zts_foundation`, `zts_web`, `zts_core`, `zts_rpc`, `zts_tauri` (`link_libc = false`) | `wasm32-freestanding` 向け `WasmHost`・`WasmApp` エクスポート ABI・WebAssembly インメモリ IPC ブートストラップ生成。 |
 | **`zts_ssg`** | `src/ssg/{mod,manifest_gen,exporter,embed_dir_main}.zig` | `zts_foundation`, `zts_web`, `zts_wasm` (`link_libc = false`) | フロントエンド SSG ディレクトリ（`out/`・`dist/`）の決定論的 `@embedFile` マニフェスト生成、ルート別プリレンダリング、およびサーバー不要静的サイト（`dist/` + `.wasm` + `.nojekyll` + `_headers`）エクスポータ。 |
 | **`z_ts`** | `src/{root,bridge_host,webview_host,app_runtime}.zig` | 上記を統合再公開 | デスクトップ & Web ハイブリッド統合 SDK（`BridgeHost`, `WebviewHost`, `WasmHost`, `DesktopRuntime`, `ssg` を再公開）。 |
+| **`zts_build`**（ビルド時のみ） | `src/build_tools/{mod,assets,embed_main,tsgen_main}.zig` | `std` / `std.Build` のみ | アプリの `build.zig` から呼ぶ統合ヘルパー。`dist/` の決定論的 gzip・CSP ハッシュ・マニフェスト生成（`embedFrontend`）と、スキーマ → `bindings.gen.ts` の生成/検証（`tsgenBindings`）。**ランタイムには含まれない**（[`build-tools.md`](build-tools.md)）。 |
+| **`zts_docsite`**（ビルド時のみ） | `src/docsite/{mod,markdown,site,demos,main}.zig` | `std` のみ | ドキュメントサイト生成器。Markdown → HTML（GFM 相当）、サイドバー・検索インデックス、リンク/アセット検査、サンプルの公開（[`documentation-site.md`](documentation-site.md)）。 |
 
 > **CI 自動強制ガード (`tests/standalone_modules.zig` & `tests/webview/verify_c_abi.c`)**: `zig build test` は `z_ts`・`zts_core` を一切インポートしない独立コンパイルターゲットで `zts_foundation`・`zts_web`・`zts_rpc`・`zts_bridge`・`zts_webview` をビルド・実行し、さらに厳格 `-std=c99 -Wall -Wextra -Werror` の C ホストバイナリとの静的リンク実行を強制検証します。
 
