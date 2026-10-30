@@ -33,6 +33,7 @@ pub const WasmBootstrapOptions = struct {
     asset_base_url: []const u8 = "./_zts/assets/",
     /// POSIX path conventions inside virtualized browser runtime (`"/"` / `":"`).
     sep: []const u8 = "/",
+    /// `PATH` delimiter inside the virtualized runtime (`:`).
     delimiter: []const u8 = ":",
 };
 

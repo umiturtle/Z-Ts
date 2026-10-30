@@ -13,12 +13,15 @@ const webview = @import("zts_webview");
 /// `zts_core.Host` implemented on a `zts_webview.Engine`: windows, IPC, eval and capture all go
 /// through the WebView backend, so `zts_tauri` plugins run unchanged on top of it.
 pub const WebviewHost = struct {
+    /// The engine every `Host` call is forwarded to.
     engine: *webview.Engine,
 
+    /// Creates a host for `engine` (no allocation).
     pub fn init(engine: *webview.Engine) WebviewHost {
         return .{ .engine = engine };
     }
 
+    /// The `core.Host` view of `self`.
     pub fn host(self: *WebviewHost) core.Host {
         return .{
             .userdata = self,

@@ -40,13 +40,17 @@ pub const ResolveError = Allocator.Error || error{
 
 /// One allowed root. `recursive = false` admits only the root itself (a single file grant).
 pub const Root = struct {
+    /// Absolute root path, owned by the scope.
     path: []const u8,
+    /// Whether everything below `path` is allowed, or only the path itself.
     recursive: bool = true,
 };
 
 /// Result of splitting an absolute normalized path into its root prefix and the rest.
 pub const SplitRoot = struct {
+    /// The root prefix (`/`, `C:\`, or the UNC share).
     root: []const u8,
+    /// Everything after the root prefix.
     rest: []const u8,
 };
 
@@ -238,7 +242,9 @@ pub fn allowsPath(style: path.PathStyle, roots: []const Root, canonical: []const
 /// `plugin:dialog` appends when the user picks a file. Every command resolves its path through this
 /// type before opening anything.
 pub const Scope = struct {
+    /// Allocator that owns `roots` and their paths.
     allocator: Allocator,
+    /// Path conventions used when comparing (`/` vs `\`).
     style: path.PathStyle,
     /// Growable: `plugin:dialog` appends a grant for every path the user picks (upstream
     /// `tauri-plugin-fs` scope behaviour), so a dialog result can be read with `plugin:fs|*`.
@@ -285,6 +291,7 @@ pub const Scope = struct {
         return canonicalizeAlloc(io, self.allocator, self.style, normalized);
     }
 
+    /// Frees every root and poisons the value.
     pub fn deinit(self: *Scope) void {
         for (self.roots.items) |root| self.allocator.free(root.path);
         self.roots.deinit(self.allocator);
@@ -305,6 +312,7 @@ pub const Scope = struct {
         try self.roots.append(self.allocator, .{ .path = canonical, .recursive = recursive });
     }
 
+    /// Whether an already-canonical path falls inside one of the roots.
     pub fn allowsCanonical(self: *const Scope, canonical: []const u8) bool {
         return allowsPath(self.style, self.roots.items, canonical);
     }

@@ -27,10 +27,14 @@ const html_escape = foundation.html_escape;
 /// through `http://<scheme>.localhost/…`, the other two use `<scheme>://localhost/…`; the page must be
 /// told which one it is talking to.
 pub const OsTarget = enum {
+    /// Linux (`linux` in the injected API).
     linux,
+    /// macOS (`macos`).
     macos,
+    /// Windows (`windows`).
     windows,
 
+    /// The platform the bootstrap should report.
     pub fn current() OsTarget {
         return switch (builtin.os.tag) {
             .macos => .macos,
@@ -39,6 +43,7 @@ pub const OsTarget = enum {
         };
     }
 
+    /// The `platform()` string upstream returns.
     pub fn asTauriName(self: OsTarget) []const u8 {
         return switch (self) {
             .linux => "linux",
@@ -47,6 +52,7 @@ pub const OsTarget = enum {
         };
     }
 
+    /// `\` on Windows, `/` elsewhere.
     pub fn pathSep(self: OsTarget) []const u8 {
         return switch (self) {
             .windows => "\\",
@@ -54,6 +60,7 @@ pub const OsTarget = enum {
         };
     }
 
+    /// `;` on Windows, `:` elsewhere.
     pub fn pathDelimiter(self: OsTarget) []const u8 {
         return switch (self) {
             .windows => ";",

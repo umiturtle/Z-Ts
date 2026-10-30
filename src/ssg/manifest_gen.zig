@@ -17,7 +17,9 @@ const testing = std.testing;
 /// What a manifest scan saw: how many files were embedded and how many bytes they add up to. Used
 /// by `build.zig` to print the `files=… raw=… gzip=…` line CI asserts on.
 pub const ManifestStats = struct {
+    /// How many generated files the manifest lists.
     file_count: usize = 0,
+    /// Their combined size.
     total_bytes: u64 = 0,
 };
 

@@ -157,10 +157,14 @@ pub fn percentDecodeSegment(out: []u8, raw: []const u8) error{ InvalidEncoding, 
 
 /// Immutable per-server cryptographic credentials initialized at `BridgeServer.start`.
 pub const SecurityState = struct {
+    /// Hex token the browser session cookie must carry.
     session_token: [token_hex_len]u8,
+    /// Hex token every `ipc://` request must present.
     invoke_key: [token_hex_len]u8,
+    /// Which `Origin` values may connect at all.
     origin_policy: OriginPolicy = .same_host,
 
+    /// Generates both tokens from the OS RNG.
     pub fn initRandom(io: Io, origin_policy: OriginPolicy) SecurityState {
         return .{
             .session_token = generateTokenHex(io),
@@ -169,6 +173,7 @@ pub const SecurityState = struct {
         };
     }
 
+    /// Formats the `Set-Cookie` value (`HttpOnly; SameSite=Strict`) into `buf`.
     pub fn setCookieHeaderValue(self: *const SecurityState, buf: *[160]u8) []const u8 {
         return std.fmt.bufPrint(
             buf,
@@ -177,6 +182,7 @@ pub const SecurityState = struct {
         ) catch unreachable;
     }
 
+    /// Constant-time check of the session cookie.
     pub fn hasValidSessionCookie(self: *const SecurityState, cookie_header: ?[]const u8) bool {
         const hdr = cookie_header orelse return false;
         const val = extractCookieValue(hdr, cookie_name) orelse return false;

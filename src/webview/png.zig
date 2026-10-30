@@ -19,7 +19,9 @@ pub const signature = [8]u8{ 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n' };
 
 /// Dimensions parsed out of a PNG's IHDR chunk.
 pub const Size = struct {
+    /// Width in pixels, read from the IHDR chunk.
     width: u32,
+    /// Height in pixels, read from the IHDR chunk.
     height: u32,
 };
 
@@ -147,9 +149,12 @@ fn writeChunk(allocator: Allocator, out: *std.ArrayList(u8), kind: []const u8, d
 
 /// zlib's Adler-32 (RFC 1950 §9) — needed because the deflate stream above is "stored".
 pub const Adler32 = struct {
+    /// Running sum of the bytes.
     a: u32 = 1,
+    /// Running sum of `a`.
     b: u32 = 0,
 
+    /// Folds `bytes` into the checksum.
     pub fn update(self: *Adler32, bytes: []const u8) void {
         const mod = 65521;
         for (bytes) |byte| {
@@ -158,6 +163,7 @@ pub const Adler32 = struct {
         }
     }
 
+    /// The 32-bit checksum (`b << 16 | a`).
     pub fn final(self: Adler32) u32 {
         return (self.b << 16) | self.a;
     }

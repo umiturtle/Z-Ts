@@ -72,10 +72,15 @@ pub const ExportOptions = struct {
 /// What `exportStaticSite()` actually wrote. Returned so `build.zig` (and CI) can assert on it
 /// instead of trusting a silent success.
 pub const ExportReport = struct {
+    /// HTML documents written (`index.html` per route).
     html_pages_written: usize = 0,
+    /// Non-HTML files copied through unchanged.
     static_files_written: usize = 0,
+    /// Assets that came from the frontend bundle.
     bundled_assets_written: usize = 0,
+    /// Assets left out because the route was outside the configured scope.
     skipped_out_of_scope_assets: usize = 0,
+    /// Total size of the `.wasm` payloads written.
     wasm_bytes_written: usize = 0,
 };
 

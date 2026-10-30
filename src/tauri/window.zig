@@ -46,8 +46,10 @@ pub const WireSize = union(enum) {
     /// Size in device pixels; scaled by the window's factor before use.
     Physical: RawDims,
 
+    /// Externally tagged (`{ "Logical": { width, height } }`), as upstream sends it.
     pub const json_union: rpc.UnionConfig = .{ .style = .external };
 
+    /// Converts either arm to logical pixels, using `scale_factor` for the physical one.
     pub fn toLogical(self: WireSize, scale_factor: f64) core.LogicalSize {
         const sf = if (scale_factor > 0.0) scale_factor else 1.0;
         return switch (self) {
@@ -64,8 +66,10 @@ pub const WirePosition = union(enum) {
     /// Position in device pixels.
     Physical: RawPoint,
 
+    /// Externally tagged (`{ "Physical": { x, y } }`).
     pub const json_union: rpc.UnionConfig = .{ .style = .external };
 
+    /// Converts either arm to logical pixels.
     pub fn toLogical(self: WirePosition, scale_factor: f64) core.LogicalPoint {
         const sf = if (scale_factor > 0.0) scale_factor else 1.0;
         return switch (self) {
@@ -306,7 +310,9 @@ fn resolveTarget(
 
 /// `plugin:window|*` RPC command namespace (`Schema` key: `.window`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:window|";
+    /// The state type `zts_rpc` resolves per app; identical to `WindowRegistry` here.
     pub const RpcState = WindowRegistry;
 
     /// `plugin:window|get_all_windows` — labels of every open window.

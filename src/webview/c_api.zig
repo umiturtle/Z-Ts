@@ -170,13 +170,21 @@ fn invokeCReleaseCallback(bytes: []const u8, ctx_ptr: ?*anyopaque, ctx_meta: ?*c
 /// the struct lives in Zig so the allocator, the IO reactor and the per-window bookkeeping all stay
 /// in one place.
 pub const CEngineHandle = struct {
+    /// Allocator that owns the handle and its thunks.
     allocator: Allocator,
+    /// IO reactor the engine runs on (owned by the handle).
     io_threaded: std.Io.Threaded,
+    /// The wrapped engine.
     engine: root.Engine,
+    /// C callback for page messages, if set.
     msg_cb: ?CMessageHandlerFn = null,
+    /// Opaque pointer handed back to `msg_cb`.
     msg_ud: ?*anyopaque = null,
+    /// C callback for window closes, if set.
     close_cb: ?CWindowCloseFn = null,
+    /// Opaque pointer handed back to `close_cb`.
     close_ud: ?*anyopaque = null,
+    /// Allocated trampolines, one per registered scheme.
     scheme_thunks: std.ArrayList(*CSchemeThunk) = .empty,
 
     fn forwardMsg(raw: ?*anyopaque, win_id: types.WindowId, message: []const u8) void {
