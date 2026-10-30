@@ -1,7 +1,8 @@
 # Task M5-06: ドキュメントの充実 + GitHub Pages 公開（Markdown → 静的サイト）
 
 - **Status**: `in_progress`（生成器・テンプレート・サンプル公開・Pages ワークフローまで実装し、
-  CI の M5-06 ゲートは green。残りはスクリーンショット画廊の取り込みと、Pages の初回有効化）
+  CI の M5-06 ゲートは green。残りはスクリーンショット画廊の取り込みと、Pages の初回有効化
+  = リポジトリ設定の 1 クリック）
 - **Branch**: `arena/16ce0c2f-z-ts`
 - **Scope**: `src/docsite/`（新規）, `build.zig`, `zigw`, `.github/workflows/pages.yml`（新規）,
   `docs/architecture/documentation-site.md`, `docs/decisions/0018-documentation-site.md`,
@@ -38,7 +39,8 @@
 - [ ] 各フレームワークのデモへのリンクを `examples/frameworks/README.md` から張る（現在は
       生成サイトの `/examples/frameworks/index.html` が入口）
 - [x] `./zigw quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
-- [x] Pages ワークフローが**未設定でも緑**になる（run `40999281238` で実証）
+- [x] Pages ワークフローが**未設定でも緑**になる（run `40999281238` / `41000081966` で実証。
+      失敗アノテーション 0 件・`Pages not enabled` の警告 1 件）
 - [ ] リポジトリ設定（Pages → Source: GitHub Actions）後に初回デプロイを確認
 
 ---

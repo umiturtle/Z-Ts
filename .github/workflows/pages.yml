@@ -8,18 +8,18 @@ name: Documentation site
 #      `/Z-Ts/` sub-path.
 #
 # Publishing needs the repository's Pages site to exist. `GITHUB_TOKEN` can *deploy* to Pages but
-# cannot reliably *create* the site (creating one is an administrative action), so this workflow:
-#   * asks `actions/configure-pages` to enable it (`enablement: true`) — succeeds when the token is
-#     allowed to, which makes the very first run work without any manual step;
-#   * otherwise keeps the job **green** with a single warning naming the exact setting to flip,
-#     instead of leaving `main` permanently red over a one-time human action.
+# cannot *create* the site (creating one needs administrative rights — measured:
+# `Create Pages site failed. Error: Resource not accessible by integration`), so this workflow:
+#   1. probes `GET /repos/{owner}/{repo}/pages` and remembers the build type;
+#   2. when the site is missing, optimistically tries `POST /pages` (works with an admin token);
+#   3. when it still cannot publish, keeps the job **green** with one warning that names the exact
+#      setting to flip — a one-time human action must not leave `main` permanently red.
 # The site itself is always built, rendered and verified here, so a real regression still fails.
 
 on:
   push:
     branches:
       - main
-      - arena/c823e754-z-ts   # TEMPORARY: validate this workflow on a branch (deploy stays gated)
   workflow_dispatch:
 
 permissions:
