@@ -65,6 +65,7 @@ pub const TrayIconOptions = struct {
     /// Deprecated upstream alias of `menu_on_left_click`; kept for wire compatibility.
     show_menu_on_left_click: ?bool = null,
 
+    /// Decodes the options object `plugin:tray|new` receives.
     pub fn decodeZtsJson(allocator: Allocator, raw: []const u8) rpc.DecodeError!TrayIconOptions {
         const value = std.json.parseFromSliceLeaky(std.json.Value, allocator, raw, .{}) catch |err| return switch (err) {
             error.OutOfMemory => error.OutOfMemory,
@@ -127,10 +128,29 @@ pub const TrayEvent = struct {
     /// `"Up"` / `"Down"` (`Click` only).
     button_state: ?[]const u8 = null,
 
-    pub const Point = struct { x: f64 = 0, y: f64 = 0 };
-    pub const Size = struct { width: f64 = 0, height: f64 = 0 };
-    pub const Rect = struct { position: Point = .{}, size: Size = .{} };
+    /// Cursor position, in physical pixels relative to the screen origin.
+    pub const Point = struct {
+        /// X in physical pixels.
+        x: f64 = 0,
+        /// Y in physical pixels.
+        y: f64 = 0,
+    };
+    /// Size of the icon, in physical pixels.
+    pub const Size = struct {
+        /// Width in physical pixels.
+        width: f64 = 0,
+        /// Height in physical pixels.
+        height: f64 = 0,
+    };
+    /// Bounding box of the tray icon on screen.
+    pub const Rect = struct {
+        /// Top-left corner of the icon.
+        position: Point = .{},
+        /// Size of the icon.
+        size: Size = .{},
+    };
 
+    /// Convenience constructor for a `Click` event (used by the mock and by tests).
     pub fn click(id: []const u8, x: f64, y: f64, button: []const u8, state: []const u8) TrayEvent {
         return .{ .type = "Click", .id = id, .position = .{ .x = x, .y = y }, .button = button, .button_state = state };
     }
@@ -154,9 +174,12 @@ pub const Emitter = struct {
 /// A native tray backend (AppKit `NSStatusItem`, Win32 `Shell_NotifyIcon`, GTK `StatusIcon`) plus the
 /// function table `TrayState` drives. `Mock` records calls so all three OSes run the same assertions.
 pub const Backend = struct {
+    /// Opaque pointer handed back to every vtable entry.
     ctx: ?*anyopaque = null,
+    /// The native implementation; `StubBackend.vtable` reports `error.Unavailable`.
     vtable: *const VTable,
 
+    /// The operations a native tray backend must provide.
     pub const VTable = struct {
         /// Creates (or replaces) the tray `id`. `menu` is the flattened menu to attach, if any.
         create: *const fn (ctx: ?*anyopaque, id: []const u8, options: TrayIconOptions, menu_snapshot: ?menu.Snapshot) TrayError!void,
@@ -170,18 +193,23 @@ pub const Backend = struct {
         set_emitter: *const fn (ctx: ?*anyopaque, emitter: Emitter) void,
     };
 
+    /// Creates (or replaces) the tray `id`, attaching `snapshot` when given.
     pub fn create(self: Backend, id: []const u8, options: TrayIconOptions, snapshot: ?menu.Snapshot) TrayError!void {
         return self.vtable.create(self.ctx, id, options, snapshot);
     }
+    /// Applies the full current options to an existing tray.
     pub fn update(self: Backend, id: []const u8, options: TrayIconOptions, snapshot: ?menu.Snapshot) TrayError!void {
         return self.vtable.update(self.ctx, id, options, snapshot);
     }
+    /// Removes the tray and its icon.
     pub fn remove(self: Backend, id: []const u8) TrayError!void {
         return self.vtable.remove(self.ctx, id);
     }
+    /// Shows or hides the icon without touching the rest of the state.
     pub fn setVisible(self: Backend, id: []const u8, visible: bool) TrayError!void {
         return self.vtable.set_visible(self.ctx, id, visible);
     }
+    /// Registers the interaction receiver; `TrayState` calls this before every apply.
     pub fn setEmitter(self: Backend, emitter: Emitter) void {
         self.vtable.set_emitter(self.ctx, emitter);
     }
@@ -189,6 +217,7 @@ pub const Backend = struct {
 
 /// Fallback backend, identical in spirit to `menu.StubBackend`.
 pub const StubBackend = struct {
+    /// The fallback table: every operation reports `error.Unavailable`.
     pub const vtable = Backend.VTable{
         .create = unavailable,
         .update = unavailable,
@@ -232,15 +261,20 @@ pub const TrayState = struct {
     /// Tray id → event channel.
     channels: std.StringHashMapUnmanaged(EventChannel) = .empty,
 
+    /// Everything the state remembers about one tray.
     pub const TrayRecord = struct {
+        /// Owned copy of the last options applied.
         options: OwnedOptions,
         /// `plugin:resources` handle handed to JS (`get_by_id` must return the *same* one).
         rid: u53 = 0,
         visible: bool = true,
     };
 
+    /// Where a tray's interactions are delivered.
     pub const EventChannel = struct {
+        /// Channel the JS `handler` listens on; the payload is a `TrayEvent`.
         channel: Channel(TrayEvent),
+        /// Caller context captured at creation, so the event carries its window.
         call_ctx: ?core.CallContext = null,
     };
 
@@ -306,6 +340,7 @@ pub const TrayState = struct {
         }
     };
 
+    /// Creates empty state that draws through `StubBackend`.
     pub fn init(allocator: Allocator, io: Io, resources: *ResourceTable, menu_state: *menu.MenuState) TrayState {
         return .{
             .allocator = allocator,
@@ -316,12 +351,14 @@ pub const TrayState = struct {
         };
     }
 
+    /// Returns a copy of `self` that draws through `backend`.
     pub fn withBackend(self: TrayState, backend: Backend) TrayState {
         var copy = self;
         copy.backend = backend;
         return copy;
     }
 
+    /// Removes every tray from the backend and frees the recorded options.
     pub fn deinit(self: *TrayState) void {
         var it = self.trays.iterator();
         while (it.next()) |entry| {
@@ -378,10 +415,14 @@ pub const TrayState = struct {
 /// Recording backend used by tests: every `create` / `update` / `remove` / `set_visible` call is
 /// appended, so a test can assert the sequence instead of a rendered picture.
 pub const Mock = struct {
+    /// Which backend entry was called.
     pub const CallKind = enum { create, update, remove, set_visible };
 
+    /// One recorded backend call, with owned copies of everything the backend saw.
     pub const Call = struct {
+        /// The entry point that was called.
         kind: CallKind,
+        /// Tray id the call targeted.
         id: []const u8,
         /// `null` when the tray has no menu; otherwise the flattened menu ids.
         menu_ids: []const []const u8,
@@ -390,14 +431,19 @@ pub const Mock = struct {
         visible: ?bool = null,
     };
 
+    /// Allocator that owns the recorded ids, tooltips and titles.
     allocator: Allocator,
+    /// Every backend call, in order.
     calls: std.ArrayListUnmanaged(Call) = .empty,
+    /// The receiver the state installed, so `interact()` can replay a click.
     emitter: ?Emitter = null,
 
+    /// Creates a backend that records what it is asked to do.
     pub fn init(allocator: Allocator) Mock {
         return .{ .allocator = allocator };
     }
 
+    /// Frees every recorded call.
     pub fn deinit(self: *Mock) void {
         for (self.calls.items) |call| {
             self.allocator.free(call.id);
@@ -409,10 +455,12 @@ pub const Mock = struct {
         self.calls.deinit(self.allocator);
     }
 
+    /// The `Backend` view of `self`, ready for `TrayState.withBackend`.
     pub fn backend(self: *Mock) Backend {
         return .{ .ctx = self, .vtable = &vtable };
     }
 
+    /// The most recent call, or `null` when nothing has been applied yet.
     pub fn lastCall(self: *Mock) ?Call {
         if (self.calls.items.len == 0) return null;
         return self.calls.items[self.calls.items.len - 1];
@@ -491,7 +539,9 @@ pub const Mock = struct {
 /// The `plugin:tray|*` RPC namespace (`create`, `update`, `remove`, …). Mounted by
 /// `withCorePlugins()`; every command resolves its tray through `TrayState`.
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:tray|";
+    /// The state type `zts_rpc` resolves per app; identical to `TrayState` here.
     pub const RpcState = TrayState;
 
     const Created = struct { u53, []const u8 };
@@ -550,12 +600,14 @@ pub const Commands = struct {
         return .{ rid, id };
     }
 
+    /// `get_by_id` — the handle for a tray id, or `null` when it is gone.
     pub fn get_by_id(ctx: *rpc.Ctx, state: *TrayState, args: struct { id: []const u8 }) TrayError!?u53 {
         _ = ctx;
         const record = state.trays.getPtr(args.id) orelse return null;
         return record.rid;
     }
 
+    /// `remove_by_id` — destroys the tray and its channel.
     pub fn remove_by_id(ctx: *rpc.Ctx, state: *TrayState, args: struct { id: []const u8 }) TrayError!void {
         _ = ctx;
         if (state.trays.fetchRemove(args.id)) |entry| {
@@ -621,6 +673,7 @@ pub const Commands = struct {
         return handle.id;
     }
 
+    /// `set_icon` — replaces the icon image.
     pub fn set_icon(ctx: *rpc.Ctx, state: *TrayState, args: struct {
         rid: u53,
         icon: menu.JsonArg = .{},
@@ -630,6 +683,7 @@ pub const Commands = struct {
         return update(ctx, state, id, .{ .icon = icon });
     }
 
+    /// `set_menu` — attaches (or detaches, with `null`) the tray's menu.
     pub fn set_menu(ctx: *rpc.Ctx, state: *TrayState, args: struct {
         rid: u53,
         menu: menu.JsonArg = .{},
@@ -649,6 +703,7 @@ pub const Commands = struct {
         return update(ctx, state, id, .{ .menu = target });
     }
 
+    /// `set_tooltip` — sets the hover text.
     pub fn set_tooltip(ctx: *rpc.Ctx, state: *TrayState, args: struct {
         rid: u53,
         tooltip: ?[]const u8 = null,
@@ -657,6 +712,7 @@ pub const Commands = struct {
         return update(ctx, state, id, .{ .tooltip = args.tooltip });
     }
 
+    /// `set_title` — sets the text shown next to the icon on macOS.
     pub fn set_title(ctx: *rpc.Ctx, state: *TrayState, args: struct {
         rid: u53,
         title: ?[]const u8 = null,
@@ -665,6 +721,7 @@ pub const Commands = struct {
         return update(ctx, state, id, .{ .title = args.title });
     }
 
+    /// `set_visible` — shows or hides the icon.
     pub fn set_visible(ctx: *rpc.Ctx, state: *TrayState, args: struct { rid: u53, visible: bool }) TrayError!void {
         _ = ctx;
         const id = try idOf(state, args.rid);
@@ -673,6 +730,7 @@ pub const Commands = struct {
         try state.backend.setVisible(id, args.visible);
     }
 
+    /// `set_temp_dir_path` — where the backend may unpack an icon file.
     pub fn set_temp_dir_path(ctx: *rpc.Ctx, state: *TrayState, args: struct {
         rid: u53,
         path: ?[]const u8 = null,
@@ -681,6 +739,7 @@ pub const Commands = struct {
         return update(ctx, state, id, .{ .temp_dir_path = args.path });
     }
 
+    /// `set_icon_as_template` — treats the icon as a macOS template image.
     pub fn set_icon_as_template(ctx: *rpc.Ctx, state: *TrayState, args: struct {
         rid: u53,
         as_template: bool,
@@ -689,6 +748,7 @@ pub const Commands = struct {
         return update(ctx, state, id, .{ .icon_as_template = args.as_template });
     }
 
+    /// `set_icon_with_as_template` — replaces the icon and its template flag in one call.
     pub fn set_icon_with_as_template(ctx: *rpc.Ctx, state: *TrayState, args: struct {
         rid: u53,
         icon: menu.JsonArg = .{},
@@ -699,6 +759,7 @@ pub const Commands = struct {
         return update(ctx, state, id, .{ .icon_with_template = .{ .icon = icon, .as_template = args.as_template } });
     }
 
+    /// `set_show_menu_on_left_click` — whether a left click opens the menu.
     pub fn set_show_menu_on_left_click(ctx: *rpc.Ctx, state: *TrayState, args: struct {
         rid: u53,
         on_left: bool,
@@ -710,9 +771,12 @@ pub const Commands = struct {
 
 /// Opaque `plugin:resources` payload so `tray.close()` resolves the tray by id.
 pub const TrayHandle = struct {
+    /// Allocator that owns `id`.
     allocator: Allocator,
+    /// Wire tray id, so `tray.close()` can find the record again.
     id: []u8,
 
+    /// Frees the tray id (called when the resource table drops the handle).
     pub fn deinit(self: *TrayHandle) void {
         self.allocator.free(self.id);
     }
