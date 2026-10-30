@@ -267,6 +267,7 @@ pub const FileHandle = struct {
     /// Canonical absolute path (owned), for diagnostics and `rename`-free re-resolution.
     path: []u8,
 
+    /// Closes the file and frees the path.
     pub fn deinit(self: *FileHandle) void {
         self.file.close(self.io);
         self.allocator.free(self.path);
@@ -292,6 +293,7 @@ pub const FsState = struct {
     /// Largest single read/write payload; bigger requests fail with `TooLarge`.
     max_io_bytes: usize = default_max_io_bytes,
 
+    /// Creates state that resolves through `scope` and offers open files as resources.
     pub fn init(
         allocator: Allocator,
         io: Io,
@@ -308,6 +310,7 @@ pub const FsState = struct {
         };
     }
 
+    /// Releases the scope's roots.
     pub fn deinit(self: *FsState) void {
         self.scope.deinit();
     }
@@ -434,11 +437,14 @@ fn joinInRoot(state: *FsState, scratch: Allocator, dir: []const u8, name: []cons
 
 /// `plugin:fs|*` RPC command namespace (`Schema` key: `.fs`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:fs|";
+    /// The state type `zts_rpc` resolves per app; identical to `FsState` here.
     pub const RpcState = FsState;
 
     // ---------------------------------------------------------------- metadata
 
+    /// `plugin:fs|exists` — whether the path exists.
     pub fn exists(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!bool {
         const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = false }) catch |err| switch (err) {
@@ -449,18 +455,21 @@ pub const Commands = struct {
         return true;
     }
 
+    /// `plugin:fs|stat` — metadata, following symlinks.
     pub fn stat(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!FileInfo {
         const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = true }) catch |err| return mapIoError(err);
         return toFileInfo(st);
     }
 
+    /// `plugin:fs|lstat` — metadata of the link itself.
     pub fn lstat(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!FileInfo {
         const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = false }) catch |err| return mapIoError(err);
         return toFileInfo(st);
     }
 
+    /// `plugin:fs|size` — length in bytes.
     pub fn size(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!rpc.SafeInt {
         const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = true }) catch |err| return mapIoError(err);
@@ -472,22 +481,26 @@ pub const Commands = struct {
 
     // ------------------------------------------------------------ whole files
 
+    /// `plugin:fs|read_text_file` — reads a file and returns it as a string.
     pub fn read_text_file(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError![]const u8 {
         const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
         return state.readAlloc(ctx.scratch, target, state.max_io_bytes);
     }
 
+    /// `plugin:fs|read_file` — reads a file and returns raw bytes.
     pub fn read_file(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!rpc.Bytes {
         const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
         return rpc.Bytes.init(try state.readAlloc(ctx.scratch, target, state.max_io_bytes));
     }
 
+    /// `plugin:fs|write_text_file` — writes a string, creating or truncating the file.
     pub fn write_text_file(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, data: []const u8, options: ?WriteOptions = null }) FsError!void {
         const opts = args.options orelse WriteOptions{};
         const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
         try state.writeAll(target, args.data, opts);
     }
 
+    /// `plugin:fs|write_file` — writes raw bytes.
     pub fn write_file(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, data: rpc.Bytes, options: ?WriteOptions = null }) FsError!void {
         const opts = args.options orelse WriteOptions{};
         const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
@@ -496,6 +509,7 @@ pub const Commands = struct {
 
     // -------------------------------------------------------------- structure
 
+    /// `plugin:fs|mkdir` — creates a directory (`recursive` by option).
     pub fn mkdir(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?MkdirOptions = null }) FsError!void {
         const opts = args.options orelse MkdirOptions{};
         const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
@@ -506,6 +520,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:fs|remove` — deletes a file or directory (`recursive` by option).
     pub fn remove(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?RemoveOptions = null }) FsError!void {
         const opts = args.options orelse RemoveOptions{};
         const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
@@ -522,6 +537,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:fs|rename` — moves a file or directory.
     pub fn rename(ctx: *rpc.Ctx, state: *FsState, args: struct { old_path: []const u8, new_path: []const u8, options: ?RenameOptions = null }) FsError!void {
         const opts = args.options orelse RenameOptions{};
         const from = try state.resolve(ctx.scratch, args.old_path, opts.old_path_base_dir);
@@ -529,6 +545,7 @@ pub const Commands = struct {
         Io.Dir.cwd().rename(from, Io.Dir.cwd(), to, state.io) catch |err| return mapIoError(err);
     }
 
+    /// `plugin:fs|copy_file` — copies one file to another path.
     pub fn copy_file(ctx: *rpc.Ctx, state: *FsState, args: struct { from_path: []const u8, to_path: []const u8, options: ?CopyOptions = null }) FsError!void {
         const opts = args.options orelse CopyOptions{};
         const from = try state.resolve(ctx.scratch, args.from_path, opts.from_path_base_dir);
@@ -549,6 +566,7 @@ pub const Commands = struct {
         }
     }
 
+    /// `plugin:fs|read_dir` — lists a directory, optionally recursively.
     pub fn read_dir(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?ReadDirOptions = null }) FsError![]DirEntry {
         const opts = args.options orelse ReadDirOptions{};
         const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
@@ -578,11 +596,13 @@ pub const Commands = struct {
 
     // ------------------------------------------------------- streaming handles
 
+    /// `plugin:fs|create` — creates a file and returns its resource handle.
     pub fn create(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!u53 {
         const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
         return state.openHandle(target, .{ .mode = .read_write, .allow_directory = false });
     }
 
+    /// `plugin:fs|open` — opens a file with the requested modes and returns its handle.
     pub fn open(ctx: *rpc.Ctx, state: *FsState, args: struct {
         path: []const u8,
         options: ?OpenOptions = null,
@@ -620,6 +640,7 @@ pub const Commands = struct {
         return rid;
     }
 
+    /// `plugin:fs|read` — reads `len` bytes from the handle's cursor.
     pub fn read(ctx: *rpc.Ctx, state: *FsState, args: struct { rid: u53, len: u32 }) FsError!rpc.Bytes {
         const h = try state.getHandle(args.rid);
         const want = @min(@as(usize, args.len), state.max_io_bytes);
@@ -631,6 +652,7 @@ pub const Commands = struct {
         return rpc.Bytes.init(buf[0..n]);
     }
 
+    /// `plugin:fs|write` — writes bytes at the handle's cursor and returns how many were written.
     pub fn write(ctx: *rpc.Ctx, state: *FsState, args: struct { rid: u53, data: rpc.Bytes }) FsError!rpc.SafeInt {
         _ = ctx;
         const h = try state.getHandle(args.rid);
@@ -641,6 +663,7 @@ pub const Commands = struct {
         return safeU64(data.len);
     }
 
+    /// `plugin:fs|seek` — repositions the cursor (`whence` 0/1/2) and returns the new offset.
     pub fn seek(ctx: *rpc.Ctx, state: *FsState, args: struct { rid: u53, offset: rpc.SafeInt, whence: u8 }) FsError!rpc.SafeInt {
         _ = ctx;
         const h = try state.getHandle(args.rid);
@@ -658,6 +681,7 @@ pub const Commands = struct {
         return safeU64(h.pos);
     }
 
+    /// `plugin:fs|fstat` — metadata of an open handle.
     pub fn fstat(ctx: *rpc.Ctx, state: *FsState, args: struct { rid: u53 }) FsError!FileInfo {
         _ = ctx;
         const h = try state.getHandle(args.rid);
@@ -665,6 +689,7 @@ pub const Commands = struct {
         return toFileInfo(st);
     }
 
+    /// `plugin:fs|truncate` — resizes a file by path.
     pub fn truncate(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, len: rpc.SafeInt, options: ?BaseOptions = null }) FsError!void {
         const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
         const file = Io.Dir.cwd().openFile(state.io, target, .{ .mode = .read_write, .allow_directory = false }) catch |err| return mapIoError(err);
@@ -673,6 +698,7 @@ pub const Commands = struct {
         file.setLength(state.io, @intCast(args.len.get())) catch |err| return mapIoError(err);
     }
 
+    /// `plugin:fs|ftruncate` — resizes an open file.
     pub fn ftruncate(ctx: *rpc.Ctx, state: *FsState, args: struct { rid: u53, len: rpc.SafeInt }) FsError!void {
         _ = ctx;
         const h = try state.getHandle(args.rid);

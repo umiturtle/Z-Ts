@@ -15,13 +15,17 @@ const rpc = @import("zts_rpc");
 /// invoked by a Windows client has to use Windows rules even when the test runs on Linux, so every
 /// function below takes the style explicitly and `.current()` only appears at the OS boundary.
 pub const PathStyle = enum {
+    /// `/` separators, case-sensitive (Linux, macOS).
     posix,
+    /// `\` separators, drive letters and UNC prefixes.
     windows,
 
+    /// The style of the OS this binary was built for.
     pub fn current() PathStyle {
         return if (builtin.os.tag == .windows) .windows else .posix;
     }
 
+    /// The separator character (`/` or `\`).
     pub fn sep(self: PathStyle) u8 {
         return switch (self) {
             .posix => '/',
@@ -87,19 +91,32 @@ pub const PathError = error{
 
 /// Deterministic cross-platform path configuration (pure Zig, zero `libc` / `getenv` global races).
 pub const PathState = struct {
+    /// Which separator conventions `normalize`/`join` follow.
     style: PathStyle = PathStyle.current(),
+    /// Bundle id used for the per-app subdirectories.
     app_identifier: []const u8 = "com.zts.app",
+    /// `$HOME` (override in tests).
     home_dir: []const u8 = "/home/user",
+    /// `appCacheDir` base, or `null` to derive it.
     cache_dir: ?[]const u8 = null,
+    /// `appConfigDir` base, or `null` to derive it.
     config_dir: ?[]const u8 = null,
+    /// `appDataDir` base, or `null` to derive it.
     data_dir: ?[]const u8 = null,
+    /// `appLocalDataDir` base, or `null` to derive it.
     local_data_dir: ?[]const u8 = null,
+    /// `resourceDir()` — where bundled resources live.
     resource_dir: []const u8 = "/app/resources",
+    /// `resolve('exe')` — directory of the running binary.
     executable_dir: []const u8 = "/app/bin",
+    /// `$XDG_RUNTIME_DIR` (Linux); unused on other platforms.
     runtime_dir: []const u8 = "/run/user/1000",
+    /// `tempDir()`.
     temp_dir: []const u8 = if (builtin.os.tag == .windows) "C:\\Temp" else "/tmp",
+    /// `resolve('cwd')` — the process working directory.
     cwd: []const u8 = "/",
 
+    /// Maps a `BaseDirectory` tag to its absolute path, appending the identifier where needed.
     pub fn resolveBaseAlloc(self: *const PathState, scratch: Allocator, raw_dir: u8) PathError![]const u8 {
         const dir = std.enums.fromInt(BaseDirectory, raw_dir) orelse return error.UnknownBaseDirectory;
         const home = self.home_dir;
@@ -321,9 +338,12 @@ pub fn extnameWithStyle(style: PathStyle, p: []const u8) []const u8 {
 
 /// `plugin:path|*` RPC command namespace (`Schema` key: `.path`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:path|";
+    /// The state type `zts_rpc` resolves per app; identical to `PathState` here.
     pub const RpcState = PathState;
 
+    /// `plugin:path|resolve_directory` — base directory without a sub-path.
     pub fn resolve_directory(
         ctx: *rpc.Ctx,
         state: *PathState,
@@ -338,30 +358,37 @@ pub const Commands = struct {
         return base;
     }
 
+    /// `plugin:path|resolve` — joins a base directory with `path`.
     pub fn resolve(ctx: *rpc.Ctx, state: *PathState, args: struct { paths: []const []const u8 }) PathError![]const u8 {
         return resolveWithStyle(ctx.scratch, state.style, state.cwd, args.paths);
     }
 
+    /// `plugin:path|normalize` — resolves `.` and `..` without touching the filesystem.
     pub fn normalize(ctx: *rpc.Ctx, state: *PathState, args: struct { path: []const u8 }) PathError![]const u8 {
         return normalizeWithStyle(ctx.scratch, state.style, args.path);
     }
 
+    /// `plugin:path|join` — joins parts with the platform separator.
     pub fn join(ctx: *rpc.Ctx, state: *PathState, args: struct { paths: []const []const u8 }) PathError![]const u8 {
         return joinWithStyle(ctx.scratch, state.style, args.paths);
     }
 
+    /// `plugin:path|dirname` — the parent directory.
     pub fn dirname(_: *PathState, args: struct { path: []const u8 }) []const u8 {
         return dirnameWithStyle(PathStyle.current(), args.path);
     }
 
+    /// `plugin:path|extname` — the extension including the dot.
     pub fn extname(_: *PathState, args: struct { path: []const u8 }) []const u8 {
         return extnameWithStyle(PathStyle.current(), args.path);
     }
 
+    /// `plugin:path|basename` — the last component, minus a matching suffix.
     pub fn basename(_: *PathState, args: struct { path: []const u8, ext: ?[]const u8 = null }) []const u8 {
         return basenameWithStyle(PathStyle.current(), args.path, args.ext);
     }
 
+    /// `plugin:path|is_absolute` — whether the path starts at a root.
     pub fn is_absolute(state: *PathState, args: struct { path: []const u8 }) bool {
         return isAbsoluteWithStyle(state.style, args.path);
     }

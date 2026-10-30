@@ -30,10 +30,14 @@ pub const ClipboardError = error{
 
 /// Pluggable native clipboard. All returned slices are allocated with the caller's allocator.
 pub const Backend = struct {
+    /// Opaque pointer handed back to every vtable entry.
     ctx: ?*anyopaque = null,
+    /// The platform implementation; `Mock` keeps everything in memory.
     vtable: *const VTable,
 
+    /// The operations a platform clipboard must provide.
     pub const VTable = struct {
+        /// Returns the plain-text contents, allocated from `allocator`.
         read_text: *const fn (ctx: ?*anyopaque, allocator: Allocator) ClipboardError![]const u8,
         write_text: *const fn (ctx: ?*anyopaque, text: []const u8) ClipboardError!void,
         read_html: *const fn (ctx: ?*anyopaque, allocator: Allocator) ClipboardError![]const u8,
@@ -45,21 +49,27 @@ pub const Backend = struct {
         write_secret: *const fn (ctx: ?*anyopaque, text: []const u8) ClipboardError!void,
     };
 
+    /// Returns the plain-text clipboard contents, allocated from `allocator`.
     pub fn readText(self: Backend, allocator: Allocator) ClipboardError![]const u8 {
         return self.vtable.read_text(self.ctx, allocator);
     }
+    /// Replaces the clipboard with plain text.
     pub fn writeText(self: Backend, text: []const u8) ClipboardError!void {
         return self.vtable.write_text(self.ctx, text);
     }
+    /// Returns the HTML flavour, allocated from `allocator`.
     pub fn readHtml(self: Backend, allocator: Allocator) ClipboardError![]const u8 {
         return self.vtable.read_html(self.ctx, allocator);
     }
+    /// Writes HTML plus its plain-text fallback.
     pub fn writeHtml(self: Backend, html: []const u8, alt_text: ?[]const u8) ClipboardError!void {
         return self.vtable.write_html(self.ctx, html, alt_text);
     }
+    /// Empties the clipboard.
     pub fn clear(self: Backend) ClipboardError!void {
         return self.vtable.clear(self.ctx);
     }
+    /// Writes text the OS may mark as confidential (`Concealed` on macOS).
     pub fn writeSecret(self: Backend, text: []const u8) ClipboardError!void {
         return self.vtable.write_secret(self.ctx, text);
     }
@@ -69,18 +79,27 @@ pub const Backend = struct {
 ///
 /// Owns every string it stores, so tests can free the backing arena and still keep the mock alive.
 pub const Mock = struct {
+    /// Allocator that owns `text`, `html` and `alt_text`.
     allocator: Allocator,
+    /// Current plain-text contents.
     text: []const u8 = "",
+    /// Current HTML flavour.
     html: []const u8 = "",
+    /// Plain-text fallback of the last `writeHtml`.
     alt_text: []const u8 = "",
+    /// How many `write_secret` calls were made.
     secret_writes: usize = 0,
+    /// How many `clear` calls were made.
     clear_calls: usize = 0,
+    /// Set to make the next call fail, so error paths can be tested.
     fail_next: ?ClipboardError = null,
 
+    /// Creates an empty clipboard.
     pub fn init(allocator: Allocator) Mock {
         return .{ .allocator = allocator };
     }
 
+    /// Frees the stored text, HTML and fallback.
     pub fn deinit(self: *Mock) void {
         if (self.text.len > 0) self.allocator.free(self.text);
         if (self.html.len > 0) self.allocator.free(self.html);
@@ -88,6 +107,7 @@ pub const Mock = struct {
         self.* = undefined;
     }
 
+    /// The `Backend` view of `self`.
     pub fn backend(self: *Mock) Backend {
         return .{ .ctx = self, .vtable = &vtable };
     }
@@ -175,9 +195,12 @@ pub const Mock = struct {
 /// State behind `plugin:clipboard-manager`: the platform backend (X11/Wayland, `NSPasteboard`,
 /// Win32 clipboard) plus the allocator used for the strings it hands back.
 pub const ClipboardState = struct {
+    /// Allocator used for reads (freed by the caller's scratch arena).
     allocator: Allocator,
+    /// Platform clipboard implementation.
     backend: Backend,
 
+    /// Creates state backed by `backend`.
     pub fn init(allocator: Allocator, backend: Backend) ClipboardState {
         return .{ .allocator = allocator, .backend = backend };
     }
@@ -185,31 +208,38 @@ pub const ClipboardState = struct {
 
 /// `plugin:clipboard-manager|*` RPC command namespace (`Schema` key: `.clipboard`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:clipboard-manager|";
+    /// The state type `zts_rpc` resolves per app; identical to `ClipboardState` here.
     pub const RpcState = ClipboardState;
 
+    /// `plugin:clipboard-manager|write_text` — replaces the clipboard with text.
     pub fn write_text(ctx: *rpc.Ctx, state: *ClipboardState, args: struct { text: []const u8, label: ?[]const u8 = null }) ClipboardError!void {
         _ = ctx;
         _ = args.label; // Desktop: upstream ignores the label outside mobile.
         try state.backend.writeText(args.text);
     }
 
+    /// `plugin:clipboard-manager|read_text` — the current plain-text contents.
     pub fn read_text(ctx: *rpc.Ctx, state: *ClipboardState, args: struct {}) ClipboardError![]const u8 {
         _ = args;
         return state.backend.readText(ctx.scratch);
     }
 
+    /// `plugin:clipboard-manager|write_html` — writes HTML and its fallback.
     pub fn write_html(ctx: *rpc.Ctx, state: *ClipboardState, args: struct { html: []const u8, alt_text: ?[]const u8 = null }) ClipboardError!void {
         _ = ctx;
         try state.backend.writeHtml(args.html, args.alt_text);
     }
 
+    /// `plugin:clipboard-manager|clear` — empties the clipboard.
     pub fn clear(ctx: *rpc.Ctx, state: *ClipboardState, args: struct {}) ClipboardError!void {
         _ = ctx;
         _ = args;
         try state.backend.clear();
     }
 
+    /// `plugin:clipboard-manager|write_secret` — writes confidential text.
     pub fn write_secret(ctx: *rpc.Ctx, state: *ClipboardState, args: struct { text: []const u8 }) ClipboardError!void {
         _ = ctx;
         try state.backend.writeSecret(args.text);
