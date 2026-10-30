@@ -48,6 +48,11 @@ docsite: 2 broken link(s)
   docs/INDEX.html: ../nope.md -> docs/nope.html
 ```
 
+Markdown のリンクに加えて、**生成した HTML の `src=` / `href=` を全部**書き出しツリーと突き合わせる
+（`assets=…` がその件数）。テンプレートやサンプルの `url(...)` は Markdown のリンク検査では
+見えないので、Pages で 404 になる前にここで落とす。Nuxt の `_payload.json` だけは既知の欠落として
+除外している。
+
 ## 4. サイドバー・検索・テーマ
 
 * **サイドバー**: グループ順は固定（はじめに → ロードマップ → アーキテクチャ → 決定（ADR）→
@@ -91,7 +96,7 @@ push to main ──> build ──> ./zigw build docs            (リンク検査
                         └─ upload-pages-artifact ──> deploy-pages
 ```
 
-* `OK docsite pages=… links=… words=… demos=…` マーカーが出なければジョブは失敗する
+* `OK docsite pages=… links=… assets=… words=… demos=…` マーカーが出なければジョブは失敗する
   （＝ページが 0 枚でも「成功」しない）。
 * `.nojekyll` を置くので Jekyll の処理は走らない（`_zts/` のようなアンダースコア始まりの
   ディレクトリもそのまま配信される）。

@@ -60,7 +60,7 @@ const head_template =
     \\<link rel="stylesheet" href="{root}assets/site.css" />
     \\<script>try{const t=localStorage.getItem("zts-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
     \\</head>
-    \\<body>
+    \\<body data-root="{root}">
     \\<a class="skip" href="#main">本文へスキップ</a>
     \\<header class="topbar">
     \\  <button class="menu-toggle" type="button" aria-label="メニュー" data-menu-toggle>☰</button>

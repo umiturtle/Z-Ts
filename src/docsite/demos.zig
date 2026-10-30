@@ -20,10 +20,12 @@ const Allocator = std.mem.Allocator;
 const Error = Allocator.Error || error{WriteFailed};
 
 pub const RewriteOptions = struct {
-    /// Where `/zts/fonts/…` should point from inside a demo directory.
+    /// Where `/zts/fonts/…` should point from the file being rewritten.
     font_prefix: []const u8 = "../fonts/",
     /// The prefix the gallery uses for fonts.
     font_source: []const u8 = "/zts/fonts/",
+    /// `../` repeated for files that live below the demo root (Next.js writes `404/index.html`).
+    asset_prefix: []const u8 = "",
 };
 
 /// Makes every asset URL in `text` relative to the page's own directory.
@@ -49,7 +51,9 @@ pub fn rewriteAbsoluteUrls(arena: Allocator, text: []const u8, options: RewriteO
 
         // 2. `href="/"` would navigate to the domain root; keep it inside the demo.
         if (std.mem.startsWith(u8, text[i..], "href=\"/\"")) {
-            writer.writeAll("href=\"./\"") catch return error.OutOfMemory;
+            writer.writeAll("href=\"") catch return error.OutOfMemory;
+            writer.writeAll(if (options.asset_prefix.len == 0) "./" else options.asset_prefix) catch return error.OutOfMemory;
+            writer.writeAll("\"") catch return error.OutOfMemory;
             i += "href=\"/\"".len;
             continue;
         }
@@ -69,6 +73,8 @@ pub fn rewriteAbsoluteUrls(arena: Allocator, text: []const u8, options: RewriteO
                     writer.writeAll(options.font_prefix) catch return error.OutOfMemory;
                     i = slash_at + 1 + options.font_source.len - 1;
                 } else {
+                    // Keep the file's own depth: `dist/404/index.html` needs `../assets/…`.
+                    writer.writeAll(options.asset_prefix) catch return error.OutOfMemory;
                     i = slash_at + 1;
                 }
                 continue;
@@ -122,7 +128,19 @@ pub fn copyDemo(
         const target = try std.fmt.allocPrint(arena, "{s}{s}/{s}", .{ dst_prefix, name, entry.path });
 
         if (isTextAsset(entry.path)) {
-            const rewritten = try rewriteAbsoluteUrls(arena, bytes, options);
+            var depth: usize = 0;
+            for (entry.path) |ch| if (ch == '/') {
+                depth += 1;
+            };
+            const up = try arena.alloc(u8, depth * 3);
+            for (0..depth) |index| @memcpy(up[index * 3 ..][0..3], "../");
+            const font_up = try arena.alloc(u8, (depth + 1) * 3);
+            for (0..depth + 1) |index| @memcpy(font_up[index * 3 ..][0..3], "../");
+            const rewritten = try rewriteAbsoluteUrls(arena, bytes, .{
+                .font_prefix = try std.fmt.allocPrint(arena, "{s}fonts/", .{font_up}),
+                .font_source = options.font_source,
+                .asset_prefix = up,
+            });
             try writeFileIn(out_dir, io, target, rewritten);
             result.bytes += rewritten.len;
         } else {
@@ -353,6 +371,22 @@ test "the `colon-slash` form used by bundlers is rewritten as well" {
     try testing.expectEqualStrings(
         "url('assets/a.woff2')",
         try rewriteForTest(arena, "url('/assets/a.woff2')"),
+    );
+}
+
+test "files below the demo root keep their own depth" {
+    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const options: RewriteOptions = .{ .asset_prefix = "../", .font_prefix = "../../fonts/" };
+    try testing.expectEqualStrings(
+        "<link href=\"../_next/static/a.css\"><a href=\"../\">home</a>",
+        try rewriteAbsoluteUrls(arena, "<link href=\"/_next/static/a.css\"><a href=\"/\">home</a>", options),
+    );
+    try testing.expectEqualStrings(
+        "url(../../fonts/zts-sans-400.woff2)",
+        try rewriteAbsoluteUrls(arena, "url(/zts/fonts/zts-sans-400.woff2)", options),
     );
 }
 

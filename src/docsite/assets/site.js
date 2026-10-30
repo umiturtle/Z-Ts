@@ -35,6 +35,9 @@
   var input = doc.getElementById("search");
   var results = doc.getElementById("search-results");
   var index = window.ZTS_SEARCH || [];
+  // Pages live at different depths (`docs/tasks/x.html`), so every search hit is resolved
+  // against the site root the generator recorded on <body>.
+  var siteRoot = doc.body.getAttribute("data-root") || "";
 
   function fold(text) { return (text || "").toLowerCase(); }
 
@@ -78,7 +81,7 @@
     hits.slice(0, 20).forEach(function (hit) {
       var li = doc.createElement("li");
       var a = doc.createElement("a");
-      a.href = hit.entry.u;
+      a.href = siteRoot + hit.entry.u;
       a.textContent = hit.entry.t;
       var group = doc.createElement("span");
       group.className = "group";

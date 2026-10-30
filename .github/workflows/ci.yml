@@ -124,6 +124,11 @@ jobs:
             exit 1
           fi
           grep -o "OK docsite .*" ci-output.log | tail -n 1
+          # `assets=0` would mean the asset verification silently did nothing.
+          if grep -q "OK docsite .* assets=0 " ci-output.log; then
+            echo "::error::no asset URL was verified - the output walk is broken."
+            exit 1
+          fi
           test -f zig-out/docs/index.html
           test -f zig-out/docs/docs/INDEX.html
           test -f zig-out/docs/assets/search-index.js

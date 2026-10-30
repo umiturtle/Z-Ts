@@ -39,6 +39,8 @@ pub const SiteReport = struct {
     bytes: usize = 0,
     /// Files copied from `examples/gallery/src/web/fw` (+ the shared fonts).
     demo_files: usize = 0,
+    /// Asset URLs (`src=` / `href=`) verified to exist in the output tree.
+    assets: usize = 0,
 };
 
 pub fn main(init: std.process.Init) !u8 {
@@ -72,8 +74,8 @@ pub fn main(init: std.process.Init) !u8 {
     };
 
     std.debug.print(
-        "OK docsite pages={d} links={d} words={d} bytes={d} demos={d}\n",
-        .{ report.pages, report.links, report.words, report.bytes, report.demo_files },
+        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d}\n",
+        .{ report.pages, report.links, report.assets, report.words, report.bytes, report.demo_files },
     );
     return 0;
 }
@@ -185,7 +187,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
 
     // 4. Write the pages.
     try cwd.createDirPath(io, out_path);
-    const out_dir = try cwd.openDir(io, out_path, .{});
+    const out_dir = try cwd.openDir(io, out_path, .{ .iterate = true });
     defer out_dir.close(io);
 
     for (rendered) |page| {
@@ -246,6 +248,11 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         report.demo_files += try publishDemos(arena, io, out_dir);
         if (report.demo_files > 0) report.bytes += 1; // the generated index page
     }
+
+    // 5b. The demos and the templates reference assets that the Markdown link check cannot see
+    //     (`<link href>`, `<script src>`, `url(…)`), so every emitted page is verified against the
+    //     files that were actually written. A 404 on Pages is a build failure, not a surprise.
+    report.assets = try verifyAssets(arena, io, out_dir);
 
     return report;
 }
@@ -390,6 +397,81 @@ fn truncateChars(text: []const u8, max: usize) []const u8 {
     }
     const slice = text[0..out];
     return if (slice.len == text.len) slice else std.mem.trimEnd(u8, slice, " ");
+}
+
+/// Walks the produced tree and checks that every relative `src=`/`href=` target exists.
+fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
+    var checked: usize = 0;
+    var missing: std.ArrayListUnmanaged([]const u8) = .empty;
+
+    // Collect first, then read: a directory iterator and file reads on the same handle do not mix
+    // (the walker seeks its descriptor to 0 on every `next`).
+    var pages: std.ArrayListUnmanaged([]const u8) = .empty;
+    var walker = try out_dir.walk(arena);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.path, ".html")) continue;
+        try pages.append(arena, try arena.dupe(u8, entry.path));
+    }
+
+    for (pages.items) |page| {
+        const html = try out_dir.readFileAlloc(io, page, arena, .limited(4 * 1024 * 1024));
+
+        var cursor: usize = 0;
+        while (nextAssetUrl(html, &cursor)) |url| {
+            if (url.len == 0 or url[0] == '#') continue;
+            if (std.mem.startsWith(u8, url, "http://") or std.mem.startsWith(u8, url, "https://") or
+                std.mem.startsWith(u8, url, "mailto:") or std.mem.startsWith(u8, url, "data:") or
+                std.mem.startsWith(u8, url, "//")) continue;
+
+            // Nuxt's static export preloads `/_payload.json`, which `nuxt generate` does not emit;
+            // the page still renders from the SSR'd HTML (documented in examples/frameworks).
+            if (std.mem.endsWith(u8, url, "_payload.json") or std.mem.indexOf(u8, url, "_payload.json?") != null) continue;
+
+            checked += 1;
+            const resolved = try site.resolveRelative(arena, page, url);
+            if (out_dir.statFile(io, resolved, .{})) |_| {} else |_| {
+                try missing.append(arena, try std.fmt.allocPrint(arena, "{s}: {s}", .{ page, url }));
+            }
+        }
+    }
+
+    if (missing.items.len > 0) {
+        std.debug.print("docsite: {d} asset URL(s) point nowhere\n", .{missing.items.len});
+        for (missing.items[0..@min(missing.items.len, 20)]) |line| {
+            std.debug.print("  {s}\n", .{line});
+        }
+        return error.BrokenAssets;
+    }
+    return checked;
+}
+
+/// Yields the value of the next `src="…"` / `href="…"` attribute in `html`.
+fn nextAssetUrl(html: []const u8, cursor: *usize) ?[]const u8 {
+    while (cursor.* < html.len) {
+        const rest = html[cursor.*..];
+        const at_src = std.mem.indexOf(u8, rest, "src=\"");
+        const at_href = std.mem.indexOf(u8, rest, "href=\"");
+        var found: ?usize = null;
+        var consume: usize = 0;
+        if (at_src) |offset| {
+            found = offset;
+            consume = "src=\"".len;
+        }
+        if (at_href) |offset| {
+            if (found == null or offset < found.?) {
+                found = offset;
+                consume = "href=\"".len;
+            }
+        }
+        const start = found orelse return null;
+        const value_start = cursor.* + start + consume;
+        const end = std.mem.findScalarPos(u8, html, value_start, '"') orelse return null;
+        cursor.* = end + 1;
+        return html[value_start..end];
+    }
+    return null;
 }
 
 fn collectSources(arena: Allocator, io: Io) ![]const Source {

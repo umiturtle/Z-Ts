@@ -47,8 +47,12 @@
   - レンダラ（`markdown.zig`）: 12 テスト。GitHub の slug 規則に合わせて `.` は削除、CJK は保持
   - シェル（`site.zig`）: 8 テスト。`relativeHref` は共通ディレクトリを畳む
   - サンプル公開（`demos.zig`）: 8 テスト。`="/…`、`:"/…`、`url(/…`、`href="/"` を書き換え
-  - 生成: `./zigw build docs` → **67 ページ / 162 リンク / 281,953 語 / 60 デモファイル**、
-    `zig-out/docs` は約 4.7 MB
+  - 生成: `./zigw build docs` → **86 ページ / 207 リンク / 6,868 アセット URL / 311,648 語 /
+    60 デモファイル**、`zig-out/docs` は約 4.7 MB
+  - アセット検査: 生成した全 HTML の `src=` / `href=` を書き出しツリーと突き合わせる
+    （壊れていれば `error.BrokenAssets`）。Nuxt の `_payload.json` のみ既知の欠落として除外。
+  - ガイド（`getting-started` / `migrating-from-tauri` / `troubleshooting`）と
+    `reference/cli.md` を追加し、README を実質的なフロントページにした
   - リンク検査: 初回実行で既存ドキュメントの壊れたリンク **11 本**を検出 → 6 本は生成対象漏れ
     （`examples/*/README.md` の読み込み上限 1 KB が原因）、5 本はサイト外ファイル（GitHub
     blob URL へ自動差し替え）で解消
