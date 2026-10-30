@@ -54,7 +54,7 @@ src/cli/mod.zig      src/docsite/mod.zig  src/root.zig
 
 | ステップ | 内容 |
 |---|---|
-| `docs` | `docs/**/*.md` を `zig-out/docs/` に描画（リンク検査つき・81 ページ） |
+| `docs` | `docs/**/*.md` を `zig-out/docs/` に描画（リンク検査・アセット検査つき） |
 
 ### OS バックエンドの切り替え
 
