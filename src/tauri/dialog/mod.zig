@@ -126,11 +126,16 @@ pub const MessageDialogButtons = struct {
     /// Label of the No button; `null` = no No button.
     no: ?[]const u8 = null,
 
+    /// A single `Ok` button.
     pub const default_ok = MessageDialogButtons{ .ok = "Ok" };
+    /// `Ok` / `Cancel`.
     pub const default_ok_cancel = MessageDialogButtons{ .ok = "Ok", .cancel = "Cancel" };
+    /// `Yes` / `No`.
     pub const default_yes_no = MessageDialogButtons{ .yes = "Yes", .no = "No" };
+    /// `Yes` / `No` / `Cancel`.
     pub const default_yes_no_cancel = MessageDialogButtons{ .yes = "Yes", .no = "No", .cancel = "Cancel" };
 
+    /// Whether the labels are exactly one of the `default_*` presets.
     pub fn isDefault(self: MessageDialogButtons) bool {
         return std.meta.eql(self, default_ok) or
             std.meta.eql(self, default_ok_cancel) or
@@ -163,6 +168,7 @@ pub const MessageDialogButtons = struct {
         return out[0..n];
     }
 
+    /// Serializes as `{ ok, cancel, yes, no }` for the JS side.
     pub fn jsonStringify(self: MessageDialogButtons, jw: anytype) !void {
         if (std.meta.eql(self, default_ok)) return jw.writeAll("\"Ok\"");
         if (std.meta.eql(self, default_ok_cancel)) return jw.writeAll("\"OkCancel\"");
@@ -184,6 +190,7 @@ pub const MessageDialogButtons = struct {
         return jw.writeAll("}");
     }
 
+    /// Accepts the presets, a `{ label, variant }` object, or a plain string.
     pub fn jsonParse(
         allocator: Allocator,
         source: anytype,
@@ -276,6 +283,7 @@ pub const Selection = struct {
     /// Canonical absolute paths, allocated with the allocator passed to the backend.
     paths: []const []const u8 = &.{},
 
+    /// Whether the user dismissed the dialog without picking anything.
     pub fn cancelled(self: Selection) bool {
         return self.paths.len == 0;
     }
@@ -290,23 +298,32 @@ pub const BackendError = DialogError;
 /// Pluggable native implementation. Single-threaded by contract: RPC dispatch is serialized by
 /// the host event loop, so backends may keep mutable state behind `ctx` without locking.
 pub const Backend = struct {
+    /// Opaque pointer handed back to every vtable entry.
     ctx: ?*anyopaque = null,
+    /// The native implementation; `Mock` is the deterministic one used by tests.
     vtable: *const VTable,
 
+    /// The operations a platform dialog implementation must provide.
     pub const VTable = struct {
+        /// Shows an open dialog and returns the picked paths.
         open: *const fn (ctx: ?*anyopaque, allocator: Allocator, options: OpenDialogOptions) BackendError!Selection,
+        /// Shows a save dialog and returns the destination path.
         save: *const fn (ctx: ?*anyopaque, allocator: Allocator, options: SaveDialogOptions) BackendError!Selection,
+        /// Shows a message dialog and returns the pressed button's label.
         message: *const fn (ctx: ?*anyopaque, allocator: Allocator, request: MessageRequest) BackendError![]const u8,
     };
 
+    /// Shows an open dialog and returns the picked paths (empty = cancelled).
     pub fn open(self: Backend, allocator: Allocator, options: OpenDialogOptions) BackendError!Selection {
         return self.vtable.open(self.ctx, allocator, options);
     }
 
+    /// Shows a save dialog and returns the destination path.
     pub fn save(self: Backend, allocator: Allocator, options: SaveDialogOptions) BackendError!Selection {
         return self.vtable.save(self.ctx, allocator, options);
     }
 
+    /// Shows a message dialog and returns the label of the button the user pressed.
     pub fn message(self: Backend, allocator: Allocator, request: MessageRequest) BackendError![]const u8 {
         return self.vtable.message(self.ctx, allocator, request);
     }
@@ -321,6 +338,7 @@ pub const Backend = struct {
 /// Queue results with [`Mock.pick`] / [`Mock.answer`] before invoking; every call is recorded so
 /// tests can assert *what* the webview asked for, not just what came back.
 pub const Mock = struct {
+    /// Allocator that owns the recorded option copies.
     allocator: Allocator,
     /// Paths returned by the next `open` / `save` call (`null` = cancelled).
     next_paths: ?[]const []const u8 = null,
@@ -329,17 +347,25 @@ pub const Mock = struct {
     /// Set to make the next call fail with this error.
     next_error: ?BackendError = null,
 
+    /// How many `open` requests were made.
     open_calls: usize = 0,
+    /// How many `save` requests were made.
     save_calls: usize = 0,
+    /// How many `message` requests were made.
     message_calls: usize = 0,
+    /// Options of the most recent `open`, so a test can assert the filters.
     last_open: ?OpenDialogOptions = null,
+    /// Options of the most recent `save`.
     last_save: ?SaveDialogOptions = null,
+    /// Request of the most recent `message`.
     last_message: ?MessageRequest = null,
 
+    /// Creates a backend that answers as configured and records every call.
     pub fn init(allocator: Allocator) Mock {
         return .{ .allocator = allocator };
     }
 
+    /// The `Backend` view of `self`.
     pub fn backend(self: *Mock) Backend {
         return .{ .ctx = self, .vtable = &vtable };
     }
@@ -401,16 +427,21 @@ pub const Mock = struct {
 /// picked path is granted to — that grant is what lets `plugin:fs` open the file the user chose
 /// without widening the static scope.
 pub const DialogState = struct {
+    /// Allocator that owns the backend's answers.
     allocator: Allocator,
+    /// IO reactor used when granting picked paths to the FS scope.
     io: Io,
+    /// Platform implementation that shows the dialogs.
     backend: Backend,
     /// When set, every picked path is granted to this scope (upstream `plugin:fs` behaviour).
     scope: ?*fs.Scope = null,
 
+    /// Creates state that shows dialogs through `backend` and grants nothing.
     pub fn init(allocator: Allocator, io: Io, backend: Backend) DialogState {
         return .{ .allocator = allocator, .io = io, .backend = backend };
     }
 
+    /// Returns a copy that also grants every picked path to `scope`.
     pub fn withScope(self: DialogState, scope: *fs.Scope) DialogState {
         var copy = self;
         copy.scope = scope;
@@ -439,7 +470,9 @@ fn writeJsonPathList(writer: *std.Io.Writer, paths: []const []const u8) DialogEr
 
 /// `plugin:dialog|*` RPC command namespace (`Schema` key: `.dialog`).
 pub const Commands = struct {
+    /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:dialog|";
+    /// The state type `zts_rpc` resolves per app; identical to `DialogState` here.
     pub const RpcState = DialogState;
 
     /// `open()` — returns `string`, `string[]`, or `null` (untagged, exactly like upstream).

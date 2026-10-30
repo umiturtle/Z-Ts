@@ -31,19 +31,27 @@ const js_bootstrap = @import("js_bootstrap.zig");
 
 /// A request/response header. Values are borrowed slices, never NUL terminated.
 pub const HeaderPair = struct {
+    /// Header name (ASCII).
     name: []const u8,
+    /// Header value (opaque bytes).
     value: []const u8,
 };
 
 /// One `tauri://` / `ipc://` / `asset://` hit, already decoded from the WebView's callback. A
 /// `WindowId` of `0` means "no window" (a request that arrived before the first window existed).
 pub const IncomingSchemeRequest = struct {
+    /// Window the request came from (`0` = no window yet).
     window_id: core.WindowId,
+    /// HTTP method (`GET`, `POST`, …).
     method: []const u8,
+    /// Full request URI, still percent-encoded.
     uri: []const u8,
+    /// Request headers, borrowed for the duration of the call.
     headers: []const HeaderPair = &.{},
+    /// Request body bytes (empty for `GET`).
     body: []const u8 = "",
 
+    /// Case-insensitive header lookup, or `null`.
     pub fn header(self: IncomingSchemeRequest, wanted_name: []const u8) ?[]const u8 {
         for (self.headers) |h| {
             if (std.ascii.eqlIgnoreCase(h.name, wanted_name)) return h.value;
@@ -56,15 +64,24 @@ pub const IncomingSchemeRequest = struct {
 /// `core.OwnedBytes`), and `content_range_buf` avoids an allocation for the 206 case by formatting
 /// `bytes 0-1023/4096` into a fixed buffer.
 pub const RoutedResponse = struct {
+    /// HTTP status to report.
     status_code: u16 = 200,
+    /// `Content-Type` to report.
     content_type: []const u8 = "application/json",
+    /// `Tauri-Response: ok` / `error`, when the request came over `ipc://`.
     tauri_response: ?[]const u8 = null,
+    /// Whether the route supports `Range` requests.
     accept_ranges: bool = false,
+    /// Fixed buffer holding the formatted `bytes a-b/total` value.
     content_range_buf: [64]u8 = undefined,
+    /// How many bytes of `content_range_buf` are valid (0 = no `Content-Range`).
     content_range_len: usize = 0,
+    /// `Content-Security-Policy` to send, when the response is HTML.
     csp_header: ?[]const u8 = null,
+    /// Response bytes, owned by the response.
     body: core.OwnedBytes = .empty,
 
+    /// Formats the optional headers into a slice allocated from `scratch`.
     pub fn intoHeaderSlice(self: *const RoutedResponse, scratch: Allocator) Allocator.Error![]HeaderPair {
         var list: std.ArrayList(HeaderPair) = .empty;
         if (self.tauri_response) |tr| {
@@ -97,13 +114,21 @@ pub const RoutedResponse = struct {
 /// * `asset_root_dir` / `asset_allow_globs` — dev-mode serving from disk, restricted to the globs.
 /// * `extra_allowed_origins` — additional origins accepted for `ipc://` (dev servers).
 pub const ProtocolConfig = struct {
+    /// Secret every `ipc://` request must present, so a page cannot forge IPC.
     invoke_key: []const u8,
+    /// Embedded frontend the `asset://` route serves, if any.
     assets: ?*const web.Assets = null,
+    /// Whether to inject the IPC bootstrap into served HTML.
     inject_bootstrap_into_html: bool = false,
+    /// Label assumed when a request arrives without a window.
     default_window_label: []const u8 = "main",
+    /// CSP applied to HTML responses.
     csp: ?[]const u8 = null,
+    /// Directory the `asset://` route reads from (native, dev mode).
     asset_root_dir: ?[]const u8 = null,
+    /// Globs the `asset://` route may serve.
     asset_allow_globs: []const []const u8 = &.{},
+    /// Additional origins allowed to call IPC.
     extra_allowed_origins: []const []const u8 = &.{},
 };
 
@@ -194,6 +219,7 @@ pub const ProtocolRouter = struct {
     /// Command table consulted for every `ipc://` request.
     rpc_handler: rpc.Handler,
 
+    /// Builds a router for one app: copies `config` and seeds its scratch arena.
     pub fn init(
         allocator: Allocator,
         io: Io,
@@ -208,6 +234,7 @@ pub const ProtocolRouter = struct {
         };
     }
 
+    /// Whether `Origin` may call `ipc://`; `null` (no origin) is allowed.
     pub fn isAllowedOrigin(self: *const ProtocolRouter, origin_opt: ?[]const u8) bool {
         const origin = origin_opt orelse return true;
         if (origin.len == 0 or std.ascii.eqlIgnoreCase(origin, "null")) return false;
@@ -218,12 +245,14 @@ pub const ProtocolRouter = struct {
         return false;
     }
 
+    /// Creates the 32-byte invoke key as 64 lowercase hex characters.
     pub fn generateInvokeKeyHex(io: Io) [64]u8 {
         var bytes: [32]u8 = undefined;
         io.randomSecure(&bytes) catch io.random(&bytes);
         return std.fmt.bytesToHex(bytes, .lower);
     }
 
+    /// Routes one `tauri://` / `ipc://` / `asset://` request and returns the response.
     pub fn handleRequest(
         self: *const ProtocolRouter,
         host: core.Host,
@@ -468,6 +497,7 @@ pub const ProtocolRouter = struct {
         };
     }
 
+    /// Handles `window.__zts.postMessage(...)` from the page.
     pub fn handlePostMessage(
         self: *const ProtocolRouter,
         host: core.Host,
