@@ -1,0 +1,102 @@
+name: Documentation site
+
+# Publishes two things on GitHub Pages, from one artifact:
+#   1. `docs/**/*.md` rendered by the in-tree `zts_docsite` generator (`M5-06`) — the Markdown is
+#      the single source of truth, so a broken link fails this workflow instead of shipping.
+#   2. The pre-built example bundles: the counter SSG export (`zig build dist`) and the nine
+#      committed framework demos, with their absolute `/assets/…` URLs rewritten for the
+#      `/Z-Ts/` sub-path.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the documentation + example site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+
+      - name: Cache Zig toolchain artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig
+            .zig-cache
+            examples/counter/.zig-cache
+          key: pages-${{ runner.os }}-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig', 'examples/counter/build.zig') }}
+          restore-keys: |
+            pages-${{ runner.os }}-
+
+      - name: Install GTK3 & WebKit2GTK (needed by the counter's desktop build)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+
+      - name: Render the documentation site
+        run: |
+          set -eo pipefail
+          ./zigw build docs --summary all 2>&1 | tee docs-build.log
+          # The generator verifies every relative link itself; the marker is the machine-readable
+          # proof that the walk, the Markdown renderer and the link check really ran.
+          if ! grep -q "OK docsite pages=" docs-build.log; then
+            echo "::error::docsite marker missing — the site was not rendered."
+            tail -n 200 docs-build.log
+            exit 1
+          fi
+          grep -o "OK docsite .*" docs-build.log | tail -n 1
+
+      - name: Build the counter static site (SSG export)
+        run: |
+          set -eo pipefail
+          ( cd examples/counter && ../../zigw build dist --summary all )
+          test -f examples/counter/zig-out/dist/index.html
+          test -f examples/counter/zig-out/dist/_zts/app.wasm
+
+      - name: Assemble the published tree
+        run: |
+          set -eo pipefail
+          rm -rf _site && mkdir -p _site
+          # `cp -r …/.` keeps the dotfiles (`.nojekyll`).
+          cp -r zig-out/docs/. _site/
+          mkdir -p _site/examples
+          cp -r examples/counter/zig-out/dist _site/examples/counter
+          # `.nojekyll` must also exist at the artifact root for Pages to skip Jekyll.
+          touch _site/.nojekyll
+          test -f _site/index.html
+          test -f _site/examples/counter/index.html
+          test -f _site/examples/frameworks/index.html
+          du -sh _site
+          find _site -name '*.html' | wc -l
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

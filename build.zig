@@ -613,6 +613,36 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    // Documentation site (`M5-06`): the Markdown renderer and the site builder are std-only, so
+    // their tests run everywhere; `zig build docs` renders docs/**/*.md into zig-out/docs.
+    const docsite_mod = b.createModule(.{
+        .root_source_file = b.path("src/docsite/mod.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = false,
+    });
+    const docsite_tests = b.addTest(.{ .root_module = docsite_mod });
+    const docsite_exe = b.addExecutable(.{
+        .name = "zts_docsite",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/docsite/main.zig"),
+            .target = b.graph.host,
+            .optimize = .debug,
+            .link_libc = false,
+        }),
+    });
+    const run_docsite = b.addRunArtifact(docsite_exe);
+    run_docsite.has_side_effects = true;
+    run_docsite.addArg("--out");
+    const docs_dir = run_docsite.addOutputDirectoryArg("docs");
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = docs_dir,
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+    const docs_step = b.step("docs", "Render the documentation site into zig-out/docs");
+    docs_step.dependOn(&install_docs.step);
+
     // `zts` CLI (`M5-02`): argument parsing + the `init` template are std-only pure functions.
     const cli_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -636,6 +666,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(ssg_tests).step);
     test_step.dependOn(&b.addRunArtifact(build_tools_tests).step);
     test_step.dependOn(&b.addRunArtifact(cli_tests).step);
+    test_step.dependOn(&b.addRunArtifact(docsite_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);
     test_step.dependOn(&b.addRunArtifact(c_abi_exe).step);
     test_step.dependOn(&b.addRunArtifact(umbrella_tests).step);

@@ -110,6 +110,31 @@ jobs:
           # `examples/counter/web/bindings.gen.ts` would already have failed the build above.
           echo "bindings freshness is enforced by the check-bindings build step."
 
+      - name: Render the documentation site and verify every internal link (M5-06 gate)
+        run: |
+          set -eo pipefail
+          {
+            ./zigw build docs --summary all
+          } 2>&1 | tee -a ci-output.log
+          # `zts_docsite` fails the build itself when a relative link points nowhere; the marker
+          # proves the walk, the Markdown renderer, the link check and the demo copy all ran.
+          if ! grep -q "OK docsite pages=" ci-output.log; then
+            echo "::error::docsite marker missing - the documentation site was not rendered."
+            tail -n 200 ci-output.log
+            exit 1
+          fi
+          grep -o "OK docsite .*" ci-output.log | tail -n 1
+          test -f zig-out/docs/index.html
+          test -f zig-out/docs/docs/INDEX.html
+          test -f zig-out/docs/assets/search-index.js
+          # The nine framework demos are published next to the docs, with rewritten asset URLs.
+          test -f zig-out/docs/examples/frameworks/index.html
+          test -f zig-out/docs/examples/frameworks/react/index.html
+          if grep -q 'src="/assets/' zig-out/docs/examples/frameworks/react/index.html; then
+            echo "::error::absolute asset URL survived the rewrite - the demo would 404 on Pages."
+            exit 1
+          fi
+
       - name: Cross-compile the Windows Win32 + Direct WebView2 backend from Linux (M3-02 gate)
         run: |
           set -o pipefail
