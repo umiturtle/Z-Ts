@@ -111,17 +111,36 @@ jobs:
         run: |
           set -eo pipefail
           enabled=false
-          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
-            echo "GitHub Pages site already exists."
+          msg=""
+
+          # 1. Does a Pages site exist, and how is it built? Only `workflow` can be deployed to by
+          #    this workflow; `legacy` means "Deploy from a branch".
+          #    (`gh api` prints the error body on stdout even when it fails, so the exit status —
+          #    not the output — is what tells us the site is missing.)
+          build_type=""
+          if build_type="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --template '{{.build_type}}' 2>/dev/null)"; then
+            build_type="${build_type:-legacy}"
+          else
+            build_type=""
+            # 2. No site at all → try to create one. This needs administrative rights, which
+            #    GITHUB_TOKEN does not have, but when it works the first push just publishes.
+            if gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow --template '{{.build_type}}' >/dev/null 2>&1; then
+              build_type=workflow
+              echo "Created the GitHub Pages site (build type: GitHub Actions)."
+            fi
+          fi
+
+          if [ "$build_type" = "workflow" ]; then
             enabled=true
-          elif gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow >/dev/null 2>&1; then
-            echo "Created the GitHub Pages site (build type: GitHub Actions)."
-            enabled=true
+            echo "GitHub Pages is enabled (build type: GitHub Actions)."
+          elif [ -n "$build_type" ]; then
+            msg="GitHub Pages is configured with build_type=${build_type} (Deploy from a branch), but this workflow publishes with GitHub Actions. One-time fix: Settings -> Pages -> Build and deployment -> Source: GitHub Actions."
+          else
+            msg="GitHub Pages is not enabled for ${GITHUB_REPOSITORY} yet. The site was built and verified, but it cannot be published: creating the Pages site needs administrative rights, which GITHUB_TOKEN does not have. One-time fix: Settings -> Pages -> Build and deployment -> Source: GitHub Actions. The next push to main then deploys with no further change."
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
 
           if [ "$enabled" != "true" ]; then
-            msg="GitHub Pages is not enabled for ${GITHUB_REPOSITORY} yet. The site was built and verified, but it cannot be published. One-time fix: Settings -> Pages -> Build and deployment -> Source: GitHub Actions. The next push to main deploys with no further change."
             echo "::warning title=Pages not enabled::$msg"
             printf '## Pages is not enabled yet\n\n%s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
             echo "Skipping the upload/deploy steps; this is a configuration step, not a build failure."
