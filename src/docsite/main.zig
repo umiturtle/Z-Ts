@@ -44,8 +44,10 @@ pub const SiteReport = struct {
     assets: usize = 0,
     /// Pages of the generated API reference (`M5-07`).
     api_pages: usize = 0,
-    /// Public declarations that the API reference documented.
+    /// Public declarations the API reference lists (types and functions, not their members).
     api_decls: usize = 0,
+    /// Struct fields and enum cases listed underneath those declarations.
+    api_members: usize = 0,
     api_internal: usize = 0,
 };
 
@@ -80,8 +82,8 @@ pub fn main(init: std.process.Init) !u8 {
     };
 
     std.debug.print(
-        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d} api_internal={d}\n",
-        .{ report.pages, report.links, report.assets, report.words, report.bytes, report.demo_files, report.api_pages, report.api_decls, report.api_internal },
+        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d} api_members={d} api_internal={d}\n",
+        .{ report.pages, report.links, report.assets, report.words, report.bytes, report.demo_files, report.api_pages, report.api_decls, report.api_members, report.api_internal },
     );
     return 0;
 }
@@ -256,6 +258,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     }
     report.api_pages = api.pages.len;
     report.api_decls = api.decl_count;
+    report.api_members = api.member_count;
     report.api_internal = api.internal_count;
 
     // 4c. The one page that lists everything the sidebar deliberately no longer shows.
@@ -740,6 +743,9 @@ const ApiSite = struct {
     packages: []const apidoc.Package,
     /// Declarations of the reader-facing modules (the number the coverage percentage uses).
     decl_count: usize,
+    /// Struct fields and enum cases below those declarations. Reported apart from `decl_count` so
+    /// the page can say "455 declarations, 1442 members" instead of one inflated total.
+    member_count: usize,
     /// Declarations of FFI tables and contract tests. Reported separately so a reader-facing number
     /// never hides a hundred `extern` declarations, and CI can still notice when the scan breaks.
     internal_count: usize,
@@ -752,10 +758,12 @@ fn buildApiPages(arena: Allocator, io: Io) !ApiSite {
     for (apidoc.packages, 0..) |spec, i| packages[i] = try apidoc.collectPackage(arena, io, spec);
 
     var decl_count: usize = 0;
+    var member_count: usize = 0;
     var internal_count: usize = 0;
     for (packages) |pkg| {
         const coverage = apidoc.coverageOf(pkg);
         decl_count += coverage.total;
+        member_count += coverage.member_total;
         internal_count += coverage.internal_total;
     }
 
@@ -763,6 +771,7 @@ fn buildApiPages(arena: Allocator, io: Io) !ApiSite {
         .pages = try apidoc.buildPages(arena, packages),
         .packages = packages,
         .decl_count = decl_count,
+        .member_count = member_count,
         .internal_count = internal_count,
     };
 }
@@ -921,11 +930,11 @@ fn renderLanding(arena: Allocator, groups: []const site.Group, api: ApiSite) ![]
     );
 
     try w.print(
-        "<section class=\"cards\"><article><h2>API リファレンス</h2><p>使う人のための公開宣言 {d} 件を、" ++
-            "シグネチャ・<code>///</code> ドキュメント・ソース行へのリンクつきで生成しています" ++
-            "（FFI 宣言などの内部モジュールは別扱い）。</p>" ++
+        "<section class=\"cards\"><article><h2>API リファレンス</h2><p>使う人のための公開宣言 {d} 件と、その下の" ++
+            "型メンバ {d} 件を、シグネチャ・<code>///</code> ドキュメント・ソース行へのリンクつきで" ++
+            "生成しています（FFI 宣言などの内部モジュールは別扱い）。</p>" ++
             "<p><a href=\"docs/api/index.html\">全体索引を開く →</a></p></article></section>\n",
-        .{api.decl_count},
+        .{ api.decl_count, api.member_count },
     );
 
     try w.writeAll("<footer class=\"landing-footer\"><nav class=\"landing-nav\">");

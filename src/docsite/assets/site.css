@@ -577,6 +577,23 @@ kbd {
   margin: 0 0 1rem;
 }
 
+.api-import {
+  font-family: var(--mono);
+  font-size: .82rem;
+  color: var(--fg-muted);
+  margin: -.6rem 0 1rem;
+}
+.api-import span {
+  display: inline-block;
+  margin-right: .5rem;
+  padding: .05rem .45rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: .7rem;
+}
+.api-import code { color: var(--fg); }
+
 .api-blurb { color: var(--fg-muted); }
 .api-stats {
   font-size: .84rem;

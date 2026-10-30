@@ -22,7 +22,8 @@
 | `dist/` に静的サイトを出したい | [`using-ssg.md`](using-ssg.md) | ① |
 | Tauri v2 のプロジェクトから移したい | [`migrating-from-tauri.md`](migrating-from-tauri.md) | ① |
 | 動かない / エラーが出た | [`troubleshooting.md`](troubleshooting.md) | ① |
-| この関数の引数は？ 戻り値は？ | <https://umiturtle.github.io/Z-Ts/docs/api/index.html>（`./zigw build docs` で手元にも生成） | ② |
+| この関数の引数は？ 戻り値は？ | [API リファレンス](https://umiturtle.github.io/Z-Ts/docs/api/index.html)（`./zigw build docs` で手元にも生成） | ② |
+| API ページの読み方が分からない | [`using-the-api-reference.md`](using-the-api-reference.md) | ② |
 | `@tauri-apps/api` のどの関数が動く？ | [`../reference/tauri-usage.md`](../reference/tauri-usage.md) | ③ |
 | `./zigw` と `zig build` のステップ一覧 | [`../reference/cli.md`](../reference/cli.md) | ③ |
 | なぜこの設計なのか | [`../internals/`](https://umiturtle.github.io/Z-Ts/docs/internals/index.html)（`docs/decisions/`・`docs/architecture/`） | ④ |

@@ -103,6 +103,11 @@ pub const Module = struct {
     decls: []const Decl,
     /// `.internal` for FFI tables and contract tests — see [`audienceOf`].
     audience: Audience = .user,
+    /// How an application reaches this file, resolved by following the root's `pub const x =
+    /// @import("…")` re-exports: `zts_tauri.window`, `zts_tauri.fs.scope`, or the package name for
+    /// the root itself. Empty when no re-export chain reaches the file (an implementation detail
+    /// pulled in by a sibling), in which case the page shows no import line.
+    access: []const u8 = "",
 };
 
 pub const PackageSpec = struct {
@@ -725,6 +730,9 @@ pub fn collectPackage(arena: Allocator, io: std.Io, spec: PackageSpec) !Package 
     try queue.append(arena, spec.root);
 
     var seen: std.StringHashMapUnmanaged(void) = .empty;
+    // Path -> the expression that reaches it, learned one `@import` at a time while walking.
+    var access: std.StringHashMapUnmanaged([]const u8) = .empty;
+    try access.put(arena, spec.root, spec.name);
     var modules: std.ArrayListUnmanaged(Module) = .empty;
 
     var head: usize = 0;
@@ -740,11 +748,17 @@ pub fn collectPackage(arena: Allocator, io: std.Io, spec: PackageSpec) !Package 
         var module = try scanModule(arena, path, source);
         module.slug = try moduleSlug(arena, spec.root, path);
         module.audience = audienceOf(path);
+        module.access = access.get(path) orelse "";
         try modules.append(arena, module);
 
         const dir = std.fs.path.dirname(path) orelse "";
         for (try importsOf(arena, source)) |spec_path| {
-            try queue.append(arena, try joinPath(arena, dir, spec_path));
+            const child = try joinPath(arena, dir, spec_path);
+            try queue.append(arena, child);
+            if (module.access.len == 0) continue;
+            const alias = importAlias(module, spec_path) orelse continue;
+            if (access.contains(child)) continue;
+            try access.put(arena, child, try std.fmt.allocPrint(arena, "{s}.{s}", .{ module.access, alias }));
         }
     }
 
@@ -755,6 +769,25 @@ pub fn collectPackage(arena: Allocator, io: std.Io, spec: PackageSpec) !Package 
     }.lessThan);
 
     return .{ .spec = spec, .modules = try modules.toOwnedSlice(arena) };
+}
+
+/// The name a parent file binds an `@import("…")` to: `pub const fs = @import("fs/mod.zig");` answers
+/// `fs` for `fs/mod.zig`. Only the relative specifier is matched, because the resolver runs on the
+/// source text rather than on a parsed AST.
+fn importAlias(module: Module, spec_path: []const u8) ?[]const u8 {
+    for (module.decls) |decl| {
+        if (decl.kind != .constant) continue;
+        const at = std.mem.find(u8, decl.signature, "@import(\"") orelse continue;
+        const rest = decl.signature[at + "@import(\"".len ..];
+        const close = std.mem.findScalar(u8, rest, '"') orelse continue;
+        if (!std.mem.eql(u8, rest[0..close], spec_path)) continue;
+        // `pub const Ctx = @import("ctx.zig").Ctx;` names a *type*, not the module; walking into it
+        // would advertise `zts_x.Ctx.Ctx` as an import path.
+        const tail = std.mem.trim(u8, rest[close + 1 ..], " \t;");
+        if (!std.mem.eql(u8, tail, ")")) continue;
+        return decl.name;
+    }
+    return null;
 }
 
 /// `pub const Ctx = ctx.Ctx;` or `pub const codec = @import("codec.zig");` — the documentation
@@ -777,16 +810,17 @@ pub fn isAlias(decl: Decl) bool {
 
 /// Documentation-comment coverage of a package.
 ///
-/// `total` / `documented` count the **user-facing** modules only: a percentage that includes 104
-/// hand-written FFI declarations says nothing about whether a reader can learn the API, and it
-/// would push authors to paste `///` lines onto `HWND_TOPMOST`. Internal modules are reported
-/// separately so the number stays honest in both directions.
+/// `total` / `documented` count **declarations** of the user-facing modules only: a percentage that
+/// includes 104 hand-written FFI declarations says nothing about whether a reader can learn the
+/// API, and it would push authors to paste `///` lines onto `HWND_TOPMOST`. Internal modules are
+/// reported separately so the number stays honest in both directions.
+///
+/// Struct fields and enum cases are counted separately (`member_*`) and are **not** folded into
+/// `total`: a `WindowConfig` with 24 fields is one declaration, and mixing the two made the headline
+/// percentage read 24% while every single declaration on the page had a doc comment.
 pub const Coverage = struct {
     total: usize = 0,
     documented: usize = 0,
-    /// Struct fields and enum cases, already included in `total` / `documented`. Kept separately so
-    /// the page can explain a low percentage instead of just showing it: a `WindowConfig` with 24
-    /// fields is one declaration and 24 members.
     member_total: usize = 0,
     member_documented: usize = 0,
     internal_total: usize = 0,
@@ -828,12 +862,8 @@ pub fn coverageOf(pkg: Package) Coverage {
                     internal_total += 1;
                     if (member.doc.len > 0) internal_documented += 1;
                 } else {
-                    total += 1;
                     member_total += 1;
-                    if (member.doc.len > 0) {
-                        documented += 1;
-                        member_documented += 1;
-                    }
+                    if (member.doc.len > 0) member_documented += 1;
                 }
             }
         }
@@ -1122,6 +1152,20 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
             try writer.print("<p class=\"api-path\"><a href=\"{s}{s}\">{s}</a> · 公開宣言 {d} 件</p>\n", .{
                 repo_blob_base, module.path, module.path, declCount(module),
             });
+            if (module.access.len > 0) {
+                // zig doc shows the file path and stops there. The first thing a reader needs is
+                // the line to paste into their own file, so say it before the prose.
+                try writer.writeAll("<p class=\"api-import\"><span>読み込み</span><code>const ");
+                if (std.mem.lastIndexOfScalar(u8, module.access, '.')) |dot| {
+                    try writer.print(
+                        "{s} = @import(\"{s}\").{s};",
+                        .{ module.access[dot + 1 ..], pkg.spec.name, module.access[pkg.spec.name.len + 1 ..] },
+                    );
+                } else {
+                    try writer.print("{s} = @import(\"{s}\");", .{ pkg.spec.name, pkg.spec.name });
+                }
+                try writer.writeAll("</code></p>\n");
+            }
 
             if (module.doc.len > 0) {
                 try writer.writeAll("<div class=\"api-moduledoc prose\">");
@@ -1173,9 +1217,15 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
         );
         if (coverage.member_total > 0) {
             try writer.print(
-                "<p class=\"api-blurb\">内訳: 宣言 {d} 件 + 型メンバ・enum ケース {d} 件 = {d} 件。" ++
-                    "文書化率は両者の合計に対して数えています。</p>\n",
-                .{ coverage.total - coverage.member_total, coverage.member_total, coverage.total },
+                "<p class=\"api-blurb\">宣言とは別に、型メンバと enum ケースが {d} 件あります（うちドキュメントコメントあり {d} 件、" ++
+                    "{d}%）。上の {d}% は宣言だけを数えた値です: フィールド 24 個の <code>WindowConfig</code> は" ++
+                    "宣言 1 件として数え、メンバはここで別に報告しています。</p>\n",
+                .{
+                    coverage.member_total,
+                    coverage.member_documented,
+                    percent(coverage.member_documented, coverage.member_total),
+                    percent(coverage.documented, coverage.total),
+                },
             );
         }
         if (coverage.internal_total > 0) {
@@ -1245,8 +1295,9 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
         );
         if (all.member_total > 0) {
             try writer.print(
-                "<p class=\"api-blurb\">内訳: 宣言 {d} 件 + 型メンバ・enum ケース {d} 件 = {d} 件。</p>\n",
-                .{ all.total - all.member_total, all.member_total, all.total },
+                "<p class=\"api-blurb\">宣言とは別に、型メンバと enum ケースが {d} 件あります（うちドキュメントコメントあり {d} 件、" ++
+                    "{d}%）。宣言の文書化率とメンバの文書化率は別々に数えています。</p>\n",
+                .{ all.member_total, all.member_documented, percent(all.member_documented, all.member_total) },
             );
         }
         if (all.internal_total > 0) {
@@ -1575,6 +1626,23 @@ test "audienceOf separates FFI tables and contract tests from the reader-facing 
     // Per-OS backends: reachable, but the documented door is `mod.zig`.
     try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/linux.zig"));
     try std.testing.expectEqual(Audience.internal, audienceOf("src/webview/windows.zig"));
+}
+
+test "importAlias resolves the name a parent binds to a relative import" {
+    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const source =
+        \\const std = @import("std");
+        \\pub const fs = @import("fs/mod.zig");
+        \\pub const Ctx = @import("ctx.zig").Ctx;
+    ;
+    const module = try scanModule(arena, "src/tauri/mod.zig", source);
+
+    try testing.expectEqualStrings("fs", importAlias(module, "fs/mod.zig").?);
+    // A type re-export is not an import alias: the page must not claim `Ctx` reaches `ctx.zig`.
+    try testing.expectEqual(@as(?[]const u8, null), importAlias(module, "ctx.zig"));
 }
 
 test "coverageOf keeps internal declarations out of the percentage" {
