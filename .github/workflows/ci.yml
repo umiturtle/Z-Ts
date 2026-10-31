@@ -733,25 +733,41 @@ jobs:
       - name: Scaffold, build, run and doctor a project outside the checkout
         shell: bash
         run: |
-          set -eo pipefail
-          exe="$GITHUB_WORKSPACE/zig-out/bin/zts"
-          [ -f "$exe" ] || exe="$exe.exe"
-          # A sibling of the checkout (not the system temp dir): `--zts-path` is written as a
-          # relative dependency, which is only computable when both paths share a volume — on
-          # Windows the runner's temp directory lives on a different drive than the workspace.
-          work="$(mktemp -d "$GITHUB_WORKSPACE/../zts-cli-smoke.XXXXXX")"
-          echo "workspace: $work"
-          cd "$work"
-          "$exe" version
-          "$exe" init demo --zts-path "$GITHUB_WORKSPACE"
-          cd demo
-          "$exe" doctor
-          "$exe" build
-          "$exe" build --frontend-only
-          out="./zig-out/bin/demo"
-          [ -f "$out" ] || out="$out.exe"
-          "$out" | tee run.log
-          grep -q "1 embedded assets" run.log
+          set -o pipefail
+          {
+            exe="$GITHUB_WORKSPACE/zig-out/bin/zts"
+            [ -f "$exe" ] || exe="$exe.exe"
+            # A sibling of the checkout (not the system temp dir): `--zts-path` is written as a
+            # relative dependency, which is only computable when both paths share a volume — on
+            # Windows the runner's temp directory lives on a different drive than the workspace.
+            work="$(mktemp -d "$GITHUB_WORKSPACE/../zts-cli-smoke.XXXXXX")"
+            echo "workspace: $work"
+            cd "$work"
+            "$exe" version
+            "$exe" init demo --zts-path "$GITHUB_WORKSPACE"
+            cd demo
+            "$exe" doctor
+            "$exe" build
+            "$exe" build --frontend-only
+            out="./zig-out/bin/demo"
+            [ -f "$out" ] || out="$out.exe"
+            "$out" | tee run.log
+            grep -q "1 embedded assets" run.log
+            echo "cli-smoke: OK"
+          } 2>&1 | tee "$GITHUB_WORKSPACE/cli-smoke.log"
+
+      # `gh run view --log` cannot reach the URL the raw logs redirect to from the Arena sandbox,
+      # but the Check Run summary is served by api.github.com, so mirror the log there.
+      - name: Mirror the smoke log into the Check Run summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### CLI smoke log'
+            echo '```text'
+            cat "$GITHUB_WORKSPACE/cli-smoke.log" 2>/dev/null || echo '(no log)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   ci-parity:
     name: Cross-OS parity (same pixels, same layout)
