@@ -34,6 +34,9 @@ const exit_usage = 2;
 /// `ZTS_ZIG`, read once at startup. `null` means "find the toolchain the usual way".
 var env_zig: ?[]const u8 = null;
 
+/// `PATH`, read once at startup, used only to prefer a real `zig` over the `zigw` wrapper.
+var env_path: ?[]const u8 = null;
+
 pub fn main(init: std.process.Init) !u8 {
     const io = init.io;
     const gpa = init.gpa;
@@ -43,6 +46,7 @@ pub fn main(init: std.process.Init) !u8 {
     const arena = arena_state.allocator();
 
     env_zig = init.environ_map.get("ZTS_ZIG");
+    env_path = init.environ_map.get("PATH");
     const argv = try init.minimal.args.toSlice(arena);
     const command = args_mod.parse(argv[1..]) catch |err| {
         printErr(io, "zts: {s}\n", .{describeParseError(err)});
@@ -404,9 +408,37 @@ fn readZon(io: Io, arena: Allocator, dir: []const u8) ![]const u8 {
 /// machine with no `zig` on PATH still builds a generated project.
 fn resolveZig(io: Io, arena: Allocator, zts_root: []const u8) []const u8 {
     if (env_zig) |value| return value;
-    const wrapper = std.fmt.allocPrint(arena, "{s}/zigw", .{zts_root}) catch return "zig";
-    if (Io.Dir.cwd().access(io, wrapper, .{})) |_| return wrapper else |_| {}
+
+    // A real `zig` binary beats the `zigw` wrapper that lives in the checkout: on Windows that
+    // wrapper is a shell script, and spawning it fails with `InvalidExe`. The wrapper stays as the
+    // last resort for a POSIX checkout where nothing else bootstrapped the toolchain.
+    if (findOnPath(io, arena, "zig")) |found| return found;
+
+    const checkout_zig = std.fmt.allocPrint(arena, "{s}/zig", .{zts_root}) catch null;
+    if (checkout_zig) |path| {
+        if (Io.Dir.cwd().access(io, path, .{})) |_| return path else |_| {}
+    }
+
+    if (builtin.os.tag != .windows) {
+        const wrapper = std.fmt.allocPrint(arena, "{s}/zigw", .{zts_root}) catch return "zig";
+        if (Io.Dir.cwd().access(io, wrapper, .{})) |_| return wrapper else |_| {}
+    }
     return "zig";
+}
+
+/// The first executable named `name` (or `name.exe` on Windows) on `PATH`, or `null`.
+fn findOnPath(io: Io, arena: Allocator, name: []const u8) ?[]const u8 {
+    const path = env_path orelse return null;
+    var it = std.mem.splitScalar(u8, path, std.fs.path.delimiter);
+    while (it.next()) |dir| {
+        if (dir.len == 0) continue;
+        const candidate = if (builtin.os.tag == .windows)
+            std.fmt.allocPrint(arena, "{s}\\{s}.exe", .{ dir, name }) catch return null
+        else
+            std.fmt.allocPrint(arena, "{s}/{s}", .{ dir, name }) catch return null;
+        if (Io.Dir.cwd().access(io, candidate, .{})) |_| return candidate else |_| {}
+    }
+    return null;
 }
 
 /// `zig build` in `dir`, with `--summary failures` so a successful build prints nothing at all.
