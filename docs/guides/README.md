@@ -1,4 +1,7 @@
-# ガイド — 学習の道筋（Learning Path）
+# ガイド — ライブラリの使い方（Learning Path）
+
+ここは **Z-Ts を使ってアプリを作る人**のための道筋です。コマンドは `zts` だけで、
+`./zigw` や CI の話は出てきません（それらは [`../contributing/`](../contributing/README.md)）。
 
 **このライブラリを使うのに、内部資料を読む必要はありません。** 下の 3 層だけで完結します。
 「なぜそう作ったか」は 4 層目（内部資料）に隔離してあり、ナビゲーションの最後に 1 つだけ
@@ -16,7 +19,9 @@
 
 | 知りたいこと | 読む場所 | 層 |
 |---|---|---|
+| `zts` コマンドを手に入れたい | [`installing-zts.md`](installing-zts.md) | ① |
 | とにかく動かしたい | [`getting-started.md`](getting-started.md) | ① |
+| コマンドの全オプション | [`../reference/cli.md`](../reference/cli.md) | ③ |
 | コマンド（`invoke`）を書きたい | [`using-rpc.md`](using-rpc.md) | ① |
 | Tauri 標準プラグインを使いたい | [`using-plugins.md`](using-plugins.md) | ① |
 | `dist/` に静的サイトを出したい | [`using-ssg.md`](using-ssg.md) | ① |
@@ -25,7 +30,8 @@
 | この関数の引数は？ 戻り値は？ | [API リファレンス](https://umiturtle.github.io/Z-Ts/docs/api/index.html)（`./zigw build docs` で手元にも生成） | ② |
 | API ページの読み方が分からない | [`using-the-api-reference.md`](using-the-api-reference.md) | ② |
 | `@tauri-apps/api` のどの関数が動く？ | [`../reference/tauri-usage.md`](../reference/tauri-usage.md) | ③ |
-| `./zigw` と `zig build` のステップ一覧 | [`../reference/cli.md`](../reference/cli.md) | ③ |
+| Z-Ts リポジトリ自体を開発する | [`../contributing/README.md`](../contributing/README.md)（層の外） | — |
+| `./zigw` と `zig build` のステップ一覧 | [`../contributing/README.md`](../contributing/README.md) §3（層の外） | — |
 | なぜこの設計なのか | [`../internals/`](https://umiturtle.github.io/Z-Ts/docs/internals/index.html)（`docs/decisions/`・`docs/architecture/`） | ④ |
 
 ## 2. 3 つの層の役割（重複は許すが、矛盾は許さない）
@@ -54,12 +60,13 @@
 
 | ガイド | 内容 | 前提 |
 |---|---|---|
-| [`getting-started.md`](getting-started.md) | 5 分でテスト → サンプル → 埋め込み → 型生成 → サイト生成 | なし |
+| [`installing-zts.md`](installing-zts.md) | `zts` をビルドして `PATH` に置く、`ZTS_ZIG`、プラットフォーム前提 | なし |
+| [`getting-started.md`](getting-started.md) | 5 分で `zts init` → `dev` → `build` → `doctor` | `zts` |
 | [`using-rpc.md`](using-rpc.md) | `rpc.Schema` → `Schema.bind` → `handler()`、引数 3 形式、`tsgen` | Zig の基本 |
 | [`using-plugins.md`](using-plugins.md) | 7 プラグインの入口、`CorePluginStates`、capability（ACL） | `using-rpc.md` |
 | [`using-ssg.md`](using-ssg.md) | `embedFrontend` → `exportApp` → `exportStaticSite`、`ExportOptions` | アプリが 1 つ動く |
 | [`migrating-from-tauri.md`](migrating-from-tauri.md) | Rust → Zig の対応表、`tauri.conf.json`、capabilities | Tauri v2 の経験 |
-| [`troubleshooting.md`](troubleshooting.md) | 実際に踏んだエラーと Zig 0.17 の API 差分 | なんでも |
+| [`troubleshooting.md`](troubleshooting.md) | `zts` のエラーメッセージ別の対処 | なんでも |
 
 ## 4. 内部資料を読みたくなったら
 

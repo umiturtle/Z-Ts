@@ -701,6 +701,58 @@ jobs:
               });
             }
 
+  # ---------------------------------------------------------------------------
+  # 5. CLI smoke: `zts init` → `zts build` → `zts doctor` in a directory *outside* the checkout.
+  #    This is the acceptance test for the user-facing story: the library must work for someone
+  #    who never opens the repository's own build.zig.
+  # ---------------------------------------------------------------------------
+  ci-cli:
+    name: CLI smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Zig 0.17.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+
+      - name: Build the `zts` binary
+        shell: bash
+        run: |
+          set -eo pipefail
+          zig version
+          zig build
+          ls -l zig-out/bin/
+
+      - name: Scaffold, build, run and doctor a project outside the checkout
+        shell: bash
+        run: |
+          set -eo pipefail
+          exe="$GITHUB_WORKSPACE/zig-out/bin/zts"
+          [ -f "$exe" ] || exe="$exe.exe"
+          # A sibling of the checkout (not the system temp dir): `--zts-path` is written as a
+          # relative dependency, which is only computable when both paths share a volume — on
+          # Windows the runner's temp directory lives on a different drive than the workspace.
+          work="$(mktemp -d "$GITHUB_WORKSPACE/../zts-cli-smoke.XXXXXX")"
+          echo "workspace: $work"
+          cd "$work"
+          "$exe" version
+          "$exe" init demo --zts-path "$GITHUB_WORKSPACE"
+          cd demo
+          "$exe" doctor
+          "$exe" build
+          "$exe" build --frontend-only
+          out="./zig-out/bin/demo"
+          [ -f "$out" ] || out="$out.exe"
+          "$out" | tee run.log
+          grep -q "1 embedded assets" run.log
+
   ci-parity:
     name: Cross-OS parity (same pixels, same layout)
     runs-on: ubuntu-24.04

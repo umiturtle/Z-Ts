@@ -173,6 +173,18 @@ pub fn injectReload(alloc: Allocator, html: []const u8, build: u64) Allocator.Er
     return out;
 }
 
+/// Rewrites a path in place to POSIX separators.
+///
+/// `std.fs.path.relativeAlloc` uses the native separator, but every `build.zig.zon` in the docs is
+/// written POSIX-style and a backslash inside a Zig string literal is an escape — so the CLI
+/// normalises before writing a dependency path.
+pub fn toPosix(path: []u8) []u8 {
+    for (path) |*ch| {
+        if (ch.* == '\\') ch.* = '/';
+    }
+    return path;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------------------------
@@ -285,4 +297,20 @@ test "isHtml only claims markup" {
     try testing.expect(isHtml("INDEX.HTM"));
     try testing.expect(!isHtml("app.js"));
     try testing.expect(!isHtml("index.html.gz"));
+}
+
+test "toPosix rewrites every native separator and leaves POSIX paths untouched" {
+    const alloc = testing.allocator;
+
+    const windows = try alloc.dupe(u8, "..\\..\\Z-Ts");
+    defer alloc.free(windows);
+    try testing.expectEqualStrings("../../Z-Ts", toPosix(windows));
+
+    const posix = try alloc.dupe(u8, "../../Z-Ts");
+    defer alloc.free(posix);
+    try testing.expectEqualStrings("../../Z-Ts", toPosix(posix));
+
+    const plain = try alloc.dupe(u8, ".");
+    defer alloc.free(plain);
+    try testing.expectEqualStrings(".", toPosix(plain));
 }

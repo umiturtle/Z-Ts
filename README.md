@@ -25,19 +25,25 @@ Z-Ts は、Tauri v2 の **IPC プロトコル・プラグイン・設定ファ�
 | **9 フレームワーク対応** | Angular / Solid / Svelte / SolidStart / Next.js / Nuxt / Astro / SvelteKit / React |
 | **上流との互換** | `@tauri-apps/api` v2 を**無改変**で動かし、`tauri.conf.json` / `capabilities/*.json` を読む |
 
-## クイックスタート
+## クイックスタート（アプリを作る）
 
 ```bash
-# Zig 0.17 はラッパーが自動導入（PyPI wheel、約 4 秒）。他のツールは不要。
-./zigw quick-test                 # 全単体テスト（コールド 8 秒 / 2 回目以降 0.03 秒）
-./zigw build test                 # build.zig を含む全テスト + E2E（キャッシュがあると速い）
-./zigw build                      # デスクトップ / live / wasm / dist を zig-out/ へ
-./zigw build docs                 # この Markdown からドキュメントサイトを生成（zig-out/docs）
+git clone https://github.com/umiturtle/Z-Ts.git && cd Z-Ts
+./zigw build                      # Zig 0.17 を自動導入し、zig-out/bin/zts を作る
+export PATH="$PWD/zig-out/bin:$PATH"
+
+zts init my-app && cd my-app
+zts dev                           # web/ を配信し、編集すると自動リロード
+zts build                         # zig-out/bin/my-app（web/ はバイナリに埋め込み済み）
+zts doctor                        # 環境とプロジェクトの点検
 ```
 
-サンプルプロジェクト:
+`zts` は Angular CLI のような位置づけで、**自分のプロジェクトだけ**を操作します。
+入手方法・前提は [`docs/guides/installing-zts.md`](docs/guides/installing-zts.md)、
+全オプションは [`docs/reference/cli.md`](docs/reference/cli.md) にあります。
 
 ```bash
+# 出来合いのサンプルを動かす場合（サンプルは独自の build.zig を持つ）
 cd examples/counter
 ../../zigw build desktop          # ネイティブ WebView の単一バイナリ
 ../../zigw build preview          # ブラウザで Live Preview（0.0.0.0:8788）
@@ -64,11 +70,12 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 
 ## リポジトリの歩き方
 
-**まず読むもの**（使う人向け）
+**アプリを作る人向け**（コマンドは `zts`）
 
 | 目的 | 行き先 |
 |---|---|
 | **学習の道筋（まずここ）** | [`docs/guides/README.md`](docs/guides/README.md) |
+| `zts` を手元に用意する | [`docs/guides/installing-zts.md`](docs/guides/installing-zts.md) |
 | 5 分で動かす | [`docs/guides/getting-started.md`](docs/guides/getting-started.md) |
 | コマンドの書き方（`invoke`） | [`docs/guides/using-rpc.md`](docs/guides/using-rpc.md) |
 | Tauri 標準プラグイン | [`docs/guides/using-plugins.md`](docs/guides/using-plugins.md) |
@@ -76,7 +83,16 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 | Tauri v2 からの移行 | [`docs/guides/migrating-from-tauri.md`](docs/guides/migrating-from-tauri.md) |
 | うまく動かないとき | [`docs/guides/troubleshooting.md`](docs/guides/troubleshooting.md) |
 | **API リファレンス**（ソースから自動生成） | <https://umiturtle.github.io/Z-Ts/docs/api/index.html>（`./zigw build docs` で手元にも生成） |
-| コマンド一覧 | [`docs/reference/cli.md`](docs/reference/cli.md) |
+| `zts` の全オプション | [`docs/reference/cli.md`](docs/reference/cli.md) |
+
+**Z-Ts 本体を開発する人向け**（コマンドは `./zigw` と `zig build`）
+
+| 目的 | 行き先 |
+|---|---|
+| **リポジトリ開発の入口** | [`docs/contributing/README.md`](docs/contributing/README.md) |
+| `./zigw` / `zig build` のステップ・スクリプト | [`docs/contributing/README.md`](docs/contributing/README.md) §3 |
+| 本体のトラブルシューティング | [`docs/contributing/troubleshooting.md`](docs/contributing/troubleshooting.md) |
+| ドキュメントサイトを生成する | `./zigw build docs`（→ `zig-out/docs/`） |
 
 **中を読む人向け**（実装の意図・経緯）
 

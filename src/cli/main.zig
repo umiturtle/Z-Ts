@@ -102,7 +102,10 @@ fn runInit(
 
     // `build.zig.zon` refuses absolute local paths (`expected path relative to build root`), so
     // the checkout is written the way a human would: `../Z-Ts`, `../../Z-Ts`, ….
-    const zts_path = opts.zts_path orelse try relativeZtsPath(io, arena, env, opts.dir);
+    const zts_path = if (opts.zts_path) |explicit|
+        try relativePath(io, arena, env, opts.dir, explicit)
+    else
+        try relativePath(io, arena, env, opts.dir, build_options.zts_root);
 
     const cwd = Io.Dir.cwd();
     if (cwd.access(io, opts.dir, .{})) |_| {
@@ -418,22 +421,25 @@ fn runZigArgv(io: Io, gpa: Allocator, arena: Allocator, dir: []const u8, extra: 
     return std.process.run(gpa, io, .{ .argv = argv.items, .cwd = .{ .path = dir } });
 }
 
-/// The path a generated `build.zig.zon` should carry: relative to the new project, because Zig
-/// rejects absolute local dependencies.
-fn relativeZtsPath(io: Io, arena: Allocator, env: *std.process.Environ.Map, target_dir: []const u8) ![]const u8 {
+/// The path a generated `build.zig.zon` should carry: relative to the new project and POSIX-style,
+/// because Zig rejects absolute local dependencies. `to` may itself be relative (resolved against
+/// the current directory), which is what `--zts-path ../other-checkout` means.
+fn relativePath(
+    io: Io,
+    arena: Allocator,
+    env: *std.process.Environ.Map,
+    target_dir: []const u8,
+    to: []const u8,
+) ![]const u8 {
     var cwd_buf: [Io.Dir.max_path_bytes]u8 = undefined;
     const cwd_len = try Io.Dir.cwd().realPath(io, &cwd_buf);
     const cwd_path = cwd_buf[0..cwd_len];
 
     const from = try std.fs.path.resolve(arena, &.{ cwd_path, target_dir });
-    const rel = try std.fs.path.relativeAlloc(arena, cwd_path, env, from, build_options.zts_root);
+    const to_abs = try std.fs.path.resolve(arena, &.{ cwd_path, to });
+    const rel = try std.fs.path.relativeAlloc(arena, cwd_path, env, from, to_abs);
     const out = try arena.dupe(u8, if (rel.len == 0) "." else rel);
-    // `relativeAlloc` uses the native separator; `build.zig.zon` paths are written POSIX-style in
-    // every document, and a backslash in a Zig string literal is an escape.
-    for (out) |*ch| {
-        if (ch.* == '\\') ch.* = '/';
-    }
-    return out;
+    return project.toPosix(out);
 }
 
 fn printOut(io: Io, comptime fmt: []const u8, fmt_args: anytype) void {

@@ -1,8 +1,8 @@
 # はじめかた（5 分）
 
-Z-Ts で最初のアプリをビルドし、3 つの成果物（デスクトップ / ブラウザ / 静的サイト）を
-手元で動かすまでの最短ルートです。**必要なのは Python 3 だけ** — Zig 0.17 はラッパーが自動で
-持ってきます。
+`zts` でプロジェクトを作り、編集しながら動かし、単一バイナリにビルドするまでの最短ルートです。
+**このページのコマンドは `zts` だけ**です。Z-Ts リポジトリの操作（`./zigw` や CI）は
+[`../contributing/README.md`](../contributing/README.md) に分けてあります。
 
 ---
 
@@ -10,129 +10,116 @@ Z-Ts で最初のアプリをビルドし、3 つの成果物（デスクトッ�
 
 | 項目 | 要件 |
 |---|---|
-| OS | Linux（GTK3 + WebKit2GTK 4.1）/ macOS（Cocoa）/ Windows（Win32 + WebView2） |
-| Python | 3.8 以上（Zig の wheel を取得するため） |
-| Node.js | 22 系（**任意** — Live Preview の E2E とフロントエンドのビルドにだけ必要） |
-
-Linux の GTK 開発パッケージが無い場合は、同梱スクリプトで sysroot を入れられます
-（詳細は内部資料 [`../environment/arena-and-caching.md`](../environment/arena-and-caching.md)）:
+| `zts` | [`installing-zts.md`](installing-zts.md) の手順でチェックアウトからビルド |
+| Zig | 0.17 系が `PATH` か `ZTS_ZIG` に（`zts` が子プロセスとして呼びます） |
+| OS | Linux（GTK3 + WebKit2GTK 4.1）/ macOS / Windows |
 
 ```bash
-bash scripts/setup-toolchains.sh --sysroot
+zts version      # zts 0.1.0
+zts doctor       # all checks passed なら準備完了
 ```
 
-## 1. リポジトリを取って、テストを回す
+## 1. プロジェクトを作る
 
 ```bash
-git clone https://github.com/umiturtle/Z-Ts.git
-cd Z-Ts
-./zigw quick-test          # コールド 8 秒 / 2 回目以降 0.03 秒
+zts init my-app
+cd my-app
 ```
 
-`quick-test` は `zig build` を介さず `zig test` を直接叩くので、`std.Build` ランナーの
-ビルド（コールドで 90 秒超）を待たずに全単体テストが走ります。**最初にこれを流すと、
-ツールチェーンが正しく入ったことが 1 コマンドで分かります。**
+生成されるのは 6 ファイルです。
 
-## 2. サンプルを動かす（`examples/counter`）
+```text
+my-app/
+├── build.zig          # 共通エンベッダで web/ を埋め込む
+├── build.zig.zon      # Z-Ts への path 依存
+├── src/main.zig       # アプリ本体（assets を列挙する最小構成）
+├── web/index.html     # フロントエンド
+├── .gitignore         # zig-out/ と .zig-cache/ を無視
+└── README.md
+```
+
+`zts init` は生成直後に 1 回ビルドし、Zig が要求する `build.zig.zon` の
+`.fingerprint` を自動で書き戻します。既存ディレクトリに書きたいときは `--force`、
+パッケージ名を変えたいときは `--name my_app` を付けます。
+
+> **雛形は「動く最小構成」です。** `zts build` すると `my_app: 1 embedded assets` のように
+> 埋め込まれたアセットを列挙して終わります。ウィンドウを開くデスクトップアプリに育てるには
+> [`../../examples/counter/README.md`](../../examples/counter/README.md) の
+> `build.zig` と `src/main.zig` を出発点にしてください。
+
+## 2. 編集しながら動かす（`zts dev`）
 
 ```bash
-cd examples/counter
-../../zigw build desktop    # ネイティブ WebView の単一バイナリ → zig-out/bin/counter
-../../zigw build preview    # ブラウザで Live Preview（既定 0.0.0.0:8788）
-../../zigw build dist       # サーバ不要の静的サイト → zig-out/dist/
+zts dev               # http://127.0.0.1:5173
 ```
 
-3 つは**同じアプリコード**（`src/app.zig` の状態と `src/main.zig` の UIView）から作られます。
-違いは「どこで動くか」だけです:
+`web/` を配信し、`web/` と `src/` の変更を 400 ms 間隔のフィンガープリントで監視して、
+変わったら `zig build` を回して**ブラウザを自動リロード**します。
 
-| 成果物 | ルーティング | 状態の保持 |
-|---|---|---|
-| `desktop` | OS の WebView（GTK / Cocoa / Win32） | プロセス内 |
-| `preview` | `zts_bridge` の HTTP + SSE | Zig プロセス内（タブを閉じても残る） |
-| `dist` | 静的ファイル + `zts_wasm` | ブラウザ内（WASI 風の仮想 FS） |
-
-## 3. 自分のプロジェクトを作る
+* `--browser` で起動時に既定ブラウザを開く
+* `--host 0.0.0.0` でコンテナや LAN の外から見られる（Arena の Live Preview など）
+* `--port 5199` でポート変更
+* ビルドが失敗している間は**直前の成功物を配信し続け**、壊れた画面は出しません。
+  現在の状態は次の 1 行で分かります。
 
 ```bash
-# `zts` CLI（M5-02、実装中）が入るまでの代替: サンプルをコピーして名前を変える
-cp -r examples/counter my-app && cd my-app
-rm -rf zig-out .zig-cache web/bindings.gen.ts
+curl http://127.0.0.1:5173/__zts_dev__/state
+{"v":3,"ok":true}
 ```
 
-`build.zig.zon` の依存を自分の Z-Ts のパスへ向けます:
+`v` はビルドが成功するたびに増え、`ok` は直前のビルド結果です。`ok:false` のままなら
+ターミナルに出ている Zig のエラーを直してください。
 
-```zig
-.dependencies = .{
-    .z_ts = .{ .path = "../Z-Ts" },   // ← ここ
-},
-```
-
-> **`zts init` について**
-> `src/cli/` に `zts init` / `dev` / `build` の実装が入りつつあります（引数解析とテンプレートは
-> 完成・テスト済み）。雛形が出す `build.zig` は `M5-01` の共通エンベッダを
-> `dep.builder.path("src/build_tools/embed_main.zig")` で起動する形で、
-> このリポジトリのサンプルと同じ構成です。進捗は内部資料
-> [`../tasks/M5-02-cli.md`](../tasks/M5-02-cli.md)。
-
-## 4. フロントエンドを埋め込む
-
-`build.zig` に次の 3 行を足すだけで、`web/` の内容が**バイナリに埋め込まれます**
-（gzip 双子と CSP ハッシュ付き）:
-
-```zig
-const embed_run = b.addRunArtifact(b.addExecutable(.{
-    .name = "embed",
-    .root_module = b.createModule(.{
-        .root_source_file = dep.builder.path("src/build_tools/embed_main.zig"),
-        .target = b.graph.host,
-    }),
-}));
-embed_run.has_side_effects = true;
-embed_run.addArg("--src");
-embed_run.addDirectoryArg(b.path("web"));
-embed_run.addArg("--out");
-const assets_dir = embed_run.addOutputDirectoryArg("frontend");
-```
-
-生成されたモジュールは `@import("embedded_frontend")` として `assets.entries`（`zts_web` の
-静的アセット表）を公開します。仕組みは内部資料
-[`../architecture/build-tools.md`](../architecture/build-tools.md)。
-
-## 5. TypeScript の型を自動生成する
-
-スキーマ（`pub const Schema = …`）を公開する小さなモジュールを 1 つ作り、
-ルートの `build.zig` と同じ要領で `tsgenBindings` を呼ぶと `bindings.gen.ts` が出ます。
-
-```zig
-const gen = zts_build.tsgenBindings(b, .{
-    .schema_mod = my_schema_mod,
-    .output_path = "web/bindings.gen.ts",
-});
-b.step("tsgen", "Regenerate the TypeScript bindings").dependOn(gen.step);
-```
-
-`zig build test` は**生成物の鮮度**も検証します（古ければ落ちる）。生成と検証の 2 モードが
-ある理由は内部資料 [`../architecture/build-tools.md`](../architecture/build-tools.md) §3。
-
-## 6. ドキュメントサイトをビルドする
+## 3. 単一バイナリにビルドする
 
 ```bash
-./zigw build docs                     # zig-out/docs/（81 ページ・リンク検査つき）
-python3 -m http.server --directory zig-out/docs 8137
+zts build
+# → zig-out/bin/my_app
 ```
 
-公開版は <https://umiturtle.github.io/Z-Ts/> です。仕組みは内部資料
-[`../architecture/documentation-site.md`](../architecture/documentation-site.md)。
+`web/` の内容は**バイナリに埋め込まれます**（gzip 双子と CSP ハッシュ付き）。隣にアセット
+ディレクトリを置く必要はありません。
+
+```bash
+zts build --target aarch64-macos    # クロスコンパイル
+zts build --debug                  # Debug（既定は ReleaseSmall）
+zts build --frontend-only          # web/ の再埋め込みだけ
+```
+
+`zts build` は `--target` / `--debug` / `--frontend-only` / `--dir` 以外のフラグを解釈しません。
+`build.zig` のオプション（`-Dgtk=false` など）を使いたいときは、プロジェクト直下で
+`zig build` を直接叩いてください。
+
+## 4. つまずいたら `zts doctor`
+
+```text
+$ zts doctor
+zts 0.1.0
+  checkout     /home/you/Z-Ts
+  z_ts         present
+  zig          /tmp/zts-toolchains/zig/zig
+  package      my_app
+  dependency   ../../home/you/Z-Ts
+  web/         present
+
+all checks passed
+```
+
+`MISSING` が出た行がそのまま対処のヒントになります（詳細は
+[`troubleshooting.md`](troubleshooting.md)）。
 
 ---
 
-## 次に読むもの
+## ここから先
 
 | 知りたいこと | 行き先 |
 |---|---|
-| 全体アーキテクチャと依存 DAG | [`../architecture/00-overview.md`](../architecture/00-overview.md) |
-| パッケージごとの境界契約 | [`../roadmap/m1-foundation-packages.md`](../roadmap/m1-foundation-packages.md) |
+| 全コマンド・全オプション | [`../reference/cli.md`](../reference/cli.md) |
+| RPC（`invoke`）と TypeScript 型生成 | [`using-rpc.md`](using-rpc.md) |
+| Tauri 標準プラグイン | [`using-plugins.md`](using-plugins.md) |
+| 静的サイト（SSG）とブラウザ実行 | [`using-ssg.md`](using-ssg.md) |
 | Tauri v2 からの移行 | [`migrating-from-tauri.md`](migrating-from-tauri.md) |
-| うまく動かないとき | [`troubleshooting.md`](troubleshooting.md) |
-| コマンド一覧 | [`../reference/cli.md`](../reference/cli.md) |
+| 動くサンプル 3 種 | [`../../examples/counter/README.md`](../../examples/counter/README.md) |
 | API ページの読み方 | [`using-the-api-reference.md`](using-the-api-reference.md) |
+| うまく動かないとき | [`troubleshooting.md`](troubleshooting.md) |
+| Z-Ts 自体を開発する | [`../contributing/README.md`](../contributing/README.md) |

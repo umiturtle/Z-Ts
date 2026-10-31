@@ -1,166 +1,190 @@
-# トラブルシューティング
+# トラブルシューティング（アプリ開発）
 
-「動かない」ときに最初に見る 1 ページです。すべて**実際に踏んだ**問題だけを載せています。
+`zts` でアプリを作っていて詰まったときの 1 ページです。**Z-Ts リポジトリ自体のビルド**で
+詰まった場合は [`../contributing/troubleshooting.md`](../contributing/troubleshooting.md) へ
+（そちらは `./zigw` と CI の話で、アプリ作者には不要です）。
 
 ---
 
 ## まず実行するもの
 
 ```bash
-bash scripts/status.sh          # ブランチ・並列エージェント・直近 CI を一望
-./zigw quick-test               # 単体テスト（ツールチェーン確認を兼ねる）
-./zigw fmt --check src/ tests/ build.zig
-python3 scripts/check-docs.py   # ドキュメント構造・リンク
+zts doctor            # 環境・依存・web/ をまとめて点検（問題なければ "all checks passed"）
+zts build             # 素のビルドが通るか（dev サーバを挟まない）
 ```
 
-3 つとも通れば、少なくとも「壊れているのは自分の変更」です。
+`doctor` が `MISSING` を 1 つも出さなければ、失敗はあなたのプロジェクトのコード側です。
+`zts doctor --dir path/to/app` でプロジェクトを指定できます。
 
 ---
 
-## ビルド・ツールチェーン
+## `zts init`
 
-### `error: FileNotFound` で Zig が見つからない
+### `'…' already has files — pass --force to write into it anyway`
 
-`./zigw` は PyPI の wheel から Zig 0.17.0 を `/tmp/zts-toolchains/` に導入します。
-プロキシ環境で失敗する場合:
-
-```bash
-export HTTPS_PROXY=http://…   # 必要なら
-./zigw version                  # 導入だけを先に実行して切り分ける
-```
-
-`/tmp` はコンテナごとに消えます。**チャットをまたぐと毎回 4 秒の再導入が走る**のは仕様です
-（内部資料 [`../environment/arena-and-caching.md`](../environment/arena-and-caching.md)）。
-
-### `zig build` が異様に遅い（コールドで 90 秒以上）
-
-`std.Build` ランナー自体のビルドに ~94 秒かかります。開発中は `./zigw quick-test` と
-`./zigw build-exe` を使ってください。`build.zig` の検証は CI（キャッシュあり）に任せるのが
-このリポジトリの既定です。
-
-### `-Dgtk=true` でヘッダが見つからない
-
-GTK3 / WebKit2GTK 4.1 の開発パッケージが要ります:
+`zts init` は**空のディレクトリ**にだけ雛形を書きます。既存プロジェクトに重ねると
+`src/main.zig` や `web/index.html` を上書きするため、明示的に `--force` が要ります。
 
 ```bash
-bash scripts/setup-toolchains.sh --sysroot   # Debian 12 の sysroot を導入
+zts init my-app --force
 ```
 
-CI と同じ Ubuntu 24.04 なら `libgtk-3-dev libwebkit2gtk-4.1-dev`。
+`.git` や `node_modules` があるだけのディレクトリでも同じメッセージが出ます。
+`zts build.zig.zon` を残したいなら、先に退避してください。
+
+### `cannot derive a package name from '…' — pass --name <name>`
+
+ディレクトリ名が Zig のパッケージ名になれないとき（ハイフン・先頭数字・大文字・非 ASCII）に
+出ます。パッケージ名は `[a-z][a-z0-9_]*` で最大 31 文字です。
+
+```bash
+zts init "my-app" --name my_app      # 表示名は my-app、パッケージ名は my_app
+```
+
+### `warning — could not read the fingerprint Zig suggested`
+
+`zts init` は生成直後に 1 回ビルドし、Zig が「この値を使ってください」と出す
+`build.zig.zon` の fingerprint を拾って書き戻します。この警告が出た場合も**失敗ではありません**。
+次の `zts build` が同じ値をもう一度出力し、`zts build` が自動で書き戻します。
+
+`error: invalid fingerprint: 0x…` が消えない場合は `build.zig.zon` の `.fingerprint` 行を
+エラーメッセージが示した値に置き換えてください（上位 32 bit はパッケージ名から決まり、
+下位 32 bit は fork 識別子で毎回変わってかまいません）。
+
+### 生成された `build.zig.zon` の `.z_ts.path` が `../../../` になる
+
+`zts` は**自分をビルドしたチェックアウト**を相対パスで指します（例:
+`../../../home/user/Z-Ts`）。これは絶対パスが Zig に拒否されるためです。次のいずれかで直せます。
+
+* そのままでよい（同じマシンで使い続ける限り動く）
+* `zts init … --zts-path <checkout>` で生成し直す
+* `build.zig.zon` の `.path` を、あなたの環境でのチェックアウトへの相対パスに書き換える
+
+`zts` を別の場所へ移した場合は `zts doctor` が
+`z_ts MISSING at … — rebuild zts or pass --zts-path` と教えます。
 
 ---
 
-## テスト
+## `zts build`
 
-### `expected type '*Build.Step', found '*const *Build.Step'`
+### `cannot read <dir>/build.zig.zon — is this a Z-Ts project?`
 
-`Step.dependOn` は `*Step` を要求します。`tsgenBindings(...).step` は `*const *Step` なので
-`&` を付けずに渡してください:
+`--dir` の指す先がプロジェクトではありません。`zts init` をしたディレクトリで実行するか、
+`--dir` を正しく渡してください。
 
-```zig
-test_step.dependOn(check_bindings.step);   // ← & を付けない
-```
+### `could not run zig …` / `set ZTS_ZIG to the zig binary if it is not on PATH`
 
-### `bindings.gen.ts is stale` で CI が落ちる
-
-スキーマを変えたら生成し直します:
+`zts build` は Zig を子プロセスとして起動します。`zts` をビルドしたのと同じバージョン
+（0.17 系）を `PATH` に置くか、`ZTS_ZIG=/path/to/zig` を設定してください。
 
 ```bash
-./zigw build tsgen
+ZTS_ZIG=/tmp/zts-toolchains/zig/zig zts build
 ```
 
-`--check` はキャッシュされると「常に緑」になるため、検証 Run には
-`has_side_effects = true` を付けています（内部資料 [`../architecture/build-tools.md`](../architecture/build-tools.md) §3）。
+### `zig build failed` の後、何も表示されない
 
-### `error: invalid fingerprint: 0x…`（`build.zig.zon`）
+`zts` は Zig の stderr を**そのまま**流します（加工しません）。`zig build 2>&1 | head -40`
+と同じ内容が出ているはずなので、最初の `error:` 行を読みます。
 
-Zig 0.17 は `.name` があるパッケージに `.fingerprint` を要求します。エラーメッセージが
-**正しい値を教えてくれる**ので、それをそのまま書きます:
+### フロントエンドだけ作り直したい
 
-```text
-build.zig.zon:1:2: error: invalid fingerprint: 0x0; if this is a new or forked package,
-use this value: 0xe244585b08949903
+```bash
+zts build --frontend-only      # build.zig の "frontend" ステップだけ（100 ms 台）
 ```
 
-上位 32 bit だけが名前から検証され、下位 32 bit は fork 識別子（毎回変わってよい）です。
-`zts init` はこの値を自動で拾って patch します（`src/cli/template.zig`）。
+`web/` を書き換えたがネイティブ側を再コンパイルしたくないときに使います。
 
-### `error: WriteFailed` が `Allocator.Error!` から出る
+### 追加の `zig build` オプションを渡したい
 
-`std.Io.Writer.Allocating` のエラー集合は `error{WriteFailed}` です。`Allocator.Error!T` を
-宣言した関数から `try w.writeAll(...)` は通らないので、内部は
-`Allocator.Error || error{WriteFailed}` で受け、公開境界で `OutOfMemory` に畳みます
-（`src/docsite/*.zig` の `Error` がその例）。
+`zts build` は `--target` / `--debug` / `--frontend-only` / `--dir` だけを解釈します
+（それ以外は `unknown flag` で止まります）。`-Dgtk=` のような `build.zig` のオプションは、
+プロジェクトのディレクトリで Zig を直接呼びます。
 
-### 0.17 の std API 違い
+```bash
+cd my-app && zig build -Dgtk=false
+```
 
-| 0.14 まで | 0.17 |
-|---|---|
-| `std.mem.trimLeft/trimRight` | **`std.mem.trimStart/trimEnd`** |
-| `b.addWriteFiles()` | `b.addUpdateSourceFiles()` |
-| `@cImport(...)` | 廃止（`extern fn … callconv(.c)` を手書き） |
-| `std.compress.flate.Options` | `flate.Compress.Options` |
-| `fn main() !void` | `fn main(init: std.process.Init) !void`（`init.io` / `init.gpa`） |
+### `error: invalid fingerprint: 0x…`
+
+上記「`warning — could not read the fingerprint…`」を参照。
+
+### GTK / WebKit2GTK のヘッダが見つからない（Linux）
+
+```bash
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
+```
+
+`zts build` は Zig のオプションをそのまま受け取らないので、細かい制御は `zig build` を直接
+叩いてください（下記「追加の `zig build` オプション」）。
 
 ---
 
-## ネイティブ WebView
+## `zts dev`
+
+### `cannot listen on 127.0.0.1:5173`（`AddressInUse`）
+
+前回の `zts dev` が残っているか、他のプロセスが使っています。ポートを変えます。
+
+```bash
+zts dev --port 5199
+```
+
+`--host 0.0.0.0` で LAN やコンテナの外からも見られます（Arena の Live Preview など）。
+
+### 画面が真っ白 / `web/` が無いと言われる
+
+`zts dev` は `web/` を配信し、`</body>` の直前にライブリロード用スクリプトを差し込みます。
+`web/index.html` が無いと起動時に
+`web/ does not exist — zts init puts the front end there` で止まります。
+
+### 編集してもリロードされない
+
+* 監視対象は `web/` と `src/` の**mtime + サイズ**です（inotify / FSEvents は使いません）。
+  ファイルを保存したが mtime が変わらないツール（一部のエディタの atomic save）では
+  検知できないことがあります。一度タッチしてください。
+* ポーリングの状態は `curl http://127.0.0.1:5173/__zts_dev__/state` で確認できます。
+  `{"v":3,"ok":true}` の `v` が増えていれば検知されています。
+* `ok:false` のままなら**ビルドが失敗しています**。`zts dev` は直前の成功物を配信し続け、
+  `v` を進めません（壊れたアプリを表示しないため）。ターミナルに出ている Zig のエラーを直します。
+
+### リロードのたびにキャッシュが効かない
+
+`zts dev` は `Cache-Control: no-store` を返します。ビルド後に古い画面が残るときは、
+ブラウザの強制リロードではなく `state` の `v` を確認してください。
+
+---
+
+## 実行・ネイティブ WebView
+
+### `zts init` したアプリは何も表示せず、アセット数だけ出る
+
+これは仕様です。`zts init` の雛形は**フロントエンドの埋め込みが動くこと**を示す最小構成で、
+`<name>: 1 embedded assets` のような行を出して終わります。ウィンドウを開く
+デスクトップアプリにするには、`examples/counter` の `build.zig` と `src/main.zig` を出発点に
+`zts_tauri` の `App` / `zts_webview` のバックエンドを組み込みます
+（[`../../examples/counter/README.md`](../../examples/counter/README.md)）。
 
 ### Linux で文字が豆腐になる / OS ごとに表示が違う
 
-同梱フォント（`ZTS Sans` / `ZTS Mono`）を使っているか確認してください。システムフォントを
-参照すると Linux だけ字形が変わります。`node scripts/check-font-coverage.mjs` が
-「使っている文字が全部フォントに入っているか」を検証します。
+Z-Ts はフォントを同梱し、OS 間で同じ字形になるようにしています。独自 CSS でシステム
+フォント（`system-ui` など）を指定すると Linux だけ字形が変わります。同梱の
+`ZTS Sans` / `ZTS Mono` を使ってください。
 
-### スクリーンショットが真っ黒 / 取得できない
+### スクリーンショットを撮ると真っ黒（CI / Xvfb）
 
-Xvfb 上ではソフトウェアレンダリングを強制します:
+ソフトウェアレンダリングを強制します。
 
 ```bash
 WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
-xvfb-run -a ./zigw build test -Dgtk=true
+xvfb-run -a ./zig-out/bin/my-app
 ```
 
-### macOS の C シムがクロスビルドできない
+### macOS / Windows でネイティブ WebView が使われない
 
-Objective-C シムは macOS の SDK を要求します。Linux からは**構文チェックだけ**行います:
-
-```bash
-./zigw test -fno-emit-bin -target aarch64-macos -mcpu baseline \
-  --dep zts_foundation -Mroot=src/tauri/native.zig …
-```
-
-実ビルド・実行は macOS の CI ジョブが担当します。
-
----
-
-## ドキュメントサイト
-
-### `docsite: N broken link(s)` で `zig build docs` が落ちる
-
-生成器は**全相対リンクを実際の出力と突き合わせます**。メッセージの `-> 解決後パス` を見て、
-リンク先を直すか、そのファイルをサイトに含めてください（`.md` は自動で含まれます）。
-`src/**.zig` のようなサイト外ファイルへのリンクは、リポジトリに実在すれば自動で GitHub の
-blob URL に差し替わります。
-
-### 検索が 0 件になる
-
-`assets/search-index.js` が読み込まれていない可能性があります。`file://` で開くと
-ブラウザによっては `script` の読み込みが制限されます。`python3 -m http.server` 経由で確認して
-ください。
-
-### GitHub Pages の公開だけがスキップされる（`Pages not enabled` の警告）
-
-ビルドは成功していて、**公開だけ**が止まっています。初回のみ、リポジトリ管理者が
-Settings → Pages → Build and deployment → Source を **GitHub Actions** にしてください。
-次の `main` push で、コードを変えずに公開が始まります。
-
-> **`enablement: true` では作れない** — `GITHUB_TOKEN` は Pages サイトを**作成できません**
-> （実測: `Create Pages site failed. Error: Resource not accessible by integration`）。
-> 作成は管理者権限の操作なので、Bot からは `GET` しか通りません。ワークフローは
-> `GET` → 失敗時のみ `POST` → それも失敗なら警告、という順で判定しているため、
-> CI が赤くなることはありません。
+`zts_webview` は対象ターゲットからバックエンドを決めます（Linux: GTK、macOS: Cocoa、
+Windows: Win32）。Linux で GTK3 / WebKit2GTK 4.1 が無い場合は `HeadlessMock` に
+フォールバックするので、`pkg-config --exists webkit2gtk-4.1 gtk+-3.0` で確認してください。
 
 ---
 
@@ -168,40 +192,29 @@ Settings → Pages → Build and deployment → Source を **GitHub Actions** �
 
 ### `bindings.gen.ts` と `@tauri-apps/api` の型が合わない
 
-`@tauri-apps/api` は**無改変**で同梱しています。型が合わない場合は、生成された
-`bindings.gen.ts` のコマンド名が `Schema` と一致しているか確認してください
-（`plugin:fs|read_text_file` のような `plugin:` 接頭辞まで含めて一致が必要です）。
+`@tauri-apps/api` は**無改変**で同梱しています。生成された `bindings.gen.ts` のコマンド名が
+スキーマと一致しているか確認してください（`plugin:fs|read_text_file` のように
+`plugin:` 接頭辞まで含めて一致が必要です）。スキーマを変えたら生成し直します。
+
+```bash
+cd my-app && zig build tsgen     # build.zig に tsgen ステップを足してから
+```
+
+`zts init` の雛形にはスキーマがまだ無いため `tsgen` ステップは入っていません。
+`examples/counter/build.zig` の `tsgenBindings` 呼び出しを参考に追加します。
 
 ### Vite の出力を埋め込んだら真っ白
 
 複数チャンクの ES モジュールを 1 つの `<script type="module">` にインライン化すると
-`import "./chunk.js"` が解決できません。`dist/` **ディレクトリごと**埋め込み、
-`/assets/…` の相対解決は `zts_web.Assets` に任せてください
-（[`../../examples/frameworks/README.md`](../../examples/frameworks/README.md) の実例）。
-
----
-
-## CI
-
-### `gh run view --log` が `EOF` で失敗する
-
-ログは外部ホストへリダイレクトされます。代わりに:
-
-```bash
-bash scripts/ci-logs.sh <run_id>     # Check Run API 経由で Step Summary を取得
-```
-
-### 3 OS の画素比較だけが落ちる
-
-`OK parity …` の行に `layout` と `pixels=max:…% mad:…` が出ます。許容差は
-「レイアウト 1px + 0.5px×文字数、背景 ±4/255、平均輝度 ≤3.0、画素 ≤12%、MAD ≤8」。
-フォント同梱と `--require-native` を確認してください
-（内部資料 [`../architecture/screenshot-parity.md`](../architecture/screenshot-parity.md)）。
+`import "./chunk.js"` が解決できません。`zts build` は `web/` を**ディレクトリごと**埋め込み、
+`/assets/…` の相対解決は `zts_web.Assets` に任せます。`web/` の外に Vite の出力を置かず、
+`base` を相対（`./`）に設定してください。
 
 ---
 
 ## 次に読むもの
 
 - 使い方の全体像: [`getting-started.md`](getting-started.md)
+- `zts` の全オプション: [`../reference/cli.md`](../reference/cli.md)
 - エラーに対応する API の引き方: [`using-the-api-reference.md`](using-the-api-reference.md)
-- ログの取得: [`../../scripts/ci-logs.sh`](../../scripts/ci-logs.sh) / [`../../AGENTS.md`](../../AGENTS.md)
+- Z-Ts 本体の開発で詰まったとき: [`../contributing/troubleshooting.md`](../contributing/troubleshooting.md)

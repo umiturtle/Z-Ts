@@ -1,56 +1,61 @@
-# Task M5-02: `zts` CLI（`init` / `dev` / `build`）
+# Task M5-02: `zts` CLI（`init` / `dev` / `build` / `doctor`）
 
-- **Status**: `in_progress`（引数解析と `init` テンプレートまで完了。`main.zig` / `dev` / `build` は未完）
-- **Branch**: `arena/16ce0c2f-z-ts`
-- **Scope**: `src/cli/`, `build.zig`, `zigw`, `docs/architecture/cli.md`（予定）,
-  `docs/roadmap/m2-m5-platform-and-ecosystem.md`, 本ファイル
+- **Status**: `done`（4 コマンド実装済み・E2E 済み。3 OS スモークは CI `ci-cli` ジョブで常時検証）
+- **Branch**: `arena/bf471265-z-ts`
+- **Scope**: `src/cli/`, `build.zig`, `docs/reference/cli.md`, `docs/guides/`, 本ファイル
 - **Upstream Reference**: `vendor/tauri/crates/tauri-cli/src/{dev,build,init}.rs`
   （`tauri dev` のウォッチャ + 再起動ループ、`tauri build` のバンドル手順、`tauri init` の雛形）
-- **Next Step**: `src/cli/main.zig` を追加し、`init` を実 IO に繋ぐ
-  （`template.scaffold` の結果を `Io.Dir.cwd().createDirPath` + `writeFile` で書き、
-  空でないディレクトリは `--force` が無ければ拒否。続けて `zig build` を 1 回叩いて
-  `fingerprintSuggestion` で `build.zig.zon` を patch する）。
+- **Next Step**: なし（完了）。続きは [`M5-08-docs-audience-split.md`](M5-08-docs-audience-split.md)
+  （利用者向けドキュメントとリポジトリ運用の分離）と `M5-03`（パッケージャ）。
 
 ---
 
 ## 1. 目的と完了条件（Definition of Done）
 
-- [ ] `zts init [dir]`
+- [x] `zts init [dir]`
   - [x] テンプレート（`.gitignore` / `README.md` / `build.zig` / `build.zig.zon` /
         `src/main.zig` / `web/index.html`）を**純粋関数**として生成（`template.scaffold`）
-  - [x] パッケージ名の検証（`[a-z][a-z0-9_]*`, 64 文字以内）と、ディレクトリ名からの導出 /
+  - [x] パッケージ名の検証（`[a-z][a-z0-9_]*`, 31 文字以内）と、ディレクトリ名からの導出 /
         正規化（`apps/my-app` → `my_app`）
   - [x] Zig 0.17 の `.fingerprint` 問題への対処（`fingerprintSuggestion` / `patchFingerprint`）
-  - [ ] 実ファイル書き込み・非空ディレクトリの拒否・`--force`
-- [x] `zts` の引数解析（`args.parse`）: `init` / `dev` / `build` / `help` / `version`、
+  - [x] 実ファイル書き込み・非空ディレクトリの拒否・`--force`
+  - [x] `--zts-path` の相対化（絶対パス・相対パスのどちらでも `build.zig.zon` に書ける形へ）
+- [x] `zts` の引数解析（`args.parse`）: `init` / `dev` / `build` / `doctor` / `help` / `version`、
       未知コマンド・未知フラグ・値欠落・範囲外ポートを**エラーにする**
-- [ ] `zts dev`
-  - [ ] `web/` を配信する静的サーバ（`206 Range` / MIME は `zts_web` のロジックを再利用）
-  - [ ] Zig ソース変更の監視 → `zig build` → 再起動
-  - [ ] `--browser`（Arena の Live Preview 用に URL を 1 行出す）
-- [ ] `zts build`
-  - [ ] フロントエンドのバンドル（`M5-01` エンベッダ）→ `zig build -Doptimize=… [-Dtarget=…]`
-  - [ ] 単一実行ファイルの出力先を表示
-- [ ] `./zigw quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
-- [ ] CI: 3 OS で `zts` のスモーク（`zts init demo && zts build`）を回す
+- [x] `zts dev`
+  - [x] `web/` を配信する静的サーバ（`std.http.Server` 直・`Cache-Control: no-store`）
+  - [x] `web/` + `src/` の変更監視 → `zig build` → ブラウザ自動リロード
+  - [x] `--browser` / `--host` / `--port`
+- [x] `zts build`
+  - [x] フロントエンドのバンドル（`M5-01` エンベッダ）→ `zig build -Doptimize=… [-Dtarget=…]`
+  - [x] 単一実行ファイルの出力先を表示
+  - [x] `--frontend-only`（`frontend` ステップのみ）
+- [x] `zts doctor`（checkout / z_ts / zig / package / dependency / web/）
+- [x] `./zigw quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
+- [x] CI: 3 OS で `zts` のスモーク（`ci-cli`: `init` → `doctor` → `build` → 実行）
 
 ---
 
 ## 2. 現在の進捗チェックポイント（Context Reset 復元用）
-
+<!-- サブタスク完了・設計決定・デバッグ判明のたびにここを上書き更新すること -->
 - **完了したこと**:
-  - `src/cli/args.zig` — `parse(argv[1..]) → Command`、`usage()`。**13 テスト**
-    （help/version の別扱い、`init` の位置引数と `--dir`、`dev` の port/host/browser、
-    `build` の `--debug`/`--target`、未知コマンド・未知フラグ・値欠落・範囲外ポート、
-    ヘルプに載っている全フラグがパーサで往復することの検証）
+  - `src/cli/args.zig` — `parse(argv[1..]) → Command`、`usage()`。**16 テスト**
   - `src/cli/template.zig` — `validateName` / `defaultName` / `normalizeName` /
     `scaffold` / `render` / `fingerprintSuggestion` / `patchFingerprint`。**9 テスト**
-    （決定論・プレースホルダ残留なし・fingerprint の抽出と patch・未知トークンの温存）
-  - `src/cli/mod.zig` — テスト集約（`quick-test` に `-Mroot=src/cli/mod.zig` を追加済み）
-  - `build.zig` — `cli_tests` を `test` ステップに追加
-- **作業中・直前の状態**: 純粋ロジックのみ実装済み。実行ファイル `zts` はまだ無い。
-- **再開するとき**: `./zigw test src/cli/mod.zig`（23 本）が通ることを確認し、
-  `src/cli/main.zig` を書くところから。
+  - `src/cli/project.zig` — `packageName` / `dependencyPath` / `executablePath` / `mimeType` /
+    `isHtml` / `assetPath` / `stripQuery` / `reloadScript` / `injectReload` / `toPosix`。**9 テスト**
+  - `src/cli/devserver.zig` — accept スレッド・`/__zts_dev__/state`・フィンガープリント。**2 テスト**
+  - `src/cli/main.zig` — `init` / `dev` / `build` / `doctor` の実行時実装（`std.process.run` で
+    `zig build` を駆動。`zts_*` は一切 import しない）
+  - `build.zig` — `zts` 実行ファイルを `b.installArtifact`（`src/cli/mod.zig` のテストからは
+    除外したまま。理由は `mod.zig` のコメント参照）
+  - **E2E（このチェックアウト上で実測）**: `init demo`（6 ファイル + fingerprint patch）→
+    `build`（8 秒）→ 実行で `1 embedded assets` → `doctor` が `all checks passed` →
+    `--frontend-only` 167 ms → `dev --port 5199` で編集検知（`v` 増加）・ビルド失敗時は
+    `ok:false` かつ `v` 据え置き・復旧で `v` 再増加。
+  - `src/cli/mod.zig` — **35 テスト**（`./zigw test src/cli/mod.zig`）
+- **作業中・直前の状態**: 完了。CI の `ci-cli` ジョブ（3 OS）がこの振る舞いを常時検証する。
+- **再開するとき**: `./zigw test src/cli/mod.zig` → `./zigw build` → `zig-out/bin/zts help`。
 
 ---
 

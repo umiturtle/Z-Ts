@@ -6,7 +6,8 @@
 [`getting-started.md`](getting-started.md) / [`using-rpc.md`](using-rpc.md) にあります）。
 
 - 公開サイト: <https://umiturtle.github.io/Z-Ts/docs/api/index.html>
-- 手元で生成: `./zigw build docs` → `zig-out/docs/docs/api/index.html`
+- 手元で生成: チェックアウトで `./zigw build docs` → `zig-out/docs/docs/api/index.html`
+  （これは Z-Ts 自体のドキュメントを生成するリポジトリ側のコマンドです）
 
 ## 1. 3 種類のページ
 
