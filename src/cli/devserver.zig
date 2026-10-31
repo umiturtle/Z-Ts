@@ -10,6 +10,7 @@
 //! `zts_*` imports and means `zig test src/cli/mod.zig` covers it without linking a web stack.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const http = std.http;
@@ -93,12 +94,16 @@ pub const DevServer = struct {
 
     /// Wakes the accept thread so it can observe `stopping` and return. Two mechanisms, because
     /// neither works everywhere: `shutdown` is the documented cancellation signal on POSIX, and a
-    /// throwaway connection unblocks Windows, where shutting down a listening socket is a no-op.
+    /// throwaway connection unblocks Windows, where `shutdown` on a *listening* socket is not a
+    /// no-op but a hard error (Winsock reports WSAEINVAL, which Zig surfaces as `error.Unexpected`
+    /// and aborts the process — a CI-only crash until the `M5-03` smoke job ran on Windows).
     pub fn stop(self: *DevServer) void {
         self.stopping.store(true, .release);
 
-        const listening: Io.net.Stream = .{ .socket = self.listener.socket };
-        listening.shutdown(self.io, .both) catch {};
+        if (builtin.os.tag != .windows) {
+            const listening: Io.net.Stream = .{ .socket = self.listener.socket };
+            listening.shutdown(self.io, .both) catch {};
+        }
 
         const host = if (std.mem.eql(u8, self.host, "0.0.0.0"))
             "127.0.0.1"

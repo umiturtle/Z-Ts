@@ -11,7 +11,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 
 | あなたは | 入口 | 使うコマンド |
 |---|---|---|
-| **Z-Ts でアプリを作りたい** | [`guides/README.md`](guides/README.md) → [`guides/getting-started.md`](guides/getting-started.md) | `zts`（`init` / `dev` / `build` / `doctor`） |
+| **Z-Ts でアプリを作りたい** | [`guides/README.md`](guides/README.md) → [`guides/getting-started.md`](guides/getting-started.md) | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
 | **Z-Ts 本体を開発・公開したい** | [`contributing/README.md`](contributing/README.md) | `./zigw` / `zig build` / `scripts/*` |
 
 ## 読み手ごとの 3 層（+ 内部資料）
@@ -46,6 +46,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`architecture/tauri-fs-plugin.md`](architecture/tauri-fs-plugin.md) | スコープ付きファイルシステム `plugin:fs`（正規化 → リンク解決 → 包含判定・全コマンド表・エラーコード） | サブシステム設計（FS 利用時） |
 | [`architecture/tauri-config-import-acl.md`](architecture/tauri-config-import-acl.md) | `tauri.conf.json` のインポートと `capabilities/*.json` の ACL（未知は警告・型違いはエラー・fail-closed） | Tauri プロジェクトを移行するとき |
 | [`architecture/tauri-menu-tray.md`](architecture/tauri-menu-tray.md) | ネイティブメニュー & システムトレイ `plugin:menu` / `plugin:tray`（平板スナップショット・22+12 コマンド・アクセラレータ） | サブシステム設計（メニュー/トレイ利用時） |
+| [`architecture/packaging-and-bench.md`](architecture/packaging-and-bench.md) | パッケージャ設計（PE `.rsrc` 追記・アーキ検出・`Depends` 生成・再現性）と対 Rust ベンチの設計（`M5-03`） | サブシステム設計（配布物・ベンチ） |
 | [`architecture/tauri-dialog-clipboard.md`](architecture/tauri-dialog-clipboard.md) | OS ダイアログ & クリップボード `plugin:dialog` / `plugin:clipboard-manager`（vtable + ネイティブ分離・untagged 戻り値・3 OS 対応表） | サブシステム設計（ダイアログ/クリップボード利用時） |
 | `architecture/<module>.md` | 各サブシステム詳細設計（例: `config.md`, `ipc.md`, `acl.md`, `window-linux.md`） | モジュール単位で完全独立 |
 | [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
@@ -54,6 +55,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`guides/README.md`](guides/README.md) | **学習の道筋**: 学ぶ / 引く / 確かめる / 中を読む の 4 層と「何を読みたいか」索引 | 入門（ガイドの入口） |
 | [`guides/installing-zts.md`](guides/installing-zts.md) | `zts` コマンドの入手（チェックアウトからビルド・`PATH`・`ZTS_ZIG`） | 入門（最初に読む） |
 | [`guides/getting-started.md`](guides/getting-started.md) | はじめかた（5 分）: `zts init` → `dev` → `build` → `doctor` | 入門（最初に読む） |
+| [`guides/packaging.md`](guides/packaging.md) | 配布物の作り方: `zts package`（`.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`）・アイコン・クロスビルド・CI | アプリが 1 つ動いたら |
 | [`guides/using-rpc.md`](guides/using-rpc.md) | RPC 層の使い方: コマンド定義 → `Schema` → `bind` → `dispatch` → TypeScript 生成 | 入門（コマンドを書く前に） |
 | [`guides/using-plugins.md`](guides/using-plugins.md) | Tauri 標準プラグイン（window/event/path/fs/dialog/clipboard/menu/tray）と capability | 入門（プラグイン利用時） |
 | [`guides/using-ssg.md`](guides/using-ssg.md) | 静的サイト書き出し（`exportStaticSite` / `ExportOptions` / WASM） | 入門（`dist/` を出すとき） |

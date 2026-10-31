@@ -11,6 +11,8 @@
 //! * `zts dev` — serve `web/`, rebuild on change, reload the page.
 //! * `zts build` — `zig build` with the project's optimisation and target.
 //! * `zts doctor` — check that the toolchain and the generated project agree with each other.
+//! * `zts package` — wrap the built executable into `.deb` / AppDir / `.app` / `.dmg` / `.exe` /
+//!   `.tar.gz` (`M5-03`). The bytes are produced by `src/bundler/`; this file only moves them.
 
 const std = @import("std");
 const Io = std.Io;
@@ -21,6 +23,7 @@ const args_mod = @import("args.zig");
 const template = @import("template.zig");
 const project = @import("project.zig");
 const devserver = @import("devserver.zig");
+const bundler = @import("zts_bundler");
 
 /// Absolute path of the Z-Ts checkout that built this binary, injected by `build.zig`. `zts init`
 /// writes it into the generated `build.zig.zon`, so a project created anywhere keeps working without
@@ -67,6 +70,7 @@ pub fn main(init: std.process.Init) !u8 {
         .dev => |opts| runDev(io, gpa, arena, opts),
         .build => |opts| runBuild(io, gpa, arena, opts),
         .doctor => |opts| runDoctor(io, arena, opts.dir),
+        .package => |opts| runPackage(io, arena, init.environ_map, opts),
     };
 }
 
@@ -330,6 +334,306 @@ fn openBrowser(io: Io, arena: Allocator, url: []const u8) !void {
     };
     const result = std.process.run(arena, io, .{ .argv = argv }) catch return;
     _ = result;
+}
+
+// ---------------------------------------------------------------------------------------------
+// zts package
+// ---------------------------------------------------------------------------------------------
+
+/// Upper bound on the executable `zts package` will read. A Z-Ts app is a few megabytes; 1 GiB
+/// means a mistyped `--binary` is a clean error instead of an out-of-memory.
+const max_binary_bytes = 1024 * 1024 * 1024;
+
+fn runPackage(
+    io: Io,
+    arena: Allocator,
+    env: *std.process.Environ.Map,
+    opts: args_mod.Package,
+) !u8 {
+    packageAll(io, arena, env, opts) catch |err| switch (err) {
+        error.Reported => return exit_failure,
+        else => {
+            printErr(io, "zts package: {s}\n", .{@errorName(err)});
+            return exit_failure;
+        },
+    };
+    return 0;
+}
+
+/// Everything `zts package` needs, resolved once and shared by every format.
+const PackageContext = struct {
+    app: bundler.App,
+    binary: []const u8,
+    icon_png: ?[]const u8,
+    icon_ico: ?[]const u8,
+    manifest: ?[]const u8,
+    arch: std.Target.Cpu.Arch,
+    formats: []const bundler.Format,
+    out_dir: []const u8,
+};
+
+fn packageAll(
+    io: Io,
+    arena: Allocator,
+    env: *std.process.Environ.Map,
+    opts: args_mod.Package,
+) !void {
+    const cwd = Io.Dir.cwd();
+    const zon = readZon(io, arena, opts.dir) catch |err| {
+        printErr(io, "zts package: cannot read {s}/build.zig.zon ({t}) — is this a Z-Ts project?\n", .{ opts.dir, err });
+        return error.Reported;
+    };
+    const name = project.packageName(zon) orelse {
+        printErr(io, "zts package: {s}/build.zig.zon has no `.name` — run `zts init` or add one\n", .{opts.dir});
+        return error.Reported;
+    };
+
+    const display = try project.displayName(arena, name);
+    const dashed = try project.dashed(arena, name);
+    const description = opts.description orelse try std.fmt.allocPrint(arena, "{s} desktop application", .{display});
+    const version = opts.version orelse project.versionOf(zon) orelse "0.1.0";
+    const identifier = opts.identifier orelse try std.fmt.allocPrint(arena, "com.example.{s}", .{dashed});
+    const maintainer = opts.maintainer orelse blk: {
+        if (env.get("ZTS_MAINTAINER")) |from_env| break :blk from_env;
+        printErr(io, "zts package: no --maintainer (or ZTS_MAINTAINER) — using a placeholder\n", .{});
+        break :blk "Z-Ts <maintainer@example.com>";
+    };
+
+    var app = bundler.App.init(name, display, version, identifier, description, maintainer) catch |err| {
+        printErr(io, "zts package: {s}: {s}\n", .{ @errorName(err), describeAppError(err) });
+        return error.Reported;
+    };
+
+    const formats = try parseFormats(io, arena, opts.format);
+    if (formats.len == 0) return error.Reported;
+
+    const binary = readExecutable(io, arena, opts) catch |err| switch (err) {
+        error.Reported => return error.Reported,
+        else => return err,
+    };
+    const detected = bundler.binary.detect(binary) catch |err| {
+        printErr(io, "zts package: the executable is not an ELF, Mach-O or PE image ({s})\n", .{@errorName(err)});
+        return error.Reported;
+    };
+
+    // Depends is derived from the executable, so it is set after the binary has been read.
+    app = app.withDepends(try bundler.app.runtimeDependencies(arena, binary));
+
+    const icon_png = try readOptional(io, arena, opts.icon);
+    const icon_ico = try readOptional(io, arena, opts.icon_ico);
+    const manifest = try readOptional(io, arena, opts.manifest);
+
+    for (formats) |format| {
+        if ((format == .deb or format == .appdir or format == .app or format == .dmg) and detected.format == .pe) {
+            printErr(io, "zts package: --format {s} needs a POSIX executable, got a PE image\n", .{@tagName(format)});
+            return error.Reported;
+        }
+        if (format == .exe and detected.format != .pe) {
+            printErr(io, "zts package: --format exe needs a Windows PE image (build with --target x86_64-windows)\n", .{});
+            return error.Reported;
+        }
+        if (format == .dmg and builtin.os.tag != .macos) {
+            printErr(io, "zts package: --format dmg needs macOS (hdiutil); use app on this host\n", .{});
+            return error.Reported;
+        }
+    }
+
+    const out_dir = if (opts.out) |explicit|
+        explicit
+    else
+        try std.fmt.allocPrint(arena, "{s}/zig-out/package", .{opts.dir});
+    try cwd.createDirPath(io, out_dir);
+    var out_handle = try cwd.openDir(io, out_dir, .{});
+    defer out_handle.close(io);
+
+    const context = PackageContext{
+        .app = app,
+        .binary = binary,
+        .icon_png = icon_png,
+        .icon_ico = icon_ico,
+        .manifest = manifest,
+        .arch = detected.arch,
+        .formats = formats,
+        .out_dir = out_dir,
+    };
+    _ = &context;
+
+    for (formats) |format| {
+        try writeFormat(io, arena, cwd, out_handle, out_dir, format, context, detected);
+    }
+
+    printOut(io, "zts: packaged {d} artifact(s) into {s}\n", .{ formats.len, out_dir });
+}
+
+fn describeAppError(err: bundler.app.InitError) []const u8 {
+    return switch (err) {
+        error.EmptyName => "the name is empty",
+        error.InvalidName => "names are [a-z][a-z0-9_-]*",
+        error.NameTooLong => "the name is longer than 32 characters",
+        error.InvalidVersion => "the version is not a semantic version (1.2.3)",
+        error.InvalidIdentifier => "the identifier must be reverse-DNS (com.example.demo)",
+        error.EmptyMaintainer => "pass --maintainer \"Name <email>\"",
+        error.EmptyDescription => "pass --description",
+        error.OutOfMemory => "out of memory",
+    };
+}
+
+/// `--format deb,appdir` → a deduplicated list. An unknown word is a usage error that names the
+/// accepted spellings, because a packaging typo discovered after `zig build` is expensive.
+fn parseFormats(io: Io, arena: Allocator, text: ?[]const u8) ![]const bundler.Format {
+    const raw = text orelse return try arena.dupe(bundler.Format, &.{bundler.Format.hostDefault(builtin.os.tag)});
+
+    var list: std.ArrayListUnmanaged(bundler.Format) = .empty;
+    var it = std.mem.splitScalar(u8, raw, ',');
+    while (it.next()) |word| {
+        const trimmed = std.mem.trim(u8, word, " \t");
+        if (trimmed.len == 0) continue;
+        const format = bundler.Format.parse(trimmed) orelse {
+            printErr(io, "zts package: unknown format '{s}' (choose deb, appdir, app, dmg, exe or tar.gz)\n", .{trimmed});
+            return error.Reported;
+        };
+        if (std.mem.indexOfScalar(bundler.Format, list.items, format) == null) {
+            try list.append(arena, format);
+        }
+    }
+    if (list.items.len == 0) {
+        printErr(io, "zts package: --format is empty\n", .{});
+        return error.Reported;
+    }
+    return list.items;
+}
+
+fn readOptional(io: Io, arena: Allocator, path: ?[]const u8) !?[]const u8 {
+    const given = path orelse return null;
+    return Io.Dir.cwd().readFileAlloc(io, given, arena, .limited(max_binary_bytes)) catch |err| {
+        printErr(io, "zts package: cannot read {s} ({t})\n", .{ given, err });
+        return error.Reported;
+    };
+}
+
+/// The executable to package: `--binary`, else `zig-out/bin/<name>` with or without `.exe`.
+fn readExecutable(io: Io, arena: Allocator, opts: args_mod.Package) ![]const u8 {
+    const cwd = Io.Dir.cwd();
+    if (opts.binary) |given| {
+        const full = try std.fmt.allocPrint(arena, "{s}/{s}", .{ opts.dir, given });
+        return cwd.readFileAlloc(io, full, arena, .limited(max_binary_bytes)) catch |err| {
+            printErr(io, "zts package: cannot read {s} ({t})\n", .{ full, err });
+            return error.Reported;
+        };
+    }
+
+    const name = project.packageName(try readZon(io, arena, opts.dir)) orelse "app";
+    for ([_]bool{ false, true }) |windows| {
+        const relative = try project.executablePath(arena, name, windows);
+        const full = try std.fmt.allocPrint(arena, "{s}/{s}", .{ opts.dir, relative });
+        if (cwd.readFileAlloc(io, full, arena, .limited(max_binary_bytes))) |bytes| {
+            return bytes;
+        } else |_| {}
+    }
+    printErr(io, "zts package: {s}/zig-out/bin/{s} not found — run `zts build` first, or pass --binary\n", .{ opts.dir, name });
+    return error.Reported;
+}
+
+fn payloadFor(context: PackageContext) bundler.plan.Payload {
+    return .{
+        .binary = context.binary,
+        .icon_png = context.icon_png,
+        .icon_ico = context.icon_ico,
+    };
+}
+
+fn writeFormat(
+    io: Io,
+    arena: Allocator,
+    cwd: Io.Dir,
+    out_handle: Io.Dir,
+    out_dir: []const u8,
+    format: bundler.Format,
+    context: PackageContext,
+    detected: bundler.binary.Binary,
+) !void {
+    const app = context.app;
+    const payload = payloadFor(context);
+
+    switch (format) {
+        .deb => {
+            const entries = try bundler.plan.debPayload(arena, app, payload);
+            const architecture = bundler.app.debArchitecture(detected.arch);
+            const bytes = try bundler.deb.buildAlloc(arena, app, entries, architecture);
+            const artifact = try app.artifactName(arena, .deb, architecture);
+            try cwd.writeFile(io, .{ .sub_path = try std.fmt.allocPrint(arena, "{s}/{s}", .{ out_dir, artifact }), .data = bytes });
+            printArtifact(io, out_dir, artifact, bytes.len);
+        },
+        .appdir => {
+            const entries = try bundler.plan.appDir(arena, app, payload);
+            const artifact = try app.artifactName(arena, .appdir, bundler.app.debArchitecture(detected.arch));
+            try bundler.tree.writeNamed(io, out_handle, artifact, entries);
+            printOut(io, "zts: wrote {s}/{s}/ ({d} files)\n", .{ out_dir, artifact, entries.entries.len });
+        },
+        .app => {
+            const entries = try bundler.plan.macApp(arena, app, payload);
+            const artifact = try app.artifactName(arena, .app, bundler.app.debArchitecture(detected.arch));
+            try bundler.tree.writeNamed(io, out_handle, artifact, entries);
+            printOut(io, "zts: wrote {s}/{s}/ ({d} files)\n", .{ out_dir, artifact, entries.entries.len });
+        },
+        .dmg => {
+            // A `.dmg` is a disk image around the `.app`, so the bundle is built first and only then
+            // handed to `hdiutil` — the same step a Xcode project's "Archive" runs.
+            const entries = try bundler.plan.macApp(arena, app, payload);
+            const bundle = try app.artifactName(arena, .app, bundler.app.debArchitecture(detected.arch));
+            try bundler.tree.writeNamed(io, out_handle, bundle, entries);
+            const bundle_path = try std.fmt.allocPrint(arena, "{s}/{s}", .{ out_dir, bundle });
+            const artifact = try app.artifactName(arena, .dmg, bundler.app.debArchitecture(detected.arch));
+            const dmg_path = try std.fmt.allocPrint(arena, "{s}/{s}", .{ out_dir, artifact });
+            const result = try std.process.run(arena, io, .{ .argv = &.{
+                "hdiutil", "create", "-volname", app.display_name, "-srcfolder", bundle_path, "-ov", "-format", "UDZO", dmg_path,
+            } });
+            if (!result.term.success()) {
+                printErr(io, "zts package: hdiutil failed\n{s}", .{result.stderr});
+                return error.Reported;
+            }
+            printOut(io, "zts: wrote {s}/{s}\n", .{ out_dir, artifact });
+        },
+        .exe => {
+            var group: ?[]const u8 = null;
+            var image_list: []const []const u8 = &.{};
+            if (context.icon_ico) |ico_bytes| {
+                // Arena-allocated: the parsed images live as long as the process, and the CLI's
+                // `gpa` is a leak-checking allocator that would flag them at exit.
+                const icon = bundler.ico.parse(arena, ico_bytes) catch |err| {
+                    printErr(io, "zts package: --icon-ico is not a readable .ico ({s})\n", .{@errorName(err)});
+                    return error.Reported;
+                };
+                group = try icon.groupBlob(arena);
+                const allocated = try arena.alloc([]const u8, icon.images.len);
+                for (icon.images, 0..) |image, index| allocated[index] = image.bytes;
+                image_list = allocated;
+            }
+
+            const resources = bundler.pe.Resources{
+                .icon = if (group) |g| .{ .group = g, .images = image_list } else null,
+                .manifest = context.manifest,
+            };
+            const bytes = bundler.pe.injectAlloc(arena, context.binary, resources) catch |err| {
+                printErr(io, "zts package: cannot embed resources ({s})\n", .{@errorName(err)});
+                return error.Reported;
+            };
+            const artifact = try app.artifactName(arena, .exe, bundler.app.debArchitecture(detected.arch));
+            try cwd.writeFile(io, .{ .sub_path = try std.fmt.allocPrint(arena, "{s}/{s}", .{ out_dir, artifact }), .data = bytes });
+            printArtifact(io, out_dir, artifact, bytes.len);
+        },
+        .tar_gz => {
+            const entries = try bundler.plan.portable(arena, app, payload);
+            const bytes = try bundler.deb.tarGzAlloc(arena, entries.entries);
+            const artifact = try app.artifactName(arena, .tar_gz, bundler.app.debArchitecture(detected.arch));
+            try cwd.writeFile(io, .{ .sub_path = try std.fmt.allocPrint(arena, "{s}/{s}", .{ out_dir, artifact }), .data = bytes });
+            printArtifact(io, out_dir, artifact, bytes.len);
+        },
+    }
+}
+
+fn printArtifact(io: Io, out_dir: []const u8, artifact: []const u8, size: usize) void {
+    printOut(io, "zts: wrote {s}/{s} ({d} bytes)\n", .{ out_dir, artifact, size });
 }
 
 // ---------------------------------------------------------------------------------------------

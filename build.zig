@@ -655,6 +655,15 @@ pub fn build(b: *std.Build) void {
     const cli_options = b.addOptions();
     cli_options.addOption([]const u8, "zts_root", zts_root);
 
+    // `M5-03`: the packager. A separate module so `src/cli` and `src/bundler` stay in disjoint
+    // directories (every `.zig` file belongs to exactly one module) and the CLI's tests can import it.
+    const bundler_mod = b.addModule("zts_bundler", .{
+        .root_source_file = b.path("src/bundler/mod.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = false,
+    });
+
     const cli_mod = b.createModule(.{
         .root_source_file = b.path("src/cli/mod.zig"),
         .target = target,
@@ -662,6 +671,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = false,
     });
     const cli_tests = b.addTest(.{ .root_module = cli_mod });
+    const bundler_tests = b.addTest(.{ .root_module = bundler_mod });
 
     const zts_exe = b.addExecutable(.{
         .name = "zts",
@@ -670,7 +680,10 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .link_libc = false,
-            .imports = &.{.{ .name = "zts_cli_options", .module = cli_options.createModule() }},
+            .imports = &.{
+                .{ .name = "zts_cli_options", .module = cli_options.createModule() },
+                .{ .name = "zts_bundler", .module = bundler_mod },
+            },
         }),
     });
     b.installArtifact(zts_exe);
@@ -688,6 +701,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(ssg_tests).step);
     test_step.dependOn(&b.addRunArtifact(build_tools_tests).step);
     test_step.dependOn(&b.addRunArtifact(cli_tests).step);
+    test_step.dependOn(&b.addRunArtifact(bundler_tests).step);
     test_step.dependOn(&b.addRunArtifact(docsite_tests).step);
     test_step.dependOn(&b.addRunArtifact(standalone_tests).step);
     test_step.dependOn(&b.addRunArtifact(c_abi_exe).step);

@@ -115,6 +115,7 @@ all checks passed
 | 知りたいこと | 行き先 |
 |---|---|
 | 全コマンド・全オプション | [`../reference/cli.md`](../reference/cli.md) |
+| 配布物（`.deb` / `.app` / `.exe`）を作る | [`packaging.md`](packaging.md) |
 | RPC（`invoke`）と TypeScript 型生成 | [`using-rpc.md`](using-rpc.md) |
 | Tauri 標準プラグイン | [`using-plugins.md`](using-plugins.md) |
 | 静的サイト（SSG）とブラウザ実行 | [`using-ssg.md`](using-ssg.md) |

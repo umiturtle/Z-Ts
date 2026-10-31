@@ -12,6 +12,7 @@ zts <command> [options]
   init     Scaffold a new project
   dev      Serve `web/` with rebuild-on-change
   build    Build the app into a single executable
+  package  Wrap the executable into .deb / AppDir / .app / .exe / .tar.gz
   doctor   Check the toolchain and the project
   help     Show this help
   version  Print the version
@@ -70,7 +71,7 @@ zts init my-app --force           # 既存ファイルがあっても書く
 | `--dir <path>` | `.` | プロジェクト |
 | `--host <addr>` | `127.0.0.1` | バインドアドレス。`0.0.0.0` で外部公開 |
 | `--port <n>` | `5173` | 1〜65535 |
-| `--browser` / `--open` | 無効 | 起動後に既定ブラウザを開く |
+| `--browser` | 無効 | 起動後に既定ブラウザを開く |
 
 仕様:
 
@@ -110,6 +111,69 @@ zts build --frontend-only       # 100 ms 台
 `-Dgtk=false` のような `build.zig` のオプションは、プロジェクト直下で `zig build` を
 直接叩いてください。Zig の stderr はそのまま中継されます。
 
+## `zts package`
+
+`zts build` が作った実行ファイルを、配布できる形に包みます。引数はすべて省略可能で、
+既定では**ホスト OS の形式**（Linux: `deb` / macOS: `app` / Windows: `exe`）を 1 つ作ります。
+
+```bash
+zts package                                  # ホストの既定形式
+zts package --format deb,appdir,tar.gz       # Linux の 3 形式を一度に
+zts package --format exe --icon-ico app.ico --manifest app.manifest
+zts package --icon icon.png --version 1.2.0 --maintainer "You <you@example.com>"
+```
+
+| オプション | 既定 | 内容 |
+|---|---|---|
+| `--dir <path>` | `.` | プロジェクト |
+| `--format <list>` | ホストの既定 | カンマ区切り。`deb`, `appdir`, `app`, `dmg`, `exe`, `tar.gz` |
+| `--binary <path>` | `zig-out/bin/<name>` | 包む実行ファイル（`--dir` からの相対） |
+| `--out <path>` | `<dir>/zig-out/package` | 出力先 |
+| `--version <semver>` | `build.zig.zon` の `.version` | パッケージ版 |
+| `--identifier <id>` | `com.example.<name>` | 逆 DNS 識別子（macOS の `CFBundleIdentifier`） |
+| `--maintainer <who>` | `ZTS_MAINTAINER`、無ければ placeholder | `Name <email>` |
+| `--description <text>` | `<表示名> desktop application` | 1 行の説明 |
+| `--icon <png>` | 無し | `.deb` / AppDir / `.app` 用の PNG（256×256 推奨） |
+| `--icon-ico <ico>` | 無し | Windows 実行ファイルに埋める `.ico` |
+| `--manifest <xml>` | 無し | Windows 実行ファイルに埋めるマニフェスト |
+
+| 形式 | 出力（`<…>` は置換） | 中身 |
+|---|---|---|
+| `deb` | `<name>` を `-` 区切りにし `<name>_<version>_<arch>.deb` | `ar` + `control.tar.gz` + `data.tar.gz`。`dpkg-deb -c` で読める |
+| `appdir` | `<name>-<version>-<arch>.AppDir/` | `AppRun` / `usr/bin/<name>` / `.desktop` / アイコン（AppImage の入力） |
+| `app` | `<display>.app/` | `Contents/{Info.plist,PkgInfo,MacOS/<name>,Resources/<name>.png}` |
+| `dmg` | `<display>-<version>.dmg` | `.app` を作ってから `hdiutil`（**macOS 専用**） |
+| `exe` | `<name>.exe` | PE をそのままコピーし、`.rsrc` を 1 セクション追記 |
+| `tar.gz` | `<name>-<version>-<arch>.tar.gz` | `<name>-<version>/` を丸ごと。どのホストからでも作れる |
+
+仕様:
+
+| 項目 | 振る舞い |
+|---|---|
+| アーキテクチャ | 実行ファイルのヘッダ（ELF / Mach-O / PE）から読む。クロスビルドでも正しく `arm64` などになる |
+| `Depends:` | ELF が実際にリンクしている soname から作る。GUI を使わないアプリに GTK は付かない |
+| 再現性 | `ar` メンバも tar エントリも mtime `0`、所有者 `0/0`。同じ入力からは同じバイト列 |
+| 失敗時 | 何も書かずに終了コード `1`。形式と実行ファイルの不一致（PE に `deb` など）は事前に検出 |
+| `License:` | `control` には書かない（Debian のバイナリ control に存在しないフィールド）。`copyright` に書く |
+
+出力例:
+
+```text
+$ zts package --format deb,tar.gz --icon icon.png
+zts: wrote ./zig-out/package/my_app_0.1.0_amd64.deb (65742 bytes)
+zts: wrote ./zig-out/package/my-app-0.1.0-amd64.tar.gz (64911 bytes)
+zts: packaged 2 artifact(s) into ./zig-out/package
+```
+
+インストール:
+
+```bash
+sudo dpkg -i zig-out/package/my_app_0.1.0_amd64.deb   # Debian/Ubuntu
+tar -xzf zig-out/package/my-app-0.1.0-amd64.tar.gz    # どこでも
+```
+
+形式ごとの前提は [`../guides/packaging.md`](../guides/packaging.md) にまとめてあります。
+
 ## `zts doctor`
 
 環境とプロジェクトを 6 項目で点検し、問題があれば `1` で終了します。
@@ -143,6 +207,7 @@ all checks passed
 | 変数 | 内容 |
 |---|---|
 | `ZTS_ZIG` | 使用する `zig` のパス。未設定なら `PATH` → チェックアウト内の `zig` |
+| `ZTS_MAINTAINER` | `zts package` の `--maintainer` の既定値 |
 
 ---
 
@@ -150,4 +215,5 @@ all checks passed
 
 - 使い始める: [`../guides/getting-started.md`](../guides/getting-started.md)
 - `zts` の入手: [`../guides/installing-zts.md`](../guides/installing-zts.md)
+- 配布物の作り方: [`../guides/packaging.md`](../guides/packaging.md)
 - リポジトリ開発のコマンド: [`../contributing/README.md`](../contributing/README.md)
