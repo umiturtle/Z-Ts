@@ -15,6 +15,8 @@ pub const Command = union(enum) {
     dev: Dev,
     /// `zts build` — front end bundle + single executable.
     build: Build,
+    /// `zts doctor` — check the toolchain and the project layout.
+    doctor: Doctor,
     /// `zts help` / `--help` / no arguments.
     help,
     /// `zts version` / `--version`.
@@ -26,8 +28,9 @@ pub const Init = struct {
     dir: []const u8 = ".",
     /// Package name; `null` means "derive from the directory base name".
     name: ?[]const u8 = null,
-    /// Path to the Z-Ts checkout the generated `build.zig.zon` depends on.
-    zts_path: []const u8 = "../Z-Ts",
+    /// Path to the Z-Ts checkout the generated `build.zig.zon` depends on. `null` means "the
+    /// checkout that built this `zts` binary" — correct no matter where the project is created.
+    zts_path: ?[]const u8 = null,
     /// Write even when the target directory already has files.
     force: bool = false,
 };
@@ -47,6 +50,10 @@ pub const Build = struct {
     optimize: Optimize = .release_small,
     /// Skip `zig build` and only bundle the front end.
     frontend_only: bool = false,
+};
+
+pub const Doctor = struct {
+    dir: []const u8 = ".",
 };
 
 pub const Optimize = enum {
@@ -83,6 +90,7 @@ pub fn parse(args: []const []const u8) ParseError!Command {
     if (std.mem.eql(u8, head, "init")) return .{ .init = try parseInit(args[1..]) };
     if (std.mem.eql(u8, head, "dev")) return .{ .dev = try parseDev(args[1..]) };
     if (std.mem.eql(u8, head, "build")) return .{ .build = try parseBuild(args[1..]) };
+    if (std.mem.eql(u8, head, "doctor")) return .{ .doctor = try parseDoctor(args[1..]) };
 
     return error.UnknownCommand;
 }
@@ -166,6 +174,20 @@ fn parseBuild(rest: []const []const u8) ParseError!Build {
     return out;
 }
 
+fn parseDoctor(rest: []const []const u8) ParseError!Doctor {
+    var out: Doctor = .{};
+    var i: usize = 0;
+    while (i < rest.len) : (i += 1) {
+        const arg = rest[i];
+        if (try flagValue(rest, &i, arg, "--dir")) |value| {
+            out.dir = value;
+        } else {
+            return error.UnknownFlag;
+        }
+    }
+    return out;
+}
+
 /// Matches `--flag value` **only** when the flag name is exactly `name`; returns `null` otherwise so
 /// the caller can fall through to the next flag (or to the unknown-flag error). A flag at the very
 /// end of the command line is `error.MissingValue` — never an empty string that silently becomes a
@@ -184,13 +206,14 @@ pub const usage_text =
     \\  init [dir]          Scaffold a new Z-Ts project (default: the current directory)
     \\  dev                 Serve `web/` with rebuild-on-change (`--browser` for Live Preview)
     \\  build               Bundle the front end and produce a single executable
+    \\  doctor              Check the toolchain, the project layout and the z_ts dependency
     \\  help                Show this help
     \\  version             Print the CLI version
     \\
     \\init options:
     \\  --dir <path>        Target directory                  (default ".")
     \\  --name <name>       Package name                      (default: directory base name)
-    \\  --zts-path <path>   Path to the Z-Ts checkout         (default "../Z-Ts")
+    \\  --zts-path <path>   Path to the Z-Ts checkout         (default: the one that built `zts`)
     \\  --force             Allow scaffolding into a non-empty directory
     \\
     \\dev options:
@@ -204,6 +227,9 @@ pub const usage_text =
     \\  --target <triple>   Cross-compile target (e.g. aarch64-macos)
     \\  --debug             Build with Debug instead of ReleaseSmall
     \\  --frontend-only     Only rebuild `web/` into the embedded asset module
+    \\
+    \\doctor options:
+    \\  --dir <path>        Project directory                 (default ".")
     \\
 ;
 
@@ -234,7 +260,7 @@ test "`init` defaults are the current directory with no forced overwrite" {
     const cmd = try parse(&.{"init"});
     try testing.expectEqualStrings(".", cmd.init.dir);
     try testing.expect(cmd.init.name == null);
-    try testing.expectEqualStrings("../Z-Ts", cmd.init.zts_path);
+    try testing.expect(cmd.init.zts_path == null); // the checkout that built this binary
     try testing.expect(!cmd.init.force);
 }
 
@@ -248,7 +274,7 @@ test "`init <dir>` takes the directory positionally and `--name` overrides the p
 test "`init --dir` and `--zts-path` are independent of the positional form" {
     const cmd = try parse(&.{ "init", "--dir", "/tmp/x", "--zts-path", "/src/Z-Ts" });
     try testing.expectEqualStrings("/tmp/x", cmd.init.dir);
-    try testing.expectEqualStrings("/src/Z-Ts", cmd.init.zts_path);
+    try testing.expectEqualStrings("/src/Z-Ts", cmd.init.zts_path.?);
 }
 
 test "`init` rejects two positional directories" {
@@ -305,7 +331,7 @@ test "unknown commands and unknown flags are reported, never silently ignored" {
 
 test "the usage text documents every command and every documented flag is accepted" {
     const text = usage();
-    for ([_][]const u8{ "init", "dev", "build", "help", "version" }) |word| {
+    for ([_][]const u8{ "init", "dev", "build", "doctor", "help", "version" }) |word| {
         try testing.expect(std.mem.indexOf(u8, text, word) != null);
     }
     for ([_][]const u8{ "--dir", "--name", "--zts-path", "--force", "--host", "--port", "--browser", "--target", "--debug", "--frontend-only" }) |flag| {
@@ -315,4 +341,12 @@ test "the usage text documents every command and every documented flag is accept
     _ = try parse(&.{ "init", "--dir", "d", "--name", "n", "--zts-path", "z", "--force" });
     _ = try parse(&.{ "dev", "--dir", "d", "--host", "h", "--port", "1", "--browser" });
     _ = try parse(&.{ "build", "--dir", "d", "--target", "t", "--debug", "--frontend-only" });
+    _ = try parse(&.{ "doctor", "--dir", "d" });
+}
+
+test "`doctor` only accepts `--dir`" {
+    const cmd = try parse(&.{ "doctor", "--dir", "apps/demo" });
+    try testing.expectEqualStrings("apps/demo", cmd.doctor.dir);
+    try testing.expectEqualStrings(".", (try parse(&.{"doctor"})).doctor.dir);
+    try testing.expectError(error.UnknownFlag, parse(&.{ "doctor", "--fix" }));
 }

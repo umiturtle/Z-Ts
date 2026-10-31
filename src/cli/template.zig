@@ -255,8 +255,12 @@ const build_zig =
     \\    b.installArtifact(exe);
     \\
     \\    const run_cmd = b.addRunArtifact(exe);
-    \\    if (b.args) |args| run_cmd.addArgs(args);
+    \\    run_cmd.addPassthruArgs();
     \\    b.step("run", "Run the app").dependOn(&run_cmd.step);
+    \\
+    \\    // `zts build --frontend-only` rebuilds just the embedded front end.
+    \\    const frontend_step = b.step("frontend", "Re-embed web/ without compiling the app");
+    \\    frontend_step.dependOn(&embed_run.step);
     \\}
     \\
 ;

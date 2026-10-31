@@ -644,15 +644,36 @@ pub fn build(b: *std.Build) void {
     const docs_step = b.step("docs", "Render the documentation site into zig-out/docs");
     docs_step.dependOn(&run_docsite.step);
 
-    // `zts` CLI (`M5-02`): argument parsing + the `init` template are std-only pure functions.
-    const cli_tests = b.addTest(.{
+    // `zts` CLI (`M5-02`): argument parsing, the `init` template, the URL mapping and the reload
+    // snippet are std-only pure functions, so the whole CLI is unit-tested without spawning it.
+    //
+    // The one thing `zts` cannot know at runtime is where its own checkout lives, and every
+    // generated `build.zig.zon` needs that path. `build.zig` is the only place that knows it, so it
+    // is baked into a tiny options module instead of being guessed from the executable location
+    // (which breaks the moment someone puts `zts` on PATH).
+    const zts_root = b.pathResolve(&.{ b.root.root_dir.path orelse ".", b.root.sub_path });
+    const cli_options = b.addOptions();
+    cli_options.addOption([]const u8, "zts_root", zts_root);
+
+    const cli_mod = b.createModule(.{
+        .root_source_file = b.path("src/cli/mod.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = false,
+    });
+    const cli_tests = b.addTest(.{ .root_module = cli_mod });
+
+    const zts_exe = b.addExecutable(.{
+        .name = "zts",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/cli/mod.zig"),
+            .root_source_file = b.path("src/cli/main.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = false,
+            .imports = &.{.{ .name = "zts_cli_options", .module = cli_options.createModule() }},
         }),
     });
+    b.installArtifact(zts_exe);
 
     const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full Z-Ts & Tauri v2 E2E suite");
     test_step.dependOn(&b.addRunArtifact(foundation_tests).step);
