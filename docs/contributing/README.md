@@ -145,8 +145,8 @@ cd examples/counter
 
 `.github/workflows/ci.yml` は **Linux / macOS / Windows の 3 ジョブ + 3 OS の画素比較ジョブ +
 `ci-cli`（`zts` のスモーク）**を回します。`ci-cli` はチェックアウトの**外**にプロジェクトを
-作り、`zts init` → `doctor` → `build` → 実行まで通すので、「利用者がリポジトリを知らなくても
-使える」ことが常時検証されます（[`../tasks/M5-08-docs-audience-split.md`](../tasks/M5-08-docs-audience-split.md)）。
+作り、`zts init` → `doctor` → `build` → 実行 → `zts package --format tar.gz` まで通すので、
+「利用者がリポジトリを知らなくても使える」ことが常時検証されます（[`../tasks/M5-08-docs-audience-split.md`](../tasks/M5-08-docs-audience-split.md)）。
 
 `pages.yml` は `main` への push でドキュメントサイトを GitHub Pages に公開します。
 

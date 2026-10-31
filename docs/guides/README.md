@@ -8,7 +8,7 @@
 入口があります。読まなくても壊れません。
 
 ```text
-① 学ぶ（Learn）        はじめかた → ガイド 5 本        … 手順と最小例。まずここ
+① 学ぶ（Learn）        はじめかた → ガイド 8 本        … 手順と最小例。まずここ
 ② 引く（Reference）    API リファレンス（自動生成）    … シグネチャ・型・/// ドキュメント
 ③ 確かめる（Spec）     リファレンス（CLI / Tauri 対応表）… 振る舞いの約束事
 ────────────────────────────────────────────────────────────
@@ -21,6 +21,7 @@
 |---|---|---|
 | `zts` コマンドを手に入れたい | [`installing-zts.md`](installing-zts.md) | ① |
 | とにかく動かしたい | [`getting-started.md`](getting-started.md) | ① |
+| 作ったアプリを配布したい（`.deb` / `.app` / `.exe`） | [`packaging.md`](packaging.md) | ① |
 | コマンドの全オプション | [`../reference/cli.md`](../reference/cli.md) | ③ |
 | コマンド（`invoke`）を書きたい | [`using-rpc.md`](using-rpc.md) | ① |
 | Tauri 標準プラグインを使いたい | [`using-plugins.md`](using-plugins.md) | ① |
@@ -62,6 +63,7 @@
 |---|---|---|
 | [`installing-zts.md`](installing-zts.md) | `zts` をビルドして `PATH` に置く、`ZTS_ZIG`、プラットフォーム前提 | なし |
 | [`getting-started.md`](getting-started.md) | 5 分で `zts init` → `dev` → `build` → `doctor` | `zts` |
+| [`packaging.md`](packaging.md) | `zts package` で配布物を作る（6 形式・アイコン・クロスビルド・CI） | アプリが 1 つ動く |
 | [`using-rpc.md`](using-rpc.md) | `rpc.Schema` → `Schema.bind` → `handler()`、引数 3 形式、`tsgen` | Zig の基本 |
 | [`using-plugins.md`](using-plugins.md) | 7 プラグインの入口、`CorePluginStates`、capability（ACL） | `using-rpc.md` |
 | [`using-ssg.md`](using-ssg.md) | `embedFrontend` → `exportApp` → `exportStaticSite`、`ExportOptions` | アプリが 1 つ動く |

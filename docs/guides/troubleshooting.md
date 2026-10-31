@@ -212,9 +212,18 @@ cd my-app && zig build tsgen     # build.zig に tsgen ステップを足して�
 
 ---
 
+## `zts package`
+
+配布物まわりのエラーは、形式ごとの前提（`dmg` は macOS だけ、`exe` は PE だけ、など）に
+起因するものがほとんどです。メッセージ別の表は
+[`packaging.md`](packaging.md#9-つまずきどころ) にまとめてあります。
+
+---
+
 ## 次に読むもの
 
 - 使い方の全体像: [`getting-started.md`](getting-started.md)
+- 配布物を作る: [`packaging.md`](packaging.md)
 - `zts` の全オプション: [`../reference/cli.md`](../reference/cli.md)
 - エラーに対応する API の引き方: [`using-the-api-reference.md`](using-the-api-reference.md)
 - Z-Ts 本体の開発で詰まったとき: [`../contributing/troubleshooting.md`](../contributing/troubleshooting.md)
