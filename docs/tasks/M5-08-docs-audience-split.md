@@ -70,3 +70,19 @@
   （`relativePath` + `project.toPosix`）。CI はこの経路をそのまま叩いている。
 - **CI の作業ディレクトリはチェックアウトの兄弟に置く**: `mktemp -d` の既定（`/tmp`）は
   Windows ランナーでは別ドライブになり、相対パスが計算できない。
+
+### CI が見つけた CLI のバグ 2 件（修正済み）
+
+新しい `ci-cli` ジョブは、サンドボックスの Linux では再現しなかった問題を 2 つ出した。
+**3 OS でスモークを回す価値の実証**でもある。
+
+1. **`resolveZig` が Windows で `InvalidExe`**: チェックアウトの `./zigw` を `zig` より優先して
+   いたため、Windows ではシェルスクリプトを起動しようとして `zts build` が必ず失敗。
+   解決順を `ZTS_ZIG` → `PATH` の `zig`/`zig.exe` → `<checkout>/zig` → `<checkout>/zigw`
+   （POSIX のみ）に変更した。`zts init` の fingerprint patch も同時に直る。
+2. **`DevServer` の teardown が macOS で `EBADF` によりプロセス abort**: テストが
+   `listener.deinit` で受付スレッドの `accept` を起こしていた。Zig は `accept` の `EBADF` を
+   programmer bug として扱うため、`cli` のテストバイナリ全体が落ちていた。`stop()` / `deinit()`
+   を追加し、`stopping` フラグ + `shutdown` + 捨て接続で accept を起こしてから `join` する
+   （`shutdown` は POSIX の正規のキャンセル手段、Windows では listening socket の shutdown が
+   no-op なので捨て接続が必須）。
