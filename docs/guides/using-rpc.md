@@ -139,8 +139,8 @@ if (ctx.getEnv(core.CallContext)) |call| {          // 無ければ null
 
 ## 5. TypeScript を生成する
 
-スキーマから `bindings.gen.ts` を作れます。生成物は**コミット対象**で、`zig build test` が
-「古くなっていないか」を検証します。
+スキーマから `bindings.gen.ts` を作れます。生成物は**コミット対象**にして、ビルド前に
+「古くなっていないか」を検証するのがおすすめです（`zts` はこの検証を自動では行いません）。
 
 ```zig
 // 手で呼ぶ場合
@@ -200,7 +200,7 @@ try std.testing.expectEqualStrings(
 | `… is not a valid RPC type` | `i128` / `*T` / `HashMap` など JSON に落ちない型を戻り値にした。`i53` か `BigInt` を使う。 |
 | `invoke` が `undefined` を返す | コマンド名が `camelCase` になっているか確認（`get_state` → `getState`）。 |
 | 引数が `null` になる | 引数 struct のフィールド名も `camelCase` に変換される。`step` はそのまま、`max_count` は `maxCount`。 |
-| 生成した `.ts` と実装がずれて CI が落ちる | `zig build tsgen` を実行して**生成物もコミット**する。 |
+| 生成した `.ts` と実装がずれた | プロジェクトに足した `tsgen` ステップ（`zig build tsgen`）で再生成し、**生成物もコミット**する。 |
 
 ---
 

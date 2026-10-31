@@ -67,9 +67,12 @@ pub const Commands = struct {
 ## 4. TypeScript の型を生成する
 
 ```bash
-./zigw build tsgen          # examples/counter/web/bindings.gen.ts を再生成
-./zigw build check-bindings # 差分があれば exit 1（CI 用）
+# 自分のプロジェクトの build.zig に tsgen ステップを足してから
+zig build tsgen             # web/bindings.gen.ts を再生成
 ```
+
+ステップの足し方は [`using-rpc.md`](using-rpc.md) §5 と
+[`../../examples/counter/build.zig`](../../examples/counter/build.zig) を参照してください。
 
 `@tauri-apps/api` v2 は**無改変**で動くので、`invoke` の型付けだけ自前の
 `bindings.gen.ts` に置き換えるのが最小の移行です。
@@ -82,9 +85,9 @@ Tauri は `devUrl` / `frontendDist` で切り替えますが、Z-Ts では**ビ�
 
 | 移行前 | 移行後 |
 |---|---|
-| `"devUrl": "http://localhost:5173"` | `zig build preview`（`zts_bridge` の Live Preview） |
+| `"devUrl": "http://localhost:5173"` | `zts dev`（`web/` を配信 + 自動リロード） |
 | `"frontendDist": "../dist"` | エンベッダで `embedded_frontend` モジュールに埋め込む |
-| `tauri build` | `zig build`（`M5-03` のパッケージャは未実装。まずは単一バイナリまで） |
+| `tauri build` | `zts build`（`M5-03` のパッケージャは未実装。まずは単一バイナリまで） |
 
 ## 6. 移行時に踏みやすいところ
 

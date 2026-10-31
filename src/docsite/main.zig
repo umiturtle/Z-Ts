@@ -696,12 +696,16 @@ fn groupFor(path: []const u8) []const u8 {
     if (std.mem.startsWith(u8, path, "docs/environment/")) return internals_group;
     if (std.mem.startsWith(u8, path, "docs/reference/")) return "ガイド";
     if (std.mem.startsWith(u8, path, "docs/guides/")) return "ガイド";
+    // Operating *this repository* (`./zigw`, CI, the docs site) is a different audience from
+    // building an app with the library, so it gets its own sidebar group instead of diluting
+    // the guides with contributor-only commands.
+    if (std.mem.startsWith(u8, path, "docs/contributing/")) return "開発";
     if (std.mem.startsWith(u8, path, "docs/INDEX.md")) return "はじめに";
     if (std.mem.startsWith(u8, path, "examples/")) return "サンプル";
     return "はじめに";
 }
 
-const group_order = [_][]const u8{ "はじめに", "ガイド", "API", "サンプル", internals_group };
+const group_order = [_][]const u8{ "はじめに", "ガイド", "API", "サンプル", "開発", internals_group };
 
 fn buildGroups(arena: Allocator, rendered: anytype, packages: []const apidoc.Package) ![]const site.Group {
     var groups: std.ArrayListUnmanaged(site.Group) = .empty;
@@ -1031,6 +1035,7 @@ test "groupFor keeps the reader-facing sidebar reader-facing" {
     try std.testing.expectEqualStrings("はじめに", groupFor("docs/INDEX.md"));
     // Guides are the front door.
     try std.testing.expectEqualStrings("ガイド", groupFor("docs/guides/using-rpc.md"));
+    try std.testing.expectEqualStrings("開発", groupFor("docs/contributing/README.md"));
     try std.testing.expectEqualStrings("ガイド", groupFor("docs/reference/cli.md"));
     try std.testing.expectEqualStrings("サンプル", groupFor("examples/counter/README.md"));
     // Everything about *why* the code looks the way it does is collapsed into one entry.

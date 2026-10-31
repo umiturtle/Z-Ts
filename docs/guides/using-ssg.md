@@ -129,7 +129,7 @@ try testing.expectEqual(@as(i32, 1), inst.invokeRaw("increment", "{}", false));
 try testing.expectEqualStrings("{\"count\":1,…}", inst.last_response.body.slice());
 ```
 
-`Instance(Spec)` は**ネイティブでも動きます**。つまり `zig build test` の中で、
+`Instance(Spec)` は**ネイティブでも動きます**。つまりあなたのプロジェクトの `zig build test` の中で、
 ブラウザを起動せずに「WASM 版のアプリ」を同じテストから叩けます（3 成果物の差分テストの正体）。
 
 ---
