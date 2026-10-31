@@ -769,6 +769,29 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Publish the smoke log to the Check Run API
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.GITHUB_WORKSPACE}/cli-smoke.log`;
+            const log = fs.existsSync(path) ? fs.readFileSync(path, 'utf8').slice(-60000) : '(no log)';
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const me = jobs.data.jobs.find(j => j.name === 'CLI smoke (${{ matrix.os }})');
+            if (me) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: me.id,
+                output: { title: 'CLI smoke', summary: '```text\n' + log + '\n```' },
+              });
+            }
+
   ci-parity:
     name: Cross-OS parity (same pixels, same layout)
     runs-on: ubuntu-24.04
