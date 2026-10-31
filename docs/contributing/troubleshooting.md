@@ -195,6 +195,20 @@ Settings → Pages → Build and deployment → Source を **GitHub Actions** �
 bash scripts/ci-logs.sh <run_id>     # Check Run API 経由で Step Summary を取得
 ```
 
+### Windows だけ `error.Unexpected NTSTATUS=0xc000000d` でテストが落ちる
+
+Winsock が「そのソケットには無効な操作」と判断した、という意味です。実例は
+`DevServer.stop` の `shutdown(.both)`（リスニング中ソケットへの `shutdown` は POSIX では
+キャンセル通知ですが、Windows では `WSAEINVAL` → Zig の `error.Unexpected` → `abort`）。
+`if (@import("builtin").os.tag != .windows)` で囲むか、接続を 1 本張って `accept` を起こす
+方式にしてください（`src/cli/devserver.zig` は両方を併用しています）。
+
+### `tar -tzf … | grep -q …` が「write error」で落ちる
+
+`grep -q` は最初の一致で終了し、パイプを閉じます。`set -o pipefail` の下では `tar` の
+`EPIPE` がジョブ全体の失敗になります（Linux だけ落ちて macOS は通るので気付きにくい）。
+一覧をファイルに出してから `grep` してください。
+
 ### 3 OS の画素比較だけが落ちる
 
 `OK parity …` の行に `layout` と `pixels=max:…% mad:…` が出ます。許容差は

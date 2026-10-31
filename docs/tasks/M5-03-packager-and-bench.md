@@ -56,6 +56,12 @@
   `appdir`（`AppRun` 実行可）、`app`、`tar.gz`、`exe`（`--target x86_64-windows` + `.ico` +
   マニフェスト、`.rsrc` 1 セクション・DataDirectory[2]・チェックサム一致を Python で検証）。
 - **作業中・直前の状態**: 未コミットの変更なしを目標に、ドキュメントと CI を整えた直後。
+- **CI で見つけて直したもの**（`ci-cli` を 3 OS で回した副産物）:
+  1. Windows で `zts` が `zigw`（シェルスクリプト）を起動できず `InvalidExe` → `PATH` の
+     `zig` を先に探すよう変更。
+  2. `DevServer.stop` が Windows で `shutdown` に失敗して `abort`（`NTSTATUS=0xc000000d`）→
+     `shutdown` は POSIX 限定に。
+  3. `tar -tzf … | grep -q` の `EPIPE` で Linux のスモークだけ失敗 → 一覧をファイル経由に。
 - **再開するとき**: スライス C。`bench/run.mjs`（依存ゼロ・Node 22）から。CI は
   `setup-toolchains.sh --rust` を呼ぶ **ベンチ専用ジョブ**にし、Rust が無い環境では
   `skipped` を Check Summary に明記する。
