@@ -31,6 +31,10 @@ pub const DevServer = struct {
     root_dir: Io.Dir,
     listener: Io.net.Server,
     bound_port: u16,
+    /// The address `start` bound, kept so `stop` can wake a blocked `accept`.
+    host: []const u8,
+    accept_thread: std.Thread,
+    stopping: std.atomic.Value(bool) = .init(false),
     /// Bumped after every successful rebuild; the served HTML embeds the value it was built with.
     build: std.atomic.Value(u64) = .init(0),
     /// Whether the last rebuild succeeded, so the page can say why it will not reload.
@@ -58,16 +62,53 @@ pub const DevServer = struct {
             .io = io,
             .gpa = gpa,
             .root_path = try gpa.dupe(u8, root_path),
+            .host = try gpa.dupe(u8, host),
             .root_dir = dir,
             .listener = listener,
             .bound_port = listener.socket.address.getPort(),
+            .accept_thread = undefined,
         };
-        _ = try std.Thread.spawn(.{ .stack_size = 512 * 1024 }, acceptLoop, .{self});
+        self.accept_thread = try std.Thread.spawn(.{ .stack_size = 512 * 1024 }, acceptLoop, .{self});
         return self;
+    }
+
+    /// Stops the accept thread and releases everything. `runDev` never calls this (Ctrl-C ends the
+    /// process), but the tests do — and closing the listener under a blocked `accept` is a
+    /// programmer bug on macOS (`EBADF` aborts the whole test binary), so this must go through
+    /// [`stop`] rather than `listener.deinit` directly.
+    pub fn deinit(self: *DevServer) void {
+        self.stop();
+        self.accept_thread.join();
+        self.listener.deinit(self.io);
+        self.root_dir.close(self.io);
+        const gpa = self.gpa;
+        gpa.free(self.host);
+        gpa.free(self.root_path);
+        gpa.destroy(self);
     }
 
     pub fn port(self: *const DevServer) u16 {
         return self.bound_port;
+    }
+
+    /// Wakes the accept thread so it can observe `stopping` and return. Two mechanisms, because
+    /// neither works everywhere: `shutdown` is the documented cancellation signal on POSIX, and a
+    /// throwaway connection unblocks Windows, where shutting down a listening socket is a no-op.
+    pub fn stop(self: *DevServer) void {
+        self.stopping.store(true, .release);
+
+        const listening: Io.net.Stream = .{ .socket = self.listener.socket };
+        listening.shutdown(self.io, .both) catch {};
+
+        const host = if (std.mem.eql(u8, self.host, "0.0.0.0"))
+            "127.0.0.1"
+        else if (std.mem.eql(u8, self.host, "::"))
+            "::1"
+        else
+            self.host;
+        const address = Io.net.IpAddress.parse(host, self.bound_port) catch return;
+        const wake = address.connect(self.io, .{ .mode = .stream, .protocol = .tcp }) catch return;
+        wake.close(self.io);
     }
 
     /// Records the outcome of a rebuild. The counter only advances on success: a failing build must
@@ -78,12 +119,19 @@ pub const DevServer = struct {
     }
 
     fn acceptLoop(self: *DevServer) void {
-        while (true) {
+        while (!self.stopping.load(.acquire)) {
             var stream = self.listener.accept(self.io) catch |err| switch (err) {
-                error.Canceled => return,
+                error.Canceled, error.SocketNotListening => return,
                 // A dropped connection between `accept()` and the first byte is normal.
-                else => continue,
+                else => {
+                    if (self.stopping.load(.acquire)) return;
+                    continue;
+                },
             };
+            if (self.stopping.load(.acquire)) {
+                stream.close(self.io);
+                return;
+            }
             self.serve(stream) catch {};
             stream.close(self.io);
         }
@@ -247,12 +295,7 @@ test "the dev server serves web/, injects the reload script and refuses traversa
     const root_path = try std.fmt.allocPrint(testing.allocator, ".zig-cache/tmp/{s}", .{tmp.sub_path});
     defer testing.allocator.free(root_path);
     var server = try DevServer.start(testing.allocator, testing.io, root_path, "127.0.0.1", 0);
-    defer {
-        server.listener.deinit(testing.io);
-        server.root_dir.close(testing.io);
-        testing.allocator.free(server.root_path);
-        testing.allocator.destroy(server);
-    }
+    defer server.deinit();
 
     const port = server.port();
     try testing.expect(port != 0);
