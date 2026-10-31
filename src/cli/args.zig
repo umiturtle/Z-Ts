@@ -17,6 +17,8 @@ pub const Command = union(enum) {
     build: Build,
     /// `zts doctor` — check the toolchain and the project layout.
     doctor: Doctor,
+    /// `zts package` — turn the built executable into an installable artifact.
+    package: Package,
     /// `zts help` / `--help` / no arguments.
     help,
     /// `zts version` / `--version`.
@@ -56,6 +58,28 @@ pub const Doctor = struct {
     dir: []const u8 = ".",
 };
 
+/// `zts package` options. Formats stay a raw string here; `main.zig` resolves them through
+/// `bundler.Format.parse`, which keeps this file free of any library import.
+pub const Package = struct {
+    dir: []const u8 = ".",
+    /// Comma-separated list (`deb,appdir`). `null` = the host's default format.
+    format: ?[]const u8 = null,
+    /// Executable to package. `null` = `zig-out/bin/<name>` (plus `.exe` on Windows).
+    binary: ?[]const u8 = null,
+    /// Output directory. `null` = `<dir>/zig-out/package`.
+    out: ?[]const u8 = null,
+    version: ?[]const u8 = null,
+    identifier: ?[]const u8 = null,
+    maintainer: ?[]const u8 = null,
+    description: ?[]const u8 = null,
+    /// 256×256 PNG for the `.deb` / AppDir / `.app`.
+    icon: ?[]const u8 = null,
+    /// Multi-size `.ico` for the Windows executable.
+    icon_ico: ?[]const u8 = null,
+    /// Application manifest XML for the Windows executable.
+    manifest: ?[]const u8 = null,
+};
+
 pub const Optimize = enum {
     debug,
     release_small,
@@ -91,6 +115,7 @@ pub fn parse(args: []const []const u8) ParseError!Command {
     if (std.mem.eql(u8, head, "dev")) return .{ .dev = try parseDev(args[1..]) };
     if (std.mem.eql(u8, head, "build")) return .{ .build = try parseBuild(args[1..]) };
     if (std.mem.eql(u8, head, "doctor")) return .{ .doctor = try parseDoctor(args[1..]) };
+    if (std.mem.eql(u8, head, "package")) return .{ .package = try parsePackage(args[1..]) };
 
     return error.UnknownCommand;
 }
@@ -188,6 +213,40 @@ fn parseDoctor(rest: []const []const u8) ParseError!Doctor {
     return out;
 }
 
+fn parsePackage(rest: []const []const u8) ParseError!Package {
+    var out: Package = .{};
+    var i: usize = 0;
+    while (i < rest.len) : (i += 1) {
+        const arg = rest[i];
+        if (try flagValue(rest, &i, arg, "--dir")) |value| {
+            out.dir = value;
+        } else if (try flagValue(rest, &i, arg, "--format")) |value| {
+            out.format = value;
+        } else if (try flagValue(rest, &i, arg, "--binary")) |value| {
+            out.binary = value;
+        } else if (try flagValue(rest, &i, arg, "--out")) |value| {
+            out.out = value;
+        } else if (try flagValue(rest, &i, arg, "--version")) |value| {
+            out.version = value;
+        } else if (try flagValue(rest, &i, arg, "--identifier")) |value| {
+            out.identifier = value;
+        } else if (try flagValue(rest, &i, arg, "--maintainer")) |value| {
+            out.maintainer = value;
+        } else if (try flagValue(rest, &i, arg, "--description")) |value| {
+            out.description = value;
+        } else if (try flagValue(rest, &i, arg, "--icon")) |value| {
+            out.icon = value;
+        } else if (try flagValue(rest, &i, arg, "--icon-ico")) |value| {
+            out.icon_ico = value;
+        } else if (try flagValue(rest, &i, arg, "--manifest")) |value| {
+            out.manifest = value;
+        } else {
+            return error.UnknownFlag;
+        }
+    }
+    return out;
+}
+
 /// Matches `--flag value` **only** when the flag name is exactly `name`; returns `null` otherwise so
 /// the caller can fall through to the next flag (or to the unknown-flag error). A flag at the very
 /// end of the command line is `error.MissingValue` — never an empty string that silently becomes a
@@ -206,6 +265,7 @@ pub const usage_text =
     \\  init [dir]          Scaffold a new Z-Ts project (default: the current directory)
     \\  dev                 Serve `web/` with rebuild-on-change (`--browser` for Live Preview)
     \\  build               Bundle the front end and produce a single executable
+    \\  package             Wrap the executable into .deb / AppDir / .app / .exe / .tar.gz
     \\  doctor              Check the toolchain, the project layout and the z_ts dependency
     \\  help                Show this help
     \\  version             Print the CLI version
@@ -227,6 +287,19 @@ pub const usage_text =
     \\  --target <triple>   Cross-compile target (e.g. aarch64-macos)
     \\  --debug             Build with Debug instead of ReleaseSmall
     \\  --frontend-only     Only rebuild `web/` into the embedded asset module
+    \\
+    \\package options:
+    \\  --dir <path>        Project directory                 (default ".")
+    \\  --format <list>     deb,appdir,app,dmg,exe,tar.gz      (default: host default)
+    \\  --binary <path>     Executable to package             (default zig-out/bin/<name>)
+    \\  --out <path>        Output directory                  (default zig-out/package)
+    \\  --version <semver>  Package version                   (default: build.zig.zon)
+    \\  --identifier <id>   Reverse-DNS id                    (default com.example.<name>)
+    \\  --maintainer <who>  "Name <email>"                    (default: from the environment)
+    \\  --description <s>   One-line description
+    \\  --icon <png>        Icon for .deb / AppDir / .app
+    \\  --icon-ico <ico>    Icon for the Windows .exe
+    \\  --manifest <xml>    Application manifest for the Windows .exe
     \\
     \\doctor options:
     \\  --dir <path>        Project directory                 (default ".")
@@ -331,10 +404,14 @@ test "unknown commands and unknown flags are reported, never silently ignored" {
 
 test "the usage text documents every command and every documented flag is accepted" {
     const text = usage();
-    for ([_][]const u8{ "init", "dev", "build", "doctor", "help", "version" }) |word| {
+    for ([_][]const u8{ "init", "dev", "build", "package", "doctor", "help", "version" }) |word| {
         try testing.expect(std.mem.indexOf(u8, text, word) != null);
     }
-    for ([_][]const u8{ "--dir", "--name", "--zts-path", "--force", "--host", "--port", "--browser", "--target", "--debug", "--frontend-only" }) |flag| {
+    for ([_][]const u8{
+        "--dir",     "--name",       "--zts-path", "--force",    "--host",     "--port",
+        "--browser", "--target",     "--debug",    "--format",   "--binary",   "--out",
+        "--version", "--identifier", "--icon",     "--icon-ico", "--manifest", "--frontend-only",
+    }) |flag| {
         try testing.expect(std.mem.indexOf(u8, text, flag) != null);
     }
     // Every flag in the help must round-trip through the parser.
@@ -342,6 +419,27 @@ test "the usage text documents every command and every documented flag is accept
     _ = try parse(&.{ "dev", "--dir", "d", "--host", "h", "--port", "1", "--browser" });
     _ = try parse(&.{ "build", "--dir", "d", "--target", "t", "--debug", "--frontend-only" });
     _ = try parse(&.{ "doctor", "--dir", "d" });
+    _ = try parse(&.{
+        "package",       "--dir",        "d",       "--format",     "deb,appdir",
+        "--binary",      "b",            "--out",   "o",            "--version",
+        "1.0.0",         "--identifier", "com.a.b", "--maintainer", "M <m@e>",
+        "--description", "x",            "--icon",  "i.png",        "--icon-ico",
+        "i.ico",         "--manifest",   "m.xml",
+    });
+}
+
+test "`package` parses its own flag set and rejects the rest" {
+    const cmd = try parse(&.{ "package", "--format", "deb", "--out", "dist", "--version", "2.0.0" });
+    const options = cmd.package;
+    try testing.expectEqualStrings(".", options.dir);
+    try testing.expectEqualStrings("deb", options.format.?);
+    try testing.expectEqualStrings("dist", options.out.?);
+    try testing.expectEqualStrings("2.0.0", options.version.?);
+    try testing.expect(options.icon == null);
+
+    try testing.expectError(error.UnknownFlag, parse(&.{ "package", "--nope" }));
+    try testing.expectError(error.UnknownFlag, parse(&.{ "package", "--force" }));
+    try testing.expectError(error.MissingValue, parse(&.{ "package", "--format" }));
 }
 
 test "`doctor` only accepts `--dir`" {

@@ -753,6 +753,11 @@ jobs:
             [ -f "$out" ] || out="$out.exe"
             "$out" | tee run.log
             grep -q "1 embedded assets" run.log
+            # `M5-03`: the portable format is the one every host can produce, so the packager is
+            # exercised on all three runners without needing dpkg or hdiutil.
+            "$exe" package --format tar.gz
+            [ -f zig-out/package/*.tar.gz ]
+            tar -tzf zig-out/package/*.tar.gz | grep -q "/demo"
             echo "cli-smoke: OK"
           } 2>&1 | tee "$GITHUB_WORKSPACE/cli-smoke.log"
 

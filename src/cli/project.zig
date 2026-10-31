@@ -46,6 +46,12 @@ pub fn packageName(zon: []const u8) ?[]const u8 {
     return fieldValue(zon, ".name");
 }
 
+/// `.version = "1.2.3",` → `1.2.3`. `zts package` falls back to `0.1.0` when a project predates the
+/// field (the `M5-02` template always writes one).
+pub fn versionOf(zon: []const u8) ?[]const u8 {
+    return fieldValue(zon, ".version");
+}
+
 /// `.z_ts = .{ .path = "../Z-Ts" },` → `../Z-Ts`.
 ///
 /// The dependency name is searched for first, so a project that also path-depends on something else
@@ -66,6 +72,36 @@ pub fn dependencyPath(zon: []const u8, dep: []const u8) ?[]const u8 {
 /// because a cross-compiled PE without the extension still runs but looks broken in a file manager).
 pub fn executablePath(alloc: Allocator, name: []const u8, windows: bool) Allocator.Error![]u8 {
     return std.fmt.allocPrint(alloc, "zig-out/bin/{s}{s}", .{ name, if (windows) ".exe" else "" });
+}
+
+/// `demo_app` → `Demo App`: the human-facing name when the author did not pass one.
+/// Underscores and hyphens become spaces and every word is capitalised, so `my_http_tool` becomes
+/// `My Http Tool`. The name is already lower-case (`App.validateName`), so there is nothing else to
+/// preserve.
+pub fn displayName(alloc: Allocator, name: []const u8) Allocator.Error![]u8 {
+    const out = try alloc.dupe(u8, name);
+    var word_start = true;
+    for (out) |*ch| {
+        if (ch.* == '_' or ch.* == '-') {
+            ch.* = ' ';
+            word_start = true;
+            continue;
+        }
+        if (word_start) {
+            ch.* = std.ascii.toUpper(ch.*);
+            word_start = false;
+        }
+    }
+    return out;
+}
+
+/// `demo_app` → `demo-app`: the component spelling a reverse-DNS identifier allows.
+pub fn dashed(alloc: Allocator, name: []const u8) Allocator.Error![]u8 {
+    const out = try alloc.dupe(u8, name);
+    for (out) |*ch| {
+        if (ch.* == '_') ch.* = '-';
+    }
+    return out;
 }
 
 /// Whether a `-Dtarget=` triple (or the host) produces a Windows executable.
@@ -201,6 +237,29 @@ test "packageName reads the enum-literal and the string spelling" {
     try testing.expectEqualStrings("legacy_app", packageName(
         \\.{ .name = "legacy_app", .version = "0.1.0" }
     ).?);
+}
+
+test "versionOf reads the string field and ignores minimum_zig_version" {
+    try testing.expectEqualStrings("1.2.3", versionOf(".version = \"1.2.3\",\n").?);
+    try testing.expect(versionOf(".minimum_zig_version = \"0.17.0\",\n") == null);
+    try testing.expect(versionOf(".{ .name = .demo }") == null);
+}
+
+test "displayName and dashed turn a package name into the two other spellings" {
+    const allocator = testing.allocator;
+    for ([_]struct { in: []const u8, display: []const u8 }{
+        .{ .in = "demo_app", .display = "Demo App" },
+        .{ .in = "demo-app", .display = "Demo App" },
+        .{ .in = "my_http_tool", .display = "My Http Tool" },
+    }) |case| {
+        const out = try displayName(allocator, case.in);
+        defer allocator.free(out);
+        try testing.expectEqualStrings(case.display, out);
+    }
+
+    const dashed_name = try dashed(allocator, "demo_app");
+    defer allocator.free(dashed_name);
+    try testing.expectEqualStrings("demo-app", dashed_name);
 }
 
 test "packageName ignores look-alike fields instead of returning the wrong name" {
