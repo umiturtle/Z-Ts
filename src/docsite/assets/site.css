@@ -975,7 +975,7 @@ body.landing { background:
   html[data-js="1"] .sidebar.open { transform: none; }
   html[data-js="1"] .menu-toggle { display: inline-grid; }
   html:not([data-js="1"]) .menu-toggle { display: none; }
-  body.nav-open::after {
+  html[data-js="1"] body.nav-open::after {
     content: "";
     position: fixed;
     inset: var(--topbar-h) 0 0 0;
