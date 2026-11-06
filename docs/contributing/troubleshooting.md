@@ -1,6 +1,6 @@
 # トラブルシューティング（リポジトリ開発）
 
-> **アプリを作っていてエラーが出た場合は [`../guides/troubleshooting.md`](../guides/troubleshooting.md)
+> **アプリを作っていてエラーが出た場合は [`../learn/ja/guides/troubleshooting.md`](../learn/ja/guides/troubleshooting.md)
 > を読んでください。** ここは `./zigw` / `zig build` / CI / ドキュメントサイトという
 > **Z-Ts 本体の開発**で実際に踏んだ問題だけを載せています。
 
@@ -221,6 +221,6 @@ Winsock が「そのソケットには無効な操作」と判断した、とい
 ## 次に読むもの
 
 - リポジトリの操作全般: [`README.md`](README.md)
-- アプリ作者向けのトラブル: [`../guides/troubleshooting.md`](../guides/troubleshooting.md)
-- 使い方の全体像: [`../guides/getting-started.md`](../guides/getting-started.md)
+- アプリ作者向けのトラブル: [`../learn/ja/guides/troubleshooting.md`](../learn/ja/guides/troubleshooting.md)
+- 使い方の全体像: [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md)
 - ログの取得: [`../../scripts/ci-logs.sh`](../../scripts/ci-logs.sh) / [`../../AGENTS.md`](../../AGENTS.md)

@@ -1,15 +1,15 @@
 # 静的サイト書き出しの使い方（`zts_ssg` + `zts_wasm`）
 
 > **対象読者**: 同じ Zig コードから「サーバ不要の `dist/`」を出したい人。
-> API は [`../api/zts_ssg/index.html`](../api/zts_ssg/index.html) と
-> [`../api/zts_wasm/index.html`](../api/zts_wasm/index.html)。
+> API は [`../api/zts_ssg/index.html`](../../../api/zts_ssg/index.html) と
+> [`../api/zts_wasm/index.html`](../../../api/zts_wasm/index.html)。
 
 `examples/counter` は 1 つのアプリから **3 つの成果物**を作ります。
 
 | 成果物 | 動く場所 | 状態の保持 | 実装 |
 |---|---|---|---|
-| `desktop` | OS の WebView | プロセス内 | [`zts_webview`](../api/zts_webview/index.html) |
-| `preview` | ブラウザ + HTTP/SSE | Zig プロセス内 | [`zts_bridge`](../api/zts_bridge/index.html) |
+| `desktop` | OS の WebView | プロセス内 | [`zts_webview`](../../../api/zts_webview/index.html) |
+| `preview` | ブラウザ + HTTP/SSE | Zig プロセス内 | [`zts_bridge`](../../../api/zts_bridge/index.html) |
 | `dist` | **静的ホスティング** | ブラウザ内（WASM） | このページ |
 
 `dist` は「HTML + JS + フォント + `app.wasm`」だけのディレクトリです。サーバも Node も要りません。
@@ -55,7 +55,7 @@ const report = try ssg.exportStaticSite(allocator, io, dist_dir, .{
 });
 ```
 
-[`exportStaticSite`](../api/zts_ssg/exporter.html#exportStaticSite) は次のものを書きます。
+[`exportStaticSite`](../../../api/zts_ssg/exporter.html#exportStaticSite) は次のものを書きます。
 
 | 出力 | 内容 |
 |---|---|
@@ -70,7 +70,7 @@ const report = try ssg.exportStaticSite(allocator, io, dist_dir, .{
 
 ## 2. `ExportOptions`
 
-定義は [`ExportOptions`](../api/zts_ssg/exporter.html#ExportOptions)。既定値のままでも 9 割方動きます。
+定義は [`ExportOptions`](../../../api/zts_ssg/exporter.html#ExportOptions)。既定値のままでも 9 割方動きます。
 
 | フィールド | 既定 | 使いどころ |
 |---|---|---|
@@ -87,7 +87,7 @@ const report = try ssg.exportStaticSite(allocator, io, dist_dir, .{
 
 ### プリレンダリング
 
-[`PrerenderRoute`](../api/zts_ssg/exporter.html#PrerenderRoute) は「JS が動き出す前に確定している HTML」を
+[`PrerenderRoute`](../../../api/zts_ssg/exporter.html#PrerenderRoute) は「JS が動き出す前に確定している HTML」を
 書きます。`initial_json` は `<script id="__ZTS_SSG_DATA__" type="application/json">` として埋め込まれ、
 `<` `>` `&` U+2028/U+2029 がすべてエスケープされるので、**`</script>` インジェクションは起きません**。
 
@@ -103,9 +103,9 @@ const report = try ssg.exportStaticSite(allocator, io, dist_dir, .{
 ```
 
 `route` は**クリーン URL** です（`/chapters/prologue` → `chapters/prologue/index.html`）。
-変換は [`routeToOutputSubPathAlloc`](../api/zts_ssg/exporter.html#routeToOutputSubPathAlloc)、
+変換は [`routeToOutputSubPathAlloc`](../../../api/zts_ssg/exporter.html#routeToOutputSubPathAlloc)、
 各ページからルートへの相対プレフィックスは
-[`relativeRootPrefixAlloc`](../api/zts_ssg/exporter.html#relativeRootPrefixAlloc) が作ります。
+[`relativeRootPrefixAlloc`](../../../api/zts_ssg/exporter.html#relativeRootPrefixAlloc) が作ります。
 **サブパス配信（`https://example.com/app/`）でも壊れません。**
 
 ---
@@ -113,7 +113,7 @@ const report = try ssg.exportStaticSite(allocator, io, dist_dir, .{
 ## 3. WASM 側の約束（`zts_wasm`）
 
 ブラウザから呼ばれるのは C ABI だけです。`exportApp(Spec)` が公開する関数は
-[`exportApp`](../api/zts_wasm/runtime.html#exportApp) を参照してください。要点は 3 つ。
+[`exportApp`](../../../api/zts_wasm/runtime.html#exportApp) を参照してください。要点は 3 つ。
 
 1. **文字列は線形メモリ上で受け渡し**する（`_zts_alloc` で確保 → 呼ぶ → `_zts_free`）。
 2. **レスポンスは最後の 1 件だけ保持**する（`Instance.last_response`）。大量に返す API は作りません。
@@ -159,13 +159,13 @@ try testing.expectEqualStrings("{\"count\":1,…}", inst.last_response.body.slic
 
 ## 次に読むもの
 
-- API: [`zts_ssg`](../api/zts_ssg/index.html) / [`exporter`](../api/zts_ssg/exporter.html) /
-  [`zts_wasm`](../api/zts_wasm/index.html) / [`runtime`](../api/zts_wasm/runtime.html)
-- 実例: [`../../examples/counter/README.md`](../../examples/counter/README.md)
-- API ページの読み方: [`using-the-api-reference.md`](using-the-api-reference.md)
-- ビルド統合: [`../architecture/build-tools.md`](../architecture/build-tools.md)（`embedFrontend`）
-- 内部資料: [`../architecture/ssg-and-wasm.md`](../architecture/ssg-and-wasm.md) /
-  [`../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`](../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md)
+- API: [`zts_ssg`](../../../api/zts_ssg/index.html) / [`exporter`](../../../api/zts_ssg/exporter.html) /
+  [`zts_wasm`](../../../api/zts_wasm/index.html) / [`runtime`](../../../api/zts_wasm/runtime.html)
+- 実例: [`examples/counter/README.md`](../../../../examples/counter/README.md)
+- API ページの読み方: [API リファレンスの索引](../../../api/index.html)
+- ビルド統合: [`../architecture/build-tools.md`](../../../architecture/build-tools.md)（`embedFrontend`）
+- 内部資料: [`../architecture/ssg-and-wasm.md`](../../../architecture/ssg-and-wasm.md) /
+  [`../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`](../../../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md)
 
 ## 設定は型で確かめる（CI がコンパイル）
 

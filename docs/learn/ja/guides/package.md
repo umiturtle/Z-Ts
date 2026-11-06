@@ -221,7 +221,7 @@ zts package --binary path/to/other-exe --format tar.gz
     path: zig-out/package/*
 ```
 
-`zts` 自体の入手は [`installing-zts.md`](installing-zts.md) を参照してください。
+`zts` 自体の入手は [`install.md`](install.md) を参照してください。
 
 ---
 
@@ -245,6 +245,6 @@ zts package --binary path/to/other-exe --format tar.gz
 
 ## 次に読むもの
 
-- コマンドの全オプション: [`../reference/cli.md`](../reference/cli.md#zts-package)
-- はじめかたに戻る: [`getting-started.md`](getting-started.md)
-- 内部の作り（なぜ PE を書き換えるのか等）: [`../architecture/packaging-and-bench.md`](../architecture/packaging-and-bench.md)
+- コマンドの全オプション: [`../reference/cli.md`](../../../reference/cli.md#zts-package)
+- はじめかたに戻る: [`counter.md`](../tutorials/counter.md)
+- 内部の作り（なぜ PE を書き換えるのか等）: [`../architecture/packaging-and-bench.md`](../../../architecture/packaging-and-bench.md)

@@ -4,7 +4,7 @@
 > **所要時間**: 症状から引く（1 分）。
 
 `zts` でアプリを作っていて詰まったときの 1 ページです。**Z-Ts リポジトリ自体のビルド**で
-詰まった場合は [`../contributing/troubleshooting.md`](../contributing/troubleshooting.md) へ
+詰まった場合は [`../contributing/troubleshooting.md`](../../../contributing/troubleshooting.md) へ
 （そちらは `./zigw` と CI の話で、アプリ作者には不要です）。
 
 ---
@@ -165,7 +165,7 @@ zts dev --port 5199
 `<name>: 1 embedded assets` のような行を出して終わります。ウィンドウを開く
 デスクトップアプリにするには、`examples/counter` の `build.zig` と `src/main.zig` を出発点に
 `zts_tauri` の `App` / `zts_webview` のバックエンドを組み込みます
-（[`../../examples/counter/README.md`](../../examples/counter/README.md)）。
+（[`examples/counter/README.md`](../../../../examples/counter/README.md)）。
 
 ### Linux で文字が豆腐になる / OS ごとに表示が違う
 
@@ -219,14 +219,14 @@ cd my-app && zig build tsgen     # build.zig に tsgen ステップを足して�
 
 配布物まわりのエラーは、形式ごとの前提（`dmg` は macOS だけ、`exe` は PE だけ、など）に
 起因するものがほとんどです。メッセージ別の表は
-[`packaging.md`](packaging.md#9-つまずきどころ) にまとめてあります。
+[`package.md`](package.md#9-つまずきどころ) にまとめてあります。
 
 ---
 
 ## 次に読むもの
 
-- 使い方の全体像: [`getting-started.md`](getting-started.md)
-- 配布物を作る: [`packaging.md`](packaging.md)
-- `zts` の全オプション: [`../reference/cli.md`](../reference/cli.md)
-- エラーに対応する API の引き方: [`using-the-api-reference.md`](using-the-api-reference.md)
-- Z-Ts 本体の開発で詰まったとき: [`../contributing/troubleshooting.md`](../contributing/troubleshooting.md)
+- 使い方の全体像: [`counter.md`](../tutorials/counter.md)
+- 配布物を作る: [`package.md`](package.md)
+- `zts` の全オプション: [`../reference/cli.md`](../../../reference/cli.md)
+- エラーに対応する API の引き方: [API リファレンスの索引](../../../api/index.html)
+- Z-Ts 本体の開発で詰まったとき: [`../contributing/troubleshooting.md`](../../../contributing/troubleshooting.md)

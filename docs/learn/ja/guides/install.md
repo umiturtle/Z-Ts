@@ -8,7 +8,7 @@
 単一バイナリのビルドまで完結します。
 
 > Z-Ts の**リポジトリ自体**をビルド・テストする手順は
-> [`../contributing/README.md`](../contributing/README.md) にあります。このページは
+> [`docs/contributing/README.md`](../../../contributing/README.md) にあります。このページは
 > 「`zts` というコマンドを手に入れる」ところまでです。
 
 ---
@@ -83,6 +83,6 @@ Zig は `zts` が子プロセスとして呼びます。**0.17 系の `zig` が 
 
 ## 次に読むもの
 
-- 最初のアプリ: [`getting-started.md`](getting-started.md)
-- 全コマンドと全オプション: [`../reference/cli.md`](../reference/cli.md)
+- 最初のアプリ: [`counter.md`](../tutorials/counter.md)
+- 全コマンドと全オプション: [`../reference/cli.md`](../../../reference/cli.md)
 - 動かないとき: [`troubleshooting.md`](troubleshooting.md)

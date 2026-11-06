@@ -17,8 +17,11 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
 5. Packages         — every `zts_*` mentioned in the docs must be a real module.
 6. Glossary         — every `### Term` is unique (it is used as a link anchor).
 7. Structure        — every reader-facing page has exactly one H1 (it becomes the sidebar label
-                      and `<title>`), and guides carry the `> **対象読者**` banner that tells the
-                      reader whether the page is for them.
+                      and `<title>`), and guides carry the `> **対象読者**` / `> **Audience**`
+                      banner that tells the reader whether the page is for them.
+8. Parity           — `docs/learn/ja/` and `docs/learn/en/` hold the same file names. A page
+                      added to one language and forgotten in the other is how a bilingual site
+                      rots; the switcher would send the reader to a 404.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -162,7 +165,7 @@ for path in sorted(glob.glob("src/**/*.zig", recursive=True)):
 READER_MD = [
     "README.md",
     "docs/glossary.md",
-] + sorted(glob.glob("docs/guides/**/*.md", recursive=True)) + sorted(glob.glob("docs/reference/**/*.md", recursive=True))
+] + sorted(glob.glob("docs/learn/**/*.md", recursive=True)) + sorted(glob.glob("docs/reference/**/*.md", recursive=True))
 for md in READER_MD:
     if not os.path.isfile(md):
         continue
@@ -215,7 +218,7 @@ KNOWN_PACKAGES = {
     "zts_build", "zts_cli",
 }
 import_pat = re.compile(r'@import\("(zts_[a-z][a-z0-9_]*|z_ts)"\)')
-scan_files = ["README.md", "docs/glossary.md"] + sorted(glob.glob("docs/guides/**/*.md", recursive=True))
+scan_files = ["README.md", "docs/glossary.md"] + sorted(glob.glob("docs/learn/**/*.md", recursive=True))
 scan_files += sorted(glob.glob("docs/reference/**/*.md", recursive=True))
 scan_files += sorted(glob.glob("examples/**/*.zig", recursive=True))
 for md in scan_files:
@@ -249,7 +252,7 @@ if os.path.isfile(glossary_path):
 # The renderer takes the first `# ` heading as the page title (sidebar label, `<title>`, search
 # entry). A second H1 silently becomes a section that looks like a page, so it is rejected here.
 # Fenced code is stripped first: `# comment` inside a shell block is not a heading.
-READER_PAGES = sorted(glob.glob("docs/guides/**/*.md", recursive=True)) + sorted(
+READER_PAGES = sorted(glob.glob("docs/learn/**/*.md", recursive=True)) + sorted(
     glob.glob("docs/reference/**/*.md", recursive=True)
 )
 for md in ["README.md"] + READER_PAGES + ["docs/glossary.md", "docs/contributing/writing-docs.md"]:
@@ -262,11 +265,37 @@ for md in ["README.md"] + READER_PAGES + ["docs/glossary.md", "docs/contributing
     # Guides are read by choice: the first lines must tell the reader whether to read on. The
     # README files are indexes (their list of pages *is* the banner) and `tauri-internals.md` is
     # an autopsy filed under `reference/`, so both are exempt.
-    needs_banner = md.startswith("docs/guides/") or md.startswith("docs/reference/")
-    if needs_banner and not md.endswith("README.md") and md != "docs/reference/tauri-internals.md":
+    needs_banner = md.startswith(("docs/learn/", "docs/reference/"))
+    if needs_banner and not md.endswith(("README.md", "index.md")) and md != "docs/reference/tauri-internals.md":
         head = "\n".join(body.splitlines()[:12])
-        if "対象読者" not in head:
-            errors.append(f"{md}: missing the '> **対象読者**: …' banner in the first 12 lines")
+        # Japanese pages carry `> **対象読者**`, English ones `> **Audience**`. Both say the same
+        # thing, so both satisfy the rule; a page with neither is a page nobody can triage.
+        if "対象読者" not in head and "Audience" not in head:
+            errors.append(f"{md}: missing the '> **対象読者**: …' / '> **Audience**: …' banner in the first 12 lines")
+
+# ---------------------------------------------------------------------------
+# 8. Translation parity between docs/learn/ja and docs/learn/en
+# ---------------------------------------------------------------------------
+
+# The language switcher rewrites the `ja`/`en` segment of the path, so a file that exists in one
+# tree and not the other produces a 404 the moment the reader clicks "English". Names are the
+# contract; translated *titles* inside the files are free.
+LEARN_ROOT = "docs/learn"
+parity_errors = 0
+ja_files = {
+    os.path.relpath(p, os.path.join(LEARN_ROOT, "ja"))
+    for p in glob.glob(os.path.join(LEARN_ROOT, "ja", "**", "*.md"), recursive=True)
+}
+en_files = {
+    os.path.relpath(p, os.path.join(LEARN_ROOT, "en"))
+    for p in glob.glob(os.path.join(LEARN_ROOT, "en", "**", "*.md"), recursive=True)
+}
+for missing in sorted(ja_files - en_files):
+    errors.append(f"{LEARN_ROOT}/en/{missing}: missing translation (exists in ja)")
+    parity_errors += 1
+for missing in sorted(en_files - ja_files):
+    errors.append(f"{LEARN_ROOT}/ja/{missing}: missing translation (exists in en)")
+    parity_errors += 1
 
 if warnings:
     for w in warnings:
@@ -278,4 +307,7 @@ if errors:
         print(f"  - {err}", file=sys.stderr)
     sys.exit(1)
 
-print(f"Documentation check OK ({len(md_files)} markdown files verified).")
+print(
+    f"Documentation check OK ({len(md_files)} markdown files verified, "
+    f"{len(ja_files)} reader pages in each of 2 languages)."
+)

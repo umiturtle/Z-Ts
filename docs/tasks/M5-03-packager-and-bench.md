@@ -4,7 +4,7 @@
 - **Branch**: `arena/235a0653-z-ts`
 - **Scope**: `src/bundler/`（新規）, `src/cli/`（`package` サブコマンド）, `bench/`（新規）,
   `build.zig`, `zigw`, `.github/workflows/ci.yml`, `docs/reference/cli.md`,
-  `docs/guides/packaging.md`, `docs/architecture/packaging-and-bench.md`, 本ファイル
+  `docs/learn/ja/guides/package.md`, `docs/architecture/packaging-and-bench.md`, 本ファイル
 - **Upstream Reference**: `vendor/tauri/crates/tauri-bundler/src/bundle/{deb,macos,settings,common}.rs`
   （`.deb` の control/data 構成、`.app` の `Info.plist`、Windows の `.exe` リソース）
 - **Next Step**: スライス C（`bench/run.mjs` + CI の Check Summary）。A/B は実装・テスト・

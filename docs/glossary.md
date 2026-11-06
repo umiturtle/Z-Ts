@@ -172,4 +172,4 @@ SSG が出力する `_zts/manifest.json`。どのファイルがどのハッシ�
 - [API リファレンス](api/index.html) — 名前から引く辞書
 - [エラー索引](reference/errors.html) — `error.Name` から引く
 - [CLI リファレンス](reference/cli.md) — `zts` のサブコマンド
-- [はじめかた](guides/getting-started.md) — 5 分で動かす
+- [はじめかた](learn/ja/tutorials/counter.md) — 5 分で動かす

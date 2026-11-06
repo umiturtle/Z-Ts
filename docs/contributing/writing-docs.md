@@ -1,7 +1,7 @@
 # ドキュメントの書き方（機械で守る規約）
 
 > **対象読者**: Z-Ts のドキュメントを書く・直す人（人間とエージェント）。
-> **アプリを作る人は読む必要がありません** → [`../guides/README.md`](../guides/README.md)。
+> **アプリを作る人は読む必要がありません** → [`../learn/ja/guides/index.md`](../learn/ja/guides/index.md)。
 > なぜこの形なのか（調査と原則）は [`../architecture/docs-as-a-product.md`](../architecture/docs-as-a-product.md)。
 
 ドキュメントが腐る原因は、ほぼ 1 つです。**書いた時点のコードと、書いた文章がずれる**。
@@ -15,7 +15,7 @@
 | 段 | 何を見るか | 失敗したときに出るもの |
 |---|---|---|
 | 1 | レンダラの単体テスト（Markdown・リンク・xref 索引） | `All N tests passed` 以外 |
-| 2 | `scripts/check-docs.py` — 構造・リンク・層・CLI・パッケージ・用語集 | `Documentation structure check FAILED` |
+| 2 | `scripts/check-docs.py` — 構造・リンク・層・CLI・パッケージ・用語集・言語パリティ | `Documentation structure check FAILED` |
 | 3 | `scripts/doc-tests.py` — `zig check` フェンスを実際にコンパイル（単体では `./zigw doctest`） | `doc-tests: N of M blocks failed` |
 | 4 | `zig build docs` — 生成した HTML の**リンクとアンカー**を検査 | `docsite: N broken link(s)` |
 
@@ -28,7 +28,7 @@ CI も同じ 4 段を回します（[`.github/workflows/ci.yml`](../../.github/w
 
 | 層 | 置き場所 | 読者 | 例 |
 |---|---|---|---|
-| 学ぶ | `docs/guides/` | アプリ作者 | [`using-rpc.md`](../guides/using-rpc.md) |
+| 学ぶ | `docs/learn/ja/` と `docs/learn/en/` | アプリ作者 | [`guides/rpc.md`](../learn/ja/guides/rpc.md) / [`en/guides/rpc.md`](../learn/en/guides/rpc.md) |
 | 引く | `docs/reference/`、`docs/api/`（生成）、[`../glossary.md`](../glossary.md) | アプリ作者 | [`cli.md`](../reference/cli.md) |
 | 確かめる | `docs/decisions/`、`docs/architecture/` | メンテナ | [`docs-as-a-product.md`](../architecture/docs-as-a-product.md) |
 | 操る | `docs/contributing/`、`docs/environment/`、`docs/tasks/` | メンテナ | このページ |
@@ -56,11 +56,11 @@ CI も同じ 4 段を回します（[`.github/workflows/ci.yml`](../../.github/w
 
 | 種別 | パスから決まる | バッジ |
 |---|---|---|
-| 概念 | `docs/guides/concepts*` | 概念 |
-| チュートリアル | `docs/guides/tutorial*` | チュートリアル |
-| ガイド | `docs/guides/*`、`docs/reference/*` | ガイド／リファレンス |
-| レシピ | `docs/guides/recipes/*` | レシピ |
-| 移行 | `docs/guides/migrating-*` | 移行 |
+| 概念 | `docs/learn/<lang>/concepts/*` | 概念 |
+| チュートリアル | `docs/learn/<lang>/tutorials/*` | チュートリアル |
+| ガイド | `docs/learn/<lang>/guides/*`、`docs/reference/*` | ガイド／リファレンス |
+| レシピ | `docs/recipes/*` | レシピ |
+| 移行 | `docs/learn/<lang>/guides/migrate-*` | 移行 |
 | エラー | `docs/reference/errors.html`（生成） | エラー |
 | API | `docs/api/**`（生成） | API |
 | 内部 | それ以外（`docs/architecture/` 等） | 内部 |
@@ -112,7 +112,7 @@ test "スキーマは名前空間を 1 つ持つ" {
 
 `> [!NOTE]` などの注記は**本文のどこにでも**置けます（§5）。
 
-- 対象は `README.md`、`docs/guides/`、`docs/reference/`、`docs/learn/`、`docs/glossary.md` です。
+- 対象は `README.md`、`docs/learn/`、`docs/reference/`、`docs/glossary.md` です。
 - `check` ブロックの末尾には `test { std.testing.refAllDecls(@This()); }` が自動で付きます。
   Zig は遅延解析なので、これが無いと「誰も参照していない宣言」の誤りを見逃します。
 - 使えるパッケージ: `zts_foundation` `zts_web` `zts_core` `zts_rpc` `zts_bridge` `zts_tauri`
@@ -170,7 +170,8 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 - [`../reference/cli.md`](../reference/cli.md) のフラグ集合は `src/cli/args.zig` と**機械的に一致**
   させます（段 2 の規約 4）。フラグを足したらリファレンスも直す、が強制されます。
 - 移行ガイドは Deno の `tsconfig` 移行に倣い、**「変更前 → 変更後」を 1 行 1 項目**の表にします
-  （[`../guides/migrating-from-tauri.md`](../guides/migrating-from-tauri.md)）。
+  （[`../learn/ja/guides/migrate-from-tauri.md`](../learn/ja/guides/migrate-from-tauri.md) /
+  [`../learn/en/guides/migrate-from-tauri.md`](../learn/en/guides/migrate-from-tauri.md)）。
 - エラーは [`../reference/errors.html`](../reference/errors.html) に自動生成されます
   （`error{…}` 集合から）。**手で書かない**でください。名前で引く導線だけを本文から張ります。
 
@@ -183,12 +184,33 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 |---|---|
 | なぜこの設計なのか | `docs/decisions/ADR-….md` |
 | どのマイルストーンで入ったか | `docs/tasks/M#-##-*.md` |
-| どう使うか | `///`、`docs/guides/`、`docs/reference/` |
+| どう使うか | `///`、`docs/learn/`、`docs/reference/` |
 
 `src/docsite/` `src/cli/` `src/bundler/` `src/build_tools/` はツールなので対象外です
 （公開 API ではない）。
 
-## 9. 生成されるもの（手で作らない）
+## 9. 2 言語で書く（英語と日本語）
+
+読者向けのページは **`docs/learn/ja/` と `docs/learn/en/` に同じファイル名で 1 本ずつ**置きます。
+これは好みではなく、言語切替スイッチの実装上の要件です。スイッチはパスの `ja`/`en` だけを
+差し替えるので、**片方にしかないファイルは押した瞬間に 404 になります**。`check-docs.py` の
+規約 8 が両ツリーのファイル名を突き合わせ、欠けていれば落ちます。
+
+| 決まり | 理由 |
+|---|---|
+| ファイル名・ディレクトリ構成を完全に一致させる | 言語切替がパス置換だけで済む |
+| 見出し（H1）は翻訳してよい | サイドバーのラベル・`<title>` は各言語のものになる |
+| `> **対象読者**` / `> **Audience**` のバナーを冒頭 12 行に置く | 規約 7。どちらの言語でも同じ位置 |
+| コードブロックは同一でよい（`zig check` は 1 回で両方検証される） | 例は言語に依存しない。翻訳で壊す余地を作らない |
+| 言語固有の事情（`dpkg` の例など）はその言語のページにだけ書く | 無理に訳すと嘘になる |
+
+順番は **日本語 → 英語** が楽です。英語を先に書くと、日本語版でしか出てこない補足
+（`zts doctor` の実出力など）を後から足す場所がなくなります。
+
+`docs/reference/` と `docs/api/` は**翻訳しません**。前者は API 名と CLI フラグが主役で、
+後者は `///` から自動生成されるためです（[用語集](../glossary.md)も同様）。
+
+## 10. 生成されるもの（手で作らない）
 
 | 生成物 | 中身 | どこで |
 |---|---|---|
@@ -201,7 +223,7 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 `llms.txt` はサイドバーと同じ並びから作られるので、**サイドバーと中身がずれません**。
 新しいページを足したら、何もしなくてもここに入ります。
 
-## 10. よくある失敗と直し方
+## 11. よくある失敗と直し方
 
 | 症状 | 原因 | 直し方 |
 |---|---|---|
@@ -210,6 +232,7 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `flag '--x' is documented but does not exist` | 実装より先に文章を書いた | `src/cli/args.zig` に足すか、リファレンスから消す |
 | `internal reference 'M4-03' in a doc comment` | 層の混線 | 理由を `docs/decisions/` へ、用法を `///` に |
 | `duplicate glossary term` | 同じ用語を 2 回定義 | 1 つに統合し、片方からリンク |
+| `docs/learn/en/…: missing translation (exists in ja)` | 片方の言語にしか無い | 同じパスで翻訳を足す（規約 8） |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

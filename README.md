@@ -39,7 +39,7 @@ zts doctor                        # 環境とプロジェクトの点検
 ```
 
 `zts` は Angular CLI のような位置づけで、**自分のプロジェクトだけ**を操作します。
-入手方法・前提は [`docs/guides/installing-zts.md`](docs/guides/installing-zts.md)、
+入手方法・前提は [`docs/learn/ja/guides/install.md`](docs/learn/ja/guides/install.md)、
 全オプションは [`docs/reference/cli.md`](docs/reference/cli.md) にあります。
 
 ```bash
@@ -74,14 +74,14 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 
 | 目的 | 行き先 |
 |---|---|
-| **学習の道筋（まずここ）** | [`docs/guides/README.md`](docs/guides/README.md) |
-| `zts` を手元に用意する | [`docs/guides/installing-zts.md`](docs/guides/installing-zts.md) |
-| 5 分で動かす | [`docs/guides/getting-started.md`](docs/guides/getting-started.md) |
-| コマンドの書き方（`invoke`） | [`docs/guides/using-rpc.md`](docs/guides/using-rpc.md) |
-| Tauri 標準プラグイン | [`docs/guides/using-plugins.md`](docs/guides/using-plugins.md) |
-| 静的サイト書き出し（`dist/`） | [`docs/guides/using-ssg.md`](docs/guides/using-ssg.md) |
-| Tauri v2 からの移行 | [`docs/guides/migrating-from-tauri.md`](docs/guides/migrating-from-tauri.md) |
-| うまく動かないとき | [`docs/guides/troubleshooting.md`](docs/guides/troubleshooting.md) |
+| **学習の道筋（まずここ）** | [`docs/learn/ja/index.md`](docs/learn/ja/index.md) — 英語は [`docs/learn/en/index.md`](docs/learn/en/index.md) |
+| `zts` を手元に用意する | [`docs/learn/ja/guides/install.md`](docs/learn/ja/guides/install.md) |
+| 15 分で動かす | [`docs/learn/ja/tutorials/counter.md`](docs/learn/ja/tutorials/counter.md) |
+| コマンドの書き方（`invoke`） | [`docs/learn/ja/guides/rpc.md`](docs/learn/ja/guides/rpc.md) |
+| Tauri 標準プラグイン | [`docs/learn/ja/guides/plugins.md`](docs/learn/ja/guides/plugins.md) |
+| 静的サイト書き出し（`dist/`） | [`docs/learn/ja/guides/static-site.md`](docs/learn/ja/guides/static-site.md) |
+| Tauri v2 からの移行 | [`docs/learn/ja/guides/migrate-from-tauri.md`](docs/learn/ja/guides/migrate-from-tauri.md) |
+| うまく動かないとき | [`docs/learn/ja/guides/troubleshooting.md`](docs/learn/ja/guides/troubleshooting.md) |
 | **API リファレンス**（ソースから自動生成） | <https://umiturtle.github.io/Z-Ts/docs/api/index.html>（`./zigw build docs` で手元にも生成） |
 | `zts` の全オプション | [`docs/reference/cli.md`](docs/reference/cli.md) |
 

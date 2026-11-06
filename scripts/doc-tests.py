@@ -78,7 +78,6 @@ def module_args() -> list[str]:
 
 def fence_targets() -> list[str]:
     files = ["README.md"]
-    files += sorted(glob.glob("docs/guides/**/*.md", recursive=True))
     files += sorted(glob.glob("docs/reference/**/*.md", recursive=True))
     files += sorted(glob.glob("docs/learn/**/*.md", recursive=True))
     files += ["docs/glossary.md"]

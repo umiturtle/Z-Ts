@@ -14,15 +14,15 @@ JavaScript 側は原則そのまま動きます。
 
 | Tauri（Rust） | Z-Ts（Zig） | 状態 |
 |---|---|---|
-| `tauri.conf.json` | [`config_import.load`](../api/zts_tauri/config_import.html#load) | 対応（未知キーは警告、型違いはエラー） |
-| `capabilities/*.json` + `acl` | [`acl.Policy`](../api/zts_tauri/acl.html#Policy) | 対応（`fromImported` で取り込み） |
-| `#[tauri::command]` | [`zts_rpc.Schema`](../api/zts_rpc/schema.html#Schema) + [`bind`](../api/zts_rpc/schema.html#Schema) | 対応 |
-| `plugin:dialog` | [`zts_tauri.dialog`](../api/zts_tauri/dialog/mod.html) | 対応（GTK / AppKit / Win32） |
-| `plugin:clipboard-manager` | [`zts_tauri.clipboard`](../api/zts_tauri/clipboard/mod.html) | 対応 |
-| `plugin:fs` | [`zts_tauri.fs`](../api/zts_tauri/fs/mod.html) | 対応（スコープ付き） |
-| `plugin:menu` / `plugin:tray` | [`menu`](../api/zts_tauri/menu/mod.html) / [`tray`](../api/zts_tauri/tray/mod.html) | 対応（Cocoa / Win32 / GTK） |
-| `tauri build`（バンドラ） | [`zts package`](packaging.md) | 対応（deb / AppImage 風 AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`） |
-| `tauri dev` | [`zts dev`](getting-started.md) | 対応（HTTP 配信 + 変更検知 + 自動リロード） |
+| `tauri.conf.json` | [`config_import.load`](../../../api/zts_tauri/config_import.html#load) | 対応（未知キーは警告、型違いはエラー） |
+| `capabilities/*.json` + `acl` | [`acl.Policy`](../../../api/zts_tauri/acl.html#Policy) | 対応（`fromImported` で取り込み） |
+| `#[tauri::command]` | [`zts_rpc.Schema`](../../../api/zts_rpc/schema.html#Schema) + [`bind`](../../../api/zts_rpc/schema.html#Schema) | 対応 |
+| `plugin:dialog` | [`zts_tauri.dialog`](../../../api/zts_tauri/dialog/mod.html) | 対応（GTK / AppKit / Win32） |
+| `plugin:clipboard-manager` | [`zts_tauri.clipboard`](../../../api/zts_tauri/clipboard/mod.html) | 対応 |
+| `plugin:fs` | [`zts_tauri.fs`](../../../api/zts_tauri/fs/mod.html) | 対応（スコープ付き） |
+| `plugin:menu` / `plugin:tray` | [`menu`](../../../api/zts_tauri/menu/mod.html) / [`tray`](../../../api/zts_tauri/tray/mod.html) | 対応（Cocoa / Win32 / GTK） |
+| `tauri build`（バンドラ） | [`zts package`](package.md) | 対応（deb / AppImage 風 AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`） |
+| `tauri dev` | [`zts dev`](../tutorials/counter.md) | 対応（HTTP 配信 + 変更検知 + 自動リロード） |
 
 ## 2. 設定ファイルはそのまま読ませる
 
@@ -42,7 +42,7 @@ const allowed = policy.allows("plugin:fs|read_text_file", .{ .window_label = "ma
 ```
 
 **fail-closed** です。capability に書かれていないコマンドは拒否されます（上流と同じ）。
-仕様の詳細は内部資料 [`../architecture/tauri-config-import-acl.md`](../architecture/tauri-config-import-acl.md)。
+仕様の詳細は内部資料 [`../architecture/tauri-config-import-acl.md`](../../../architecture/tauri-config-import-acl.md)。
 
 ## 3. コマンドを写す
 
@@ -74,8 +74,8 @@ pub const Commands = struct {
 zig build tsgen             # web/bindings.gen.ts を再生成
 ```
 
-ステップの足し方は [`using-rpc.md`](using-rpc.md) §5 と
-[`../../examples/counter/build.zig`](../../examples/counter/build.zig) を参照してください。
+ステップの足し方は [`rpc.md`](rpc.md) §5 と
+[`../../examples/counter/build.zig`](../../../../examples/counter/build.zig) を参照してください。
 
 `@tauri-apps/api` v2 は**無改変**で動くので、`invoke` の型付けだけ自前の
 `bindings.gen.ts` に置き換えるのが最小の移行です。
@@ -83,19 +83,19 @@ zig build tsgen             # web/bindings.gen.ts を再生成
 ## 5. フロントエンドの配信方法を選ぶ
 
 Tauri は `devUrl` / `frontendDist` で切り替えますが、Z-Ts では**ビルド時に埋め込む**のが基本です
-（[埋め込みの仕組み](../architecture/build-tools.md)）。`dist/` をそのまま `@embedFile` するので、実行時にアセットディレクトリを
+（[埋め込みの仕組み](../../../architecture/build-tools.md)）。`dist/` をそのまま `@embedFile` するので、実行時にアセットディレクトリを
 配る必要がありません。
 
 | 移行前 | 移行後 |
 |---|---|
 | `"devUrl": "http://localhost:5173"` | `zts dev`（`web/` を配信 + 自動リロード） |
 | `"frontendDist": "../dist"` | エンベッダで `embedded_frontend` モジュールに埋め込む |
-| `tauri build` | [`zts build`](getting-started.md) → [`zts package`](packaging.md)（deb / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`） |
+| `tauri build` | [`zts build`](../tutorials/counter.md) → [`zts package`](package.md)（deb / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`） |
 
 ## 6. 移行時に踏みやすいところ
 
 1. **`withGlobalTauri`**: Z-Ts は常に `window.__TAURI_INTERNALS__` を公開します。
-   `window.__TAURI__` を前提にした古いコードは互換レイヤ（[`js_bootstrap`](../api/zts_tauri/js_bootstrap.html)）で吸収済みです。
+   `window.__TAURI__` を前提にした古いコードは互換レイヤ（[`js_bootstrap`](../../../api/zts_tauri/js_bootstrap.html)）で吸収済みです。
 2. **`invoke` の戻り値**: Tauri は `Result<T, E>` を JSON で返します。Z-Ts も同じ封筒
    （`{"result": …}` / `{"error": …}`）を使うので、`try/catch` の挙動は変わりません。
 3. **ACL のパススコープ**: `{ "path": "$APPDATA/db/*" }` のようなスコープは
@@ -104,15 +104,15 @@ Tauri は `devUrl` / `frontendDist` で切り替えますが、Z-Ts では**ビ�
    セレクタ（macOS）／`MF_*`（Win32）へ写されます。カスタム項目は ID で
    `WM_COMMAND` / セレクタ経由で通知されます。
 5. **`tauri build` の成果物**: `.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz` は
-   [`zts package`](packaging.md) が作ります。`.msi` と AppImage は**まだ**作れません
+   [`zts package`](package.md) が作ります。`.msi` と AppImage は**まだ**作れません
    （AppDir までは作れるので、AppImage 化は外部ツールに渡せます）。
 
 ---
 
 ## 次に読むもの
 
-- API の引き方: [`using-the-api-reference.md`](using-the-api-reference.md)（`plugin:window|set_title` →
+- API の引き方: [API リファレンスの索引](../../../api/index.html)（`plugin:window|set_title` →
   `Commands.set_title` の対応表があります）
-- プラグインの実装状況: [`using-plugins.md`](using-plugins.md)
+- プラグインの実装状況: [`plugins.md`](plugins.md)
 - 移行後に動かないとき: [`troubleshooting.md`](troubleshooting.md)
-- 既存の Tauri アプリの設定取り込み: [`../api/zts_tauri/config_import.html`](../api/zts_tauri/config_import.html)
+- 既存の Tauri アプリの設定取り込み: [`../api/zts_tauri/config_import.html`](../../../api/zts_tauri/config_import.html)

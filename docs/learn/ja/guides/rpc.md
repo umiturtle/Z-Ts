@@ -1,7 +1,7 @@
 # RPC 層の使い方（`zts_rpc`）
 
 > **対象読者**: アプリのコマンド（`invoke("…")` で呼ばれる関数）を書きたい人。
-> **5 分で読めます。** API の全体像は [`../api/zts_rpc/index.html`](../api/zts_rpc/index.html) にあります。
+> **5 分で読めます。** API の全体像は [`../api/zts_rpc/index.html`](../../../api/zts_rpc/index.html) にあります。
 
 `zts_rpc` は「Zig の関数を、そのまま TypeScript から呼べるコマンドにする」ための層です。
 ルーティングテーブルを手で書くことはありません。**関数を書いて、構造体にまとめて、`Schema` に渡すだけ**です。
@@ -36,12 +36,12 @@ invoke("setStep", {step:5}) →       Counter.set_step(&state, .{ .step = 5 })
 |---|---|---|
 | `rpc.Schema(.{ … })` | `comptime` でコマンド表・JSON 型検査・TS 型定義を作る | **型**（`type`） |
 | `Schema.bind(env)` | 各名前空間の状態ポインタを束縛する | `Schema.Router` |
-| `router.handler()` | 呼び出し規約を隠した 2 ワードの `Handler` | [`Handler`](../api/zts_rpc/ctx.html#Handler) |
+| `router.handler()` | 呼び出し規約を隠した 2 ワードの `Handler` | [`Handler`](../../../api/zts_rpc/ctx.html#Handler) |
 
 ### 動く最小例（このブロックは CI がコンパイルします）
 
 上の図の `…` を埋めた完全版です。情報文字列に `zig check` を持つコードブロックは
-[`scripts/doc-tests.py`](../../scripts/doc-tests.py) が実際に `zig build-obj` に通すので、
+[`scripts/doc-tests.py`](../../../../scripts/doc-tests.py) が実際に `zig build-obj` に通すので、
 API の名前が変わればこのページが赤くなります。
 
 ```zig check
@@ -93,17 +93,17 @@ pub const Commands = struct {
 規則は 3 つだけです。
 
 1. **第 1 引数が `*rpc.Ctx` なら「コンテキスト付き」**と解釈されます。`Ctx` は
-   [`Ctx`](../api/zts_rpc/ctx.html#Ctx) で、イベント送出やホスト操作の入口です。
+   [`Ctx`](../../../api/zts_rpc/ctx.html#Ctx) で、イベント送出やホスト操作の入口です。
 2. **次の引数が「状態」**（`bind` で渡したポインタ）。状態が `void` の名前空間では省略できます。
 3. **最後の引数が匿名 `struct`** なら、それが JSON の引数オブジェクトになります。
-   引数オブジェクトが不要なら [`canOmitArgs`](../api/zts_rpc/schema.html#canOmitArgs) が真になり、
+   引数オブジェクトが不要なら [`canOmitArgs`](../../../api/zts_rpc/schema.html#canOmitArgs) が真になり、
    `invoke("reset")` と `invoke("reset", {})` の両方を受け付けます。
 
 ### 名前の変換
 
 Zig の `snake_case` は JavaScript 側で **`camelCase`** になります（`get_state` → `getState`）。
 `@tauri-apps/api` を無改造で使えるのはこの変換のおかげです。変換規則そのものは
-[`../api/zts_rpc/naming.html`](../api/zts_rpc/naming.html) にあります。
+[`../api/zts_rpc/naming.html`](../../../api/zts_rpc/naming.html) にあります。
 
 ---
 
@@ -111,8 +111,8 @@ Zig の `snake_case` は JavaScript 側で **`camelCase`** になります（`ge
 
 戻り値の型は **JSON に落ちる型**である必要があります（`struct` / `enum` / 整数 / `[]const u8` /
 `zts_rpc.Bytes` / `BigInt` / `Handle` など）。検査は `comptime` に行われ、駄目な型は
-**ビルド時に**落ちます（[`assertValidRpcType`](../api/zts_rpc/codec.html#assertValidRpcType)、
-理由の文字列は [`checkRpcType`](../api/zts_rpc/codec.html#checkRpcType)）。
+**ビルド時に**落ちます（[`assertValidRpcType`](../../../api/zts_rpc/codec.html#assertValidRpcType)、
+理由の文字列は [`checkRpcType`](../../../api/zts_rpc/codec.html#checkRpcType)）。
 
 エラーは `error{X}` を返せば、HTTP/IPC のエラー応答になります。
 
@@ -133,9 +133,9 @@ invoke("setStep", { step: 0 })  →  reject({ code: "StepOutOfRange" })
 | JSON（本文） | `{"code":"CounterOverflow"}` |
 | `OutgoingResponse.status` | `.err`（HTTP では 4xx/5xx） |
 
-より細かい制御が要るなら [`Responses`](../api/zts_rpc/ctx.html#Responses) と
-[`errorResponseComptime`](../api/zts_rpc/ctx.html#errorResponseComptime) で、HTTP ステータスや
-追加フィールドを自分で決められます。認可は [`AuthorizeFn`](../api/zts_rpc/ctx.html#AuthorizeFn) を
+より細かい制御が要るなら [`Responses`](../../../api/zts_rpc/ctx.html#Responses) と
+[`errorResponseComptime`](../../../api/zts_rpc/ctx.html#errorResponseComptime) で、HTTP ステータスや
+追加フィールドを自分で決められます。認可は [`AuthorizeFn`](../../../api/zts_rpc/ctx.html#AuthorizeFn) を
 `Router.withAuth` に渡すと、全コマンドの前で 1 回だけ走ります。
 
 ---
@@ -216,7 +216,7 @@ try std.testing.expectEqualStrings(
     "{\"count\":0,\"step\":1,\"mutations\":0,\"mode\":\"desktop\"}", resp.body.slice());
 ```
 
-`resp.body` は [`OwnedBytes`](../api/zts_foundation/owned_bytes.html#OwnedBytes) です。
+`resp.body` は [`OwnedBytes`](../../../api/zts_foundation/owned_bytes.html#OwnedBytes) です。
 大きい応答ではスタックにコピーせず、内部バッファを参照したまま返るので、
 **`deinit()` を忘れない**でください（`defer` で十分です）。
 
@@ -236,12 +236,12 @@ try std.testing.expectEqualStrings(
 
 ## 次に読むもの
 
-- API: [`zts_rpc`](../api/zts_rpc/index.html) / [`Schema`](../api/zts_rpc/schema.html#Schema) /
-  [`Ctx`](../api/zts_rpc/ctx.html#Ctx) / [`codec`](../api/zts_rpc/codec.html) /
-  [`tsgen`](../api/zts_rpc/tsgen.html)
-- 実例: [`../../examples/counter/README.md`](../../examples/counter/README.md)（全コマンドが実装済み）
-- 設計の背景: [`../architecture/rpc-codec.md`](../architecture/rpc-codec.md)（内部資料）,
-  [`../decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md`](../decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md)
-- API ページの読み方: [`using-the-api-reference.md`](using-the-api-reference.md)
-- 送り手側: [`using-plugins.md`](using-plugins.md)（Tauri 標準プラグイン） /
-  [`using-ssg.md`](using-ssg.md)（同じスキーマを WASM で動かす）
+- API: [`zts_rpc`](../../../api/zts_rpc/index.html) / [`Schema`](../../../api/zts_rpc/schema.html#Schema) /
+  [`Ctx`](../../../api/zts_rpc/ctx.html#Ctx) / [`codec`](../../../api/zts_rpc/codec.html) /
+  [`tsgen`](../../../api/zts_rpc/tsgen.html)
+- 実例: [`examples/counter/README.md`](../../../../examples/counter/README.md)（全コマンドが実装済み）
+- 設計の背景: [`../architecture/rpc-codec.md`](../../../architecture/rpc-codec.md)（内部資料）,
+  [`../decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md`](../../../decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md)
+- API ページの読み方: [API リファレンスの索引](../../../api/index.html)
+- 送り手側: [`plugins.md`](plugins.md)（Tauri 標準プラグイン） /
+  [`static-site.md`](static-site.md)（同じスキーマを WASM で動かす）

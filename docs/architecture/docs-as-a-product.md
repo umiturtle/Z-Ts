@@ -2,7 +2,7 @@
 
 > **内部資料です。** これは「Z-Ts のドキュメントをどう作るか」を決めるための調査記録で、
 > ライブラリ利用者が読む必要はありません。利用者向けの入口は
-> [`../guides/README.md`](../guides/README.md)、改善の作業計画は
+> [`../learn/ja/guides/index.md`](../learn/ja/guides/index.md)、改善の作業計画は
 > [`../tasks/M5-09-docs-ux.md`](../tasks/M5-09-docs-ux.md) にあります。
 
 - **調査日**: 2026-11-06
@@ -187,7 +187,7 @@ Z-Ts の `` `Handler` `` の自動リンク（§3 P13）は、この発想を**�
 
 分類も技術者向けではありません（`Cluster Architecture` `Containers` `Workloads` `Storage`
 `Security`）。**「何をしたいか」で並んでいる**ので、初見でも辿れます。
-Z-Ts の `docs/guides/README.md`（Learning Path）とホームの目的別入口は、この形に寄せます。
+Z-Ts の `docs/learn/ja/guides/index.md`（Learning Path）とホームの目的別入口は、この形に寄せます。
 
 #### 2.5.3 Go — 例は「動くテスト」として書く
 
@@ -218,7 +218,7 @@ Deno の `tsconfig` 移行ガイドは、**「あなたの tsconfig の項目 | 
 2 列の表だけです。`target` は削除、`module` は削除（Deno は常に ESM）、`strict` は既定で有効——
 **「場合によっては」を書かない**のが特徴です。読者は迷わず、終わったかどうかも判定できます。
 
-Z-Ts の [`../guides/migrating-from-tauri.md`](../guides/migrating-from-tauri.md) は
+Z-Ts の [`../learn/ja/guides/migrate-from-tauri.md`](../learn/ja/guides/migrate-from-tauri.md) は
 Tauri の API → Z-Ts の API を 1 行 1 項目の表にし、各行にリンクを付けました。
 
 #### 2.5.6 TypeScript — 参照項目はメタデータを持つ
@@ -423,7 +423,7 @@ API ページに至っては目次すら生成していない（`toc` を Markdo
 
 **根拠**: Kubernetes の `/docs/concepts/`。各項目に 1 文、並びはタスク順。
 
-**Z-Ts への含意**: ホーム・`docs/guides/README.md`・`docs/api/index.html` の 3 つは索引である。
+**Z-Ts への含意**: ホーム・`docs/learn/ja/guides/index.md`・`docs/api/index.html` の 3 つは索引である。
 リンクだけを並べず、**読者が踏む前に判断できる 1 文**を付ける。並びは「機能」ではなく
 「やりたいこと」（はじめる → コマンドを書く → 画面を作る → 配る → 失敗から戻る）。
 
@@ -436,7 +436,7 @@ API ページに至っては目次すら生成していない（`toc` を Markdo
 **Z-Ts への含意**: Tauri からの移行は `fs` → `zts_tauri.fs`、`invoke` → `zts_rpc` の
 `Schema` のように、**1 行で書ける対応**がほとんど。文章で説明すると読者は写経を間違える。
 
-**判定基準**: [`../guides/migrating-from-tauri.md`](../guides/migrating-from-tauri.md) の
+**判定基準**: [`../learn/ja/guides/migrate-from-tauri.md`](../learn/ja/guides/migrate-from-tauri.md) の
 対応表が全行リンク付きで、各行が「Tauri の API | Z-Ts の API | ひとこと」になっていること。
 
 ### P16. 参照ページの項目は既定値・関連・導入時期を持つ
@@ -572,7 +572,7 @@ OK docsite pages=197 links=468 assets=12895 words=460868 bytes=5452965 demos=60
 | C1 | 公開 API の `///` に `ADR-0002` / `M1-03` / 「2-word fat-pointer」など内部事情が入っている（37 箇所）。`M5-07` の「実装意図を `///` に書かない」に違反 | `src/rpc/schema.zig`、`src/rpc/ctx.zig`、`src/tauri/mod.zig` ほか |
 | C2 | モジュール先頭の `//!` が「設計書の要約」になっていて、**役割と例**になっていない（Rust の規約と逆） | `src/tauri/mod.zig`、`src/rpc/mod.zig` |
 | C3 | `site.zig` のモジュールドキュメントが `sitemap.txt` を出すと書いているが、実際には出していない | `src/docsite/site.zig:6` |
-| C4 | `guides/README.md` の「ガイド 8 本」は実態と合うが、内訳（ハンズオン / 移行 / 障害）がラベルされていない | `docs/guides/README.md` |
+| C4 | `guides/README.md` の「ガイド 8 本」は実態と合うが、内訳（ハンズオン / 移行 / 障害）がラベルされていない | `docs/learn/ja/guides/index.md` |
 
 ### 4.5 第 2 ラウンドで解消したもの（2026-11-06）
 

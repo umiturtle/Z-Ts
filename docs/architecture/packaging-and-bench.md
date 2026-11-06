@@ -1,7 +1,7 @@
 # パッケージャと対 Rust ベンチマーク（`M5-03`）
 
 > **内部資料です。** アプリ作者が読む必要はありません。使い方は
-> [`../guides/packaging.md`](../guides/packaging.md)、CLI の仕様は
+> [`../learn/ja/guides/package.md`](../learn/ja/guides/package.md)、CLI の仕様は
 > [`../reference/cli.md`](../reference/cli.md#zts-package) にあります。
 
 このページは「なぜこの形にしたか」と「どこまで作り、どこをまだ作っていないか」の記録です。

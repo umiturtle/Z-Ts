@@ -30,17 +30,17 @@
 - **完了したこと**:
   - 新設 `docs/contributing/README.md` — リポジトリ開発の入口（`./zigw` の全コマンド、
     `zig build` のオプション、`scripts/*`、地図、変更の作法、CI）
-  - `docs/guides/troubleshooting.md` → `docs/contributing/troubleshooting.md` へ移動
-    （中身は元々すべてリポジトリ運用の話だった）。新規 `docs/guides/troubleshooting.md` は
+  - `docs/learn/ja/guides/troubleshooting.md` → `docs/contributing/troubleshooting.md` へ移動
+    （中身は元々すべてリポジトリ運用の話だった）。新規 `docs/learn/ja/guides/troubleshooting.md` は
     `zts` のエラーメッセージ別の対処（init の拒否・fingerprint・`--zts-path`・
     `ZTS_ZIG`・`dev` のポート/リロード・Vite の埋め込み）
-  - 新設 `docs/guides/installing-zts.md` — `zts` の入手（`./zigw build` → `PATH`）、
+  - 新設 `docs/learn/ja/guides/install.md` — `zts` の入手（`./zigw build` → `PATH`）、
     `ZTS_ZIG`、`--zts-path`、OS ごとの前提
-  - `docs/guides/getting-started.md` を全面書き換え — `zts init` → `dev` → `build` →
+  - `docs/learn/ja/tutorials/counter.md` を全面書き換え — `zts init` → `dev` → `build` →
     `doctor` だけ。`./zigw` は一度も出てこない
   - `docs/reference/cli.md` を `zts` 仕様だけに（`init` / `dev` / `build` / `doctor` /
     `help` / `version`、全オプション、`dev` の配信・監視・リロード仕様、`doctor` の 6 項目）
-  - `docs/guides/README.md` / `docs/INDEX.md` / `README.md` — 冒頭に「どちらの読者か」の
+  - `docs/learn/ja/guides/index.md` / `docs/INDEX.md` / `README.md` — 冒頭に「どちらの読者か」の
     2 択表を置き、`zts` と `./zigw` の系統を明示
   - `src/docsite/main.zig` — `docs/contributing/` をサイドバーの独立グループ `開発` に
     （テスト 1 本追加）

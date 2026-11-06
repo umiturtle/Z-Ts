@@ -176,7 +176,7 @@ sudo dpkg -i zig-out/package/my_app_0.1.0_amd64.deb   # Debian/Ubuntu
 tar -xzf zig-out/package/my-app-0.1.0-amd64.tar.gz    # どこでも
 ```
 
-形式ごとの前提は [`../guides/packaging.md`](../guides/packaging.md) にまとめてあります。
+形式ごとの前提は [`../learn/ja/guides/package.md`](../learn/ja/guides/package.md) にまとめてあります。
 
 ## `zts doctor`
 
@@ -229,7 +229,7 @@ zts help          # 同上
 
 ## 次に読むもの
 
-- 使い始める: [`../guides/getting-started.md`](../guides/getting-started.md)
-- `zts` の入手: [`../guides/installing-zts.md`](../guides/installing-zts.md)
-- 配布物の作り方: [`../guides/packaging.md`](../guides/packaging.md)
+- 使い始める: [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md)
+- `zts` の入手: [`../learn/ja/guides/install.md`](../learn/ja/guides/install.md)
+- 配布物の作り方: [`../learn/ja/guides/package.md`](../learn/ja/guides/package.md)
 - リポジトリ開発のコマンド: [`../contributing/README.md`](../contributing/README.md)
