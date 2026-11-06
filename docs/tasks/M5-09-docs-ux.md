@@ -1,6 +1,6 @@
 # Task M5-09: ドキュメントサイトの UX 改善（学習しやすさ）
 
-- **Status**: `in_progress`（Wave 0 / 1 / 3 を実装済み。残りは Wave 2 の G1・G2・G5・G3）
+- **Status**: `in_progress`（Wave 0 / 1 / 3 と G1・G2 を実装済み。残りは Wave 2 の G5・G3）
 - **Branch**: `arena/30af0dbd-z-ts`
 - **Scope**: `docs/learn/`（新規）, `docs/errors/`（新規）, `docs/reference/`, `docs/guides/`,
   `src/docsite/{main,site,apidoc,markdown}.zig`, `src/docsite/assets/{site.css,site.js}`,
@@ -9,7 +9,8 @@
 - **Upstream Reference**: 調査記録 [`../architecture/docs-as-a-product.md`](../architecture/docs-as-a-product.md)
   （Angular / Tauri / Rust の第 1 ラウンド、React / K8s / Go / Python / Deno / TypeScript の
   第 2 ラウンド、原則 P1〜P18）
-- **Next Step**: Wave 2（U8 概念ページ → U9 チュートリアル → U12 ACL → U13 API の例）。
+- **Next Step**: G5（レシピ）と G3（移行の 1 行表）を書く。読者向けコーパスは
+  `docs/learn/{ja,en}/` に **同一ファイル名で 2 言語**そろえる（規約 8 が突き合わせる）。
   執筆の規約は [`../contributing/writing-docs.md`](../contributing/writing-docs.md) に固定済み。
 
 ---
