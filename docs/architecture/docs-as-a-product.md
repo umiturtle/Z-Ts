@@ -511,22 +511,22 @@ OK docsite pages=192 links=409 assets=9492 words=392967 bytes=4512495 demos=60
    api_pages=90 api_decls=455 api_members=1477 api_undoc=0 api_internal=452
 
 # 現在（第 2 ラウンド実装後）
-OK docsite pages=197 links=460 assets=12857 words=450895 bytes=5423555 demos=60
+OK docsite pages=197 links=468 assets=12895 words=460794 bytes=5452884 demos=60
    api_pages=90 api_decls=455 api_members=1477 api_undoc=0 api_internal=452
-   xref_targets=4605 xrefs=985 errors=118
+   xref_targets=4605 xrefs=988 errors=118
 ```
 
 | 指標 | 当初 | 現在 | 補足 |
 |---|---|---|---|
 | 総ページ | 192 | **197** | うち内部資料が大半（サイドバーでは 1 エントリに畳まれる） |
-| 読者向けリンク | 409 | **460** | 相対リンクの総数。`zig build docs` が全数を検査 |
-| xref（自動リンク） | 0 | **985** | `` `Handler` `` 等のコード表記が API へ飛ぶ |
+| 読者向けリンク | 409 | **468** | 相対リンクの総数。`zig build docs` が全数を検査 |
+| xref（自動リンク） | 0 | **988** | `` `Handler` `` 等のコード表記が API へ飛ぶ |
 | エラー索引の項目 | 0 | **118** | `error{…}` から生成。`#error.Name` で引ける |
-| 検索索引 | 886 件 | **2,362 件** | 型メンバ（1,477）と用語集を追加 |
+| 検索索引 | 886 件 | **2,363 件** | 型メンバ（1,477）と用語集を追加 |
 | API ページ | 90 | 90 | 10 パッケージ。目次（TOC）付きに |
 | 公開宣言 | 455 | 455 | `///` 付き 100%（`api_undoc=0`） |
 | 型メンバ | 1,477 | 1,477 | 宣言とは別に数えている（検索対象になった） |
-| サイドバー | 6 グループ / 31 項目 | 6 グループ / 34 項目 | エラー索引・用語集・執筆規約を追加 |
+| サイドバー | 6 グループ / 31 項目 | 6 グループ / 35 項目 | エラー索引・用語集・執筆規約を追加 |
 | `llms.txt` / `llms-full.txt` | なし | **あり** | サイドバーと同じ並びから生成 |
 | `sitemap.xml` / `404.html` | なし | **あり** | 行き止まりから戻れる |
 | 注記（`> [!NOTE]`） | なし | **4 種対応** | GitHub とサイトの両方で読める |
