@@ -83,5 +83,8 @@
 - **`zts package` は `--format` と実行ファイルの形式が食い違えば書く前に止まる**（例: PE に `deb`）。
 - **`zigw quick-test` は bundler を含む 8 本**。`src/bundler/mod.zig` は依存ゼロなので
   `-Mroot` だけで走る。
+- **`macos-14` ラベルは 2026-11-06 からスケジュールされなくなった**。`ci-cli` の
+  `CLI smoke (macos-14)` が step 0 件・1 秒で `cancelled`（`runner_name` が空）になり、PR が
+  赤くなる。`macos-latest`（`ci-macos` が既に使っている）に変えて解消。以後は `*-latest` に追従。
 - **CI の `ci-cli` は 3 OS で実際にビルドする**。Windows では `zts` が `zig` を解決できる必要が
   あり、`PATH` の `zig` をチェックアウト内の `zigw`（シェルスクリプト）より優先している。
