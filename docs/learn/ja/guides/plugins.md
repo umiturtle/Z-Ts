@@ -1,7 +1,8 @@
-# Tauri 標準プラグインの使い方（`zts_tauri`）
+# Tauri 標準プラグイン（`zts_tauri`）
 
 > **対象読者**: `@tauri-apps/api` の `window` / `event` / `path` / `fs` / `dialog` / `menu` / `tray`
-> を使いたい人。API の一覧は [`../api/zts_tauri/index.html`](../../../api/zts_tauri/index.html)。
+> を使いたい人。API の一覧は [`zts_tauri`](../../../api/zts_tauri/index.html)。
+> **所要時間**: 8 分。**前提**: コマンドを 1 つ書いたことがある（[コマンド](rpc.md)）。
 
 Z-Ts は Tauri v2 の**ワイヤプロトコル**（`plugin:window|set_title` のようなコマンド名と JSON の形）を
 そのまま実装しています。したがってフロントエンドは**無改造の `@tauri-apps/api` v2** が使え、

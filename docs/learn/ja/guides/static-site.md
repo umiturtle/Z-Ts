@@ -1,8 +1,8 @@
-# 静的サイト書き出しの使い方（`zts_ssg` + `zts_wasm`）
+# 静的サイトを書き出す（`zts_ssg` + `zts_wasm`）
 
 > **対象読者**: 同じ Zig コードから「サーバ不要の `dist/`」を出したい人。
-> API は [`../api/zts_ssg/index.html`](../../../api/zts_ssg/index.html) と
-> [`../api/zts_wasm/index.html`](../../../api/zts_wasm/index.html)。
+> **所要時間**: 8 分。**前提**: アプリが 1 つ動いていること。
+> API は [`zts_ssg`](../../../api/zts_ssg/index.html) と [`zts_wasm`](../../../api/zts_wasm/index.html)。
 
 `examples/counter` は 1 つのアプリから **3 つの成果物**を作ります。
 

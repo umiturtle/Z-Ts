@@ -21,7 +21,7 @@
   --surface-3: #eceef4;
   --fg: #14161c;
   --fg-muted: #5b6472;
-  --fg-faint: #8b93a1;
+  --fg-faint: #696f7d;
   --border: #e4e7ee;
   --border-strong: #cfd4df;
   --accent: #4f46e5;
@@ -29,6 +29,10 @@
   --accent-soft: #eef0ff;
   --accent-fg: #ffffff;
   --accent-2: #7c3aed;
+  /* Fixed brand gradient. `--accent` flips to a light tint in dark mode (so it reads on a dark
+     background), which would put white text on a pale button — these two never flip. */
+  --brand-a: #4f46e5;
+  --brand-b: #7c3aed;
   --code-bg: #f7f8fc;
   --code-border: #e5e8f0;
   --code-header: #eff1f7;
@@ -55,7 +59,7 @@ html[data-theme="dark"] {
   --surface-3: #1d222e;
   --fg: #e8eaf0;
   --fg-muted: #a0a8b8;
-  --fg-faint: #6f7787;
+  --fg-faint: #8b93a3;
   --border: #1f2431;
   --border-strong: #2f3648;
   --accent: #8b93ff;
@@ -63,6 +67,8 @@ html[data-theme="dark"] {
   --accent-soft: #1a1f38;
   --accent-fg: #0a0c11;
   --accent-2: #a78bfa;
+  --brand-a: #4f46e5;
+  --brand-b: #7c3aed;
   --code-bg: #0e1119;
   --code-border: #1e2330;
   --code-header: #161a24;
@@ -133,7 +139,7 @@ svg { width: 1.05em; height: 1.05em; fill: none; stroke: currentColor; stroke-wi
   inset: 0 auto auto 0;
   height: 2px;
   width: 0;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: linear-gradient(90deg, var(--brand-a), var(--brand-b));
   z-index: 60;
   transition: width .1s linear;
 }
@@ -173,7 +179,7 @@ svg { width: 1.05em; height: 1.05em; fill: none; stroke: currentColor; stroke-wi
   width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
   color: #fff;
   font-weight: 800;
   font-size: .95rem;
@@ -292,7 +298,6 @@ html[data-theme="dark"] [data-theme-toggle] .i-moon { display: block; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.search-results .group::first-line { color: var(--accent); }
 .search-results .empty { padding: .6rem; color: var(--fg-faint); font-size: .85rem; }
 .search-results mark { background: color-mix(in srgb, var(--accent) 25%, transparent); color: inherit; border-radius: 3px; }
 
@@ -757,7 +762,11 @@ body.landing { background:
   var(--bg);
 }
 
-.landing-main { max-width: 1100px; margin: 0 auto; padding: 0 1.4rem 4rem; }
+.landing-main { max-width: 1100px; margin: 0 auto; padding: 0 1.4rem 1rem; }
+
+/* The landing topbar keeps full-bleed background but aligns its content with the hero, so the
+   brand and the H1 share a left edge on wide screens. */
+.landing-topbar { padding-inline: max(1.1rem, calc((100vw - 1100px) / 2)); }
 
 .hero { padding: 4.2rem 0 1.5rem; text-align: center; }
 .eyebrow {
@@ -823,7 +832,7 @@ body.landing { background:
 .button:hover { transform: translateY(-1px); box-shadow: var(--shadow); text-decoration: none; color: var(--fg); border-color: var(--border-strong); }
 .button svg { width: 16px; height: 16px; }
 .button.primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
   border-color: transparent;
   color: #fff;
 }
@@ -933,7 +942,7 @@ body.landing { background:
 .landing-nav ul { margin: 0; padding: 0; list-style: none; font-size: .82rem; }
 .landing-nav li { margin: .2rem 0; }
 .landing-nav a { color: var(--fg-muted); }
-.landing-footer { max-width: 1100px; margin: 0 auto; border-top: 0; }
+.landing-footer { max-width: 1100px; margin: 0 auto; padding-inline: 1.4rem; border-top: 0; }
 
 /* -------------------------------------------------------------- responsive */
 
@@ -1204,5 +1213,5 @@ html[data-theme="dark"] .zk-n { color: #d2a8ff; }
 /* Landing sections and footer share the same 1100px measure as `.landing-main`. */
 .paths, .features, .all-pages { display: block; }
 .landing-footer .footer-meta { display: inline-flex; align-items: center; gap: .5rem; }
-.landing-topbar { max-width: none; }
+
 .api-index-wide { display: flex; flex-wrap: wrap; gap: .35rem; margin: 1rem 0 2rem; }

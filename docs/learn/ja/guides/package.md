@@ -1,7 +1,7 @@
 # 配布物を作る（`zts package`）
 
 > **対象読者**: 作ったアプリを人に配りたい人（`.deb` / `.dmg` / `.exe`）。
-> **所要時間**: 15 分。
+> **所要時間**: 15 分。**前提**: `zts build` が通る（[チュートリアル](../tutorials/counter.md)）。
 
 `zts build` までは「動く実行ファイル」までです。このガイドでは、それを**人に渡せる形** —
 `.deb`、AppDir、`.app`、`.dmg`、アイコン入り `.exe`、ポータブルな `.tar.gz` — にするところまで
@@ -246,5 +246,5 @@ zts package --binary path/to/other-exe --format tar.gz
 ## 次に読むもの
 
 - コマンドの全オプション: [`../reference/cli.md`](../../../reference/cli.md#zts-package)
-- はじめかたに戻る: [`counter.md`](../tutorials/counter.md)
+- チュートリアルに戻る: [カウンターを作る](../tutorials/counter.md)
 - 内部の作り（なぜ PE を書き換えるのか等）: [`../architecture/packaging-and-bench.md`](../../../architecture/packaging-and-bench.md)

@@ -54,7 +54,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
 | [`learn/ja/index.md`](learn/ja/index.md) | **学習の道筋**: 4 つの入口（概念 / チュートリアル / ガイド / API）と前提知識。英語版は `learn/en/index.md` | 入門（最初に読む） |
 | [`learn/ja/guides/install.md`](learn/ja/guides/install.md) | `zts` コマンドの入手（チェックアウトからビルド・`PATH`・`ZTS_ZIG`） | 入門（最初に読む） |
-| [`learn/ja/tutorials/counter.md`](learn/ja/tutorials/counter.md) | はじめかた（5 分）: `zts init` → `dev` → `build` → `doctor` | 入門（最初に読む） |
+| [`learn/ja/tutorials/counter.md`](learn/ja/tutorials/counter.md) | チュートリアル（15 分）: `zts init` → コマンド → `dev` → `build` → `doctor` | 入門（最初に読む） |
 | [`learn/ja/guides/package.md`](learn/ja/guides/package.md) | 配布物の作り方: `zts package`（`.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`）・アイコン・クロスビルド・CI | アプリが 1 つ動いたら |
 | [`learn/ja/guides/rpc.md`](learn/ja/guides/rpc.md) | RPC 層の使い方: コマンド定義 → `Schema` → `bind` → `dispatch` → TypeScript 生成 | 入門（コマンドを書く前に） |
 | [`learn/ja/guides/plugins.md`](learn/ja/guides/plugins.md) | Tauri 標準プラグイン（window/event/path/fs/dialog/clipboard/menu/tray）と capability | 入門（プラグイン利用時） |

@@ -2,6 +2,7 @@
 
 > **対象読者**: `zts` をまだ持っていない人。
 > **所要時間**: 3 分（Linux / macOS / Windows）。
+> **前提**: `git` と Python 3.8 以上。Zig は `./zigw` が導入します。
 
 `zts` は Z-Ts でアプリを作るための CLI です（Angular CLI のような位置づけ）。
 `init` / `dev` / `build` / `doctor` の 4 つだけ覚えれば、プロジェクトの生成から

@@ -1,7 +1,8 @@
-# RPC 層の使い方（`zts_rpc`）
+# コマンドを書く（`zts_rpc`）
 
 > **対象読者**: アプリのコマンド（`invoke("…")` で呼ばれる関数）を書きたい人。
-> **5 分で読めます。** API の全体像は [`../api/zts_rpc/index.html`](../../../api/zts_rpc/index.html) にあります。
+> **所要時間**: 10 分。API の全体像は [`zts_rpc`](../../../api/zts_rpc/index.html) にあります。
+> **前提**: [チュートリアル](../tutorials/counter.md) を 1 度通した、または `zts dev` が動く。
 
 `zts_rpc` は「Zig の関数を、そのまま TypeScript から呼べるコマンドにする」ための層です。
 ルーティングテーブルを手で書くことはありません。**関数を書いて、構造体にまとめて、`Schema` に渡すだけ**です。

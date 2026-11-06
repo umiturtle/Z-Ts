@@ -346,7 +346,12 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
         .body = body.written(),
         // The word-count template is runtime data (`{d} 語` / `{d} words`), so the number is
         // substituted rather than formatted.
-        .words = try replaceAll(arena, s.words_fmt, "{d}", try std.fmt.allocPrint(arena, "{d}", .{countWords(layout.plain)})),
+        // A page with no prose (the 404, generated listings) gets no word count: "0 語" in the
+        // footer is noise that reads like a bug.
+        .words = if (hasProse(layout.plain))
+            try replaceAll(arena, s.words_fmt, "{d}", try std.fmt.allocPrint(arena, "{d}", .{countWords(layout.plain)}))
+        else
+            "",
     });
     return out.toOwnedSlice();
 }
@@ -365,6 +370,11 @@ fn pageTitle(arena: Allocator, layout: Layout, href: []const u8) Allocator.Error
         }
     };
     return arena.dupe(u8, layout.site_title);
+}
+
+fn hasProse(plain: []const u8) bool {
+    for (plain) |ch| if (!std.ascii.isWhitespace(ch)) return true;
+    return false;
 }
 
 fn countWords(plain: []const u8) usize {
