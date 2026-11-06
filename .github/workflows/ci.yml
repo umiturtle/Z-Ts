@@ -713,7 +713,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2022]
+        # `macos-14` stopped being schedulable on 2026-11-06: the job was cancelled after 1s with
+        # an empty `runner_name` (no runner ever assigned, no steps run). `macos-latest` is what
+        # `ci-macos` already uses and it is still served, so track latest here too.
+        os: [ubuntu-24.04, macos-latest, windows-2022]
     steps:
       - uses: actions/checkout@v4
 
