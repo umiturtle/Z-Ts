@@ -302,6 +302,8 @@ CI ゲートは `OK docsite` マーカーの拡張（U16）で行い、**数値�
 - **完了したこと**: なし（提案のみ。実装は未着手）
 - **作業中・直前の状態**: 調査記録 [`../architecture/docs-as-a-product.md`](../architecture/docs-as-a-product.md)
   を書き、そこからこのバックログ（U0〜U20）を作った。
+- **検証済み（2026-11-06）**: `python3 scripts/check-docs.py` → `OK (84 markdown files verified)`、
+  `./zigw build docs` → `OK docsite pages=194 links=416 api_undoc=0`（リンク・アンカー検査込み）。
 - **再開するとき**: 承認を得て `Status` を `in_progress` にし、まず U0（1 行）→ U1 → U2 → U5。
   文章を書く波（Wave 2）に入る前に、U3（ページ種別）を入れておくと、新しいページの置き場所が
   決まってから書ける。
