@@ -1447,7 +1447,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\<link rel="alternate" hreflang="{s}" href="{s}{s}" />
         \\<link rel="stylesheet" href="{s}assets/site.css" />
         \\<link rel="icon" href="{s}assets/favicon.svg" type="image/svg+xml" />
-        \\<script>try{{var t=localStorage.getItem("zts-theme");if(t==="light"||t==="dark"){{document.documentElement.dataset.theme=t}}else if(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches){{document.documentElement.dataset.theme="dark"}}}}catch(e){{}}</script>
+        \\<script>document.documentElement.dataset.js="1";try{{var t=localStorage.getItem("zts-theme");if(t==="light"||t==="dark"){{document.documentElement.dataset.theme=t}}else if(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches){{document.documentElement.dataset.theme="dark"}}}}catch(e){{}}</script>
         \\</head>
         \\<body class="landing" data-root="{s}" data-lang="{s}">
         \\<header class="topbar landing-topbar">

@@ -98,7 +98,7 @@ const head_template =
     \\<link rel="stylesheet" href="{root}assets/site.css" />
     \\{alt_link}
     \\<link rel="icon" href="{root}assets/favicon.svg" type="image/svg+xml" />
-    \\<script>try{var t=localStorage.getItem("zts-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t}else if(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches){document.documentElement.dataset.theme="dark"}}catch(e){}</script>
+    \\<script>document.documentElement.dataset.js="1";try{var t=localStorage.getItem("zts-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t}else if(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches){document.documentElement.dataset.theme="dark"}}catch(e){}</script>
     \\</head>
     \\<body data-root="{root}" data-lang="{lang}">
     \\<a class="skip" href="#main">{skip}</a>

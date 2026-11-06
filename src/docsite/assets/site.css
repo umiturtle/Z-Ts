@@ -954,13 +954,14 @@ body.landing { background:
 
 @media (max-width: 900px) {
   .brand-tagline, .topbar-sep { display: none; }
-  .menu-toggle { display: inline-grid; }
   .search input[type="search"] { width: 9.5rem; }
   .search input[type="search"]:focus { width: 12rem; }
   .langs > * { padding: .22rem .4rem; }
 
   .layout { grid-template-columns: minmax(0, 1fr); }
-  .sidebar {
+  /* Without JS the sidebar stays in the flow above the article — the navigation is still there,
+     it just is not collapsible. `data-js` is set by the inline script in <head> before paint. */
+  html[data-js="1"] .sidebar {
     position: fixed;
     inset: var(--topbar-h) auto 0 0;
     z-index: 45;
@@ -971,7 +972,9 @@ body.landing { background:
     transform: translateX(-102%);
     transition: transform .2s ease;
   }
-  .sidebar.open { transform: none; }
+  html[data-js="1"] .sidebar.open { transform: none; }
+  html[data-js="1"] .menu-toggle { display: inline-grid; }
+  html:not([data-js="1"]) .menu-toggle { display: none; }
   body.nav-open::after {
     content: "";
     position: fixed;
