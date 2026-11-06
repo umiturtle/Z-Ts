@@ -1,4 +1,4 @@
-//! Screenshot capture contract tests (`M5-04`).
+//! Screenshot capture contract tests.
 //!
 //! The real encoders are platform code (cairo on GTK, `NSBitmapImageRep` on macOS, WebView2
 //! `CapturePreview` on Windows), so the *contract* every backend must satisfy is pinned here and

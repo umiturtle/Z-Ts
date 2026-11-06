@@ -70,7 +70,7 @@ pub const Ctx = struct {
     }
 };
 
-/// Single-function authorization gate (`ADR-0002` §1.6).
+/// Single-function authorization gate.
 /// Return `true` to allow `command` execution for `ctx`, or `false` to reject with `403 Forbidden`.
 pub const AuthorizeFn = *const fn (ctx: *const Ctx, command: []const u8) bool;
 

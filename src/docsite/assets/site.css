@@ -788,3 +788,112 @@ html[data-theme="dark"] .zk-n { color: #d2a8ff; }
   color: var(--fg-muted);
   letter-spacing: 0.01em;
 }
+
+/* ---------------------------------------------------------------------------
+   Navigation: breadcrumbs, page-kind badge, prev/next pager, edit link.
+   The badge colours are the only place the page "type" is expressed visually;
+   they are deliberately quiet (a 1px border, no fill) so a reference page and a
+   tutorial still look like the same document.
+   --------------------------------------------------------------------------- */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .8rem;
+  margin: 0 0 1.1rem;
+  font-size: .82rem;
+}
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; color: var(--fg-muted); }
+.crumbs a { color: var(--fg-muted); }
+.crumbs a:hover { color: var(--accent); }
+.crumbs .sep { opacity: .5; }
+.crumbs [aria-current="page"] { color: var(--fg); }
+
+.kind-badge {
+  display: inline-block;
+  padding: .05rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: .72rem;
+  letter-spacing: .02em;
+  color: var(--fg-muted);
+}
+.kind-badge[data-kind="guide"] { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent); }
+.kind-badge[data-kind="concept"] { border-color: color-mix(in srgb, #7aa2f7 55%, var(--border)); }
+.kind-badge[data-kind="tutorial"] { border-color: color-mix(in srgb, #9ece6a 55%, var(--border)); }
+.kind-badge[data-kind="reference"] { border-color: color-mix(in srgb, #e0af68 55%, var(--border)); }
+.kind-badge[data-kind="errors"] { border-color: color-mix(in srgb, var(--warn) 55%, var(--border)); }
+.kind-badge[data-kind="internals"] { opacity: .75; }
+
+/* A cross-reference is still a code span: the monospace shape is the signal that the
+   word is an identifier, the underline is the signal that it is also a place. */
+a.xref { text-decoration: none; border-bottom: 1px dotted color-mix(in srgb, var(--accent) 55%, transparent); }
+a.xref:hover { border-bottom-style: solid; }
+a.xref code { background: none; padding: 0; color: inherit; }
+
+.pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .8rem;
+  margin: 2.2rem 0 .6rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--border);
+}
+.pager a {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  padding: .7rem .85rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  text-decoration: none;
+  color: var(--fg);
+  min-width: 0;
+}
+.pager a:hover { border-color: var(--accent); }
+.pager a span { font-size: .74rem; color: var(--fg-muted); }
+.pager a strong { font-weight: 550; font-size: .9rem; overflow-wrap: anywhere; }
+.pager-next { text-align: right; grid-column: 2; }
+.pager-prev:only-child { grid-column: 1 / -1; }
+.pager-next:only-child { grid-column: 1 / -1; }
+
+.edit-link { margin: 1.4rem 0 0; font-size: .78rem; color: var(--fg-muted); }
+.edit-link a { color: var(--fg-muted); }
+.edit-link a:hover { color: var(--accent); }
+
+/* 「このページに出てくる API」 — generated from the cross-reference index. */
+.related {
+  margin: 2rem 0 0;
+  padding: .9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-soft, transparent);
+}
+.related h2 { margin: 0 0 .5rem; font-size: .82rem; color: var(--fg-muted); font-weight: 600; letter-spacing: .02em; }
+.related ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .35rem .55rem; }
+.related li { margin: 0; }
+.related a code { font-size: .78rem; }
+
+/* Error index: one card per `error.Name`. */
+.error-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .6rem; margin: 1.2rem 0 2rem; }
+.error-entry { border: 1px solid var(--border); border-radius: 9px; padding: .55rem .7rem; }
+.error-entry h2 { margin: 0 0 .25rem; font-size: .86rem; font-weight: 600; }
+.error-files { margin: 0; font-size: .72rem; color: var(--fg-muted); overflow-wrap: anywhere; }
+
+/* API 「関連」 line: the usage graph, derived from signatures. */
+.api-related { margin: .5rem 0 0; font-size: .8rem; color: var(--fg-muted); }
+.api-related span { margin-right: .4rem; font-weight: 600; }
+
+@media print {
+  .pager, .edit-link, .page-head { display: none; }
+}
+
+/* GitHub 互換の注記（`> [!NOTE]`）。引用の見た目は保ちつつ、左線と見出しで種類を示す。 */
+blockquote.admonition {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  padding: .6rem .9rem;
+}
+blockquote.admonition[data-kind="WARNING"] { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+blockquote.admonition[data-kind="IMPORTANT"] { border-left-color: #bb9af7; }
+.admonition-title { margin: 0 0 .3rem; font-size: .76rem; font-weight: 700; letter-spacing: .04em; color: var(--fg-muted); }

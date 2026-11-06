@@ -19,7 +19,7 @@
 ## 1. 3 ステップ
 
 ```zig
-// ① フロントエンドを Zig モジュールにする（build.zig、M5-01）
+// ① フロントエンドを Zig モジュールにする（build.zig）
 const frontend = zts_build.embedFrontend(b, .{
     .src_dir = b.path("web/dist"),       // Vite / Astro / Next out のどれでも
     .web_mod = web_mod,                  // zts_web
@@ -166,3 +166,26 @@ try testing.expectEqualStrings("{\"count\":1,…}", inst.last_response.body.slic
 - ビルド統合: [`../architecture/build-tools.md`](../architecture/build-tools.md)（`embedFrontend`）
 - 内部資料: [`../architecture/ssg-and-wasm.md`](../architecture/ssg-and-wasm.md) /
   [`../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`](../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md)
+
+## 設定は型で確かめる（CI がコンパイル）
+
+`ExportOptions` のフィールド名は、このブロックを CI がコンパイルすることで守られています。
+フィールドを改名したら、ドキュメントのこの例が先に落ちます。
+
+```zig check
+const std = @import("std");
+const ssg = @import("zts_ssg");
+
+test "ExportOptions のフィールド名" {
+    const options: ssg.ExportOptions = .{
+        .assets = undefined,
+        .wasm_bytes = null,
+        .prerender_routes = &.{
+            .{ .route = "/about", .title = "About", .initial_json = null },
+        },
+        .emit_spa_404 = true,
+        .emit_nojekyll = true,
+    };
+    try std.testing.expectEqualStrings("/about", options.prerender_routes[0].route);
+}
+```

@@ -42,7 +42,7 @@ test {
     _ = snapshot_wire;
 }
 
-/// OS-independent conversion of a flattened snapshot for the native backends (`M4-05`).
+/// OS-independent conversion of a flattened snapshot for the native backends.
 pub const snapshot_wire = @import("snapshot_wire.zig");
 
 pub const Accelerator = accelerator.Accelerator;

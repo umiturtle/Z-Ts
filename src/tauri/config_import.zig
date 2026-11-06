@@ -1,4 +1,4 @@
-//! `tauri.conf.json` (Tauri v2) importer — the migration half of `M4-04`.
+//! `tauri.conf.json` (Tauri v2) importer — the migration half of .
 //!
 //! Existing Tauri v2 projects describe themselves in `src-tauri/tauri.conf.json` and
 //! `src-tauri/capabilities/*.json`. This module reads those files **without modification** and maps

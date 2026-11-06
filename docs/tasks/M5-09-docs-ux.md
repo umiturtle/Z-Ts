@@ -1,14 +1,16 @@
 # Task M5-09: ドキュメントサイトの UX 改善（学習しやすさ）
 
-- **Status**: `todo`（提案のみ・未承認・未着手。着手時は `in_progress` に変えて 1 コミット push する）
-- **Branch**: `arena/8dcbe303-z-ts`
+- **Status**: `in_progress`（Wave 0 / 1 / 3 を実装済み。残りは Wave 2 の G1・G2・G5・G3）
+- **Branch**: `arena/30af0dbd-z-ts`
 - **Scope**: `docs/learn/`（新規）, `docs/errors/`（新規）, `docs/reference/`, `docs/guides/`,
   `src/docsite/{main,site,apidoc,markdown}.zig`, `src/docsite/assets/{site.css,site.js}`,
   `src/**.zig`（`///` の規約修正のみ）, `scripts/check-docs.py`, `build.zig`, `zigw`,
   `docs/INDEX.md`, `docs/tasks/M5-09-docs-ux.md`, 本ファイル
 - **Upstream Reference**: 調査記録 [`../architecture/docs-as-a-product.md`](../architecture/docs-as-a-product.md)
-  （Angular / Tauri / Rust の一次調査、原則 P1〜P12）
-- **Next Step**: 承認後、Wave 0（U0）→ Wave 1 の U1 / U2 / U5 の順。理由は §2 の「効き目 × コスト」。
+  （Angular / Tauri / Rust の第 1 ラウンド、React / K8s / Go / Python / Deno / TypeScript の
+  第 2 ラウンド、原則 P1〜P18）
+- **Next Step**: Wave 2（U8 概念ページ → U9 チュートリアル → U12 ACL → U13 API の例）。
+  執筆の規約は [`../contributing/writing-docs.md`](../contributing/writing-docs.md) に固定済み。
 
 ---
 
@@ -219,15 +221,15 @@
 
 ### U14. doctest-lite（例のコンパイル検査）
 
-- **ねらい**: ガイドには 25 個の ```zig ブロックがあるが、壊れても誰も気付かない（G4）。
+- **ねらい**: ガイドには 25 個の Zig コードブロックがあるが、壊れても誰も気付かない（G4）。
 - **実装**: `scripts/docs-examples.mjs` か Zig 実装の `docsite --check-examples`。フェンスの
   info 文字列で扱いを分ける。
 
   | 記法 | 意味 |
   |---|---|
-  | ` ```zig ` | 完全なファイルとしてコンパイル |
-  | ` ```zig snippet ` | 宣言の断片。`pub const _test = struct { … }` で包んでコンパイル |
-  | ` ```zig ignore ` | 検査しない（意図をコメントで書く） |
+  | `zig check` | 完全なファイルとしてコンパイル |
+  | `zig check-snippet` | 宣言の断片。`fn __doc()` で包んでコンパイル |
+  | `zig ignore` | 検査しない（意図をコメントで書く） |
 
 - **受け入れ条件**: ガイド内の `zig` フェンスがすべて 3 種のいずれかに分類され、
   `snippet` / `full` がコンパイルを通る。壊すと CI が落ちる。
@@ -268,18 +270,55 @@
 
 ---
 
+## 7.5 実装ログ（2026-11-06・第 2 ラウンド）
+
+`arena/30af0dbd-z-ts` の 1 本の PR にまとめた実装です。**U0〜U7・U14〜U17 の大半が完了**。
+検証は `./zigw docs-check`（4 段）で再現できます。
+
+| # | 状態 | 実装 | 証拠 |
+|---|---|---|---|
+| U0 | ✅ | `site.zig` の `//!` を実態（`sitemap.xml` / `llms.txt` / `404.html`）に修正 | C3 解消 |
+| U1 | ✅ | `site.Crumb` / `site.NavLink`、`main.buildCrumbs()` / `neighbors()` | 全 197 ページ |
+| U2 | ✅ | `apidoc.Page.toc`（宣言の見出し）＋ パッケージへ戻るリンク | 90 API ページ |
+| U3 | ✅ | `pageKind()` → `span.kind-badge[data-kind]`（9 種） | 全ページ |
+| U4 | ✅ | 検索索引 886 → **2,362 件**（型メンバ 1,477 + 用語） | `assets/search-index.js` |
+| U5 | ✅ | `renderLlmsTxt` / `renderLlmsFull`（サイドバーと同じ並び） | `llms.txt` 9 KB / `llms-full.txt` 146 KB |
+| U6 | ✅ | `renderSitemap` / `renderNotFoundBody` | `sitemap.xml` / `404.html` |
+| U7 | ✅ | `> [!NOTE]` `[!TIP]` `[!WARNING]` `[!IMPORTANT]`（GitHub 互換） | `markdown.zig` + 単体テスト |
+| U10 | ✅ | [`../glossary.md`](../glossary.md) 31 項目（相互参照つき） | 用語集ページ |
+| U11 | ✅ | [`../reference/errors.html`](../reference/errors.html) 118 項目（生成） | `renderErrorsBody` |
+| U13 | ◐ | API ページに「関連」（署名一致の兄弟を最大 6 件）＋ 各ページ末尾の「関連 API」最大 24 件 | `apidoc.renderDecl` / `main.renderRelatedApi` |
+| U14 | ✅ | `scripts/doc-tests.py` — `zig check` を `zig test --test-no-exec` でコンパイル | `./zigw docs-check` の第 3 段 |
+| U15 | ✅ | `check-docs.py` 規約 3（`///`・`//!` の `ADR-####` / `M#-##` 禁止、公開ツリー限定） | 54 行を実際に除去 |
+| U16 | ◐ | `OK docsite` マーカーに `xref_targets` / `xrefs` / `errors` を追加 | CI ログ |
+| U17 | ✗ | 検索の重みづけ（前方一致の優先）は未実装 | — |
+| U8 U9 U12 | ✗ | 概念・チュートリアル・ACL は本文を書く作業（Wave 2 の本体） | — |
+| U18〜U20 | ✗ | 保留のまま（§7） | — |
+
+**新しく増えた規約**（このタスクの範囲外だが、腐らせないために足したもの）
+
+- `check-docs.py` の規約 6 本を再編: 読者向け散文（README / glossary / guides / reference）でも
+  内部 ID を禁止、`@import("zts_…")` 以外の `zts_*` はパッケージ扱いしない。
+- `./zigw docs-check` = レンダラのテスト → `check-docs.py` → `doc-tests.py` → `zig build docs`。
+  CI も同じ 4 段（`.github/workflows/ci.yml`）。
+- 執筆の規約を [`../contributing/writing-docs.md`](../contributing/writing-docs.md) に集約。
+
+---
+
 ## 8. 成功の測り方
 
-| 指標 | 現在（2026-11-06） | Wave 1 後 | Wave 2 後 |
+| 指標 | 着手前 | 現在（第 2 ラウンド後） | Wave 2 後（目標） |
 |---|---|---|---|
-| 読者向けページ数 | 10 | 10 | 22（概念 5 + チュートリアル 3 + 用語 + エラー + ACL） |
-| コード例を持つ宣言 | 0 / 455 | 20 / 455 | 60% |
-| メンバ検索 | 不可 | 1,477 件が引ける | 同左 |
-| ページ種別ラベル | なし | 全ページ | 同左 |
-| 前後送り・パンくず | なし | 全ページ | 同左 |
-| `llms.txt` | なし | 生成 | 同左 |
-| 例のコンパイル検査 | なし | — | ガイド 25 ブロック全部 |
-| `///` の層違反 | 37 件 | 0 件 | 0 件 |
+| 読者向けページ数 | 10 | 12（用語集・執筆規約を追加） | 22（概念 5 + チュートリアル 3 + ACL + 用語 + エラー） |
+| 読者向けリンク数 | 409 | **463** | 600 |
+| xref（自動リンク） | 0 | **985** | 1,500 |
+| コード例を持つ宣言 | 0 / 455 | 0 / 455（例はガイド側に 2 本） | 60% |
+| メンバ検索 | 不可 | **1,477 件が引ける** | 同左 |
+| ページ種別ラベル | なし | **全ページ（9 種）** | 同左 |
+| 前後送り・パンくず | なし | **全ページ** | 同左 |
+| `llms.txt` | なし | **生成（9 KB）** | 同左 |
+| 例のコンパイル検査 | なし | **`zig check` 2 本 / CI** | ガイドの主要ブロック全部 |
+| `///` の層違反 | 37 件 | **0 件（公開ツリー）** | 0 件 |
 
 CI ゲートは `OK docsite` マーカーの拡張（U16）で行い、**数値が下がったら落ちる**ようにします。
 
@@ -299,11 +338,13 @@ CI ゲートは `OK docsite` マーカーの拡張（U16）で行い、**数値�
 
 （項目を完了するたびにここを上書き更新すること）
 
-- **完了したこと**: なし（提案のみ。実装は未着手）
-- **作業中・直前の状態**: 調査記録 [`../architecture/docs-as-a-product.md`](../architecture/docs-as-a-product.md)
-  を書き、そこからこのバックログ（U0〜U20）を作った。
-- **検証済み（2026-11-06）**: `python3 scripts/check-docs.py` → `OK (84 markdown files verified)`、
-  `./zigw build docs` → `OK docsite pages=194 links=416 api_undoc=0`（リンク・アンカー検査込み）。
-- **再開するとき**: 承認を得て `Status` を `in_progress` にし、まず U0（1 行）→ U1 → U2 → U5。
-  文章を書く波（Wave 2）に入る前に、U3（ページ種別）を入れておくと、新しいページの置き場所が
-  決まってから書ける。
+- **完了したこと**: U0〜U7・U10・U11・U14・U15（§7.5）。加えて 6 サイトの追加調査と P13〜P18 の
+  原則化、執筆規約の文書化（`docs/contributing/writing-docs.md`）。
+- **作業中・直前の状態**: 1 本の PR にまとめて提出する段階。`./zigw docs-check` が 4 段とも緑。
+- **検証済み（2026-11-06）**:
+  - `./zigw docs-check` → `All 52 tests passed` / `Documentation check OK (86 markdown files verified)` /
+    `OK doctest blocks=2` / `OK docsite pages=197 links=463 xrefs=985 errors=118 api_undoc=0`
+  - `python3 scripts/check-docs.py` → 0 件（かつて 671 件だった）
+- **再開するとき**: Wave 2（U8 概念 → U9 チュートリアル → U12 ACL → U13 API の例）から。
+  各ページは `docs/contributing/writing-docs.md` の骨格（`# 見出し` + 対象読者 + 所要時間）で書き、
+  例には `zig check` を付ける。1 ページ書いたら `./zigw docs-check` を回す。

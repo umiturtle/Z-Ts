@@ -19,9 +19,9 @@ Z-Ts は、Tauri v2 の **IPC プロトコル・プラグイン・設定ファ�
 
 | 目標 | 手段 |
 |---|---|
-| **単一バイナリ** | フロントエンドの `dist/` をビルド時に gzip + CSP ハッシュ付きで埋め込む（`M5-01`） |
+| **単一バイナリ** | フロントエンドの `dist/` をビルド時に gzip + CSP ハッシュ付きで埋め込む（[埋め込みの仕組み](docs/architecture/build-tools.md)） |
 | **3 つの成果物** | ネイティブ WebView / ブラウザ Live Preview（SSE）/ サーバ不要の静的 SSG |
-| **OS 間で同じ表示** | 同梱フォント・レイアウト指紋・画素許容差で 3 OS のスクショを CI が相互比較（`M5-04`/`M5-05`） |
+| **OS 間で同じ表示** | 同梱フォント・レイアウト指紋・画素許容差で 3 OS のスクショを CI が相互比較（[画素一致の設計](docs/architecture/screenshot-parity.md)） |
 | **9 フレームワーク対応** | Angular / Solid / Svelte / SolidStart / Next.js / Nuxt / Astro / SvelteKit / React |
 | **上流との互換** | `@tauri-apps/api` v2 を**無改変**で動かし、`tauri.conf.json` / `capabilities/*.json` を読む |
 

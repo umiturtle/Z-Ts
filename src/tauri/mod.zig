@@ -1,6 +1,6 @@
 //! `zts_tauri` — Standalone Tauri v2 Wire Protocol, Streaming `Channel(T)` & Core Plugins (`link_libc = false`).
 //!
-//! Designed strictly around `ADR-0002` & multi-product reuse constraints:
+//! Designed strictly around  & multi-product reuse constraints:
 //! - Depends ONLY on `zts_foundation`, `zts_web`, `zts_core`, and `zts_rpc` (`link_libc = false`).
 //! - Zero compile-time or link-time dependency on GTK, Cocoa, Win32, or HTTP sockets.
 //! - Runs identically atop `WebviewHost` (native desktop), `BridgeHost` (browser / Live Preview),
@@ -91,10 +91,10 @@ pub const CorePluginStates = struct {
     app_state: AppState,
     /// `plugin:resources` state: handles handed to JS.
     resources: ResourceTable,
-    /// `M4-03`: `plugin:menu`. Starts on the `Stub` backend; `withMenuBackend` swaps in a native
+    /// `plugin:menu`. Starts on the `Stub` backend; `withMenuBackend` swaps in a native
     /// one (`native.menuBackend()`) or a `Mock` for tests.
     menu_state: MenuState,
-    /// `M4-03`: `plugin:tray` (needs `menu_state` for the attached menus).
+    /// `plugin:tray` (needs `menu_state` for the attached menus).
     tray_state: TrayState,
 
     /// Heap-allocated bundle because internal cross-references (`events.window_labels -> &self.windows`)

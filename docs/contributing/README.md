@@ -36,7 +36,7 @@
 ```bash
 bash scripts/status.sh          # ブランチ・未コミット・並列エージェント・直近 CI
 ./zigw quick-test               # 全単体テスト（コールド 8 秒 / 2 回目以降 0.03 秒）
-python3 scripts/check-docs.py && ./zigw fmt --check src/ tests/ examples/ build.zig
+./zigw docs-check               # ドキュメントの 4 段ゲート（12 秒）
 ```
 
 3 つとも通れば「壊れているのは自分の変更」です。
@@ -50,8 +50,10 @@ python3 scripts/check-docs.py && ./zigw fmt --check src/ tests/ examples/ build.
 | `./zigw quick-test` | `std.Build` を介さず全モジュールの単体テスト | コールド 8 秒 / 2 回目 0.03 秒 |
 | `./zigw full-test` | `zig build test` と同じ（E2E・C ABI・バインディング鮮度を含む） | コールド 90 秒以上 |
 | `./zigw build test -Dgtk=false` | GTK を切って `test` ステップを実行（CI と同じ形） | キャッシュ次第 |
+| `./zigw docs-check` | ドキュメントの**全ゲート**（下記 4 段）。PR 前に必ずこれ | 約 12 秒 |
 | `./zigw build docs` | ドキュメントサイトを `zig-out/docs/` に生成（リンク・アンカー検査つき） | 約 4 秒 |
-| `python3 scripts/check-docs.py` | ドキュメント構造・相対リンク・禁止ファイルの検査 | 0.1 秒 |
+| `python3 scripts/check-docs.py` | 構造・相対リンク・層違反・CLI 乖離・パッケージ名・用語集・ページ骨格 | 0.1 秒 |
+| `python3 scripts/doc-tests.py` | `zig check` フェンスを実際にコンパイル（doctest-lite） | 2 ブロックで 5 秒 |
 
 個別モジュールだけ回すときは `./zigw test src/docsite/mod.zig` のように書きます
 （`src/cli/mod.zig` だけは `main.zig` を含まないので、CLI 本体は `./zigw build` が型検査します）。

@@ -10,7 +10,7 @@
 //! ## Mnemonics
 //!
 //! The core's labels use GTK's marker: `_F` marks `F` as the mnemonic and `__` is a literal
-//! underscore (this is what `M4-03`'s GTK backend feeds `gtk_menu_item_new_with_mnemonic`).
+//! underscore.
 //! Upstream `muda` instead stores `&` in shared state; Z-Ts converts per backend, which keeps
 //! the existing GTK behaviour (and its tests) intact:
 //!

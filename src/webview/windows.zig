@@ -1,4 +1,4 @@
-//! Native Windows Backend — `Win32` window + Direct WebView2 (`src/webview/windows.zig`, `M3-02`).
+//! Native Windows Backend — `Win32` window + Direct WebView2.
 //!
 //! Pure Zig, **no C / C++ / Rust, no `@cImport`, no `WebView2Loader.dll`**: the runtime is located
 //! and driven through [`webview2_loader.zig`](webview2_loader.zig) plus the hand-generated COM
@@ -15,7 +15,7 @@
 //!    navigates, so no Zig code ever blocks the STA.
 //! 3. **`ICoreWebView2Deferral` isolation**: the raw COM pointers live in a main-thread-only table
 //!    and Zig only ever sees `(window_id, RequestId)` + bytes — Architectural Invariant #4 from
-//!    `ADR-0002` holds on Windows exactly as it does on GTK / WKWebView.
+//!     holds on Windows exactly as it does on GTK / WKWebView.
 //! 4. **No custom scheme API needed**: `tauri://localhost/…` is rewritten to
 //!    `http://tauri.localhost/…` (see [`windows_util.toWebView2Url`](windows_util.zig)) and served
 //!    through `WebResourceRequested`, the same workaround wry/Tauri ship.
@@ -129,7 +129,7 @@ const Deferred = struct {
 // COM event handler objects
 // ---------------------------------------------------------------------------
 
-/// In-flight / finished-but-uncollected `CapturePreview` (`M5-04`).
+/// In-flight / finished-but-uncollected `CapturePreview`.
 ///
 /// WebView2 writes the PNG into an `IStream` and calls the handler later, so the slot outlives the
 /// call. It is heap-owned and freed by the completion handler (or by `deinit()` on a closed
@@ -443,7 +443,7 @@ pub const WindowsWebView2Backend = struct {
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
-    /// Screenshot slots (`M5-04`): pending renders and finished images not yet collected.
+    /// Screenshot slots: pending renders and finished images not yet collected.
     captures: std.ArrayList(*CaptureSlot) = .empty,
 
     /// Set by `requestQuit()`.
@@ -1626,7 +1626,7 @@ pub const WindowsWebView2Backend = struct {
         return w.*.hwnd;
     }
 
-    /// Overlay embedding (`M3-03`): resize the child HWND to fill the host's client area.
+    /// Overlay embedding: resize the child HWND to fill the host's client area.
     /// `PUT/SetWindowPos` on a `WS_CHILD` window is the Win32 equivalent of
     /// `gtk_widget_set_size_request` / `[NSView setFrame:]` in the other two backends.
     pub fn fitParent(self: *WindowsWebView2Backend, win_id: types.WindowId) types.WebviewError!void {
@@ -2034,7 +2034,7 @@ fn classifyVirtualOrigin(uri: []const u8) ?util.Protocol {
 /// **no terminator after the last header** (the shape `wry` emits). A trailing newline makes the
 /// runtime throw the *whole* block away: the response is still delivered, so the page renders, but
 /// `Access-Control-Allow-Origin` / `Tauri-Response` silently disappear and every cross-origin
-/// `fetch` dies with `TypeError: Failed to fetch` (`M3-02`, diagnosed on `ci-windows`).
+/// `fetch` dies with `TypeError: Failed to fetch`.
 fn appendHeaderLine(
     out: *std.ArrayList(u8),
     allocator: Allocator,

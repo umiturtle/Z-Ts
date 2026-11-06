@@ -1,4 +1,4 @@
-//! Overlay (parent-window) embedding contract tests (`M3-03`).
+//! Overlay (parent-window) embedding contract tests.
 //!
 //! `zts_webview` can mount its WebView as a **child** of a container the application already owns
 //! (`GtkContainer*` / `NSView*` / `HWND`), which is what game engines, editor docks and broadcast

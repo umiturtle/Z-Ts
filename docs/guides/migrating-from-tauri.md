@@ -1,5 +1,8 @@
 # Tauri v2 からの移行ガイド
 
+> **対象読者**: Tauri v2 のアプリを Z-Ts に載せ替えたい人。
+> **所要時間**: 30 分（フロントエンドは変更不要です）。
+
 既存の Tauri v2 アプリ（Rust + `@tauri-apps/api`）を Z-Ts に載せ替える手順です。
 **ゴールは「フロントエンドを 1 行も変えない」**こと。Z-Ts は Tauri の IPC プロトコル
 （`tauri://` の内部呼び出し、`__TAURI_INTERNALS__`、plugin コマンド名）をそのまま実装しているので、
@@ -11,15 +14,15 @@ JavaScript 側は原則そのまま動きます。
 
 | Tauri（Rust） | Z-Ts（Zig） | 状態 |
 |---|---|---|
-| `tauri.conf.json` | [`src/tauri/config_import.zig`](../../src/tauri/config_import.zig)（`load`） | `M4-04` 対応済み |
-| `capabilities/*.json` + `acl` | [`src/tauri/acl.zig`](../../src/tauri/acl.zig)（`Policy`） | `M4-04` 対応済み |
-| `#[tauri::command]` | `zts_rpc` の `Schema` + `bind` | `M1-04` 対応済み |
-| `plugin:dialog` | [`src/tauri/dialog`](../../src/tauri/) | `M4-01` 対応済み |
-| `plugin:clipboard-manager` | 同上 | `M4-01` 対応済み |
-| `plugin:fs` | [`src/tauri/fs/scope.zig`](../../src/tauri/fs/scope.zig) | `M4-02` 対応済み（スコープ付き） |
-| `plugin:menu` / `plugin:tray` | [`src/tauri/menu`](../../src/tauri/menu/)、[`src/tauri/tray`](../../src/tauri/tray/) | `M4-03`/`M4-05`/`M4-06` 対応済み |
-| `tauri build`（バンドラ） | `M5-03`（3-OS パッケージャ） | **未実装** |
-| `tauri dev` | `zts dev`（`M5-02`） | **未実装**（`zig build` を直接使う） |
+| `tauri.conf.json` | [`config_import.load`](../api/zts_tauri/config_import.html#load) | 対応（未知キーは警告、型違いはエラー） |
+| `capabilities/*.json` + `acl` | [`acl.Policy`](../api/zts_tauri/acl.html#Policy) | 対応（`fromImported` で取り込み） |
+| `#[tauri::command]` | [`zts_rpc.Schema`](../api/zts_rpc/schema.html#Schema) + [`bind`](../api/zts_rpc/schema.html#Schema) | 対応 |
+| `plugin:dialog` | [`zts_tauri.dialog`](../api/zts_tauri/dialog/mod.html) | 対応（GTK / AppKit / Win32） |
+| `plugin:clipboard-manager` | [`zts_tauri.clipboard`](../api/zts_tauri/clipboard/mod.html) | 対応 |
+| `plugin:fs` | [`zts_tauri.fs`](../api/zts_tauri/fs/mod.html) | 対応（スコープ付き） |
+| `plugin:menu` / `plugin:tray` | [`menu`](../api/zts_tauri/menu/mod.html) / [`tray`](../api/zts_tauri/tray/mod.html) | 対応（Cocoa / Win32 / GTK） |
+| `tauri build`（バンドラ） | [`zts package`](packaging.md) | 対応（deb / AppImage 風 AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`） |
+| `tauri dev` | [`zts dev`](getting-started.md) | 対応（HTTP 配信 + 変更検知 + 自動リロード） |
 
 ## 2. 設定ファイルはそのまま読ませる
 
@@ -80,19 +83,19 @@ zig build tsgen             # web/bindings.gen.ts を再生成
 ## 5. フロントエンドの配信方法を選ぶ
 
 Tauri は `devUrl` / `frontendDist` で切り替えますが、Z-Ts では**ビルド時に埋め込む**のが基本です
-（`M5-01` のエンベッダ）。`dist/` をそのまま `@embedFile` するので、実行時にアセットディレクトリを
+（[埋め込みの仕組み](../architecture/build-tools.md)）。`dist/` をそのまま `@embedFile` するので、実行時にアセットディレクトリを
 配る必要がありません。
 
 | 移行前 | 移行後 |
 |---|---|
 | `"devUrl": "http://localhost:5173"` | `zts dev`（`web/` を配信 + 自動リロード） |
 | `"frontendDist": "../dist"` | エンベッダで `embedded_frontend` モジュールに埋め込む |
-| `tauri build` | `zts build`（`M5-03` のパッケージャは未実装。まずは単一バイナリまで） |
+| `tauri build` | [`zts build`](getting-started.md) → [`zts package`](packaging.md)（deb / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`） |
 
 ## 6. 移行時に踏みやすいところ
 
 1. **`withGlobalTauri`**: Z-Ts は常に `window.__TAURI_INTERNALS__` を公開します。
-   `window.__TAURI__` を前提にした古いコードは `M1-05` の互換レイヤで吸収済みです。
+   `window.__TAURI__` を前提にした古いコードは互換レイヤ（[`js_bootstrap`](../api/zts_tauri/js_bootstrap.html)）で吸収済みです。
 2. **`invoke` の戻り値**: Tauri は `Result<T, E>` を JSON で返します。Z-Ts も同じ封筒
    （`{"result": …}` / `{"error": …}`）を使うので、`try/catch` の挙動は変わりません。
 3. **ACL のパススコープ**: `{ "path": "$APPDATA/db/*" }` のようなスコープは
@@ -100,8 +103,9 @@ Tauri は `devUrl` / `frontendDist` で切り替えますが、Z-Ts では**ビ�
 4. **メニュー / トレイ**: predefined 項目（`Copy` / `Quit` / `Separator` …）は OS 標準の
    セレクタ（macOS）／`MF_*`（Win32）へ写されます。カスタム項目は ID で
    `WM_COMMAND` / セレクタ経由で通知されます。
-5. **`tauri build` の成果物**: `.dmg` / `.msi` / `AppImage` はまだ作れません（`M5-03`）。
-   単一バイナリ（`zig-out/bin/<name>`）までは `zig build` で作れます。
+5. **`tauri build` の成果物**: `.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz` は
+   [`zts package`](packaging.md) が作ります。`.msi` と AppImage は**まだ**作れません
+   （AppDir までは作れるので、AppImage 化は外部ツールに渡せます）。
 
 ---
 

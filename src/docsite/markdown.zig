@@ -18,6 +18,8 @@ const Allocator = std.mem.Allocator;
 /// helpers declare it alongside `OutOfMemory`; [`render`] narrows it back to `OutOfMemory` (which is
 /// what it really means) at the public boundary.
 const Error = Allocator.Error || error{WriteFailed};
+const paths = @import("paths.zig");
+const links = @import("links.zig");
 
 pub const RenderOptions = struct {
     /// `[x](../tasks/M5-01-build-tools.md)` → `…html` so the rendered site has no dead links.
@@ -29,7 +31,22 @@ pub const RenderOptions = struct {
     /// Per-page overrides, e.g. turn `../../src/tauri/fs/scope.zig` into a GitHub blob URL on the
     /// published site (that file is not part of the site itself).
     rewrites: []const Rewrite = &.{},
+    /// Turns code spans such as `` `Engine` `` / `` `zts dev` `` / `` `error.OutOfMemory` `` into
+    /// links to the API page, the CLI reference or the error index. `null` keeps the text plain
+    /// (unit tests, internal pages that should not advertise the public surface).
+    linker: ?*const links.Index = null,
+    /// Resolved cross-references, in reading order. The caller uses them to print a
+    /// 「このページに出てくる API」box, which is how every guide gets a table of contents into the
+    /// API without anyone maintaining a second list by hand.
+    xrefs: ?*std.ArrayListUnmanaged(Xref) = null,
+    /// Links the same name only once per page: a paragraph that says `Schema` five times keeps one
+    /// destination instead of five. The API pages relax it (`repeat_xrefs`), because a declaration
+    /// page is read as a reference, not as prose.
+    repeat_xrefs: bool = false,
 };
+
+/// One resolved `` `Name` `` → `href` (site-relative) pair.
+pub const Xref = struct { name: []const u8, href: []const u8 };
 
 pub const Rewrite = struct {
     page: []const u8,
@@ -104,6 +121,11 @@ const Parser = struct {
     headings: std.ArrayListUnmanaged(Heading),
     links: std.ArrayListUnmanaged(Link),
     slugs: std.StringHashMapUnmanaged(usize),
+    /// Names already linked on this page (`repeat_xrefs` aside).
+    linked: std.StringHashMapUnmanaged(void) = .empty,
+    /// Non-zero while rendering a heading: a link inside `<h2>` would nest an anchor in the
+    /// permalink and read badly in the table of contents.
+    no_xref: u32 = 0,
 
     // ---------------------------------------------------------------- blocks
 
@@ -202,6 +224,8 @@ const Parser = struct {
         try out.writeAll("\"><a class=\"anchor\" href=\"#");
         try writeEscaped(out, id);
         try out.writeAll("\" aria-label=\"permalink\"></a>");
+        self.no_xref += 1;
+        defer self.no_xref -= 1;
         try self.renderInline(out, text);
         try out.print("</h{d}>\n", .{heading.level});
     }
@@ -225,7 +249,32 @@ const Parser = struct {
             } else break;
         }
 
-        try out.writeAll("<blockquote>\n");
+        // GitHub-style admonitions: `> [!NOTE]` / `[!TIP]` / `[!WARNING]` / `[!IMPORTANT]`.
+        // The marker line is dropped and the block gets a class, so the same Markdown is readable
+        // on GitHub and visually distinct on the site. Any other quote is untouched.
+        var kind: ?[]const u8 = null;
+        if (inner.items.len > 0) {
+            const first = std.mem.trim(u8, inner.items[0], " \t");
+            if (std.mem.eql(u8, first, "[!NOTE]")) {
+                kind = "NOTE";
+            } else if (std.mem.eql(u8, first, "[!TIP]")) {
+                kind = "TIP";
+            } else if (std.mem.eql(u8, first, "[!WARNING]")) {
+                kind = "WARNING";
+            } else if (std.mem.eql(u8, first, "[!IMPORTANT]")) {
+                kind = "IMPORTANT";
+            }
+            if (kind != null) inner.items = inner.items[1..];
+        }
+
+        if (kind) |k| {
+            try out.writeAll("<blockquote class=\"admonition\" data-kind=\"");
+            try writeEscaped(out, k);
+            try out.writeAll("\">\n");
+            try out.print("<p class=\"admonition-title\">{s}</p>\n", .{admonitionLabel(k)});
+        } else {
+            try out.writeAll("<blockquote>\n");
+        }
         try self.renderBlocks(out, inner.items);
         try out.writeAll("</blockquote>\n");
         return i;
@@ -422,9 +471,7 @@ const Parser = struct {
                 const run = countRun(text, i, '`');
                 if (std.mem.indexOfPos(u8, text, i + run, text[i .. i + run])) |end| {
                     const body = text[i + run .. end];
-                    try out.writeAll("<code>");
-                    try writeEscaped(out, trimCodeSpan(body));
-                    try out.writeAll("</code>");
+                    try self.writeCodeSpan(out, trimCodeSpan(body));
                     i = end + run;
                     continue;
                 }
@@ -508,6 +555,34 @@ const Parser = struct {
             try writeEscaped(out, text[i .. i + 1]);
             i += 1;
         }
+    }
+
+    /// A code span, promoted to a link when the cross-reference index knows the name.
+    ///
+    /// Only exact, whole-span names are considered: `` `Engine` `` links, `` `Engine.run()` `` does
+    /// not (the call would have to be stripped, and a wrong link is worse than no link). That keeps
+    /// the rule explainable in one sentence, which is what makes it safe to enable everywhere.
+    fn writeCodeSpan(self: *Parser, out: *std.Io.Writer, text: []const u8) Error!void {
+        if (self.no_xref == 0 and text.len > 1 and text.len < 96) {
+            if (self.options.linker) |ix| {
+                if (ix.resolve(text)) |target| {
+                    if (self.options.repeat_xrefs or !self.linked.contains(text)) {
+                        try self.linked.put(self.arena, text, {});
+                        const href = try paths.relativeHref(self.arena, self.options.page, target);
+                        try out.writeAll("<a class=\"xref\" href=\"");
+                        try writeEscaped(out, href);
+                        try out.writeAll("\"><code>");
+                        try writeEscaped(out, text);
+                        try out.writeAll("</code></a>");
+                        if (self.options.xrefs) |list| try list.append(self.arena, .{ .name = text, .href = target });
+                        return;
+                    }
+                }
+            }
+        }
+        try out.writeAll("<code>");
+        try writeEscaped(out, text);
+        try out.writeAll("</code>");
     }
 
     /// `[text](href)` / `![alt](src)` → returns the index just past the closing paren.
@@ -834,6 +909,13 @@ fn isRawHtmlBlock(line: []const u8) bool {
     const tags = [_][]const u8{ "<details", "<summary", "<div", "<table", "<video", "<picture", "<figure", "<iframe", "<p", "<section" };
     for (tags) |tag| if (std.mem.startsWith(u8, trimmed, tag)) return true;
     return false;
+}
+
+fn admonitionLabel(kind: []const u8) []const u8 {
+    if (std.mem.eql(u8, kind, "NOTE")) return "注記";
+    if (std.mem.eql(u8, kind, "TIP")) return "ヒント";
+    if (std.mem.eql(u8, kind, "WARNING")) return "注意";
+    return "重要";
 }
 
 fn isSafeInlineHtml(inner: []const u8) bool {
@@ -1226,4 +1308,14 @@ test "render is deterministic" {
     const first = try renderIn(arena, source);
     const second = try renderIn(arena, source);
     try testing.expectEqualStrings(first.html, second.html);
+}
+
+test "blockquote admonitions keep the marker out of the text" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const doc = try render(arena, "> [!NOTE]\n> ここに注意。\n", .{});
+    try std.testing.expect(std.mem.indexOf(u8, doc.html, "class=\"admonition\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, doc.html, "[!NOTE]") == null);
+    try std.testing.expect(std.mem.indexOf(u8, doc.html, "ここに注意。") != null);
 }

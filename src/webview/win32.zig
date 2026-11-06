@@ -1,8 +1,8 @@
-//! Minimal, auditable Win32 + COM bindings for the Windows backend (`src/webview/win32.zig`, `M3-02`).
+//! Minimal, auditable Win32 + COM bindings for the Windows backend.
 //!
 //! Why hand-written instead of `@cImport` / `addTranslateC`?
 //! - Zig 0.17 removed `@cImport`; `addTranslateC` on `<windows.h>` costs tens of seconds on every
-//!   cold CI container (see ADR-0001 / ADR-0007).
+//!   cold CI container.
 //! - Only ~120 symbols are actually needed, and every one below is named exactly as in the SDK so
 //!   `grep`-based audits and diffing against MSDN stay trivial.
 //!

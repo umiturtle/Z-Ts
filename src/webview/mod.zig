@@ -34,24 +34,24 @@ pub const has_native_gtk = (builtin.os.tag == .linux) and webview_options.enable
 /// non-Linux target).
 pub const linux = if (has_native_gtk) @import("linux.zig") else struct {};
 
-/// Native macOS `NSApplication` + `WKWebView` backend availability (`M3-01`).
+/// Native macOS `NSApplication` + `WKWebView` backend availability.
 pub const has_native_macos = (builtin.os.tag == .macos) and webview_options.enable_macos;
 /// The Cocoa + `WKWebView` module, or an empty struct when macOS support was not compiled in.
 pub const macos = if (has_native_macos) @import("macos.zig") else struct {};
 
-/// Native Windows `Win32` + Direct `WebView2` backend availability (`M3-02`).
+/// Native Windows `Win32` + Direct `WebView2` backend availability.
 /// No `WebView2Loader.dll`: the Evergreen runtime is located in the registry and
 /// `EmbeddedBrowserWebView.dll` is loaded directly (see `webview2_loader.zig`).
 pub const has_native_windows = (builtin.os.tag == .windows) and webview_options.enable_windows;
 /// The Win32 + WebView2 module, or an empty struct when Windows support was not compiled in.
 pub const windows = if (has_native_windows) @import("windows.zig") else struct {};
 
-/// Hand-generated `ICoreWebView2*` COM vtables (`M3-02`). Pure declarations, so the vtable
+/// Hand-generated `ICoreWebView2*` COM vtables. Pure declarations, so the vtable
 /// slot-count assertions and the IID/GUID parsing test also run on Linux and macOS CI.
 pub const webview2_com = @import("webview2_com.zig");
 
 /// OS-independent Windows/WebView2 helpers (registry keys, `http://<proto>.localhost` rewriting,
-/// DPI math). Zero Win32 imports, so these are unit-tested on every OS (`M3-02`).
+/// DPI math). Zero Win32 imports, so these are unit-tested on every OS.
 pub const windows_util = @import("windows_util.zig");
 
 pub const WindowId = types.WindowId;
@@ -285,7 +285,7 @@ pub const Engine = union(enum) {
     }
 
     /// Resizes an **embedded** window (`WindowConfig.parent_native_handle != null`) to fill its
-    /// host container's client area (`M3-03`). Toplevel windows return `error.Unsupported`; hosts
+    /// host container's client area. Toplevel windows return `error.Unsupported`; hosts
     /// driving their own loop can call this once per frame next to `step(.poll)`.
     pub fn fitParent(self: *Engine, win_id: WindowId) WebviewError!void {
         return switch (self.*) {
@@ -476,7 +476,7 @@ pub const Engine = union(enum) {
         };
     }
 
-    /// Starts an asynchronous PNG screenshot of `win_id`'s current viewport (`M5-04`).
+    /// Starts an asynchronous PNG screenshot of `win_id`'s current viewport.
     ///
     /// All three native backends capture asynchronously (WebKit snapshot / `WKWebView`
     /// `takeSnapshotWithConfiguration:` / WebView2 `CapturePreview`), so this only *queues* the work:

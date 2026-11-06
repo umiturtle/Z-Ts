@@ -3,7 +3,8 @@
 //! The site is generated *by the project itself* (dogfooding): `./zigw build docs` runs
 //! `src/docsite/main.zig`, which walks `docs/**.md` (+ `AGENTS.md`, `README.md`, the example
 //! READMEs), renders every page with [`markdown`], writes `dist/docs/*.html`, copies the static
-//! CSS/JS and emits `search-index.js` + `sitemap.txt`.
+//! CSS/JS and emits `search-index.js` (+ `sitemap.xml`, `llms.txt`, `llms-full.txt` and `404.html`
+//! from `main.zig`).
 //!
 //! Two things make this a real gate rather than a nice-to-have:
 //! * **link verification** — every relative link in the corpus is resolved against the set of pages
@@ -14,6 +15,11 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const markdown = @import("markdown.zig");
+const paths = @import("paths.zig");
+
+/// Re-exported from `paths.zig` so existing callers (`main.zig`, the API generator) keep using
+/// `site.relativeHref`; the renderer imports `paths.zig` directly to avoid an import cycle.
+pub const relativeHref = paths.relativeHref;
 
 /// `std.Io.Writer.Allocating` reports allocation failure as `error.WriteFailed`; the internal
 /// helpers accept both and the public entry points narrow it to `OutOfMemory` (see `markdown.zig`).
@@ -33,6 +39,12 @@ pub const Group = struct {
     entries: []const NavEntry,
 };
 
+/// One step of the breadcrumb trail. The last crumb has no `href`.
+pub const Crumb = struct { label: []const u8, href: []const u8 = "" };
+
+/// A previous/next page in the reader's order (the sidebar order, which is the learning order).
+pub const NavLink = struct { title: []const u8, href: []const u8 };
+
 pub const Layout = struct {
     site_title: []const u8 = "Z-Ts",
     /// Currently rendered page; `""` for the landing page.
@@ -49,7 +61,39 @@ pub const Layout = struct {
     toc: []const markdown.Heading = &.{},
     /// Plain-text page content, used for the word count in the footer.
     plain: []const u8 = "",
+    /// `guide` / `tutorial` / `concept` / `reference` / `recipe` / `migration` / `errors` / `api`.
+    /// Rendered as a badge next to the breadcrumbs and reused by the search result list.
+    kind: []const u8 = "",
+    /// Repository path of the Markdown source, for the "edit this page" link. `""` on generated
+    /// pages, which have no single source file.
+    source: []const u8 = "",
+    /// Breadcrumb trail (`Z-Ts › ガイド › RPC`). Rendered above the body.
+    crumbs: []const Crumb = &.{},
+    /// Reading order neighbours. `null` at the ends of a group.
+    prev: ?NavLink = null,
+    next: ?NavLink = null,
 };
+
+/// Japanese label for a page kind. Unknown kinds fall through unchanged, so a new folder can ship a
+/// badge before this table learns about it.
+pub fn kindLabel(kind: []const u8) []const u8 {
+    const table = .{
+        .{ "guide", "ガイド" },
+        .{ "tutorial", "チュートリアル" },
+        .{ "concept", "概念" },
+        .{ "reference", "リファレンス" },
+        .{ "recipe", "レシピ" },
+        .{ "migration", "移行" },
+        .{ "errors", "エラー" },
+        .{ "api", "API" },
+        .{ "internals", "内部資料" },
+        .{ "home", "ホーム" },
+    };
+    inline for (table) |row| {
+        if (std.mem.eql(u8, kind, row[0])) return row[1];
+    }
+    return kind;
+}
 
 pub const layout_error = Error;
 
@@ -153,6 +197,39 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
     }
     try writer.writeAll("</div>\n</nav>\n<main id=\"main\" class=\"content\">\n");
 
+    // Where am I? A breadcrumb every page, a kind badge when the corpus declares one, and the two
+    // neighbours. The pager is repeated at the bottom with the full titles: at the top it is a
+    // hint, at the bottom it is the "what next" affordance.
+    if (layout.crumbs.len > 0 or layout.kind.len > 0) {
+        try writer.writeAll("<div class=\"page-head\">\n");
+        if (layout.crumbs.len > 0) {
+            try writer.writeAll("<nav class=\"crumbs\" aria-label=\"パンくず\">");
+            for (layout.crumbs, 0..) |crumb, idx| {
+                if (idx > 0) try writer.writeAll("<span class=\"sep\" aria-hidden=\"true\">›</span>");
+                if (crumb.href.len > 0) {
+                    try writer.writeAll("<a href=\"");
+                    try writeEscaped(writer, try relativeHref(arena, href, crumb.href));
+                    try writer.writeAll("\">");
+                    try writeEscaped(writer, crumb.label);
+                    try writer.writeAll("</a>");
+                } else {
+                    try writer.writeAll("<span aria-current=\"page\">");
+                    try writeEscaped(writer, crumb.label);
+                    try writer.writeAll("</span>");
+                }
+            }
+            try writer.writeAll("</nav>\n");
+        }
+        if (layout.kind.len > 0) {
+            try writer.writeAll("<span class=\"kind-badge\" data-kind=\"");
+            try writeEscaped(writer, layout.kind);
+            try writer.writeAll("\">");
+            try writeEscaped(writer, kindLabel(layout.kind));
+            try writer.writeAll("</span>");
+        }
+        try writer.writeAll("\n</div>\n");
+    }
+
     if (layout.toc.len > 0) {
         try writer.writeAll("<details class=\"toc\"");
         if (layout.toc.len <= 8) try writer.writeAll(" open");
@@ -168,50 +245,37 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
     }
 
     try writer.writeAll(layout.body);
+
+    if (layout.prev != null or layout.next != null) {
+        try writer.writeAll("<nav class=\"pager\" aria-label=\"前後のページ\">\n");
+        if (layout.prev) |link| {
+            try writer.writeAll("<a class=\"pager-prev\" rel=\"prev\" href=\"");
+            try writeEscaped(writer, try relativeHref(arena, href, link.href));
+            try writer.writeAll("\"><span>← 前のページ</span><strong>");
+            try writeEscaped(writer, link.title);
+            try writer.writeAll("</strong></a>\n");
+        }
+        if (layout.next) |link| {
+            try writer.writeAll("<a class=\"pager-next\" rel=\"next\" href=\"");
+            try writeEscaped(writer, try relativeHref(arena, href, link.href));
+            try writer.writeAll("\"><span>次のページ →</span><strong>");
+            try writeEscaped(writer, link.title);
+            try writer.writeAll("</strong></a>\n");
+        }
+        try writer.writeAll("</nav>\n");
+    }
+
+    if (layout.source.len > 0) {
+        try writer.writeAll("<p class=\"edit-link\"><a href=\"https://github.com/umiturtle/Z-Ts/blob/main/");
+        try writeEscaped(writer, layout.source);
+        try writer.writeAll("\" target=\"_blank\" rel=\"noopener\">このページを GitHub で編集</a></p>\n");
+    }
+
     try writeTemplate(writer, tail_template, "", root);
 
     // The footer needs the word count, so patch the placeholder after the fact.
     const rendered = try out.toOwnedSlice();
     return replaceAll(arena, rendered, "{words}", try wordCount(arena, layout.plain));
-}
-
-/// Relative link from the page at `from` to the page at `to` (both site-relative).
-///
-/// The directories the two pages share are dropped, so `docs/tasks/a.html` → `docs/index.html`
-/// becomes `../index.html` rather than `../../docs/index.html`.
-pub fn relativeHref(arena: Allocator, from: []const u8, to: []const u8) Allocator.Error![]const u8 {
-    const from_dir = from[0 .. std.mem.lastIndexOfScalar(u8, from, '/') orelse 0];
-
-    // Longest shared directory prefix (on segment boundaries).
-    var shared: usize = 0;
-    var probe: usize = 0;
-    while (probe < from_dir.len and probe < to.len) : (probe += 1) {
-        if (from_dir[probe] != to[probe]) break;
-        if (to[probe] == '/') shared = probe + 1;
-    }
-    // `from_dir` entirely consumed means the target may sit in the same directory — but only when
-    // the next character of `to` is a separator (or the paths are equal). Matching `from_dir` as a
-    // *string* is not enough: `docs/api/zts_web` is a prefix of `docs/api/zts_webview`, and an
-    // unguarded branch here turned that into `href="iew/index.html"`.
-    if (probe == from_dir.len) {
-        if (to.len == from_dir.len) {
-            shared = from_dir.len;
-        } else if (to[from_dir.len] == '/') {
-            shared = from_dir.len + 1; // the target lives in the same directory
-        } else {
-            // `from_dir` matched as a string but not as a path segment: keep the last boundary.
-            shared = @min(shared, from_dir.len);
-        }
-    }
-
-    // `shared` indexes both strings; when the whole directory is shared it overshoots by one.
-    const rest_up = from_dir[@min(shared, from_dir.len)..];
-    var depth: usize = 0;
-    if (rest_up.len > 0) depth = std.mem.count(u8, rest_up, "/") + 1;
-
-    const up = try arena.alloc(u8, depth * 3);
-    for (0..depth) |i| @memcpy(up[i * 3 ..][0..3], "../");
-    return std.fmt.allocPrint(arena, "{s}{s}", .{ up, to[shared..] });
 }
 
 fn wordCount(arena: Allocator, plain: []const u8) Allocator.Error![]const u8 {

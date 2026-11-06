@@ -38,6 +38,36 @@ invoke("setStep", {step:5}) →       Counter.set_step(&state, .{ .step = 5 })
 | `Schema.bind(env)` | 各名前空間の状態ポインタを束縛する | `Schema.Router` |
 | `router.handler()` | 呼び出し規約を隠した 2 ワードの `Handler` | [`Handler`](../api/zts_rpc/ctx.html#Handler) |
 
+### 動く最小例（このブロックは CI がコンパイルします）
+
+上の図の `…` を埋めた完全版です。情報文字列に `zig check` を持つコードブロックは
+[`scripts/doc-tests.py`](../../scripts/doc-tests.py) が実際に `zig build-obj` に通すので、
+API の名前が変わればこのページが赤くなります。
+
+```zig check
+const std = @import("std");
+const rpc = @import("zts_rpc");
+
+const State = struct { count: i32 = 0, step: i32 = 1 };
+
+const Commands = struct {
+    pub fn get_state(state: *State) !struct { count: i32, step: i32 } {
+        return .{ .count = state.count, .step = state.step };
+    }
+
+    pub fn increment(state: *State) !i32 {
+        state.count += state.step;
+        return state.count;
+    }
+};
+
+const Schema = rpc.Schema(.{ .app = Commands });
+
+test "schema は名前空間を 1 つ持つ" {
+    try std.testing.expectEqual(@as(usize, 1), Schema.namespaces.len);
+}
+```
+
 `handler` は関数ポインタ 2 語だけの値なので、`zts_bridge`（HTTP+SSE）にも `zts_tauri`（IPC）にも、
 テストにもそのまま渡せます。
 
@@ -149,7 +179,7 @@ try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = "web/bindings.gen.ts", .data =
 ```
 
 ```zig
-// build.zig に組み込む場合（推奨・M5-01）
+// build.zig に組み込む場合（推奨）
 const gen = zts_build.tsgenBindings(b, .{
     .schema_mod = b.createModule(.{ .root_source_file = b.path("src/bindings_schema.zig") }),
     .output_path = "web/bindings.gen.ts",

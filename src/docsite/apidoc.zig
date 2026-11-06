@@ -26,6 +26,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const markdown = @import("markdown.zig");
+const xref_index = @import("links.zig");
 
 pub const Error = Allocator.Error || error{WriteFailed};
 
@@ -135,6 +136,9 @@ pub const Page = struct {
     /// `.internal` must not turn up between `Engine` and `WindowConfig`, or the last step out of
     /// the learning path is one anonymous search hit away.
     audience: Audience = .user,
+    /// In-page table of contents. Reference pages are long (a module can hold 24 declarations), so
+    /// the same `<details>` the Markdown pages get is generated here from the declaration list.
+    toc: []const markdown.Heading = &.{},
 };
 
 /// The public surface, mirroring the modules declared in `build.zig` (one root file per package).
@@ -1026,10 +1030,11 @@ fn renderDocMarkdown(
     text: []const u8,
     page: []const u8,
     source_path: []const u8,
-    links: *std.ArrayListUnmanaged(markdown.Link),
+    link_list: *std.ArrayListUnmanaged(markdown.Link),
+    index: *const xref_index.Index,
 ) Error![]const u8 {
     if (text.len == 0) return "";
-    const first = try markdown.render(arena, text, .{ .page = page });
+    const first = try markdown.render(arena, text, .{ .page = page, .linker = index });
 
     var rewrites: std.ArrayListUnmanaged(markdown.Rewrite) = .empty;
     for (first.links) |link| {
@@ -1039,12 +1044,12 @@ fn renderDocMarkdown(
     }
 
     if (rewrites.items.len == 0) {
-        for (first.links) |link| try links.append(arena, link);
+        for (first.links) |link| try link_list.append(arena, link);
         return first.html;
     }
 
-    const second = try markdown.render(arena, text, .{ .page = page, .rewrites = rewrites.items });
-    for (second.links) |link| try links.append(arena, link);
+    const second = try markdown.render(arena, text, .{ .page = page, .rewrites = rewrites.items, .linker = index });
+    for (second.links) |link| try link_list.append(arena, link);
     return second.html;
 }
 
@@ -1053,9 +1058,11 @@ fn renderDecl(
     arena: Allocator,
     writer: *std.Io.Writer,
     decl: Decl,
+    siblings: []const Decl,
     source_path: []const u8,
     page: []const u8,
-    links: *std.ArrayListUnmanaged(markdown.Link),
+    link_list: *std.ArrayListUnmanaged(markdown.Link),
+    index: *const xref_index.Index,
 ) Error!void {
     try writer.print("<section class=\"api-decl\" id=\"{s}\">\n", .{decl.name});
     try writer.writeAll("<h2 class=\"api-sig\"><span class=\"api-kind\">");
@@ -1067,7 +1074,7 @@ fn renderDecl(
 
     if (decl.doc.len > 0) {
         try writer.writeAll("<div class=\"api-doc prose\">");
-        try writer.writeAll(try renderDocMarkdown(arena, decl.doc, page, source_path, links));
+        try writer.writeAll(try renderDocMarkdown(arena, decl.doc, page, source_path, link_list, index));
         try writer.writeAll("</div>\n");
     } else if (isAlias(decl)) {
         try writer.writeAll("<p class=\"api-reexport\">再エクスポート（ドキュメントは定義元にあります）</p>\n");
@@ -1094,13 +1101,28 @@ fn renderDecl(
             try writer.print("</code><a class=\"api-line\" href=\"{s}{s}#L{d}\">L{d}</a></div>\n", .{ repo_blob_base, source_path, member.line, member.line });
             if (member.doc.len > 0) {
                 try writer.writeAll("<div class=\"api-doc prose\">");
-                try writer.writeAll(try renderDocMarkdown(arena, member.doc, page, source_path, links));
+                try writer.writeAll(try renderDocMarkdown(arena, member.doc, page, source_path, link_list, index));
                 try writer.writeAll("</div>\n");
             }
             try writer.writeAll("</div>\n");
         }
         try writer.writeAll("</div>\n");
     }
+
+    // 「関連」: declarations in this module whose *signature* mentions this one. It is derived from
+    // the parse, so it stays true when the API changes — the reader gets the usage graph for free
+    // instead of a hand-maintained "See also" that goes stale on the first rename.
+    var related: usize = 0;
+    for (siblings) |other| {
+        if (std.mem.eql(u8, other.name, decl.name)) continue;
+        if (std.mem.indexOf(u8, other.signature, decl.name) == null) continue;
+        if (related == 0) try writer.writeAll("<p class=\"api-related\"><span>関連</span> ");
+        if (related > 0) try writer.writeAll(" · ");
+        try writer.print("<a href=\"#{s}\">{s}</a>", .{ other.name, other.name });
+        related += 1;
+        if (related >= 6) break;
+    }
+    if (related > 0) try writer.writeAll("</p>\n");
 
     try writer.writeAll("</section>\n");
 }
@@ -1129,6 +1151,7 @@ fn renderModuleEntry(
     page: []const u8,
     source_path: []const u8,
     links: *std.ArrayListUnmanaged(markdown.Link),
+    index: *const xref_index.Index,
 ) Error!void {
     const summary = try firstParagraph(arena, module.doc);
     try writer.print("<li><a href=\"{s}.html\">{s}.zig</a> <span class=\"api-count\">{d}</span>", .{
@@ -1136,14 +1159,14 @@ fn renderModuleEntry(
     });
     if (summary.len > 0) {
         try writer.writeAll("<div class=\"api-summary prose\">");
-        try writer.writeAll(try renderDocMarkdown(arena, summary, page, source_path, links));
+        try writer.writeAll(try renderDocMarkdown(arena, summary, page, source_path, links, index));
         try writer.writeAll("</div>");
     }
     try writer.writeAll("</li>\n");
 }
 
 /// Builds every API page: the A–Z index, one page per package and one page per module.
-pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const Page {
+pub fn buildPages(arena: Allocator, packages_in: []const Package, index: *const xref_index.Index) Error![]const Page {
     var pages: std.ArrayListUnmanaged(Page) = .empty;
 
     for (packages_in) |pkg| {
@@ -1194,7 +1217,7 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
 
             if (module.doc.len > 0) {
                 try writer.writeAll("<div class=\"api-moduledoc prose\">");
-                try writer.writeAll(try renderDocMarkdown(arena, module.doc, href, module.path, &links));
+                try writer.writeAll(try renderDocMarkdown(arena, module.doc, href, module.path, &links, index));
                 try writer.writeAll("</div>\n");
             }
 
@@ -1207,16 +1230,25 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
             }
 
             for (module.decls) |decl| {
-                try renderDecl(arena, writer, decl, module.path, href, &links);
+                try renderDecl(arena, writer, decl, module.decls, module.path, href, &links, index);
             }
 
             if (module.decls.len == 0) {
                 try writer.writeAll("<p class=\"api-undoc\">このファイルには公開宣言がありません（内部実装のみ）。</p>\n");
             }
 
+            // Declarations only. The members are one `<details>` away in the body and a 24-field
+            // struct would otherwise push the whole module out of the "8 entries or fewer" heuristic
+            // that decides whether the TOC starts open.
+            var toc_list: std.ArrayListUnmanaged(markdown.Heading) = .empty;
+            for (module.decls) |decl| {
+                try toc_list.append(arena, .{ .level = 2, .id = decl.name, .text = decl.name });
+            }
+
             try pages.append(arena, .{
                 .href = href,
                 .title = try std.fmt.allocPrint(arena, "{s}/{s}", .{ pkg.spec.name, module.slug }),
+                .toc = try toc_list.toOwnedSlice(arena),
                 .body = try body.toOwnedSlice(),
                 .plain = try searchText(arena, module),
                 .links = try links.toOwnedSlice(arena),
@@ -1265,7 +1297,7 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
         try writer.writeAll("<h2>モジュール</h2>\n<ul class=\"api-modules\">\n");
         for (pkg.modules) |module| {
             if (module.audience == .internal) continue;
-            try renderModuleEntry(arena, writer, module, pkg_href, pkg.spec.root, &links);
+            try renderModuleEntry(arena, writer, module, pkg_href, pkg.spec.root, &links, index);
         }
         try writer.writeAll("</ul>\n");
 
@@ -1275,7 +1307,7 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package) Error![]const 
             try writer.writeAll("<details class=\"api-internal\"><summary>内部モジュール（FFI バインディング・契約テスト）</summary>\n<ul class=\"api-modules\">\n");
             for (pkg.modules) |module| {
                 if (module.audience != .internal) continue;
-                try renderModuleEntry(arena, writer, module, pkg_href, pkg.spec.root, &links);
+                try renderModuleEntry(arena, writer, module, pkg_href, pkg.spec.root, &links, index);
             }
             try writer.writeAll("</ul>\n</details>\n");
         }

@@ -1,4 +1,4 @@
-//! WebView2 COM interfaces — **GENERATED, DO NOT EDIT** (`src/webview/webview2_com.zig`, `M3-02`).
+//! WebView2 COM interfaces — **GENERATED, DO NOT EDIT**.
 //!
 //! Source: Microsoft's `WebView2.h` (MIDL output). Regenerate with:
 //!   `python3 scripts/gen-webview2-com.py /path/to/WebView2.h`
@@ -9,7 +9,7 @@
 //! prove it.
 //!
 //! `callconv(.winapi)` only exists on Windows targets; `CALL` keeps this file analyzable on every
-//! host so the assertions and the GUID test run in all CI jobs (see ADR-0007).
+//! host so the assertions and the GUID test run in all CI jobs.
 
 const std = @import("std");
 const builtin = @import("builtin");

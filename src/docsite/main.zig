@@ -16,7 +16,12 @@
 //!
 //! Everything is verified here, not in the browser: every relative link is resolved against the
 //! pages that were actually written, and a single broken link fails the build. Marker for CI:
-//! `OK docsite pages=N links=M words=W`.
+//! `OK docsite pages=N links=M assets=A api_undoc=0 xref_targets=T xrefs=X errors=E`.
+//!
+//! The `xref_*` numbers are the anti-drift signal for the cross-reference index: `xref_targets`
+//! counts the names the index can resolve (it drops when a rename makes two `Ctx` ambiguous) and
+//! `xrefs` counts the links the corpus actually produced (it drops when a guide stops mentioning
+//! the API). Both are printed so CI can refuse a regression instead of trusting a review.`
 
 const std = @import("std");
 const Io = std.Io;
@@ -26,6 +31,8 @@ const markdown = @import("markdown.zig");
 const site = @import("site.zig");
 const demos = @import("demos.zig");
 const apidoc = @import("apidoc.zig");
+const xref_index = @import("links.zig");
+const paths = @import("paths.zig");
 
 /// One Markdown file of the corpus plus the sidebar group it belongs to.
 const Source = struct {
@@ -53,6 +60,13 @@ pub const SiteReport = struct {
     api_undoc: usize = 0,
     /// Declarations inside FFI tables and contract tests (excluded from `api_undoc`).
     api_internal: usize = 0,
+    /// Names the cross-reference index can turn into a link (`Engine`, `zts dev`, `error.X`).
+    /// Printed so a regression in the index shows up as a number, not as "the docs feel plain".
+    xref_targets: usize = 0,
+    /// `` `Code` `` spans that were promoted to links across the whole corpus.
+    xrefs: usize = 0,
+    /// Distinct error names harvested from `error{…}` declarations and `error.Name` uses.
+    errors: usize = 0,
 };
 
 pub fn main(init: std.process.Init) !u8 {
@@ -86,11 +100,12 @@ pub fn main(init: std.process.Init) !u8 {
     };
 
     std.debug.print(
-        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d} api_members={d} api_undoc={d} api_internal={d}\n",
+        "OK docsite pages={d} links={d} assets={d} words={d} bytes={d} demos={d} api_pages={d} api_decls={d} api_members={d} api_undoc={d} api_internal={d} xref_targets={d} xrefs={d} errors={d}\n",
         .{
             report.pages,       report.links,      report.assets,       report.words,
             report.bytes,       report.demo_files, report.api_pages,    report.api_decls,
-            report.api_members, report.api_undoc,  report.api_internal,
+            report.api_members, report.api_undoc,  report.api_internal, report.xref_targets,
+            report.xrefs,       report.errors,
         },
     );
     return 0;
@@ -102,6 +117,13 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     const sources = try collectSources(arena, io);
     if (sources.len == 0) return error.NoDocuments;
 
+    // 0. The API reference is parsed *first* even though it is written last: it is the source of
+    //    truth for the cross-reference index, and every Markdown page links into it while it is
+    //    being rendered. Parsing is cheap (no code generation), so the reorder costs nothing.
+    const packages = try collectPackages(arena, io);
+    const errors = try collectErrors(arena, io);
+    var index = try buildLinkIndex(arena, io, packages, errors);
+
     // 1. Render every document once: the sidebar and the search index need all titles first.
     const Rendered = struct {
         href: []const u8,
@@ -110,6 +132,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         group: []const u8,
         document: markdown.Document,
         toc: []const markdown.Heading,
+        xrefs: []const markdown.Xref,
     };
     const rendered = try arena.alloc(Rendered, sources.len);
 
@@ -122,14 +145,18 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
             .group = source.group,
             .document = undefined,
             .toc = &.{},
+            .xrefs = &.{},
         };
-        try renderInto(arena, cwd, io, out);
+        try renderInto(arena, cwd, io, out, &index);
         report.words += countWords(out.document.plain);
+        report.xrefs += out.xrefs.len;
     }
 
     // 1b. API reference, generated from the Zig sources themselves (`M5-07`). It is built before
     //     the sidebar because the sidebar lists one entry per package.
-    const api = try buildApiPages(arena, io);
+    const api = try buildApiPages(arena, packages, &index);
+    report.xref_targets = index.count();
+    report.errors = index.errors;
 
     // 2. Sidebar: fixed group order, entries sorted by source path.
     const groups = try buildGroups(arena, rendered, api.packages);
@@ -144,6 +171,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     var written: std.ArrayListUnmanaged([]const u8) = .empty;
     try written.append(arena, "index.html");
     try written.append(arena, internals_href);
+    try written.append(arena, errors_href);
     for (rendered) |page| try written.append(arena, page.href);
     for (sections) |section| try written.append(arena, try std.fmt.allocPrint(arena, "{s}/index.html", .{section.dir}));
     for (api.pages) |page| try written.append(arena, page.href);
@@ -190,7 +218,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
                 if (std.mem.eql(u8, rule.page, page.href)) relevant = true;
             }
             if (!relevant) continue;
-            try renderIntoWithRewrites(arena, cwd, io, page, rewrites.items);
+            try renderIntoWithRewrites(arena, cwd, io, page, rewrites.items, &index);
         }
 
         refs.clearRetainingCapacity();
@@ -223,10 +251,12 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     defer out_dir.close(io);
 
     for (rendered) |page| {
+        const related = if (std.mem.eql(u8, page.group, internals_group)) "" else try renderRelatedApi(arena, page.href, page.xrefs);
         const body = if (std.mem.eql(u8, page.group, internals_group))
             try std.fmt.allocPrint(arena, "{s}{s}", .{ try internalsBanner(arena, page.href), page.document.html })
         else
-            page.document.html;
+            try std.fmt.allocPrint(arena, "{s}{s}", .{ page.document.html, related });
+        const nav = neighbors(groups, page.href);
         const html = try site.renderPage(arena, .{
             .title = page.title,
             .active_href = page.href,
@@ -234,6 +264,11 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
             .body = body,
             .toc = page.toc,
             .plain = page.document.plain,
+            .kind = pageKind(page.source),
+            .source = page.source,
+            .crumbs = try buildCrumbs(arena, page.group, page.href, page.title),
+            .prev = nav.prev,
+            .next = nav.next,
         }, page.href);
         try writeInDir(io, arena, out_dir, page.href, html);
         report.pages += 1;
@@ -253,12 +288,17 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     }
 
     // 4b. The API reference pages (`docs/api/…`).
-    for (api.pages) |page| {
+    for (api.pages, 0..) |page, page_index| {
         const html = try site.renderPage(arena, .{
             .title = page.title,
             .active_href = page.href,
             .groups = groups,
             .body = page.body,
+            .toc = page.toc,
+            .kind = "api",
+            .crumbs = try apiCrumbs(arena, page.href),
+            .prev = if (page_index > 0) .{ .title = api.pages[page_index - 1].title, .href = api.pages[page_index - 1].href } else null,
+            .next = if (page_index + 1 < api.pages.len) .{ .title = api.pages[page_index + 1].title, .href = api.pages[page_index + 1].href } else null,
         }, page.href);
         try writeInDir(io, arena, out_dir, page.href, html);
         report.pages += 1;
@@ -269,6 +309,27 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     report.api_members = api.member_count;
     report.api_undoc = api.undoc_count;
     report.api_internal = api.internal_count;
+
+    // 4b-bis. The error index: generated from `error{…}` sets, so it cannot list an error the
+    // library does not declare. No prose is invented; each entry shows where it is raised.
+    {
+        const body = try renderErrorsBody(arena, errors);
+        const html = try site.renderPage(arena, .{
+            .title = "エラー索引",
+            .active_href = errors_href,
+            .groups = groups,
+            .body = body,
+            .kind = "errors",
+            .crumbs = &.{
+                .{ .label = "Z-Ts", .href = "index.html" },
+                .{ .label = "リファレンス" },
+            },
+            .plain = try errorIndexPlain(arena, errors),
+        }, errors_href);
+        try writeInDir(io, arena, out_dir, errors_href, html);
+        report.pages += 1;
+        report.bytes += html.len;
+    }
 
     // 4c. The one page that lists everything the sidebar deliberately no longer shows.
     {
@@ -304,6 +365,28 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
         report.bytes += bytes.len;
     }
 
+    // 5a. Machine-readable companions (P11 in docs/architecture/docs-as-a-product.md):
+    // `llms.txt` is the table of contents an agent can read in one request, `llms-full.txt` is the
+    // concatenated prose, and `sitemap.xml` is what crawlers expect. All three are generated from
+    // the same page list as the sidebar, so they cannot disagree with it.
+    try writeInDir(io, arena, out_dir, "llms.txt", try renderLlmsTxt(arena, groups, rendered));
+    try writeInDir(io, arena, out_dir, "llms-full.txt", try renderLlmsFull(arena, rendered));
+    try writeInDir(io, arena, out_dir, "sitemap.xml", try renderSitemap(arena, written.items));
+
+    // 5a-bis. GitHub Pages serves `404.html` for anything that does not exist. Without it a
+    // renamed page loses the reader at a blank screen with no way back.
+    {
+        const html = try site.renderPage(arena, .{
+            .title = "ページが見つかりません",
+            .active_href = "",
+            .groups = groups,
+            .body = try renderNotFoundBody(arena),
+            .kind = "home",
+        }, "404.html");
+        try writeInDir(io, arena, out_dir, "404.html", html);
+        report.bytes += html.len;
+    }
+
     // Search is for readers: the internals (design notes, ADRs, task sheets) are deliberately not
     // indexed, and the API reference is indexed down to the individual declaration.
     var search_list: std.ArrayListUnmanaged(site.SearchEntry) = .empty;
@@ -334,6 +417,17 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
                     .group = "API",
                     .text = try apidoc.firstParagraph(arena, decl.doc),
                 });
+                // Members are searchable in their own right: `title` or `size` has to find
+                // `WindowConfig.title`, otherwise the only way in is to already know the type.
+                for (decl.members) |member| {
+                    if (!isIdent(member.name)) continue;
+                    try search_list.append(arena, .{
+                        .href = try std.fmt.allocPrint(arena, "docs/api/{s}/{s}.html#{s}.{s}", .{ pkg.spec.name, module.slug, decl.name, member.name }),
+                        .title = try std.fmt.allocPrint(arena, "{s}.{s}.{s}", .{ module.slug, decl.name, member.name }),
+                        .group = "API",
+                        .text = try std.fmt.allocPrint(arena, "{s} · {s} のメンバ", .{ member.signature, decl.name }),
+                    });
+                }
             }
         }
     }
@@ -368,19 +462,22 @@ fn repoPathKind(io: Io, path: []const u8) RepoPath {
 }
 
 /// Renders one source file into `out` (no link rewrites).
-fn renderInto(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype) !void {
-    try renderIntoWithRewrites(arena, cwd, io, out, &.{});
+fn renderInto(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype, index: *const xref_index.Index) !void {
+    try renderIntoWithRewrites(arena, cwd, io, out, &.{}, index);
 }
 
-fn renderIntoWithRewrites(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype, rewrites: []const markdown.Rewrite) !void {
+fn renderIntoWithRewrites(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype, rewrites: []const markdown.Rewrite, index: *const xref_index.Index) !void {
     const bytes = cwd.readFileAlloc(io, out.source, arena, .limited(8 * 1024 * 1024)) catch |err| {
         std.debug.print("docsite: cannot read {s}: {t}\n", .{ out.source, err });
         return err;
     };
 
+    var xrefs: std.ArrayListUnmanaged(markdown.Xref) = .empty;
     const document = try markdown.render(arena, bytes, .{
         .page = out.href,
         .rewrites = rewrites,
+        .linker = index,
+        .xrefs = &xrefs,
     });
 
     var toc_list: std.ArrayListUnmanaged(markdown.Heading) = .empty;
@@ -391,6 +488,7 @@ fn renderIntoWithRewrites(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype, r
     out.title = try pageTitle(arena, document.headings, out.source);
     out.document = document;
     out.toc = try toc_list.toOwnedSlice(arena);
+    out.xrefs = try xrefs.toOwnedSlice(arena);
 }
 
 const demo_root = "examples/gallery/src/web/fw";
@@ -683,6 +781,10 @@ fn collectSources(arena: Allocator, io: Io) ![]const Source {
 /// of the search index. The landing point is [`internals_href`].
 const internals_group = "内部資料";
 const internals_href = "docs/internals/index.html";
+/// Generated error index. Lives under `docs/reference/` because it is a reference page, not a
+/// chapter; the file is produced from `src/**` and has no Markdown source of its own.
+const errors_href = "docs/reference/errors.html";
+const glossary_href = "docs/glossary.html";
 
 fn groupFor(path: []const u8) []const u8 {
     // `tauri-internals.md` is an implementation autopsy — it belongs with the design notes even
@@ -737,12 +839,123 @@ fn buildGroups(arena: Allocator, rendered: anytype, packages: []const apidoc.Pac
                     .source = page.source,
                 });
             }
+            // Generated reference pages ride with the guides: they are read the same way (look
+            // something up), but they have no Markdown source to be discovered from.
+            if (std.mem.eql(u8, heading, "ガイド")) {
+                try entries.append(arena, .{ .href = errors_href, .title = "エラー索引（自動生成）", .source = "src/" });
+            }
         }
 
         if (entries.items.len == 0) continue;
         try groups.append(arena, .{ .heading = heading, .entries = try entries.toOwnedSlice(arena) });
     }
     return groups.toOwnedSlice(arena);
+}
+
+/// The page's role, from its path. Deliberately path-based (no front matter to fix up, no tooling
+/// to learn): adding `docs/learn/concepts/foo.md` is enough for it to be a concept page.
+fn pageKind(path: []const u8) []const u8 {
+    if (std.mem.eql(u8, path, "README.md") or std.mem.eql(u8, path, "docs/INDEX.md")) return "home";
+    if (std.mem.startsWith(u8, path, "docs/learn/concepts/")) return "concept";
+    if (std.mem.startsWith(u8, path, "docs/learn/tutorial/")) return "tutorial";
+    if (std.mem.startsWith(u8, path, "docs/recipes/")) return "recipe";
+    if (std.mem.startsWith(u8, path, "docs/errors/")) return "errors";
+    if (std.mem.eql(u8, path, "docs/glossary.md")) return "reference";
+    if (std.mem.startsWith(u8, path, "docs/reference/")) return "reference";
+    if (std.mem.startsWith(u8, path, "docs/guides/migrating")) return "migration";
+    if (std.mem.startsWith(u8, path, "docs/guides/")) return "guide";
+    if (std.mem.startsWith(u8, path, "examples/")) return "recipe";
+    if (std.mem.startsWith(u8, path, "docs/")) return "internals";
+    return "home";
+}
+
+/// `Z-Ts › ガイド › RPC` — the middle crumb points at the section index the generator wrote for
+/// every directory, so it is never a dead end.
+fn buildCrumbs(arena: Allocator, group: []const u8, href: []const u8, title: []const u8) ![]const site.Crumb {
+    var list: std.ArrayListUnmanaged(site.Crumb) = .empty;
+    try list.append(arena, .{ .label = "Z-Ts", .href = "index.html" });
+    if (std.mem.lastIndexOfScalar(u8, href, '/')) |slash| {
+        const dir = href[0..slash];
+        if (dir.len > 0) {
+            try list.append(arena, .{
+                .label = group,
+                .href = try std.fmt.allocPrint(arena, "{s}/index.html", .{dir}),
+            });
+        }
+    }
+    try list.append(arena, .{ .label = title });
+    return list.toOwnedSlice(arena);
+}
+
+/// `Z-Ts › API › zts_rpc › schema` for `docs/api/zts_rpc/schema.html`.
+fn apiCrumbs(arena: Allocator, href: []const u8) ![]const site.Crumb {
+    var list: std.ArrayListUnmanaged(site.Crumb) = .empty;
+    try list.append(arena, .{ .label = "Z-Ts", .href = "index.html" });
+    try list.append(arena, .{ .label = "API", .href = "docs/api/index.html" });
+    // `docs/api/index.html` itself is the second crumb; do not repeat it as the third.
+    if (!std.mem.eql(u8, href, "docs/api/index.html")) {
+        const rest = href["docs/api/".len..];
+        if (std.mem.indexOfScalar(u8, rest, '/')) |slash| {
+            const pkg = rest[0..slash];
+            try list.append(arena, .{
+                .label = pkg,
+                .href = try std.fmt.allocPrint(arena, "docs/api/{s}/index.html", .{pkg}),
+            });
+            const stem = rest[slash + 1 .. rest.len - ".html".len];
+            if (!std.mem.eql(u8, stem, "index")) {
+                try list.append(arena, .{ .label = stem });
+            } else {
+                // Drop the trailing duplicate: the package crumb is already the current page.
+                _ = list.pop();
+                try list.append(arena, .{ .label = pkg });
+            }
+        }
+    }
+    return list.toOwnedSlice(arena);
+}
+
+/// Previous/next in the sidebar's reading order (the groups are the curriculum, so their order is
+/// the only sensible linearisation). 内部資料 is excluded: it is a filing cabinet, not a chapter.
+fn neighbors(groups: []const site.Group, href: []const u8) struct { prev: ?site.NavLink, next: ?site.NavLink } {
+    var prev: ?site.NavLink = null;
+    var found = false;
+    for (groups) |group| {
+        if (std.mem.eql(u8, group.heading, internals_group)) continue;
+        for (group.entries) |entry| {
+            if (found) return .{ .prev = prev, .next = .{ .title = entry.title, .href = entry.href } };
+            if (std.mem.eql(u8, entry.href, href)) {
+                found = true;
+            } else {
+                prev = .{ .title = entry.title, .href = entry.href };
+            }
+        }
+    }
+    return .{ .prev = prev, .next = null };
+}
+
+/// 「このページに出てくる API」 — the inverse of the auto-linker. Every guide ends with the list of
+/// declarations it just mentioned, so a reader who finished "connecting RPC" has the reference one
+/// click away without going through the sidebar.
+fn renderRelatedApi(arena: Allocator, page_href: []const u8, xrefs: []const markdown.Xref) ![]const u8 {
+    if (xrefs.len == 0) return "";
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    const w = &out.writer;
+    try w.writeAll("<aside class=\"related\"><h2>このページに出てくる API</h2><ul>");
+    var seen: usize = 0;
+    outer: for (xrefs) |xref| {
+        for (xrefs[0..seen]) |earlier| {
+            if (std.mem.eql(u8, earlier.href, xref.href)) continue :outer;
+        }
+        seen += 1;
+        try w.print("<li><a href=\"{s}\"><code>{s}</code></a></li>", .{
+            try paths.relativeHref(arena, page_href, xref.href),
+            xref.name,
+        });
+        if (seen >= 24) break;
+    }
+    try w.writeAll("</ul></aside>\n");
+    return out.toOwnedSlice();
 }
 
 fn htmlPath(arena: Allocator, source_path: []const u8) ![]const u8 {
@@ -775,10 +988,181 @@ const ApiSite = struct {
 
 /// Scans every package's import graph and renders the reference. A failure here fails the build:
 /// an API page that silently disappears is worse than a red CI run.
-fn buildApiPages(arena: Allocator, io: Io) !ApiSite {
+/// Everything a code span may point at: API declarations, packages/modules, the glossary, the CLI
+/// subcommands and the error index.
+///
+/// The API half is derived from the same parse that renders `docs/api/**`, so it cannot drift. The
+/// glossary and the CLI reference are read from the corpus, and the errors come from the `error{…}`
+/// sets in `src/**`: that is the part of the index a human would otherwise have to maintain by hand.
+fn buildLinkIndex(arena: Allocator, io: Io, packages: []const apidoc.Package, errors: []const ErrorEntry) !xref_index.Index {
+    var index = xref_index.Index.init(arena);
+    const cwd = Io.Dir.cwd();
+
+    for (packages) |pkg| {
+        const pkg_href = try apidoc.packageHref(arena, pkg.spec.name);
+        try index.addExact(pkg.spec.name, pkg_href);
+        for (pkg.modules) |module| {
+            const href = try apidoc.moduleHref(arena, pkg.spec.name, module);
+            try index.addExact(try std.fmt.allocPrint(arena, "{s}.{s}", .{ pkg.spec.name, module.slug }), href);
+            // `schema` / `ctx` on their own are too generic to claim globally, but a module slug is
+            // a useful weak target: it loses only when a declaration has the same spelling.
+            try index.addWeak(module.slug, href);
+            for (module.decls) |decl| {
+                // `@"error"` and friends: a quoted identifier is not a usable `#fragment`, so the
+                // index skips it rather than emitting a link the anchor check would reject.
+                if (!isIdent(decl.name)) continue;
+                const anchor = try std.fmt.allocPrint(arena, "{s}#{s}", .{ href, decl.name });
+                try index.addExact(try std.fmt.allocPrint(arena, "{s}.{s}", .{ module.slug, decl.name }), anchor);
+                try index.addExact(try std.fmt.allocPrint(arena, "{s}.{s}", .{ pkg.spec.name, decl.name }), anchor);
+                // A re-export points at another module's page; letting it claim the bare name would
+                // make `Ctx` depend on import order. Only the defining module competes.
+                if (!apidoc.isAlias(decl)) try index.addBare(decl.name, anchor);
+                for (decl.members) |member| {
+                    if (!isIdent(member.name)) continue;
+                    try index.addExact(
+                        try std.fmt.allocPrint(arena, "{s}.{s}", .{ decl.name, member.name }),
+                        try std.fmt.allocPrint(arena, "{s}#{s}.{s}", .{ href, decl.name, member.name }),
+                    );
+                }
+            }
+        }
+    }
+
+    // Errors: `error.InvalidName` → `docs/reference/errors.html#error.InvalidName`. Registered
+    // before the glossary so a capitalised error (`Unsupported`) beats a glossary entry that
+    // happens to share the spelling.
+    if (errors.len > 0) {
+        try index.addExact("error", errors_href);
+        for (errors) |entry| {
+            const key = try std.fmt.allocPrint(arena, "error.{s}", .{entry.name});
+            const href = try std.fmt.allocPrint(arena, "{s}#error.{s}", .{ errors_href, entry.name });
+            try index.addExact(key, href);
+            try index.addWeak(entry.name, href);
+        }
+        index.errors = errors.len;
+    }
+
+    // Glossary: `### Capability` → `docs/glossary.html#capability`.
+    if (cwd.readFileAlloc(io, "docs/glossary.md", arena, .limited(1024 * 1024)) catch null) |bytes| {
+        var it = std.mem.splitScalar(u8, bytes, '\n');
+        while (it.next()) |line| {
+            if (!std.mem.startsWith(u8, line, "### ")) continue;
+            const term = std.mem.trim(u8, line[4..], " \t");
+            if (term.len == 0) continue;
+            const slug = try markdown.slugify(arena, term);
+            const href = try std.fmt.allocPrint(arena, "docs/glossary.html#{s}", .{slug});
+            try index.addWeak(term, href);
+        }
+    }
+
+    // CLI: `## `zts init [dir]`` → link `` `zts init` `` to `docs/reference/cli.html#zts-init-dir`.
+    if (cwd.readFileAlloc(io, "docs/reference/cli.md", arena, .limited(1024 * 1024)) catch null) |bytes| {
+        var it = std.mem.splitScalar(u8, bytes, '\n');
+        while (it.next()) |line| {
+            if (!std.mem.startsWith(u8, line, "## ")) continue;
+            const heading = std.mem.trim(u8, std.mem.trim(u8, line[3..], " \t"), "`");
+            if (!std.mem.startsWith(u8, heading, "zts ")) continue;
+            const slug = try markdown.slugify(arena, std.mem.trim(u8, line[3..], " \t"));
+            const href = try std.fmt.allocPrint(arena, "docs/reference/cli.html#{s}", .{slug});
+            // `zts init` (first two words) is what guides actually write.
+            var words = std.mem.tokenizeScalar(u8, heading, ' ');
+            const first = words.next() orelse continue;
+            const second = words.next() orelse continue;
+            try index.addWeak(try std.fmt.allocPrint(arena, "{s} {s}", .{ first, second }), href);
+        }
+    }
+
+    return index;
+}
+
+pub const ErrorEntry = struct {
+    name: []const u8,
+    /// Files that declare or mention this name in an `error{…}` body.
+    files: []const []const u8,
+};
+
+/// Scans `src/**/*.zig` for `error{…}` sets. The list is the compiler's list, which is exactly the
+/// point: the error index cannot promise a name the library does not have, and a renamed error
+/// breaks the `` `error.Old` `` link in the same build instead of six months later.
+fn collectErrors(arena: Allocator, io: Io) ![]const ErrorEntry {
+    const cwd = Io.Dir.cwd();
+    const src = cwd.openDir(io, "src", .{ .iterate = true }) catch return &.{};
+    defer src.close(io);
+
+    const Acc = struct { name: []const u8, files: std.ArrayListUnmanaged([]const u8) = .empty };
+    var by_name: std.StringHashMapUnmanaged(*Acc) = .empty;
+    var list: std.ArrayListUnmanaged(*Acc) = .empty;
+
+    var walker = try src.walk(arena);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.path, ".zig")) continue;
+        const bytes = src.readFileAlloc(io, entry.path, arena, .limited(1024 * 1024)) catch continue;
+        const path = try std.fmt.allocPrint(arena, "src/{s}", .{entry.path});
+        var rest = bytes;
+        while (std.mem.indexOf(u8, rest, "error{")) |at| {
+            rest = rest[at + "error{".len ..];
+            const close = std.mem.indexOfScalar(u8, rest, '}') orelse break;
+            if (close > 4096) continue; // a prose mention in a comment, not a set
+            const body = rest[0..close];
+            rest = rest[close..];
+            var toks = std.mem.tokenizeAny(u8, body, ", \t\r\n");
+            while (toks.next()) |raw| {
+                const name = std.mem.trim(u8, raw, " \t");
+                if (name.len == 0 or name.len > 48) continue;
+                if (!isIdent(name)) continue;
+                // Zig error names are PascalCase; lowercase tokens are prose that happened to sit
+                // between `error{` and the next `}` (a doc comment, a nested struct literal).
+                if (!std.ascii.isUpper(name[0])) continue;
+                const entry_ptr = try by_name.getOrPut(arena, name);
+                if (!entry_ptr.found_existing) {
+                    const acc = try arena.create(Acc);
+                    acc.* = .{ .name = name };
+                    entry_ptr.value_ptr.* = acc;
+                    try list.append(arena, acc);
+                }
+                const acc = entry_ptr.value_ptr.*;
+                var known = false;
+                for (acc.files.items) |f| if (std.mem.eql(u8, f, path)) {
+                    known = true;
+                };
+                if (!known) try acc.files.append(arena, path);
+            }
+        }
+    }
+
+    const out = try arena.alloc(ErrorEntry, list.items.len);
+    for (list.items, out) |acc, *entry| {
+        std.mem.sort([]const u8, acc.files.items, {}, struct {
+            fn lessThan(_: void, a: []const u8, b: []const u8) bool {
+                return std.mem.order(u8, a, b) == .lt;
+            }
+        }.lessThan);
+        entry.* = .{ .name = acc.name, .files = try acc.files.toOwnedSlice(arena) };
+    }
+    std.mem.sort(ErrorEntry, out, {}, struct {
+        fn lessThan(_: void, a: ErrorEntry, b: ErrorEntry) bool {
+            return std.mem.order(u8, a.name, b.name) == .lt;
+        }
+    }.lessThan);
+    return out;
+}
+
+fn isIdent(text: []const u8) bool {
+    if (text.len == 0) return false;
+    if (!std.ascii.isAlphabetic(text[0]) and text[0] != '_') return false;
+    for (text) |ch| if (!std.ascii.isAlphanumeric(ch) and ch != '_') return false;
+    return true;
+}
+
+fn collectPackages(arena: Allocator, io: Io) ![]const apidoc.Package {
     const packages = try arena.alloc(apidoc.Package, apidoc.packages.len);
     for (apidoc.packages, 0..) |spec, i| packages[i] = try apidoc.collectPackage(arena, io, spec);
+    return packages;
+}
 
+fn buildApiPages(arena: Allocator, packages: []const apidoc.Package, index: *const xref_index.Index) !ApiSite {
     var decl_count: usize = 0;
     var member_count: usize = 0;
     var undoc_count: usize = 0;
@@ -792,7 +1176,7 @@ fn buildApiPages(arena: Allocator, io: Io) !ApiSite {
     }
 
     return .{
-        .pages = try apidoc.buildPages(arena, packages),
+        .pages = try apidoc.buildPages(arena, packages, index),
         .packages = packages,
         .decl_count = decl_count,
         .member_count = member_count,
@@ -982,6 +1366,134 @@ fn renderLanding(arena: Allocator, groups: []const site.Group, api: ApiSite) ![]
     }
     try w.writeAll("</nav></footer>\n");
     try w.writeAll("<script src=\"assets/site.js\"></script>\n</body>\n</html>\n");
+    return out.toOwnedSlice();
+}
+
+const site_url = "https://umiturtle.github.io/Z-Ts/";
+
+/// `llms.txt`: a single request that tells an agent what this site contains and where.
+fn renderLlmsTxt(arena: Allocator, groups: []const site.Group, rendered: anytype) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    const w = &out.writer;
+    try w.writeAll("# Z-Ts\n\n");
+    try w.writeAll("> Tauri v2 のプロトコルとプラグインを Zig 0.17 で再実装したツールキット。" ++
+        "同じアプリコードからネイティブ WebView / Live Preview / 静的 SSG の 3 つを生成する。\n\n");
+    try w.writeAll("- 対応: Zig 0.17.0 / Tauri v2（`@tauri-apps/api` を無改変で利用）\n");
+    try w.writeAll("- パッケージ: zts_foundation, zts_web, zts_core, zts_rpc, zts_bridge, zts_webview, zts_tauri, zts_wasm, zts_ssg, z_ts\n");
+    try w.writeAll("- 全文: llms-full.txt / エラー索引: docs/reference/errors.html\n\n");
+
+    for (groups) |group| {
+        if (std.mem.eql(u8, group.heading, internals_group)) continue;
+        try w.print("## {s}\n\n", .{group.heading});
+        for (group.entries) |entry| {
+            // One line per page: the title, then the first sentence of the page itself so the
+            // reader (human or model) can decide without fetching it.
+            var summary: []const u8 = "";
+            for (rendered) |page| {
+                if (!std.mem.eql(u8, page.href, entry.href)) continue;
+                summary = teaser(page.document.plain, page.title);
+            }
+            if (summary.len > 0) {
+                try w.print("- [{s}]({s}{s}): {s}\n", .{ entry.title, site_url, entry.href, summary });
+            } else {
+                try w.print("- [{s}]({s}{s})\n", .{ entry.title, site_url, entry.href });
+            }
+        }
+        try w.writeAll("\n");
+    }
+    return out.toOwnedSlice();
+}
+
+/// `llms-full.txt`: every reader-facing page, in sidebar order, as plain text.
+fn renderLlmsFull(arena: Allocator, rendered: anytype) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    const w = &out.writer;
+    for (rendered) |page| {
+        if (std.mem.eql(u8, page.group, internals_group)) continue;
+        try w.print("\n\n===== {s} ====\nURL: {s}{s}\n\n", .{ page.title, site_url, page.href });
+        try w.writeAll(page.document.plain);
+    }
+    try w.writeAll("\n");
+    return out.toOwnedSlice();
+}
+
+fn renderSitemap(arena: Allocator, pages: []const []const u8) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    const w = &out.writer;
+    try w.writeAll("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    try w.writeAll("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
+    for (pages) |page| {
+        try w.print("  <url><loc>{s}{s}</loc></url>\n", .{ site_url, page });
+    }
+    try w.writeAll("</urlset>\n");
+    return out.toOwnedSlice();
+}
+
+fn renderNotFoundBody(arena: Allocator) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    const w = &out.writer;
+    try w.writeAll("<h1>ページが見つかりません</h1>\n");
+    try w.writeAll("<p>URL が変わったか、まだ存在しません。検索（<kbd>/</kbd>）か、下の入口から辿ってください。</p>\n");
+    try w.writeAll("<ul class=\"notfound\">");
+    const links = [_]struct { href: []const u8, label: []const u8 }{
+        .{ .href = "index.html", .label = "ホーム" },
+        .{ .href = "docs/guides/getting-started.html", .label = "はじめかた（5 分）" },
+        .{ .href = "docs/glossary.html", .label = "用語集" },
+        .{ .href = "docs/api/index.html", .label = "API リファレンス（A–Z）" },
+        .{ .href = "docs/reference/cli.html", .label = "CLI リファレンス" },
+        .{ .href = "docs/reference/errors.html", .label = "エラー索引" },
+    };
+    for (links) |link| {
+        try w.print("<li><a href=\"{s}\">{s}</a></li>", .{ link.href, link.label });
+    }
+    try w.writeAll("</ul>\n");
+    return out.toOwnedSlice();
+}
+
+/// The error index body. One `<section>` per name, anchored `error.<Name>` so that
+/// `` `error.InvalidName` `` anywhere in the corpus lands here without a redirect table.
+fn renderErrorsBody(arena: Allocator, errors: []const ErrorEntry) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    const w = &out.writer;
+
+    try w.writeAll("<p class=\"api-crumbs\"><a href=\"../api/index.html\">API</a> / <code>error</code></p>\n");
+    try w.writeAll("<h1>エラー索引</h1>\n");
+    try w.print(
+        "<p class=\"api-blurb\">このページは <code>src/**/*.zig</code> の <code>error{{…}}</code> から" ++
+            "自動生成しています（{d} 件）。ライブラリが実際に宣言している名前だけを載せるので、" ++
+            "「ドキュメントにはあるが存在しないエラー」は起こりません。逆向きも同じで、" ++
+            "名前を変えると <code>error.旧名</code> へのリンクが壊れてビルドが落ちます。</p>\n",
+        .{errors.len},
+    );
+    try w.writeAll("<p class=\"api-blurb\">使い方（どのエラーをどう扱うか）は " ++
+        "<a href=\"../guides/troubleshooting.html\">トラブルシューティング</a>、" ++
+        "API のどこで返るかは各宣言のシグネチャを見てください。</p>\n");
+
+    try w.writeAll("<div class=\"error-grid\">\n");
+    for (errors) |entry| {
+        try w.print("<section class=\"error-entry\" id=\"error.{s}\">\n", .{entry.name});
+        try w.print("<h2><code>error.{s}</code></h2>\n", .{entry.name});
+        try w.writeAll("<p class=\"error-files\">");
+        for (entry.files, 0..) |file, i| {
+            if (i > 0) try w.writeAll(" · ");
+            try w.print("<a href=\"https://github.com/umiturtle/Z-Ts/blob/main/{s}\">{s}</a>", .{ file, file });
+        }
+        try w.writeAll("</p>\n</section>\n");
+    }
+    try w.writeAll("</div>\n");
+    return out.toOwnedSlice();
+}
+
+/// Plain text for the search index: the names, so `InvalidName` finds the entry.
+fn errorIndexPlain(arena: Allocator, errors: []const ErrorEntry) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    for (errors) |entry| try out.writer.print("error.{s} {s} ", .{ entry.name, entry.name });
     return out.toOwnedSlice();
 }
 

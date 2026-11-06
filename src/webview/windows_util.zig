@@ -1,4 +1,4 @@
-//! OS-independent WebView2 helpers (`src/webview/windows_util.zig`, `M3-02`).
+//! OS-independent WebView2 helpers.
 //!
 //! Everything in this file is **pure Zig with zero Win32 imports**, so the tricky parts of the
 //! Windows backend — runtime discovery paths, version floors, `http://<proto>.localhost` URL

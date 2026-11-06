@@ -13,7 +13,7 @@
 //!    - `metadata.{currentWindow, currentWebview}` & `plugins.path.{sep, delimiter}`
 //! 3. `window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener` + `window.__ztsRegisterEvent` / `window.__ztsDeliverEvent`
 //! 4. Cross-platform frameless drag delegation for BOTH `[data-tauri-drag-region]` (`""`, `"true"`, `"deep"`, `"false"`,
-//!    interactive element exclusion, double-click `internal_toggle_maximize`) AND CSS `-webkit-app-region: drag` (`M1-07` / Boundary #10).
+//!    interactive element exclusion, double-click `internal_toggle_maximize`) AND CSS `-webkit-app-region: drag`.
 
 const std = @import("std");
 const builtin = @import("builtin");

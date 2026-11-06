@@ -1,4 +1,4 @@
-//! Pure-Zig replacement for Microsoft's `WebView2Loader.dll` (`src/webview/webview2_loader.zig`, `M3-02`).
+//! Pure-Zig replacement for Microsoft's `WebView2Loader.dll`.
 //!
 //! The official WebView2 SDK ships a per-architecture `WebView2Loader.dll` that must sit next to
 //! the `.exe`. Z-Ts refuses to ship a second binary: this module locates the already-installed

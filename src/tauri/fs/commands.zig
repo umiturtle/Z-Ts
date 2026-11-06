@@ -8,7 +8,7 @@
 //! - Names, argument shapes, and result shapes follow `plugins-workspace/plugins/fs/src/commands.rs`
 //!   (`plugin:fs|read_text_file`, `plugin:fs|write_text_file`, `plugin:fs|read_dir`, ...).
 //! - Tauri returns a raw `ArrayBuffer` for binary reads/writes. `zts_rpc` is a JSON codec, so binary
-//!   payloads travel as Base64 [`rpc.Bytes`] (documented in ADR-0011). Text commands stay strings.
+//!   payloads travel as Base64 [`rpc.Bytes`]. Text commands stay strings.
 //! - File handles are ordinary `zts_tauri` resources (`rid`), closed via `plugin:resources|close`.
 //!   Positions are tracked in Zig (`readPositional`/`writePositional`), because Zig 0.17's
 //!   `std.Io.File` intentionally exposes no `seek` syscall wrapper.

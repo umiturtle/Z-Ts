@@ -62,6 +62,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`guides/migrating-from-tauri.md`](guides/migrating-from-tauri.md) | Tauri v2 からの移行（`tauri.conf.json` / ACL / コマンド / プラグイン対応表） | 移行時 |
 | [`guides/troubleshooting.md`](guides/troubleshooting.md) | アプリ開発のトラブルシューティング（`zts` のエラーとその直し方） | 困ったとき |
 | [`contributing/README.md`](contributing/README.md) | **リポジトリ開発の入口**: `./zigw`・`zig build` のステップ・スクリプト・変更の作法・CI | 本体を直すとき |
+| [`contributing/writing-docs.md`](contributing/writing-docs.md) | **ドキュメントの書き方**: 4 層・ページ骨格・xref・`zig check`・注記・用語集・内部 ID 禁止・生成物 | ページを書くとき |
 | [`contributing/troubleshooting.md`](contributing/troubleshooting.md) | リポジトリ開発のトラブルシューティング（ツールチェーン・コールドビルド・0.17 API 差分・Pages） | 本体で困ったとき |
 | [`tasks/TEMPLATE.md`](tasks/TEMPLATE.md) | 1タスク＝1ファイルの作業計画＆記憶チェックポイント標準テンプレート | テンプレート |
 | `tasks/<ID>-<slug>.md` | 個別タスクの進捗・設計メモ・次の1手（例: [`tasks/M0-01-bootstrap.md`](tasks/M0-01-bootstrap.md)） | **担当ブランチ専有（競合ゼロ）** |
