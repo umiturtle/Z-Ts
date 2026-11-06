@@ -446,7 +446,10 @@ html[data-theme="dark"] .kind-badge[data-kind] {
 /* Two-column reading layout: prose + sticky "on this page" rail. */
 .doc {
   display: grid;
-  grid-template-columns: minmax(0, var(--measure)) minmax(0, var(--rail-w));
+  /* The prose column is fluid and capped by `.prose { max-width }`, the rail is fixed. Sizing the
+     prose column as `var(--measure)` instead would overflow as soon as the viewport minus the
+     sidebar drops below 46rem + rail + gaps (roughly 1400px). */
+  grid-template-columns: minmax(0, 1fr) var(--rail-w);
   gap: 3rem;
   align-items: start;
 }
@@ -934,7 +937,7 @@ body.landing { background:
 
 /* -------------------------------------------------------------- responsive */
 
-@media (max-width: 1180px) {
+@media (max-width: 1240px) {
   .doc { grid-template-columns: minmax(0, 1fr); }
   .rail { display: none; }
   .prose { max-width: var(--measure); }

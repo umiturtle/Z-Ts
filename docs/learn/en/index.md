@@ -43,6 +43,11 @@ faster than pushing through.
 Tauri v2 experience is **not** required. Only migrating? Read
 [Migrating from Tauri](guides/migrate-from-tauri.md).
 
+> [!NOTE]
+> The learning path is translated in full. The two **lookup** trees — the generated API reference
+> and `docs/reference/` (CLI flags, configuration) — are language-neutral by design: their subject
+> is declaration names and flag spellings, which are identical in every language.
+
 ## The whole thing in 30 seconds
 
 ```bash
