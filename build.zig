@@ -696,7 +696,15 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(webview_tests).step);
     test_step.dependOn(&b.addRunArtifact(core_tests).step);
     test_step.dependOn(&b.addRunArtifact(tauri_tests).step);
-    test_step.dependOn(&b.addRunArtifact(tauri_native_tests).step);
+    // The CI gates (`.github/workflows/ci.yml`, M4-05 / M4-06) grep this binary's stdout for
+    // `OK menu-win32 checks=`, `OK tray-cocoa checks=` and friends: they prove the *native* backend
+    // really ran instead of the fail-closed stub. A cached run step replays no stdout in Zig 0.17,
+    // so a warm `.zig-cache` turned those gates red on a passing build (seen on Windows,
+    // 2026-11-06). Marking only this run as side-effecting keeps the markers in the log; the other
+    // suites stay cacheable because nothing greps their output.
+    const run_tauri_native_tests = b.addRunArtifact(tauri_native_tests);
+    run_tauri_native_tests.has_side_effects = true;
+    test_step.dependOn(&run_tauri_native_tests.step);
     test_step.dependOn(&b.addRunArtifact(wasm_tests).step);
     test_step.dependOn(&b.addRunArtifact(ssg_tests).step);
     test_step.dependOn(&b.addRunArtifact(build_tools_tests).step);
