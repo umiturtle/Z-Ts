@@ -15,6 +15,21 @@
 ④ 中を読む（Internals）設計メモ・ADR・タスク・環境     … 実装の意図と経緯。任意
 ```
 
+## 0. 前提知識（ここが足りないと感じたら先に戻る）
+
+Z-Ts は **既に何かを作ったことがある人**を想定しています。読み始める前に、次の 3 つを確認して
+ください。当てはまらない項目があれば、先にその基礎を済ませたほうが早道です（Vue の
+Prerequisites と同じ考え方で、**読者を正しい場所へ返す**ために書いています）。
+
+| 前提 | どこで要るか | 足りないとき |
+|---|---|---|
+| Zig の基本（`comptime`、エラー集合、`defer`） | `zts_rpc` のスキーマ、`zts_wasm` | [Zig Language Reference](https://ziglang.org/documentation/master/) の "Zig Standalone"〜"comptime" |
+| Web の基本（HTML / CSS / `fetch` / イベント） | フロントエンド、`zts_web` | [MDN: Learn Web Development](https://developer.mozilla.org/en-US/docs/Learn) |
+| Tauri v2（使ったことがある必要なし） | 移行ガイドだけ | 不要。`invoke` の形は[用語集](../glossary.md)にあります |
+
+**Zig も Web も初めて**という場合は、このリポジトリの `examples/counter` をそのままビルドして
+動かすところから始めるのが最短です（コードは読まずに、コマンドと結果だけ追ってください）。
+
 ## 1. 何を読みたいかから引く
 
 | 知りたいこと | 読む場所 | 層 |

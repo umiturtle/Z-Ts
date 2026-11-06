@@ -1346,7 +1346,92 @@ fn renderLanding(arena: Allocator, groups: []const site.Group, api: ApiSite) ![]
         .{ api.decl_count, api.member_count },
     );
 
-    try w.writeAll("<footer class=\"landing-footer\"><nav class=\"landing-nav\">");
+    // Four ways in, copied from kubernetes.io/docs/home: each entry says *what the section is
+    // for* in one sentence, shows the five links people actually want, and ends with a call to
+    // action. The sidebar already has every page; this is the map, not the index.
+    const Path = struct {
+        title: []const u8,
+        blurb: []const u8,
+        cta_label: []const u8,
+        cta_href: []const u8,
+        links: []const []const u8,
+    };
+    const entry_points = [_]Path{
+        .{
+            .title = "学ぶ（読む）",
+            .blurb = "Z-Ts が何をするものかを理解し、自分のアプリに当てはめます。コードはまだ書かなくて構いません。",
+            .cta_label = "ガイドを読む",
+            .cta_href = "docs/guides/README.html",
+            .links = &.{
+                "docs/guides/getting-started.html",
+                "docs/guides/using-rpc.html",
+                "docs/guides/using-ssg.html",
+                "docs/guides/using-plugins.html",
+                "docs/glossary.html",
+            },
+        },
+        .{
+            .title = "手を動かす",
+            .blurb = "動くものを 5 分で用意して、そこから書き換えます。サンプルはそのままビルドできます。",
+            .cta_label = "はじめかた（5 分）",
+            .cta_href = "docs/guides/getting-started.html",
+            .links = &.{
+                "examples/counter/README.html",
+                "examples/gallery/README.html",
+                "examples/frameworks/README.html",
+                "docs/guides/installing-zts.html",
+                "docs/guides/packaging.html",
+            },
+        },
+        .{
+            .title = "引く",
+            .blurb = "名前は分かっているが使い方を忘れた、というときのための辞書です。",
+            .cta_label = "API 全体索引",
+            .cta_href = "docs/api/index.html",
+            .links = &.{
+                "docs/reference/cli.html",
+                "docs/reference/errors.html",
+                "docs/glossary.html",
+                "docs/api/zts_rpc/index.html",
+                "docs/api/zts_tauri/index.html",
+            },
+        },
+        .{
+            .title = "確かめる・中を読む",
+            .blurb = "なぜそうなっているのか、どう直すのか。設計判断と、リポジトリ自身の操作手順。",
+            .cta_label = "コントリビュータ向け",
+            .cta_href = "docs/contributing/README.html",
+            .links = &.{
+                "docs/architecture/00-overview.html",
+                "docs/contributing/writing-docs.html",
+                "docs/reference/tauri-usage.html",
+                "docs/INDEX.html",
+                internals_href,
+            },
+        },
+    };
+
+    try w.writeAll("<section class=\"paths\"><h2 class=\"paths-title\">4 つの入口</h2><div class=\"path-grid\">");
+    for (entry_points) |entry_point| {
+        try w.writeAll("<article class=\"path\"><h3>");
+        try writeEscaped(w, entry_point.title);
+        try w.writeAll("</h3><p class=\"path-blurb\">");
+        try writeEscaped(w, entry_point.blurb);
+        try w.writeAll("</p><ul>");
+        for (entry_point.links) |href| {
+            // Titles come from the sidebar so a renamed page cannot leave a dead-looking entry.
+            var label: []const u8 = href;
+            for (groups) |group| for (group.entries) |entry| {
+                if (std.mem.eql(u8, entry.href, href)) label = entry.title;
+            };
+            try w.print("<li><a href=\"{s}\">{s}</a></li>", .{ href, label });
+        }
+        try w.print("</ul><p class=\"path-cta\"><a href=\"{s}\">{s} →</a></p></article>\n", .{ entry_point.cta_href, entry_point.cta_label });
+    }
+    try w.writeAll("</div></section>\n");
+
+    // Everything else, collapsed: the sidebar's own order is the source of truth for "all pages".
+    try w.print("<footer class=\"landing-footer\"><details class=\"all-pages\"><summary>すべてのページ（{d} グループ）</summary><nav class=\"landing-nav\">", .{groups.len});
     for (groups) |group| {
         try w.writeAll("<div><h3>");
         try writeEscaped(w, group.heading);
@@ -1364,7 +1449,7 @@ fn renderLanding(arena: Allocator, groups: []const site.Group, api: ApiSite) ![]
         }
         try w.writeAll("</ul></div>");
     }
-    try w.writeAll("</nav></footer>\n");
+    try w.writeAll("</nav></details></footer>\n");
     try w.writeAll("<script src=\"assets/site.js\"></script>\n</body>\n</html>\n");
     return out.toOwnedSlice();
 }

@@ -129,7 +129,8 @@ def main() -> int:
                 cmd += extra
                 cmd += [f"-Mroot={path}"]
                 cmd += inputs
-                cmd += ["--cache-dir", os.path.join(tmp, ".cache"), "--global-cache-dir", os.path.join(tmp, ".gcache")]
+                # The repository's own caches are reused on purpose: a cold global cache would
+                # rebuild the Zig std lib for every block (~4 s each).
 
                 checked += 1
                 result = subprocess.run(cmd, capture_output=True, text=True)

@@ -16,7 +16,7 @@
 |---|---|---|
 | 1 | レンダラの単体テスト（Markdown・リンク・xref 索引） | `All N tests passed` 以外 |
 | 2 | `scripts/check-docs.py` — 構造・リンク・層・CLI・パッケージ・用語集 | `Documentation structure check FAILED` |
-| 3 | `scripts/doc-tests.py` — `zig check` フェンスを実際にコンパイル | `doc-tests: N of M blocks failed` |
+| 3 | `scripts/doc-tests.py` — `zig check` フェンスを実際にコンパイル（単体では `./zigw doctest`） | `doc-tests: N of M blocks failed` |
 | 4 | `zig build docs` — 生成した HTML の**リンクとアンカー**を検査 | `docsite: N broken link(s)` |
 
 CI も同じ 4 段を回します（[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)）。
@@ -110,6 +110,8 @@ test "スキーマは名前空間を 1 つ持つ" {
 | `zig check-snippet` | 関数本体の断片。`std`・`zts_*` の前置きを付けて包む |
 | `zig ignore` | 意図的に除外（理由を直後に 1 行書く） |
 
+`> [!NOTE]` などの注記は**本文のどこにでも**置けます（§5）。
+
 - 対象は `README.md`、`docs/guides/`、`docs/reference/`、`docs/learn/`、`docs/glossary.md` です。
 - `check` ブロックの末尾には `test { std.testing.refAllDecls(@This()); }` が自動で付きます。
   Zig は遅延解析なので、これが無いと「誰も参照していない宣言」の誤りを見逃します。
@@ -117,6 +119,9 @@ test "スキーマは名前空間を 1 つ持つ" {
   `zts_wasm` `zts_ssg`（`zts_webview` は GTK/Cocoa のヘッダを要するため対象外）。
 - **例を足すときは、まずコードを書いて `python3 scripts/doc-tests.py` に通す**のが速いです。
   落ちたら、それは API が変わったという合図でもあります。
+
+- CI では `zig` が PATH に無いので、`./zigw doctest`（`$ZIG_BIN` を `ZTS_ZIG` として渡す）を使います。
+  手元で `python3 scripts/doc-tests.py` を直接叩く場合は `zig` が PATH にあれば動きます。
 
 > なぜ実行しないのか: 例の多くはウィンドウやイベントループを要します。`--test-no-exec` は
 > **型検査とコンパイル**を行うので、改名・引数変更・削除はすべて検出できます。出力の一致まで

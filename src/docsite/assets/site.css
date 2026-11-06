@@ -897,3 +897,15 @@ blockquote.admonition {
 blockquote.admonition[data-kind="WARNING"] { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); }
 blockquote.admonition[data-kind="IMPORTANT"] { border-left-color: #bb9af7; }
 .admonition-title { margin: 0 0 .3rem; font-size: .76rem; font-weight: 700; letter-spacing: .04em; color: var(--fg-muted); }
+
+/* ホームの「4 つの入口」— kubernetes.io/docs/home と同じ発想で、節の目的を 1 文で示す。 */
+.paths { max-width: 72rem; margin: 3rem auto 0; padding: 0 1.5rem; }
+.paths-title { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-muted); margin-bottom: 1rem; }
+.path-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.path { border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.1rem; background: var(--bg-elev); }
+.path h3 { margin: 0 0 .35rem; font-size: 1rem; }
+.path-blurb { margin: 0 0 .6rem; font-size: .86rem; color: var(--fg-muted); line-height: 1.6; }
+.path ul { margin: 0 0 .7rem; padding-left: 1rem; font-size: .88rem; line-height: 1.9; }
+.path-cta { margin: 0; font-size: .88rem; font-weight: 600; }
+.all-pages { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; }
+.all-pages summary { cursor: pointer; color: var(--fg-muted); font-size: .85rem; margin: 1.5rem 0 .8rem; }
