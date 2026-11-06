@@ -511,7 +511,7 @@ OK docsite pages=192 links=409 assets=9492 words=392967 bytes=4512495 demos=60
    api_pages=90 api_decls=455 api_members=1477 api_undoc=0 api_internal=452
 
 # 現在（第 2 ラウンド実装後）
-OK docsite pages=197 links=468 assets=12895 words=460794 bytes=5452884 demos=60
+OK docsite pages=197 links=468 assets=12895 words=460868 bytes=5452965 demos=60
    api_pages=90 api_decls=455 api_members=1477 api_undoc=0 api_internal=452
    xref_targets=4605 xrefs=988 errors=118
 ```

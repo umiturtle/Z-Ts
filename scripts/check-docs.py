@@ -176,11 +176,15 @@ for md in READER_MD:
 # ---------------------------------------------------------------------------
 
 args_src = open("src/cli/args.zig", encoding="utf-8").read() if os.path.isfile("src/cli/args.zig") else ""
-code_flags = set(re.findall(r'"(--[a-z][a-z0-9-]+)"', args_src))
-# `--nope` is the parser's negative test fixture, not a real flag.
-# Negative test fixtures in `args.zig`: the parser is asserted to *reject* them.
+# Flags are parsed from the implementation, minus the strings that only exist to be *rejected*:
+# `expectError(error.UnknownFlag, parse(&.{ "doctor", "--fix" }))` is a negative test fixture, not
+# a flag a user can pass, so documenting it would be wrong.
+code_flags: set[str] = set()
+for line in args_src.splitlines():
+    if "expectError" in line:
+        continue
+    code_flags.update(re.findall(r'"(--[a-z][a-z0-9-]+)"', line))
 code_flags.discard("--nope")
-code_flags.discard("--fix")
 
 cli_ref_path = "docs/reference/cli.md"
 if os.path.isfile(cli_ref_path):
@@ -188,7 +192,7 @@ if os.path.isfile(cli_ref_path):
     doc_flags = set(re.findall(r"(?<![\w-])(--[a-z][a-z0-9-]+)", cli_ref))
     for flag in sorted(code_flags - doc_flags):
         errors.append(f"{cli_ref_path}: flag '{flag}' exists in src/cli/args.zig but is not documented")
-    for flag in sorted(doc_flags - code_flags - {"--fix"}):
+    for flag in sorted(doc_flags - code_flags):
         errors.append(f"{cli_ref_path}: flag '{flag}' is documented but does not exist in src/cli/args.zig")
 
     # Subcommands: the parser matches on bare words, the reference uses `## `zts <cmd>``.

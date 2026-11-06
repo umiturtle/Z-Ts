@@ -1,6 +1,6 @@
 //! `zts_tauri` — Standalone Tauri v2 Wire Protocol, Streaming `Channel(T)` & Core Plugins (`link_libc = false`).
 //!
-//! Designed strictly around  & multi-product reuse constraints:
+//! Designed around the multi-product reuse constraints:
 //! - Depends ONLY on `zts_foundation`, `zts_web`, `zts_core`, and `zts_rpc` (`link_libc = false`).
 //! - Zero compile-time or link-time dependency on GTK, Cocoa, Win32, or HTTP sockets.
 //! - Runs identically atop `WebviewHost` (native desktop), `BridgeHost` (browser / Live Preview),

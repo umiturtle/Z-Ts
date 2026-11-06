@@ -204,8 +204,8 @@ all checks passed
 | `dependency` | `.z_ts.path` が解決できるか | `… does not exist (resolved from …)` |
 | `web/` | フロントエンドのディレクトリ | `missing — the embedder needs a front end` |
 
-`--dir <path>` で対象プロジェクトを指定できます。それ以外のフラグ（`--fix` など）は
-`UnknownFlag` として拒否します — 黙って無視しません。
+`--dir <path>` で対象プロジェクトを指定できます。**それ以外のフラグは受け付けません** —
+未知のフラグは `UnknownFlag` として拒否します（黙って無視しないので、綴り間違いに気付けます）。
 
 ## `zts --help` / `--version`
 
