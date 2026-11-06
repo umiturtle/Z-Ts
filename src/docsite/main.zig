@@ -460,7 +460,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     // `llms.txt` is the table of contents an agent can read in one request, `llms-full.txt` is the
     // concatenated prose, and `sitemap.xml` is what crawlers expect. All three are generated from
     // the same page list as the sidebar, so they cannot disagree with it.
-    try writeInDir(io, arena, out_dir, "llms.txt", try renderLlmsTxt(arena, groups_ja, rendered));
+    try writeInDir(io, arena, out_dir, "llms.txt", try renderLlmsTxt(arena, groups_ja, groups_en, rendered));
     try writeInDir(io, arena, out_dir, "llms-full.txt", try renderLlmsFull(arena, rendered));
     try writeInDir(io, arena, out_dir, "sitemap.xml", try renderSitemap(arena, written.items));
 
@@ -645,14 +645,25 @@ const Section = struct { dir: []const u8, entries: []const site.DirectoryEntry }
 /// Groups rendered pages by their directory and builds the teaser list for each section page.
 fn buildSectionIndexes(arena: Allocator, rendered: anytype) ![]const Section {
     var dirs: std.ArrayListUnmanaged([]const u8) = .empty;
+    // A directory that already has a hand-written `index.md` keeps it: the reader path
+    // (`docs/learn/ja/guides/index.html`) is an argument for reading on, not an alphabetical list,
+    // and silently overwriting it would also make the generator's own links point at a page that
+    // says something else.
     for (rendered) |page| {
         const dir = page.href[0 .. std.mem.lastIndexOfScalar(u8, page.href, '/') orelse 0];
         if (dir.len == 0) continue;
+        if (std.mem.eql(u8, page.title, "")) continue;
         var known = false;
         for (dirs.items) |existing| if (std.mem.eql(u8, existing, dir)) {
             known = true;
         };
-        if (!known) try dirs.append(arena, dir);
+        if (known) continue;
+        var has_index = false;
+        for (rendered) |other| {
+            if (other.href.len == dir.len + 11 and std.mem.startsWith(u8, other.href, dir) and
+                std.mem.eql(u8, other.href[dir.len..], "/index.html")) has_index = true;
+        }
+        if (!has_index) try dirs.append(arena, dir);
     }
     std.mem.sort([]const u8, dirs.items, {}, struct {
         fn lessThan(_: void, a: []const u8, b: []const u8) bool {
@@ -1666,35 +1677,43 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
 
 const site_url = "https://umiturtle.github.io/Z-Ts/";
 
-fn renderLlmsTxt(arena: Allocator, groups: []const site.Group, rendered: anytype) ![]const u8 {
+fn renderLlmsTxt(arena: Allocator, groups_ja: []const site.Group, groups_en: []const site.Group, rendered: anytype) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
     const w = &out.writer;
     try w.writeAll("# Z-Ts\n\n");
     try w.writeAll("> Tauri v2 のプロトコルとプラグインを Zig 0.17 で再実装したツールキット。" ++
-        "同じアプリコードからネイティブ WebView / Live Preview / 静的 SSG の 3 つを生成する。\n\n");
+        "同じアプリコードからネイティブ WebView / Live Preview / 静的 SSG の 3 つを生成する。\n>\n" ++
+        "> A Zig 0.17 reimplementation of the Tauri v2 protocol and plugins. One app source, " ++
+        "three artefacts: native WebView, browser Live Preview, static site.\n\n");
     try w.writeAll("- 対応: Zig 0.17.0 / Tauri v2（`@tauri-apps/api` を無改変で利用）\n");
     try w.writeAll("- パッケージ: zts_foundation, zts_web, zts_core, zts_rpc, zts_bridge, zts_webview, zts_tauri, zts_wasm, zts_ssg, z_ts\n");
-    try w.writeAll("- 全文: llms-full.txt / エラー索引: docs/reference/errors.html\n\n");
+    try w.writeAll("- 全文 / full text: llms-full.txt / エラー索引: docs/reference/errors.html\n");
+    try w.writeAll("- 英語の学習パス / English learning path: docs/learn/en/index.html\n\n");
 
-    for (groups) |group| {
-        if (std.mem.eql(u8, group.heading, GroupKey.internals.heading(.ja))) continue;
-        try w.print("## {s}\n\n", .{group.heading});
-        for (group.entries) |entry| {
-            // One line per page: the title, then the first sentence of the page itself so the
-            // reader (human or model) can decide without fetching it.
-            var summary: []const u8 = "";
-            for (rendered) |page| {
-                if (!std.mem.eql(u8, page.href, entry.href)) continue;
-                summary = teaser(page.document.plain, page.title);
+    for ([_][2][]const u8{ .{ "日本語", "ja" }, .{ "English", "en" } }, 0..) |lang, lang_index| {
+        try w.print("# {s}\n\n", .{lang[0]});
+        const groups = if (lang_index == 0) groups_ja else groups_en;
+        for (groups) |group| {
+            if (std.mem.eql(u8, group.heading, GroupKey.internals.heading(.ja))) continue;
+            if (std.mem.eql(u8, group.heading, GroupKey.internals.heading(.en))) continue;
+            try w.print("## {s}\n\n", .{group.heading});
+            for (group.entries) |entry| {
+                // One line per page: the title, then the first sentence of the page itself so the
+                // reader (human or model) can decide without fetching it.
+                var summary: []const u8 = "";
+                for (rendered) |page| {
+                    if (!std.mem.eql(u8, page.href, entry.href)) continue;
+                    summary = teaser(page.document.plain, page.title);
+                }
+                if (summary.len > 0) {
+                    try w.print("- [{s}]({s}{s}): {s}\n", .{ entry.title, site_url, entry.href, summary });
+                } else {
+                    try w.print("- [{s}]({s}{s})\n", .{ entry.title, site_url, entry.href });
+                }
             }
-            if (summary.len > 0) {
-                try w.print("- [{s}]({s}{s}): {s}\n", .{ entry.title, site_url, entry.href, summary });
-            } else {
-                try w.print("- [{s}]({s}{s})\n", .{ entry.title, site_url, entry.href });
-            }
+            try w.writeAll("\n");
         }
-        try w.writeAll("\n");
     }
     return out.toOwnedSlice();
 }
