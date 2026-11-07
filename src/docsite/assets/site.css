@@ -462,8 +462,8 @@ html[data-theme="dark"] .kind-badge[data-kind] {
 }
 .path-rail ol {
   display: grid;
-  /* `auto-fit`, not a literal 4: adding a fifth step to `learn_path.zig` must not orphan a cell. */
-  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  /* Four columns = the four steps in `learn_path.zig`; the responsive block below halves it. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: .25rem;
   margin: 0;
   padding: 0;
@@ -956,7 +956,7 @@ body.landing { background:
 }
 .landing-path ol {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: .7rem;
   margin: 0;
   padding: 0;
@@ -1043,7 +1043,7 @@ body.landing { background:
 .feature-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 1.4rem;
 }
 .feature { padding: 1rem 1.1rem; border-left: 2px solid var(--border); }
@@ -1105,6 +1105,8 @@ body.landing { background:
     z-index: 44;
   }
   .content { padding: 1.4rem 1.15rem 3rem; }
+  .path-rail ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .landing-path ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero { padding-top: 2.6rem; }
   .landing-path-head { margin-top: 2.6rem; }
   .pager { grid-template-columns: 1fr; }
