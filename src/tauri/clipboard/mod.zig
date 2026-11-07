@@ -12,7 +12,7 @@
 //!
 //! **Not implemented:** `write_image` / `read_image`. Both need image decoding on the Zig side
 //! (`src/webview/png.zig` encodes but does not decode); `plugin:fs`-style rids are already ready,
-//! so adding them later is additive. See ADR-0012 §4.
+//! so adding them later is additive. See  §4.
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;

@@ -1,11 +1,15 @@
 # `zts` を手元に用意する
 
+> **対象読者**: `zts` をまだ持っていない人。
+> **所要時間**: 3 分（Linux / macOS / Windows）。
+> **前提**: `git` と Python 3.8 以上。Zig は `./zigw` が導入します。
+
 `zts` は Z-Ts でアプリを作るための CLI です（Angular CLI のような位置づけ）。
 `init` / `dev` / `build` / `doctor` の 4 つだけ覚えれば、プロジェクトの生成から
 単一バイナリのビルドまで完結します。
 
 > Z-Ts の**リポジトリ自体**をビルド・テストする手順は
-> [`../contributing/README.md`](../contributing/README.md) にあります。このページは
+> [`docs/contributing/README.md`](../../../contributing/README.md) にあります。このページは
 > 「`zts` というコマンドを手に入れる」ところまでです。
 
 ---
@@ -80,6 +84,6 @@ Zig は `zts` が子プロセスとして呼びます。**0.17 系の `zig` が 
 
 ## 次に読むもの
 
-- 最初のアプリ: [`getting-started.md`](getting-started.md)
-- 全コマンドと全オプション: [`../reference/cli.md`](../reference/cli.md)
+- 最初のアプリ: [`counter.md`](../tutorials/counter.md)
+- 全コマンドと全オプション: [`../reference/cli.md`](../../../reference/cli.md)
 - 動かないとき: [`troubleshooting.md`](troubleshooting.md)

@@ -32,7 +32,7 @@
       （公開宣言 **455 件 = 100%**、型メンバ **1,477/1,477 = 100%**。ページ上に未文書表示はゼロ。
       ネイティブ FFI は内部扱いのため分母から除外）
 - [x] `./zigw quick-test` / `./zigw build docs` / `python3 scripts/check-docs.py` が通る
-- [x] **追加**: 読者向け / 内部向けの層分け（`docs/guides/README.md`）と API の公開・内部分離
+- [x] **追加**: 読者向け / 内部向けの層分け（`docs/learn/ja/guides/index.md`）と API の公開・内部分離
       （`Audience`）— 学習中に FFI 宣言へ暴露されない
 
 ## 2. 現在の進捗チェックポイント（Context Reset 復元用）
@@ -45,7 +45,7 @@
   - `verifyAssets` のアンカー検査（`error.DanglingAnchors`）、出力ツリーの事前削除、
     `zig build docs` を `zig-out/docs` 直書きに変更（`InstallDir` が古いページを残していた）。
   - サイト再編: はじめに / ガイド / API / サンプル / 内部資料、`docs/internals/index.html`、
-    内部資料の検索除外、`docs/guides/README.md`（4 層の学習の道筋）。
+    内部資料の検索除外、`docs/learn/ja/guides/index.md`（4 層の学習の道筋）。
   - ガイド 3 本（`using-rpc` / `using-plugins` / `using-ssg`）+ ADR-0019 + 本ドキュメントの
     アーキテクチャ更新 + CI/Pages のゲート追加。
   - 公開面の `///` 約 90 件（webview / tauri / rpc / bridge / core / ssg / app_runtime）。

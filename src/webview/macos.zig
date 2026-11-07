@@ -1,4 +1,4 @@
-//! Native macOS Backend — `Cocoa` (`NSApplication` / `NSWindow`) + `WKWebView` (`src/webview/macos.zig`, `M3-01`).
+//! Native macOS Backend — `Cocoa` (`NSApplication` / `NSWindow`) + `WKWebView`.
 //!
 //! Public Zig wrapper around the Objective-C shim in [`macos_shim.m`](macos_shim.m). The entire
 //! Objective-C / AppKit surface is flattened into a handful of `zts_macos_*` C functions so this
@@ -104,7 +104,7 @@ const shim = struct {
     ) u64;
     extern fn zts_macos_window_close(h: ?*anyopaque, ident: u64) c_int;
     extern fn zts_macos_window_native(h: ?*anyopaque, ident: u64) ?*anyopaque;
-    /// Overlay embedding (`M3-03`): 1 when resized, 0 when the window is not embedded.
+    /// Overlay embedding: 1 when resized, 0 when the window is not embedded.
     extern fn zts_macos_window_fit_parent(h: ?*anyopaque, ident: u64) c_int;
     extern fn zts_macos_window_frame(h: ?*anyopaque, ident: u64, x: ?*f64, y: ?*f64, w: ?*f64, ht: ?*f64) void;
     extern fn zts_macos_window_set_title(h: ?*anyopaque, ident: u64, title: [*:0]const u8) void;
@@ -127,7 +127,7 @@ const shim = struct {
     extern fn zts_macos_window_load_html(h: ?*anyopaque, ident: u64, html: [*:0]const u8, base_url: ?[*:0]const u8) void;
     extern fn zts_macos_window_open_devtools(h: ?*anyopaque, ident: u64) void;
 
-    /// Screenshot completion (`M5-04`): `bytes == null` means the render failed.
+    /// Screenshot completion: `bytes == null` means the render failed.
     const CaptureCb = *const fn (userdata: ?*anyopaque, win: u64, bytes: ?*const anyopaque, len: usize) callconv(.c) void;
     extern fn zts_macos_window_capture(h: ?*anyopaque, ident: u64, userdata: ?*anyopaque, cb: CaptureCb) void;
 };
@@ -139,7 +139,7 @@ const shim = struct {
 const MacWindow = struct {
     /// Opaque `unsigned long long` identity minted by the shim (1-based).
     native: u64,
-    /// Overlay embedding (`M3-03`): `true` when the `WKWebView` lives in a host-provided `NSView`.
+    /// Overlay embedding: `true` when the `WKWebView` lives in a host-provided `NSView`.
     embedded: bool = false,
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
@@ -161,7 +161,7 @@ const PendingToken = struct {
     }
 };
 
-/// In-flight / finished-but-uncollected `takeSnapshotWithConfiguration:` render (`M5-04`).
+/// In-flight / finished-but-uncollected `takeSnapshotWithConfiguration:` render.
 /// Heap-owned because WebKit can deliver the completion handler after the window was closed.
 const SnapshotSlot = struct {
     backend: *MacOsBackend,
@@ -224,7 +224,7 @@ pub const MacOsBackend = struct {
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
-    /// Screenshot slots WebKit still owes a completion handler for (`M5-04`).
+    /// Screenshot slots WebKit still owes a completion handler for.
     snapshots: std.ArrayList(*SnapshotSlot) = .empty,
 
     /// Creates the shared `NSApplication` + `WKWebViewConfiguration` (Dock icon / menu bar enabled).
@@ -675,7 +675,7 @@ pub const MacOsBackend = struct {
         slot.done = true;
     }
 
-    /// Overlay embedding (`M3-03`): resize the child `WKWebView` to the host view's bounds.
+    /// Overlay embedding: resize the child `WKWebView` to the host view's bounds.
     /// The shim already installs an autoresizing mask, so this is for hosts that replace their
     /// content view wholesale or want an explicit sync each frame next to `step(.poll)`.
     pub fn fitParent(self: *MacOsBackend, win_id: types.WindowId) types.WebviewError!void {

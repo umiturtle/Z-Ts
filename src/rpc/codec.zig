@@ -1,6 +1,6 @@
 //! Web ⇔ Zig JSON RPC Codec (`src/rpc/codec.zig`).
 //!
-//! Built cleanly atop `zts_core.html_escape` (`M1-02`), `zts_core.Handle` (`M1-01`),
+//! Built cleanly atop `zts_core.html_escape`, `zts_core.Handle`,
 //! `src/rpc/naming.zig`, `src/rpc/types.zig`, and `src/rpc/scanner.zig`.
 //!
 //! Enforces all Web ⇔ Zig boundary guarantees at `comptime` and runtime:

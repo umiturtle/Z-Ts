@@ -1,4 +1,4 @@
-//! Tauri v2 **ACL** (`capabilities/*.json`) — the security half of `M4-04`.
+//! Tauri v2 **ACL** (`capabilities/*.json`) — the security half of .
 //!
 //! An existing Tauri app describes *what the frontend may call* in `capabilities/*.json`:
 //!

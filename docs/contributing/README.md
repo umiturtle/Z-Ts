@@ -1,7 +1,7 @@
 # Z-Ts 自体を開発する（コントリビュータ向け）
 
 > **アプリを作りたい人はこのページを読む必要はありません。**
-> [`../guides/getting-started.md`](../guides/getting-started.md) が「`zts` CLI で自分のアプリを作る」
+> [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md) が「`zts` CLI で自分のアプリを作る」
 > 手順です。ここは **Z-Ts のリポジトリそのものをビルド・テスト・公開する**ためのコマンドと作法を
 > まとめたページです（コントリビュータ・エージェント・将来の自分向け）。
 
@@ -36,7 +36,7 @@
 ```bash
 bash scripts/status.sh          # ブランチ・未コミット・並列エージェント・直近 CI
 ./zigw quick-test               # 全単体テスト（コールド 8 秒 / 2 回目以降 0.03 秒）
-python3 scripts/check-docs.py && ./zigw fmt --check src/ tests/ examples/ build.zig
+./zigw docs-check               # ドキュメントの 4 段ゲート（12 秒）
 ```
 
 3 つとも通れば「壊れているのは自分の変更」です。
@@ -50,8 +50,10 @@ python3 scripts/check-docs.py && ./zigw fmt --check src/ tests/ examples/ build.
 | `./zigw quick-test` | `std.Build` を介さず全モジュールの単体テスト | コールド 8 秒 / 2 回目 0.03 秒 |
 | `./zigw full-test` | `zig build test` と同じ（E2E・C ABI・バインディング鮮度を含む） | コールド 90 秒以上 |
 | `./zigw build test -Dgtk=false` | GTK を切って `test` ステップを実行（CI と同じ形） | キャッシュ次第 |
+| `./zigw docs-check` | ドキュメントの**全ゲート**（下記 4 段）。PR 前に必ずこれ | 約 7 秒（温） |
 | `./zigw build docs` | ドキュメントサイトを `zig-out/docs/` に生成（リンク・アンカー検査つき） | 約 4 秒 |
-| `python3 scripts/check-docs.py` | ドキュメント構造・相対リンク・禁止ファイルの検査 | 0.1 秒 |
+| `python3 scripts/check-docs.py` | 構造・相対リンク・層違反・CLI 乖離・パッケージ名・用語集・ページ骨格 | 0.1 秒 |
+| `./zigw doctest` | `zig check` フェンスを実際にコンパイル（doctest-lite） | 2 ブロックで 1〜5 秒 |
 
 個別モジュールだけ回すときは `./zigw test src/docsite/mod.zig` のように書きます
 （`src/cli/mod.zig` だけは `main.zig` を含まないので、CLI 本体は `./zigw build` が型検査します）。
@@ -114,7 +116,7 @@ cd examples/counter
 | `src/cli/` | **`zts` CLI 本体**（アプリ作者向けのコマンド） |
 | `src/docsite/` | このドキュメントサイトの生成器（Markdown 描画・API リファレンス） |
 | `examples/` | サンプル（counter / gallery / frameworks / c_embed） |
-| `docs/` | ドキュメント（4 層構造は [`../guides/README.md`](../guides/README.md)） |
+| `docs/` | ドキュメント（4 層構造は [`../learn/ja/guides/index.md`](../learn/ja/guides/index.md)） |
 | `scripts/` | CI・スクリーンショット・ツールチェーンのスクリプト |
 | `tests/` | パッケージをまたぐ E2E |
 
@@ -133,13 +135,13 @@ cd examples/counter
    手書きバインディングに閉じ込める。
 4. **`build.zig` の変更は最小限**。共通ロジックは `src/build_tools/` と `src/docsite/` へ。
 5. **公開宣言には必ず `///` を書く**。`zig build docs` のログに `api_undoc=N` が出て、
-   **CI は 0 以外を失敗扱い**にします（[`../guides/using-the-api-reference.md`](../guides/using-the-api-reference.md)）。
+   **CI は 0 以外を失敗扱い**にします（[`../api/index.html`](../api/index.html)）。
 6. **コミット前に**: `./zigw fmt --check src/ tests/ examples/ build.zig` と
    `python3 scripts/check-docs.py`。
 7. **ドキュメントをどこに書くか**: アプリ作者向け（手順）は `docs/guides/`、振る舞いの約束は
    `docs/reference/`、**このリポジトリの操作**は `docs/contributing/`、実装の意図は
    `docs/architecture/` `docs/decisions/` `docs/tasks/`。迷ったら
-   [`../guides/README.md`](../guides/README.md) §2 の表に従ってください。
+   [`../learn/ja/guides/index.md`](../learn/ja/guides/index.md) §2 の表に従ってください。
 
 ## 6. CI
 
@@ -159,7 +161,7 @@ cd examples/counter
 
 リポジトリ側の既知の失敗（ツールチェーン・コールドビルド・GTK ヘッダ・ドキュメントサイトの
 リンク検査・Pages の有効化・画素比較）は [`troubleshooting.md`](troubleshooting.md) に
-まとめてあります。アプリ側のエラーは [`../guides/troubleshooting.md`](../guides/troubleshooting.md) へ。
+まとめてあります。アプリ側のエラーは [`../learn/ja/guides/troubleshooting.md`](../learn/ja/guides/troubleshooting.md) へ。
 
 ---
 
@@ -167,7 +169,7 @@ cd examples/counter
 
 | 知りたいこと | 行き先 |
 |---|---|
-| アプリを作る（利用者向け） | [`../guides/getting-started.md`](../guides/getting-started.md) |
+| アプリを作る（利用者向け） | [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md) |
 | `zts` CLI の仕様 | [`../reference/cli.md`](../reference/cli.md) |
 | 全体アーキテクチャ | [`../architecture/00-overview.md`](../architecture/00-overview.md) |
 | 設計判断の記録 | [`../decisions/`](../decisions/) |

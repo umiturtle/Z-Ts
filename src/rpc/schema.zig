@@ -1,6 +1,6 @@
 //! `comptime` RPC Router Composition (`Schema` / `bind`) (`src/rpc/schema.zig`).
 //!
-//! Implements the two-stage architecture established in `ADR-0002` §3.1 & §4:
+//! Implements the two-stage architecture established in  §3.1 & §4:
 //! 1. **Compile-time Schema composition (`pub const Rpc = zts.rpc.Schema(.{ ... });`)**:
 //!    - Merges multiple stateless or stateful command namespaces (`""`, `"plugin:window|"`, etc.)
 //!      into a single static dispatch table with **zero heap allocations** and full Dead Code Elimination.
@@ -323,7 +323,7 @@ pub fn Schema(comptime specs: anytype) type {
         pub const Router = struct {
             states: StatePtrTuple,
             authorize_fn: ?AuthorizeFn = null,
-            /// Stateful authorizer (`M4-04` ACL): takes the caller's opaque pointer, so an app can
+            /// Stateful authorizer: takes the caller's opaque pointer, so an app can
             /// hand its policy to `withAuthCtx` without a global variable.
             authorize_ctx: ?*anyopaque = null,
             authorize_ctx_fn: ?*const fn (userdata: ?*anyopaque, ctx: *const Ctx, command: []const u8) bool = null,

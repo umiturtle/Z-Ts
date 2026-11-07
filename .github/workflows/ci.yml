@@ -65,6 +65,7 @@ jobs:
           chmod +x ./zigw
           {
             python3 scripts/check-docs.py
+            ./zigw doctest
             node scripts/check-font-coverage.mjs
             npx -y -p typescript tsc --noEmit --strict --target esnext --module esnext --moduleResolution bundler tests/bridge/verify_bridge_e2e.ts
             ./zigw fmt --check src/ tests/ examples/ build.zig build.zig.zon examples/counter/build.zig.zon

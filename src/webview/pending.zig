@@ -1,6 +1,6 @@
 //! Main-Thread Pending Request Isolation Table & Thread-Safe Completion Queue (`src/webview/pending.zig`).
 //!
-//! Enforces Architectural Invariant #4 from `ADR-0002`:
+//! Enforces Architectural Invariant #4 from :
 //! - Raw OS request objects (`WebKitURISchemeRequest*`, `WKURLSchemeTask`, `ICoreWebView2WebResourceRequestedEventArgs*`)
 //!   NEVER cross thread boundaries and NEVER escape the UI main thread.
 //! - Worker threads receive ONLY a 53-bit generational `RequestId` (`Handle(.ipc_request)`) + payload bytes,

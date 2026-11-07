@@ -2,11 +2,13 @@
 
 > **内部資料です。** これは「Z-Ts のドキュメントをどう作るか」を決めるための調査記録で、
 > ライブラリ利用者が読む必要はありません。利用者向けの入口は
-> [`../guides/README.md`](../guides/README.md)、改善の作業計画は
+> [`../learn/ja/guides/index.md`](../learn/ja/guides/index.md)、改善の作業計画は
 > [`../tasks/M5-09-docs-ux.md`](../tasks/M5-09-docs-ux.md) にあります。
 
 - **調査日**: 2026-11-06
-- **調査対象**: <https://angular.dev> / <https://v2.tauri.app> / <https://doc.rust-lang.org>（＋ `rust-lang.org/learn`）
+- **調査対象（第 1 ラウンド）**: <https://angular.dev> / <https://v2.tauri.app> / <https://doc.rust-lang.org>（＋ `rust-lang.org/learn`）
+- **調査対象（第 2 ラウンド）**: <https://react.dev/learn> / <https://kubernetes.io/docs/concepts/> / <https://go.dev/blog/examples> /
+  <https://docs.python.org/3/glossary.html> / <https://docs.deno.com/runtime/reference/ts_config_migration/> / <https://www.typescriptlang.org/tsconfig/>
 - **対象読者**: Z-Ts のドキュメントを書く人・直す人・エージェント
 - **前提**: `M5-07`（API リファレンス生成）と `M5-08`（読者分離）で作った 4 層モデルを出発点に、
   **「学習しやすさ」の側面を足す**のがこの文書の目的です。4 層モデルを否定はしません。
@@ -154,9 +156,123 @@ Rust は 3 つの層がはっきり分かれています。
 | オフライン | — | — | `rustup doc` | リポジトリ内 Markdown |
 | ナビゲーション | 章送り・目次 | 章送り・目次 | ← → / `S` / `?` / print | 目次（details）のみ、前後なし |
 
+### 2.5 第 2 ラウンド — 6 サイトが「1 つのこと」を徹底している
+
+第 1 ラウンド（Angular / Tauri / Rust）は**サイト全体の骨格**を教えてくれました。
+第 2 ラウンドは「1 ページの中の書き方」を学ぶために、性格の違う 6 つを選びました。
+
+| サイト | 見たページ | 1 文でいうと | Z-Ts への持ち帰り |
+|---|---|---|---|
+| **React** | `/learn` | 「このページで日常使う React 概念の 80% を紹介する」と**範囲を宣言**し、`### You will learn` の箇条書き → コード → 説明。`class` `map()` `export` など**術語の初出で MDN へインラインリンク** | §2.5.1 |
+| **Kubernetes** | `/docs/concepts/` | 概念トップが**索引**で、各サブセクションに**1 文の説明**が付く（"The Kubernetes cluster architecture…"）。分類は技術ではなく**タスク**順 | §2.5.2 |
+| **Go** | `/blog/examples` | **Testable Examples**。例はパッケージのテストとしてコンパイル・実行され、`// Output:` と出力を突き合わせる。`Output:` が無ければコンパイルのみ。命名規約 `ExampleFoo` / `ExampleBar_Qux` で**例と対象が機械的に対応** | §2.5.3 |
+| **Python** | `/3/glossary.html` | 用語集の各項目が**定義元（実装ページ）へリンク**し、項目同士が相互参照（`duck typing` ↔ `abstract base class`）。PEP・HOWTO へのインラインリンクも | §2.5.4 |
+| **Deno** | `ts_config_migration` | 移行ガイドが **「あなたの tsconfig の項目 | Deno では」の 1 行表**。delete / keep を**断定**し、選択肢を残さない | §2.5.5 |
+| **TypeScript** | `/tsconfig/` | 参照ページは**カテゴリ索引 + 安定アンカー**。各項目が **Default / Related（他項目へのリンク）/ Released** のメタデータを持つ | §2.5.6 |
+
+#### 2.5.1 React — 「何を学ぶか」を先に宣言し、術語を初出でリンクする
+
+React の `/learn` は冒頭で「**このページは日常的に使う React の 80% を教える。残りは上級編**」と
+**範囲を明示**します。読者は「読み終われば何ができるか」を最初の 3 行で知り、離脱するかどうかを
+決められます。続く `### You will learn` は 5〜7 個の箇条書きで、本文の見出しとほぼ 1:1 です。
+
+さらに重要なのが**術語のインラインリンク**です。`class` と書けば MDN へ、`map()` と書けば MDN へ、
+`export` と書けば MDN へ。**用語集ページへ飛ばさず、その場で定義へ飛ばす**。
+Z-Ts の `` `Handler` `` の自動リンク（§3 P13）は、この発想を**サイト内で**やるものです。
+
+#### 2.5.2 Kubernetes — 索引ページは「1 文つきの目次」である
+
+`/docs/concepts/` は Concept の一覧ですが、ただのリンク集ではありません。各項目に
+**「それが何か」を 1 文**書いてあります。読者はリンクを踏む前に、自分が読むべきかを判断できます。
+
+分類も技術者向けではありません（`Cluster Architecture` `Containers` `Workloads` `Storage`
+`Security`）。**「何をしたいか」で並んでいる**ので、初見でも辿れます。
+Z-Ts の `docs/learn/ja/guides/index.md`（Learning Path）とホームの目的別入口は、この形に寄せます。
+
+#### 2.5.3 Go — 例は「動くテスト」として書く
+
+Go の例は `_test.go` の中の関数で、`// Output:` コメントが付いていれば**出力まで照合**されます。
+つまり、例が古くなれば `go test` が落ちます。公式ブログの言葉がすべてです。
+
+> 実行可能なドキュメントは、API の変化で古くならない。
+
+Z-Ts の `scripts/doc-tests.py`（§3 P5 / P18）は、この仕組みの**前半（コンパイル）**を実装しました。
+後半（出力の一致）は未実装で、理由は「例の多くがウィンドウとイベントループを要する」からです。
+
+#### 2.5.4 Python — 用語集は「辞書」ではなく「ハブ」
+
+Python の用語集は、項目を並べただけのページではありません。各項目が
+
+1. **定義**（1〜2 文）
+2. **定義元へのリンク**（`__slots__` → data model の該当節）
+3. **他の用語へのリンク**（`duck typing` → `abstract base class`）
+4. **関連仕様へのリンク**（PEP や HOWTO）
+
+を持ちます。結果として、用語集は「読んだ語を確認する場所」から「**次に読むべき場所を教える場所**」
+に変わっています。Z-Ts の `docs/glossary.md`（31 項目）は 1 と 3 を実装済み、2 と 4 を
+xref の自動リンクで近似しています。
+
+#### 2.5.5 Deno — 移行は「1 行 1 項目、断定で」
+
+Deno の `tsconfig` 移行ガイドは、**「あなたの tsconfig の項目 | Deno ではどうするか」**という
+2 列の表だけです。`target` は削除、`module` は削除（Deno は常に ESM）、`strict` は既定で有効——
+**「場合によっては」を書かない**のが特徴です。読者は迷わず、終わったかどうかも判定できます。
+
+Z-Ts の [`../learn/ja/guides/migrate-from-tauri.md`](../learn/ja/guides/migrate-from-tauri.md) は
+Tauri の API → Z-Ts の API を 1 行 1 項目の表にし、各行にリンクを付けました。
+
+#### 2.5.6 TypeScript — 参照項目はメタデータを持つ
+
+`/tsconfig/` の各オプションは、**Default（既定値）/ Related（関連オプションへのリンク）/
+Released（導入バージョン）** を必ず持ちます。読者は「今の設定から変えたら何が起きるか」を、
+ページを移らずに判断できます。アンカーも安定していて（`#strict` など）、外部からリンクされます。
+
+Z-Ts の [`../reference/cli.md`](../reference/cli.md) は、この 3 点を各節に足す方針にしました。
+
+### 2.6 10 サイトを 1 枚にすると
+
+| 観点 | 第 1 ラウンド（3） | 第 2 ラウンド（6） | 共通する結論 |
+|---|---|---|---|
+| 学習の入口 | Angular 2 入口 / Tauri 地図 / Rust 3 モード | React「範囲の宣言」 | **読む前に「何が得られるか」を 1 文で** |
+| 概念の置き場所 | essentials / concept / Book | K8s の 1 文つき索引 | **概念は読者の層に、索引は 1 文つきで** |
+| 辞書 | API / CLI / Errors | Python 用語集 / TS メタデータ | **引くページは「次に読む」を返す** |
+| 例 | Angular サンドボックス / Rust doctest | Go の Testable Examples | **例は機械が検証する。手で貼らない** |
+| 移行 | Angular update guide / Tauri v1→v2 | Deno の 1 行表 | **変更前 → 変更後、断定で** |
+| 機械可読 | Angular・Tauri の `llms.txt` | （TS の安定アンカー） | **目次は 1 リクエストで取れる形で** |
+
+### 2.7 第 3 ラウンド — 「入口の作り方」だけを見る（Vue / Kubernetes ホーム）
+
+第 2 ラウンドで「1 ページの中」を学んだので、最後に**サイトの入口**だけを 2 サイトで確認しました。
+
+| サイト | 見たページ | 発見 | Z-Ts での対応 |
+|---|---|---|---|
+| **Vue** | `/guide/introduction.html` | 冒頭に **Prerequisites** 節があり、「HTML/CSS/JS の基礎が無いなら先に MDN へ」と**読者を返す**。さらに "The Progressive Framework" で「どこから始めても、学んだことは後で効く」と**学習の投資対効果**を明言 | 各ガイドの冒頭に `> **対象読者**` と `> **所要時間**` を必須化（`check-docs.py` の規約 7） |
+| **Kubernetes** | `/docs/home/` | ホームが **4 つの入口**（Understand / Try / Set up / Learn tasks / Reference）で、各入口に **1 文の説明 + 代表 5〜7 リンク + CTA**。フッターに "About the documentation"（対応バージョン） | ホームに「4 つの入口」（学ぶ / 手を動かす / 引く / 確かめる・中を読む）を追加。全ページ一覧は `<details>` に畳む |
+
+#### 2.7.1 Vue — 前提知識を書くと、読者は正しい場所から始められる
+
+Vue の導入ページは、本文の前に**「この先を読むには HTML/CSS/JavaScript の基礎が要る」**と書き、
+足りない読者には MDN の該当ページを渡して**戻します**。これは親切であると同時に、
+「分からないのは自分が悪いのか、説明が悪いのか」という迷いを消します。
+
+Z-Ts のガイドは対象読者を書いていましたが、**「何を知っている前提か」**は書いていませんでした。
+第 2 ラウンドで全ガイドに `> **対象読者**` と `> **所要時間**` を入れ、`check-docs.py` が
+12 行以内に無ければ落とすようにしました（書き忘れを機械で止める）。
+
+#### 2.7.2 Kubernetes ホーム — 索引ではなく「入口」
+
+`/docs/home/` は全ページの一覧ではありません。**4 つの目的**（理解する / 試す / 使う / 引く）が
+縦に並び、それぞれに「この節は何のためか」の 1 文、代表的な 5〜7 リンク、そして
+"View Concepts" のような CTA があります。読者は「自分は今どこにいるか」を選んでから入ります。
+
+Z-Ts のホームはヒーロー + 3 枚のカード + グループ別リンク集でした。これを
+**4 つの入口**（学ぶ / 手を動かす / 引く / 確かめる・中を読む）に置き換え、全ページ一覧は
+`<details>` に畳みました。リンクのラベルは**サイドバーから引く**ので、ページ名を変えても
+ホームが古い名前を出し続けることはありません。
+
 ---
 
-## 3. 導かれる 12 の原則
+## 3. 導かれる 20 の原則（第 1 ラウンドの 12）
 
 以下は「3 サイトに共通して見えたこと」と「Z-Ts に当てはめたときに効くこと」をセットにした
 原則です。**判定基準**は、後で機械的に測れる形にしてあります。
@@ -210,7 +326,7 @@ Rust は 3 つの層がはっきり分かれています。
 **根拠**: rustdoc の doctest。例が壊れたら CI が落ちる。
 
 **Z-Ts への含意**: ガイドのコードは手で貼られており、API の変更で壊れても気付けない。少なくとも
-**```zig フェンスを抽出してコンパイルする**だけの検査（doctest-lite）は、依存ゼロの現構成でも
+**`zig` フェンスを抽出してコンパイルする**だけの検査（doctest-lite）は、依存ゼロの現構成でも
 実現できる。
 
 **判定基準**: `zig build docs` か専用ステップが、ガイド内の Zig コード片のコンパイルに失敗したら
@@ -287,31 +403,170 @@ API ページに至っては目次すら生成していない（`toc` を Markdo
 
 ---
 
+## 3b. 第 2 ラウンドで足した 6 原則（P13〜P18）
+
+§2.5 の 6 サイトから取り出した、**1 ページの中の書き方**に関する原則です。P1〜P12 が
+「サイトの骨格」なら、こちらは「段落と表の作り方」です。
+
+### P13. 術語は初出でリンクする（用語集へ飛ばさない）
+
+**根拠**: React は `class` `map()` `export` の初出で MDN へリンクする。
+
+**Z-Ts への含意**: 「用語集を見てください」は 1 クリックの無駄。本文の `` `Handler` `` が
+そのまま `zts_rpc` の宣言へ飛ぶべき。実装は `src/docsite/markdown.zig` の `writeCodeSpan()` —
+コード表記を xref 索引（4,600 項目）で引き、完全修飾名 → 一意な名前 → 何もしない、の順に解決する。
+
+**判定基準**: 生成 HTML に `class="xref"` のリンクが一定数（現在 982 本）あり、
+リンク先がすべて実在すること（`zig build docs` が検査）。
+
+### P14. 索引ページは「1 文つきの目次」にする
+
+**根拠**: Kubernetes の `/docs/concepts/`。各項目に 1 文、並びはタスク順。
+
+**Z-Ts への含意**: ホーム・`docs/learn/ja/guides/index.md`・`docs/api/index.html` の 3 つは索引である。
+リンクだけを並べず、**読者が踏む前に判断できる 1 文**を付ける。並びは「機能」ではなく
+「やりたいこと」（はじめる → コマンドを書く → 画面を作る → 配る → 失敗から戻る）。
+
+**判定基準**: 索引ページの各リンクに 1 文の説明があること（`llms.txt` の生成は同じ情報源）。
+
+### P15. 移行ガイドは「変更前 → 変更後」を 1 行 1 項目で書く
+
+**根拠**: Deno の `tsconfig` 移行表。断定で、選択肢を残さない。
+
+**Z-Ts への含意**: Tauri からの移行は `fs` → `zts_tauri.fs`、`invoke` → `zts_rpc` の
+`Schema` のように、**1 行で書ける対応**がほとんど。文章で説明すると読者は写経を間違える。
+
+**判定基準**: [`../learn/ja/guides/migrate-from-tauri.md`](../learn/ja/guides/migrate-from-tauri.md) の
+対応表が全行リンク付きで、各行が「Tauri の API | Z-Ts の API | ひとこと」になっていること。
+
+### P16. 参照ページの項目は既定値・関連・導入時期を持つ
+
+**根拠**: TypeScript の `/tsconfig/`。`Default` / `Related` / `Released` が全項目にある。
+
+**Z-Ts への含意**: `zts` のフラグは「既定値」が最重要（`--release` の既定は何か）。
+「関連」は同じページ内アンカーで足りる。「導入」は 0.1.0 のうちは省いてよいが、
+フラグが増えたら必要になる。
+
+**判定基準**: [`../reference/cli.md`](../reference/cli.md) の各節に **既定値** 行があり、
+フラグ集合が `src/cli/args.zig` と一致すること（`check-docs.py` の規約 4）。
+
+### P17. 用語集はハブにする（定義 + 定義元 + 相互参照）
+
+**根拠**: Python の用語集は、定義元・他用語・PEP へリンクする。
+
+**Z-Ts への含意**: 31 項目の [`../glossary.md`](../glossary.md) は、各項目が
+「1 文 + 初出ページ + API 宣言」を持つ。定義中の `` `Code` `` は他の項目へリンクするので、
+用語集の中を読み進められる。
+
+**判定基準**: `###` 見出しが一意（`check-docs.py` の規約 6）、各項目にリンクが 1 本以上あること。
+
+### P18. 例は出力まで含めて検証する（コンパイルは最低線）
+
+**根拠**: Go の Testable Examples は `// Output:` と照合する。**例が古くなるとテストが落ちる。**
+
+**Z-Ts への含意**: すべての例を実行するのは無理（ウィンドウ・イベントループが要る）。
+だが**コンパイルは全例でできる**ので、そこを最低線にする。`zig check` を付けたブロックだけ
+が対象で、`scripts/doc-tests.py` が `zig test --test-no-exec` に通す。出力の一致は将来の拡張。
+
+**判定基準**: `python3 scripts/doc-tests.py` が緑で、`zig check` ブロックが 2 本以上あること。
+**未達**: 出力一致（`// Output:`）は未実装。
+
+---
+
+## 3c. 第 3 ラウンドで足した 2 原則（P19〜P20）
+
+### P19. ホームは索引ではなく「入口」にする
+
+**根拠**: Kubernetes の `/docs/home/`。4 つの目的 ×（1 文 + 代表リンク + CTA）。
+
+**Z-Ts への含意**: ホームに全 197 ページを並べても読者は選べない。**目的で 4 つに切り**、
+各入口に「何のための節か」を 1 文で書く。全ページ一覧は `<details>` に畳んで残す。
+
+**判定基準**: ホームに 4 つの `article.path` があり、各カードに 1 文の説明・5 リンク・CTA があること。
+リンクのラベルはサイドバー（`groups`）から引くので、改名に追従する。
+
+### P20. 「何を知っている前提か」を書く（読者を正しい場所へ返す）
+
+**根拠**: Vue の Prerequisites 節。基礎が無い読者には MDN を渡して**戻す**。
+
+**Z-Ts への含意**: 「対象読者」だけでは足りない。**所要時間**と**前提**（例:「Rust の
+`#[tauri::command]` を知っている」「Zig の `comptime` を読める」）を冒頭 12 行に置く。
+書かなければ CI が落ちるので、新しいページでも抜けない。
+
+**判定基準**: `docs/learn/**` と `docs/reference/*`（索引と内部向けを除く）の全ページが
+`> **対象読者**`（英語ページは `> **Audience**`）を 12 行以内に持ち、`check-docs.py` の規約 7 が
+検証する。
+
+## 3d. 第 4 ラウンド: 言語と見た目を「後付け」にしない
+
+第 3 ラウンドまでで**構造**（4 層・入口・現在地・前提）は揃いました。残ったのは
+「日本語しか読めない」「見た目が素の HTML」という 2 点で、どちらも**後から足すと必ず壊れる**
+種類のものです。そこで 2 原則を追加しました。
+
+### P21. 翻訳はパスの写像にする（ファイル名を一致させる）
+
+**根拠**: Tauri（`/start/` と `/ja/start/` が同じ slug）、React（`/learn` と `/ja/learn`）。
+両者とも**言語だけがパスの前置き**で、ページの識別子は言語に依存しません。
+
+**Z-Ts への含意**: 読者向けページは `docs/learn/ja/…` と `docs/learn/en/…` に**同一ファイル名**で
+置く。言語切替はパスの `ja`/`en` を置き換えるだけ（`i18n.alternateHref`）で、翻訳の有無を
+判定するコードを持たない。逆に、片方にしかないファイルは**切替を押した瞬間に 404** になるので、
+規約 8 が両ツリーの集合一致を検証する。
+
+**判定基準**: `docs/learn/ja` と `docs/learn/en` の相対パス集合が一致（`check-docs.py` 規約 8）。
+相手が存在するときだけ `<link rel="alternate" hreflang>` を出す（`altHref` が実ファイルを見る）。
+
+### P22. テーマはトークンで 2 つ持つ（後から暗くしない）
+
+**根拠**: Vue / Deno / TypeScript のドキュメントはいずれも**色をすべて変数**にし、
+`:root` と `[data-theme="dark"]` で 2 回定義します。後から「暗いときに読めない箇所」を
+探す作業が発生しないのが利点です。
+
+**Z-Ts への含意**: `site.css` の色は `--bg` / `--fg` / `--accent` などの宣言だけで使い、
+直値の色を本文側に書かない。ブランドのグラデーションだけは例外で、`--accent` がダークで
+明るい色に反転するため**反転しない固定色**（`--brand-a` / `--brand-b`）を別に持つ。
+初期値は `prefers-color-scheme`、切替は `localStorage`、`<head>` の 1 行スクリプトで
+**描画前に**確定させる（白い flash を出さない）。
+
+**判定基準**: `site.css` の全 `var(--…)` が両テーマで定義されていること、本文色の
+コントラストが AA（4.5:1）を満たすこと。現状 `--fg-faint` は 4.87:1（light）/ 6.33:1（dark）。
+
+---
+
 ## 4. Z-Ts の現在地（実測）
 
 ### 4.1 数字（2026-11-06、`./zigw build docs`）
 
-> この表は**本調査記録と M5-09 を書き足す前**の実測です（現在は `pages=194` で、
-> 増えた 2 ページはこの 2 本の内部資料）。
+> 下表の「当初」はこの調査を始めた時点（本調査記録と M5-09 を書き足す前）の実測です。
+> 「現在」は 2026-11-06 の第 2 ラウンド実装後（`./zigw build docs`）。
 
 ```text
+# 当初（2026-11-06 調査時）
 OK docsite pages=192 links=409 assets=9492 words=392967 bytes=4512495 demos=60
    api_pages=90 api_decls=455 api_members=1477 api_undoc=0 api_internal=452
+
+# 現在（第 2 ラウンド実装後）
+OK docsite pages=197 links=468 assets=12895 words=460868 bytes=5452965 demos=60
+   api_pages=90 api_decls=455 api_members=1477 api_undoc=0 api_internal=452
+   xref_targets=4605 xrefs=988 errors=118
 ```
 
-| 指標 | 値 | 補足 |
-|---|---|---|
-| 総ページ | 192 | うち内部資料（architecture / decisions / tasks / roadmap / environment / AGENTS）が大半 |
-| API ページ | 90 | 10 パッケージ |
-| 公開宣言 | 455 | `///` 付き 100%（`api_undoc=0`） |
-| 型メンバ | 1,477 | 宣言とは別に数えている |
-| 検索索引 | 886 件 / 約 257 KB | 型メンバは索引に**入っていない** |
-| サイドバー | 6 グループ / 31 項目 | はじめに / ガイド / API / サンプル / 開発 / 内部資料 |
-| 利用者向け本文 | 10 ページ・約 1,594 行 | guides 9 + cli 1（README 含む） |
-| API ページ内のコード例 | **0** | 90 ページすべてで `<pre class="code">` が 0 |
-| `///` 内のコードフェンス | **3 ブロック** | 1,530 行のドキュメントコメントに対して |
-| `///` の `# 見出し` | **0** | `# Parameters` `# Example` 等の節が無い |
-| `///` 内の内部参照 | **37 箇所** | `ADR-…` / `M\d-\d\d` |
+| 指標 | 当初 | 現在 | 補足 |
+|---|---|---|---|
+| 総ページ | 192 | **197** | うち内部資料が大半（サイドバーでは 1 エントリに畳まれる） |
+| 読者向けリンク | 409 | **468** | 相対リンクの総数。`zig build docs` が全数を検査 |
+| xref（自動リンク） | 0 | **988** | `` `Handler` `` 等のコード表記が API へ飛ぶ |
+| エラー索引の項目 | 0 | **118** | `error{…}` から生成。`#error.Name` で引ける |
+| 検索索引 | 886 件 | **2,363 件** | 型メンバ（1,477）と用語集を追加 |
+| API ページ | 90 | 90 | 10 パッケージ。目次（TOC）付きに |
+| 公開宣言 | 455 | 455 | `///` 付き 100%（`api_undoc=0`） |
+| 型メンバ | 1,477 | 1,477 | 宣言とは別に数えている（検索対象になった） |
+| サイドバー | 6 グループ / 31 項目 | 6 グループ / 35 項目 | エラー索引・用語集・執筆規約を追加 |
+| `llms.txt` / `llms-full.txt` | なし | **あり** | サイドバーと同じ並びから生成 |
+| `sitemap.xml` / `404.html` | なし | **あり** | 行き止まりから戻れる |
+| 注記（`> [!NOTE]`） | なし | **4 種対応** | GitHub とサイトの両方で読める |
+| `zig check` ブロック | 0 | **2 本** | `scripts/doc-tests.py` が CI でコンパイル |
+| `///` 内の内部参照 | **37 箇所** | **0**（公開ツリー） | `check-docs.py` の規約 3 が再発を止める |
 
 ### 4.2 できていること（他サイトと比べても強い部分）
 
@@ -352,7 +607,39 @@ OK docsite pages=192 links=409 assets=9492 words=392967 bytes=4512495 demos=60
 | C1 | 公開 API の `///` に `ADR-0002` / `M1-03` / 「2-word fat-pointer」など内部事情が入っている（37 箇所）。`M5-07` の「実装意図を `///` に書かない」に違反 | `src/rpc/schema.zig`、`src/rpc/ctx.zig`、`src/tauri/mod.zig` ほか |
 | C2 | モジュール先頭の `//!` が「設計書の要約」になっていて、**役割と例**になっていない（Rust の規約と逆） | `src/tauri/mod.zig`、`src/rpc/mod.zig` |
 | C3 | `site.zig` のモジュールドキュメントが `sitemap.txt` を出すと書いているが、実際には出していない | `src/docsite/site.zig:6` |
-| C4 | `guides/README.md` の「ガイド 8 本」は実態と合うが、内訳（ハンズオン / 移行 / 障害）がラベルされていない | `docs/guides/README.md` |
+| C4 | `guides/README.md` の「ガイド 8 本」は実態と合うが、内訳（ハンズオン / 移行 / 障害）がラベルされていない | `docs/learn/ja/guides/index.md` |
+
+### 4.5 第 2 ラウンドで解消したもの（2026-11-06）
+
+| 項目 | 状態 | 実装 |
+|---|---|---|
+| G4 例の検証（コンパイル） | **達成** | `scripts/doc-tests.py` + `zig check` 規約。`./zigw docs-check` と CI で実行 |
+| G6 エラー索引 | **達成** | `docs/reference/errors.html`（118 項目、`error{…}` から生成） |
+| G7 用語集 | **達成** | [`../glossary.md`](../glossary.md)（31 項目、相互参照） |
+| G8 パンくず・種別・前後送り | **達成** | `site.zig` の `Crumb` / `kindLabel` / `NavLink` |
+| G9 API の目次 | **達成** | `apidoc.Page.toc`（宣言の見出しのみ。メンバは索引を肥大させるため除外） |
+| G10 メンバ検索 | **達成** | `search-index.js` 2,362 件（型メンバ 1,477 を含む） |
+| G11 `llms.txt` | **達成** | `main.zig` の `renderLlmsTxt` / `renderLlmsFull` |
+| G13 注記 | **達成**（コードタブは未） | `markdown.zig` の admonition（`> [!NOTE]` 他 3 種） |
+| G14 404 / `sitemap.xml` | **達成** | `main.zig` の `renderSitemap` / `renderNotFoundBody` |
+| C1 `///` の内部 ID | **達成**（公開ツリー） | 54 行から削除。`check-docs.py` 規約 3 が再発を止める |
+| C2 `//!` の要約化 | **部分達成** | `src/rpc/mod.zig` 等の主要 3 本を書き換え。残りは Wave 2 |
+| C3 `sitemap.txt` の虚偽記述 | **達成** | `site.zig` のモジュールドキュメントを実態に合わせた |
+| — 相互リンクの量 | **達成** | 読者向けリンク 409 → 460、xref 0 → 985、用語集・エラー索引からの導線 |
+| — 執筆規約の明文化 | **達成** | [`../contributing/writing-docs.md`](../contributing/writing-docs.md) |
+| G1 概念ページ / G2 チュートリアル / G5 ACL / G12 印刷版 / G3 API の例 | **未着手** | Wave 2〜4（[`../tasks/M5-09-docs-ux.md`](../tasks/M5-09-docs-ux.md)） |
+
+### 4.6 第 4 ラウンドで解消したもの（2026-11-06）
+
+| 項目 | 状態 | 実装 |
+|---|---|---|
+| G1 概念ページ | **達成** | `docs/learn/{ja,en}/concepts/` 4 ページ（構成・コマンド・プラグイン・セキュリティ） |
+| G2 チュートリアル | **達成** | `docs/learn/{ja,en}/tutorials/counter.md`（15 分・`zig check` 付き） |
+| G12 印刷版 | **達成** | `site.css` の `@media print`（ナビ・レール・検索を落とし、リンクを下線で残す） |
+| 2 言語（P21） | **達成** | `docs/learn/{ja,en}/` 各 16 ページ・規約 8 がパリティ検証 |
+| ダークモード（P22） | **達成** | `site.css` のトークン 2 定義・AA コントラスト・描画前のテーマ確定 |
+| 学習の道筋（P14 / P19 / P20） | **達成** | 日英 2 つのランディング（4 入口）+ `docs/learn/*/index.md` |
+| G5 ACL の作例 / G3 API の例 | **未着手** | Wave 2 の残り |
 
 ---
 
@@ -386,6 +673,11 @@ OK docsite pages=192 links=409 assets=9492 words=392967 bytes=4512495 demos=60
   `api_with_examples` 指標）。
 - **Wave 4（L・任意）**: コードタブ、印刷版、バージョン切替。今の規模では後回し。
 
+> **進捗（2026-11-06）**: Wave 0・Wave 1・Wave 3 の大半は実装済み（§4.5）。残るのは
+> Wave 2 の本体（G1 概念 / G2 チュートリアル / G5 ACL / G3 API の例）と G12 の印刷版です。
+> 実装済みの検証は `./zigw docs-check`（レンダラのテスト → `check-docs.py` → `doc-tests.py` →
+> `zig build docs`）の 4 段で、CI でも同じ順に回ります。
+
 ---
 
 ## 6. アンチパターン（やらないこと）
@@ -418,6 +710,14 @@ OK docsite pages=192 links=409 assets=9492 words=392967 bytes=4512495 demos=60
 | Rust | <https://doc.rust-lang.org/std/index.html> | "How to read this documentation"、Summary、Source |
 | Rust | <https://doc.rust-lang.org/book/> と第 1 章 | 章送り、`S` / `?`、print.html、Listing 番号 |
 | Rust | <https://doc.rust-lang.org/rustdoc/how-to-write-documentation.html> | 文書構造の規約、Panics/Errors/Safety、doctest |
+| React | <https://react.dev/learn> | 範囲の宣言（「日常使う 80%」）、`You will learn`、術語の MDN リンク、実行可能な例 |
+| Kubernetes | <https://kubernetes.io/docs/concepts/> | 1 文つき索引、タスク志向の分類 |
+| Go | <https://go.dev/blog/examples> | Testable Examples（`// Output:`）、命名規約、"executable documentation" |
+| Python | <https://docs.python.org/3/glossary.html> | 定義元リンク、用語間の相互参照、PEP・HOWTO へのインラインリンク |
+| Deno | <https://docs.deno.com/runtime/reference/ts_config_migration/> | 移行の 1 行表、断定（delete / keep） |
+| TypeScript | <https://www.typescriptlang.org/tsconfig/> | カテゴリ索引、安定アンカー、Default / Related / Released |
+| Vue | <https://vuejs.org/guide/introduction.html> | Prerequisites（前提知識を書いて読者を MDN へ返す）、Progressive Framework の位置づけ |
+| Kubernetes | <https://kubernetes.io/docs/home/> | ホーム = 4 つの入口 ×（1 文 + 代表リンク + CTA）、対応バージョンの明記 |
 
 Diátaxis（Tutorial / How-to / Reference / Explanation の 4 分類）は、3 サイトの情報設計を
 整理する枠組みとして参照した一般に知られた分類です（この文書では §3 P9 でのみ使用）。

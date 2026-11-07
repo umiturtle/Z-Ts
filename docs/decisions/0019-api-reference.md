@@ -59,7 +59,7 @@ API ページは全ファイルを生成するが、**索引・検索・文書�
 * 除外件数は `api_internal=…` としてログに出す（隠していないことを検証できる）。
 
 ガイド・仕様・内部資料の 4 層の役割分担は
-[`../guides/README.md`](../guides/README.md) §2 に正本を置いた。
+[`../learn/ja/guides/index.md`](../learn/ja/guides/index.md) §2 に正本を置いた。
 
 ### 2.4 リンク検査に「アンカー」を足す
 

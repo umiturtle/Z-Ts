@@ -160,7 +160,7 @@ pub const MessageShape = enum { ok, ok_cancel, yes_no, yes_no_cancel };
 /// Maps the shape onto the `MessageBoxW` button flag.
 ///
 /// `MessageBoxW` cannot rename buttons, so a custom label still shows the OS text; the *result*
-/// reported back to the webview keeps the caller's label (see ADR-0012 §5).
+/// reported back to the webview keeps the caller's label.
 pub fn messageBoxButtons(shape: MessageShape) u32 {
     return switch (shape) {
         .ok => MessageBoxButtons.ok,

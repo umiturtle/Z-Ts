@@ -26,7 +26,7 @@ const body_chunk_size: usize = 64 * 1024;
 
 const LinuxWindow = struct {
     toplevel: ?*c.GtkWidget, // `null` when embedded inside external `parent_native_handle`
-    /// Host container we were embedded into (`M3-03`); `null` for toplevel windows.
+    /// Host container we were embedded into; `null` for toplevel windows.
     parent: ?*c.GtkWidget = null,
     webview: *c.WebKitWebView,
     ucm: *c.WebKitUserContentManager,
@@ -67,7 +67,7 @@ const OwnedBodyHolder = struct {
     body: types.OwnedBytes,
 };
 
-/// In-flight (or finished, uncollected) `webkit_web_view_get_snapshot()` render (`M5-04`).
+/// In-flight (or finished, uncollected) `webkit_web_view_get_snapshot()` render.
 ///
 /// The completion callback owns the slot: it either frees it (discarded / failed) or leaves it in
 /// `LinuxGtkBackend.snapshots` with `done = true` for `takeCapture()`. The struct is heap-allocated
@@ -842,7 +842,7 @@ pub const LinuxGtkBackend = struct {
         return c.CAIRO_STATUS_SUCCESS;
     }
 
-    /// Overlay embedding (`M3-03`): resize the child WebView to the host container's client area.
+    /// Overlay embedding: resize the child WebView to the host container's client area.
     ///
     /// A `GtkBox` already re-packs expanding children on resize, but hosts that use a fixed/overlay
     /// container (`GtkFixed`, `GtkOverlay`, a raw `GtkContainer`) need this explicit sync — and a

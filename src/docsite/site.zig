@@ -3,7 +3,8 @@
 //! The site is generated *by the project itself* (dogfooding): `./zigw build docs` runs
 //! `src/docsite/main.zig`, which walks `docs/**.md` (+ `AGENTS.md`, `README.md`, the example
 //! READMEs), renders every page with [`markdown`], writes `dist/docs/*.html`, copies the static
-//! CSS/JS and emits `search-index.js` + `sitemap.txt`.
+//! CSS/JS and emits `search-index.js` (+ `sitemap.xml`, `llms.txt`, `llms-full.txt` and `404.html`
+//! from `main.zig`).
 //!
 //! Two things make this a real gate rather than a nice-to-have:
 //! * **link verification** — every relative link in the corpus is resolved against the set of pages
@@ -14,6 +15,12 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const markdown = @import("markdown.zig");
+const paths = @import("paths.zig");
+const i18n = @import("i18n.zig");
+
+/// Re-exported from `paths.zig` so existing callers (`main.zig`, the API generator) keep using
+/// `site.relativeHref`; the renderer imports `paths.zig` directly to avoid an import cycle.
+pub const relativeHref = paths.relativeHref;
 
 /// `std.Io.Writer.Allocating` reports allocation failure as `error.WriteFailed`; the internal
 /// helpers accept both and the public entry points narrow it to `OutOfMemory` (see `markdown.zig`).
@@ -33,6 +40,12 @@ pub const Group = struct {
     entries: []const NavEntry,
 };
 
+/// One step of the breadcrumb trail. The last crumb has no `href`.
+pub const Crumb = struct { label: []const u8, href: []const u8 = "" };
+
+/// A previous/next page in the reader's order (the sidebar order, which is the learning order).
+pub const NavLink = struct { title: []const u8, href: []const u8 };
+
 pub const Layout = struct {
     site_title: []const u8 = "Z-Ts",
     /// Currently rendered page; `""` for the landing page.
@@ -49,46 +62,86 @@ pub const Layout = struct {
     toc: []const markdown.Heading = &.{},
     /// Plain-text page content, used for the word count in the footer.
     plain: []const u8 = "",
+    /// `guide` / `tutorial` / `concept` / `reference` / `recipe` / `migration` / `errors` / `api`.
+    /// Rendered as a badge next to the breadcrumbs and reused by the search result list.
+    kind: []const u8 = "",
+    /// Repository path of the Markdown source, for the "edit this page" link. `""` on generated
+    /// pages, which have no single source file.
+    source: []const u8 = "",
+    /// Breadcrumb trail (`Z-Ts › ガイド › RPC`). Rendered above the body.
+    crumbs: []const Crumb = &.{},
+    /// Reading order neighbours. `null` at the ends of a group.
+    prev: ?NavLink = null,
+    next: ?NavLink = null,
+    /// Language of the page. Drives `<html lang>`, every chrome string and the switcher.
+    lang: i18n.Lang = .ja,
+    /// Site-relative path of the same page in the other language. `null` on untranslated pages
+    /// (the Japanese deep dives, the API reference), which then render without a switcher.
+    alt_href: ?[]const u8 = null,
 };
 
 pub const layout_error = Error;
+pub const Heading = markdown.Heading;
 
+/// The page shell. `{root}` is the relative prefix back to the site root, `{title}` the escaped
+/// document title; every other string is supplied by [`i18n.Strings`] so no user-facing literal
+/// lives in this file.
 const head_template =
     \\<!doctype html>
-    \\<html lang="ja" data-theme="light">
+    \\<html lang="{lang}" data-theme="light">
     \\<head>
     \\<meta charset="utf-8" />
     \\<meta name="viewport" content="width=device-width, initial-scale=1" />
     \\<title>{title}</title>
-    \\<meta name="description" content="Z-Ts — Tauri in Zig 0.17: 6 つの直交パッケージでデスクトップ / WebAssembly / SSG を 1 言語で。" />
+    \\<meta name="description" content="{description}" />
+    \\<meta name="color-scheme" content="light dark" />
     \\<link rel="stylesheet" href="{root}assets/site.css" />
-    \\<script>try{const t=localStorage.getItem("zts-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+    \\{alt_link}
+    \\<link rel="icon" href="{root}assets/favicon.svg" type="image/svg+xml" />
+    \\<script>document.documentElement.dataset.js="1";try{var t=localStorage.getItem("zts-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t}else if(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches){document.documentElement.dataset.theme="dark"}}catch(e){}</script>
     \\</head>
-    \\<body data-root="{root}">
-    \\<a class="skip" href="#main">本文へスキップ</a>
+    \\<body data-root="{root}" data-lang="{lang}">
+    \\<a class="skip" href="#main">{skip}</a>
     \\<header class="topbar">
-    \\  <button class="menu-toggle" type="button" aria-label="メニュー" data-menu-toggle>☰</button>
-    \\  <a class="brand" href="{root}index.html"><span class="brand-mark">Z</span> Z-Ts <span class="brand-sub">Tauri in Zig</span></a>
+    \\  <button class="icon-btn menu-toggle" type="button" aria-label="{menu}" aria-expanded="false" data-menu-toggle>
+    \\    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+    \\  </button>
+    \\  <a class="brand" href="{root}{home_href}"><span class="brand-mark">Z</span><span class="brand-name">Z-Ts</span></a>
+    \\  <span class="topbar-sep" aria-hidden="true"></span>
+    \\  <span class="brand-tagline">Tauri in Zig</span>
     \\  <div class="topbar-actions">
-    \\    <a class="gh" href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener">GitHub</a>
-    \\    <button class="theme-toggle" type="button" aria-label="テーマ切替" data-theme-toggle>◐</button>
+    \\    <div class="search" role="search">
+    \\      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M16.5 16.5 21 21" /></svg>
+    \\      <input type="search" id="search" placeholder="{search_placeholder}" aria-label="{search_placeholder}" autocomplete="off" spellcheck="false" />
+    \\      <kbd class="search-kbd">/</kbd>
+    \\      <ul id="search-results" class="search-results" hidden></ul>
+    \\    </div>
+    \\    <nav class="langs" aria-label="{language}">{lang_links}</nav>
+    \\    <button class="icon-btn" type="button" aria-label="{theme}" data-theme-toggle>
+    \\      <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9" /></svg>
+    \\      <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" /></svg>
+    \\    </button>
+    \\    <a class="icon-btn gh" href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener" aria-label="{github}">
+    \\      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" /></svg>
+    \\    </a>
     \\  </div>
     \\</header>
-    \\<div class="shell">
-    \\<nav class="sidebar" aria-label="ドキュメント">
-    \\<div class="search">
-    \\  <input type="search" id="search" placeholder="検索…  ( / )" autocomplete="off" spellcheck="false" />
-    \\  <ul id="search-results" class="search-results" hidden></ul>
+    \\<div class="layout">
+    \\<aside class="sidebar" aria-label="{nav_label}">
+    \\  <nav class="nav-groups">{nav}</nav>
+    \\  <div class="sidebar-foot"><a href="{github_url}" target="_blank" rel="noopener">{github}</a><span aria-hidden="true">·</span><a href="{root}{index_href}">Docs index</a></div>
+    \\</aside>
+    \\<main id="main" class="content" tabindex="-1">
+    \\<div class="page-head">{page_head}</div>
+    \\<div class="doc">
+    \\  <article class="prose">{body}</article>
+    \\  <aside class="rail" aria-label="{toc}">{rail}</aside>
     \\</div>
-    \\
-;
-
-const tail_template =
     \\</main>
     \\</div>
     \\<footer class="footer">
-    \\  <span>Z-Ts — Tauri v2 の思想を Zig 0.17 で再実装（<a href="https://github.com/umiturtle/Z-Ts">umiturtle/Z-Ts</a>）</span>
-    \\  <span>{words} 語</span>
+    \\  <span>© Z-Ts — {footer_note}</span>
+    \\  <span class="footer-meta">{words}</span>
     \\</footer>
     \\<script src="{root}assets/search-index.js"></script>
     \\<script src="{root}assets/site.js"></script>
@@ -111,110 +164,220 @@ pub fn rootPrefix(arena: Allocator, href: []const u8) Allocator.Error![]const u8
 
 /// Renders one page. `href` is the site-relative path of the page itself.
 pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8 {
-    var out: std.Io.Writer.Allocating = .init(arena);
-    defer out.deinit();
-    const writer = &out.writer;
-
+    const s = i18n.strings(layout.lang);
     const root = try rootPrefix(arena, href);
-    const title = if (layout.title.len > 0)
-        try std.fmt.allocPrint(arena, "{s} — {s}", .{ layout.title, layout.site_title })
-    else if (href.len == 0)
-        layout.site_title
-    else
-        try std.fmt.allocPrint(arena, "{s} — {s}", .{
-            blk: {
-                // The first nav entry that matches this page supplies the title.
-                for (layout.groups) |group| for (group.entries) |entry| {
-                    if (std.mem.eql(u8, entry.href, href)) break :blk entry.title;
-                };
-                break :blk layout.site_title;
-            },
-            layout.site_title,
-        });
+    const title = try pageTitle(arena, layout, href);
 
-    try writeTemplate(writer, head_template, title, root);
-
-    try writer.writeAll("<div class=\"nav-groups\">\n");
+    // ---------------------------------------------------------------- sidebar
+    var nav: std.Io.Writer.Allocating = .init(arena);
+    defer nav.deinit();
     for (layout.groups) |group| {
-        try writer.writeAll("<section class=\"nav-group\">\n<h2>");
-        try writeEscaped(writer, group.heading);
-        try writer.writeAll("</h2>\n<ul>\n");
+        if (group.entries.len == 0) continue;
+        try nav.writer.writeAll("<section class=\"nav-group\"><h2 class=\"nav-heading\">");
+        try writeEscaped(&nav.writer, group.heading);
+        try nav.writer.writeAll("</h2><ul>");
         for (group.entries) |entry| {
             const active = std.mem.eql(u8, entry.href, href);
-            try writer.writeAll("<li");
-            if (active) try writer.writeAll(" class=\"active\"");
-            try writer.writeAll("><a href=\"");
-            try writeEscaped(writer, try relativeHref(arena, href, entry.href));
-            try writer.writeAll("\">");
-            try writeEscaped(writer, entry.title);
-            try writer.writeAll("</a></li>\n");
+            try nav.writer.writeAll("<li><a");
+            if (active) try nav.writer.writeAll(" class=\"active\" aria-current=\"page\"");
+            try nav.writer.writeAll(" href=\"");
+            try writeEscaped(&nav.writer, try relativeHref(arena, href, entry.href));
+            try nav.writer.writeAll("\"><span>");
+            try writeEscaped(&nav.writer, entry.title);
+            try nav.writer.writeAll("</span></a></li>");
         }
-        try writer.writeAll("</ul>\n</section>\n");
+        try nav.writer.writeAll("</ul></section>");
     }
-    try writer.writeAll("</div>\n</nav>\n<main id=\"main\" class=\"content\">\n");
 
+    // ------------------------------------------------------------- page head
+    var head: std.Io.Writer.Allocating = .init(arena);
+    defer head.deinit();
+    if (layout.crumbs.len > 0) {
+        try head.writer.writeAll("<nav class=\"crumbs\" aria-label=\"");
+        try writeEscaped(&head.writer, s.crumbs_label);
+        try head.writer.writeAll("\">");
+        for (layout.crumbs, 0..) |crumb, idx| {
+            if (idx > 0) try head.writer.writeAll("<span class=\"sep\" aria-hidden=\"true\">›</span>");
+            if (crumb.href.len > 0) {
+                try head.writer.writeAll("<a href=\"");
+                try writeEscaped(&head.writer, try relativeHref(arena, href, crumb.href));
+                try head.writer.writeAll("\">");
+                try writeEscaped(&head.writer, crumb.label);
+                try head.writer.writeAll("</a>");
+            } else {
+                try head.writer.writeAll("<span aria-current=\"page\">");
+                try writeEscaped(&head.writer, crumb.label);
+                try head.writer.writeAll("</span>");
+            }
+        }
+        try head.writer.writeAll("</nav>");
+    }
+    if (layout.kind.len > 0) {
+        try head.writer.writeAll("<span class=\"kind-badge\" data-kind=\"");
+        try writeEscaped(&head.writer, layout.kind);
+        try head.writer.writeAll("\">");
+        try writeEscaped(&head.writer, i18n.kindLabel(layout.lang, layout.kind));
+        try head.writer.writeAll("</span>");
+    }
+    if (layout.lang.code().len > 0) {
+        try head.writer.writeAll("<span class=\"lang-badge\">");
+        try writeEscaped(&head.writer, layout.lang.code());
+        try head.writer.writeAll("</span>");
+    }
+
+    // ------------------------------------------------------------------- rail
+    var rail: std.Io.Writer.Allocating = .init(arena);
+    defer rail.deinit();
     if (layout.toc.len > 0) {
-        try writer.writeAll("<details class=\"toc\"");
-        if (layout.toc.len <= 8) try writer.writeAll(" open");
-        try writer.writeAll("><summary>このページの目次</summary>\n<ul>\n");
+        try rail.writer.writeAll("<nav class=\"toc\"><p class=\"toc-title\">");
+        try writeEscaped(&rail.writer, s.toc);
+        try rail.writer.writeAll("</p><ul>");
         for (layout.toc) |heading| {
-            try writer.print("<li class=\"lvl{d}\"><a href=\"#", .{heading.level});
-            try writeEscaped(writer, heading.id);
-            try writer.writeAll("\">");
-            try writeEscaped(writer, heading.text);
-            try writer.writeAll("</a></li>\n");
+            try rail.writer.print("<li class=\"lvl{d}\"><a href=\"#", .{heading.level});
+            try writeEscaped(&rail.writer, heading.id);
+            try rail.writer.writeAll("\">");
+            try writeEscaped(&rail.writer, heading.text);
+            try rail.writer.writeAll("</a></li>");
         }
-        try writer.writeAll("</ul></details>\n");
+        try rail.writer.writeAll("</ul></nav>");
     }
 
-    try writer.writeAll(layout.body);
-    try writeTemplate(writer, tail_template, "", root);
-
-    // The footer needs the word count, so patch the placeholder after the fact.
-    const rendered = try out.toOwnedSlice();
-    return replaceAll(arena, rendered, "{words}", try wordCount(arena, layout.plain));
-}
-
-/// Relative link from the page at `from` to the page at `to` (both site-relative).
-///
-/// The directories the two pages share are dropped, so `docs/tasks/a.html` → `docs/index.html`
-/// becomes `../index.html` rather than `../../docs/index.html`.
-pub fn relativeHref(arena: Allocator, from: []const u8, to: []const u8) Allocator.Error![]const u8 {
-    const from_dir = from[0 .. std.mem.lastIndexOfScalar(u8, from, '/') orelse 0];
-
-    // Longest shared directory prefix (on segment boundaries).
-    var shared: usize = 0;
-    var probe: usize = 0;
-    while (probe < from_dir.len and probe < to.len) : (probe += 1) {
-        if (from_dir[probe] != to[probe]) break;
-        if (to[probe] == '/') shared = probe + 1;
+    // ------------------------------------------------------------------- body
+    var body: std.Io.Writer.Allocating = .init(arena);
+    defer body.deinit();
+    try body.writer.writeAll(layout.body);
+    if (layout.prev != null or layout.next != null) {
+        try body.writer.writeAll("<nav class=\"pager\" aria-label=\"");
+        try writeEscaped(&body.writer, s.next);
+        try body.writer.writeAll("\">");
+        if (layout.prev) |link| {
+            try body.writer.writeAll("<a class=\"pager-prev\" rel=\"prev\" href=\"");
+            try writeEscaped(&body.writer, try relativeHref(arena, href, link.href));
+            try body.writer.writeAll("\"><span>← ");
+            try writeEscaped(&body.writer, s.previous);
+            try body.writer.writeAll("</span><strong>");
+            try writeEscaped(&body.writer, link.title);
+            try body.writer.writeAll("</strong></a>");
+        }
+        if (layout.next) |link| {
+            try body.writer.writeAll("<a class=\"pager-next\" rel=\"next\" href=\"");
+            try writeEscaped(&body.writer, try relativeHref(arena, href, link.href));
+            try body.writer.writeAll("\"><span>");
+            try writeEscaped(&body.writer, s.next);
+            try body.writer.writeAll(" →</span><strong>");
+            try writeEscaped(&body.writer, link.title);
+            try body.writer.writeAll("</strong></a>");
+        }
+        try body.writer.writeAll("</nav>");
     }
-    // `from_dir` entirely consumed means the target may sit in the same directory — but only when
-    // the next character of `to` is a separator (or the paths are equal). Matching `from_dir` as a
-    // *string* is not enough: `docs/api/zts_web` is a prefix of `docs/api/zts_webview`, and an
-    // unguarded branch here turned that into `href="iew/index.html"`.
-    if (probe == from_dir.len) {
-        if (to.len == from_dir.len) {
-            shared = from_dir.len;
-        } else if (to[from_dir.len] == '/') {
-            shared = from_dir.len + 1; // the target lives in the same directory
+    if (layout.source.len > 0) {
+        try body.writer.writeAll("<p class=\"edit-link\"><a href=\"https://github.com/umiturtle/Z-Ts/blob/main/");
+        try writeEscaped(&body.writer, layout.source);
+        try body.writer.writeAll("\" target=\"_blank\" rel=\"noopener\">");
+        try writeEscaped(&body.writer, s.edit);
+        try body.writer.writeAll("</a></p>");
+    }
+
+    // ------------------------------------------------------- language switcher
+    var langs: std.Io.Writer.Allocating = .init(arena);
+    defer langs.deinit();
+    inline for (.{ i18n.Lang.ja, i18n.Lang.en }) |lang| {
+        const current = lang == layout.lang;
+        const target = if (current)
+            ""
+        else if (layout.alt_href) |alt|
+            try relativeHref(arena, href, alt)
+        else
+            try relativeHref(arena, href, if (lang == .ja) "docs/learn/ja/index.html" else "docs/learn/en/index.html");
+        if (current) {
+            try langs.writer.print("<span class=\"active\" aria-current=\"true\" lang=\"{s}\">{s}</span>", .{ lang.code(), lang.nativeName() });
         } else {
-            // `from_dir` matched as a string but not as a path segment: keep the last boundary.
-            shared = @min(shared, from_dir.len);
+            try langs.writer.print("<a href=\"{s}\" hreflang=\"{s}\" lang=\"{s}\">{s}</a>", .{ target, lang.code(), lang.code(), lang.nativeName() });
         }
     }
 
-    // `shared` indexes both strings; when the whole directory is shared it overshoots by one.
-    const rest_up = from_dir[@min(shared, from_dir.len)..];
-    var depth: usize = 0;
-    if (rest_up.len > 0) depth = std.mem.count(u8, rest_up, "/") + 1;
+    const alt_lang = layout.lang.other();
+    // `hreflang` is only truthful when a translation exists: pages outside the translated tree
+    // still get the visible switcher (pointing at the other language's hub), but not a machine
+    // claim that this exact URL has an English twin.
+    const alt_link = if (layout.alt_href) |alt|
+        try std.fmt.allocPrint(arena, "<link rel=\"alternate\" hreflang=\"{s}\" href=\"{s}\" />", .{
+            alt_lang.code(),
+            try relativeHref(arena, href, alt),
+        })
+    else
+        "";
 
-    const up = try arena.alloc(u8, depth * 3);
-    for (0..depth) |i| @memcpy(up[i * 3 ..][0..3], "../");
-    return std.fmt.allocPrint(arena, "{s}{s}", .{ up, to[shared..] });
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    const esc = struct {
+        fn e(a: Allocator, text: []const u8) Allocator.Error![]const u8 {
+            var buf: std.Io.Writer.Allocating = .init(a);
+            errdefer buf.deinit();
+            writeEscaped(&buf.writer, text) catch return error.OutOfMemory;
+            return buf.toOwnedSlice();
+        }
+    };
+    try writeTemplate(&out.writer, head_template, .{
+        .lang = layout.lang.code(),
+        .alt_link = alt_link,
+        .title = try esc.e(arena, title),
+        .root = root,
+        .home_href = if (layout.lang == .en) "en/index.html" else "index.html",
+        .description = if (layout.lang == .en)
+            "Z-Ts — Tauri v2 reimplemented in Zig 0.17: six orthogonal packages for desktop, WebAssembly and static sites."
+        else
+            "Z-Ts — Tauri の思想を Zig 0.17 で。6 つの直交パッケージでデスクトップ / WebAssembly / SSG を 1 言語で。",
+        .skip = try esc.e(arena, s.skip_to_content),
+        .menu = try esc.e(arena, s.menu),
+        .search_placeholder = try esc.e(arena, s.search_placeholder),
+        .theme = try esc.e(arena, s.theme),
+        .github = try esc.e(arena, s.github),
+        .language = try esc.e(arena, s.language),
+        .nav_label = try esc.e(arena, s.nav_label),
+        .toc = try esc.e(arena, s.toc),
+        .footer_note = try esc.e(arena, s.footer_note),
+        .github_url = "https://github.com/umiturtle/Z-Ts",
+        .index_href = "docs/INDEX.html",
+        .lang_links = langs.written(),
+        .nav = nav.written(),
+        .page_head = head.written(),
+        .rail = rail.written(),
+        .body = body.written(),
+        // The word-count template is runtime data (`{d} 語` / `{d} words`), so the number is
+        // substituted rather than formatted.
+        // A page with no prose (the 404, generated listings) gets no word count: "0 語" in the
+        // footer is noise that reads like a bug.
+        .words = if (hasProse(layout.plain))
+            try replaceAll(arena, s.words_fmt, "{d}", try std.fmt.allocPrint(arena, "{d}", .{countWords(layout.plain)}))
+        else
+            "",
+    });
+    return out.toOwnedSlice();
 }
 
-fn wordCount(arena: Allocator, plain: []const u8) Allocator.Error![]const u8 {
+/// `<title>`: explicit title first, then the sidebar entry that matches this page, then the site
+/// name. Keeping the fallback chain here (instead of at every call site) is what lets generated
+/// pages — which are not in the sidebar — still get a meaningful tab title.
+fn pageTitle(arena: Allocator, layout: Layout, href: []const u8) Allocator.Error![]const u8 {
+    if (layout.title.len > 0) {
+        return std.fmt.allocPrint(arena, "{s} — {s}", .{ layout.title, layout.site_title });
+    }
+    if (href.len == 0) return arena.dupe(u8, layout.site_title);
+    for (layout.groups) |group| for (group.entries) |entry| {
+        if (std.mem.eql(u8, entry.href, href)) {
+            return std.fmt.allocPrint(arena, "{s} — {s}", .{ entry.title, layout.site_title });
+        }
+    };
+    return arena.dupe(u8, layout.site_title);
+}
+
+fn hasProse(plain: []const u8) bool {
+    for (plain) |ch| if (!std.ascii.isWhitespace(ch)) return true;
+    return false;
+}
+
+fn countWords(plain: []const u8) usize {
     var words: usize = 0;
     var in_word = false;
     for (plain) |ch| {
@@ -231,29 +394,33 @@ fn wordCount(arena: Allocator, plain: []const u8) Allocator.Error![]const u8 {
         in_word = true;
     }
     if (in_word) words += 1;
-    if (words == 0) return "0";
-    return std.fmt.allocPrint(arena, "{d}", .{words});
+    return words;
 }
 
 /// Substitutes `{root}` and `{title}`. Every other brace is literal — the head template contains
 /// real JavaScript, so this must not behave like `std.fmt`.
-fn writeTemplate(writer: *std.Io.Writer, template: []const u8, title: []const u8, root: []const u8) !void {
+fn writeTemplate(writer: *std.Io.Writer, template: []const u8, values: anytype) !void {
     var rest = template;
     while (std.mem.indexOfScalar(u8, rest, '{')) |open| {
         const token_end = std.mem.indexOfScalarPos(u8, rest, open, '}') orelse break;
         const token = rest[open + 1 .. token_end];
-        const known = std.mem.eql(u8, token, "root") or std.mem.eql(u8, token, "title");
-        if (!known) {
+
+        var substituted = false;
+        inline for (@typeInfo(@TypeOf(values)).@"struct".field_names) |name| {
+            if (std.mem.eql(u8, token, name)) {
+                try writer.writeAll(rest[0..open]);
+                // Values are inserted verbatim. Text that comes from the corpus is escaped by
+                // the caller (`escape` below) so that the few deliberately-raw HTML fragments
+                // (navigation, body, table of contents) survive.
+                try writer.writeAll(@field(values, name));
+                substituted = true;
+            }
+        }
+        if (!substituted) {
             // Emit the opening brace literally and keep scanning after it.
             try writer.writeAll(rest[0 .. open + 1]);
             rest = rest[open + 1 ..];
             continue;
-        }
-        try writer.writeAll(rest[0..open]);
-        if (std.mem.eql(u8, token, "root")) {
-            try writer.writeAll(root);
-        } else {
-            try writeEscaped(writer, title);
         }
         rest = rest[token_end + 1 ..];
     }
@@ -378,7 +545,12 @@ fn displayDir(dir: []const u8) []const u8 {
         .{ .dir = "docs/architecture", .label = "アーキテクチャ" },
         .{ .dir = "docs/roadmap", .label = "ロードマップ" },
         .{ .dir = "docs/reference", .label = "リファレンス" },
-        .{ .dir = "docs/guides", .label = "ガイド" },
+        .{ .dir = "docs/learn/ja/guides", .label = "ガイド" },
+        .{ .dir = "docs/learn/en/guides", .label = "Guides" },
+        .{ .dir = "docs/learn/ja/concepts", .label = "概念" },
+        .{ .dir = "docs/learn/en/concepts", .label = "Concepts" },
+        .{ .dir = "docs/learn/ja/tutorials", .label = "チュートリアル" },
+        .{ .dir = "docs/learn/en/tutorials", .label = "Tutorials" },
         .{ .dir = "docs/environment", .label = "実行環境" },
         .{ .dir = "docs", .label = "ドキュメント" },
         .{ .dir = "examples/frameworks", .label = "フレームワーク" },
@@ -449,6 +621,9 @@ pub const SearchEntry = struct {
     title: []const u8,
     group: []const u8,
     text: []const u8,
+    /// `ja` / `en`. The client sorts same-language hits first; without it, an English query
+    /// would be buried under Japanese pages that happen to contain the same Latin word.
+    lang: []const u8 = "ja",
 };
 
 /// A tiny client-side index: `window.ZTS_SEARCH = [...]`. No server, no dependency, ~1 byte per
@@ -467,6 +642,8 @@ pub fn renderSearchIndex(arena: Allocator, entries: []const SearchEntry) Error![
         try writeJsString(&out.writer, entry.title);
         try out.writer.writeAll("\",\"g\":\"");
         try writeJsString(&out.writer, entry.group);
+        try out.writer.writeAll("\",\"l\":\"");
+        try writeJsString(&out.writer, entry.lang);
         try out.writer.writeAll("\",\"x\":\"");
         // Cap the body: the index is shipped to every visitor.
         try writeJsString(&out.writer, truncate(entry.text, 4000));
@@ -606,7 +783,7 @@ test "truncate never splits a UTF-8 sequence" {
 }
 
 test "renderPage produces a full document with nav, toc and assets" {
-    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
@@ -624,15 +801,46 @@ test "renderPage produces a full document with nav, toc and assets" {
         .body = "<p>body</p>\n",
         .toc = toc,
         .plain = "one two three",
+        .kind = "guide",
+        .crumbs = &.{.{ .label = "Z-Ts", .href = "index.html" }},
+        .lang = .ja,
     }, "docs/tasks/a.html");
 
     try testing.expect(std.mem.startsWith(u8, html, "<!doctype html>"));
+    try testing.expect(std.mem.indexOf(u8, html, "<html lang=\"ja\"") != null);
     try testing.expect(std.mem.indexOf(u8, html, "<title>タスク A — Z-Ts</title>") != null);
     try testing.expect(std.mem.indexOf(u8, html, "href=\"../../assets/site.css\"") != null);
-    try testing.expect(std.mem.indexOf(u8, html, "class=\"active\"><a href=\"a.html\">タスク A") != null);
-    try testing.expect(std.mem.indexOf(u8, html, "href=\"../index.html\">索引") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "class=\"active\" aria-current=\"page\" href=\"a.html\"><span>タスク A") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "href=\"../index.html\"") != null);
     try testing.expect(std.mem.indexOf(u8, html, "<a href=\"#目的\">目的</a>") != null);
     try testing.expect(std.mem.indexOf(u8, html, "<p>body</p>") != null);
-    try testing.expect(std.mem.indexOf(u8, html, "<span>3 語</span>") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "<span class=\"footer-meta\">3 語</span>") != null);
+    // Japanese chrome, plus a switcher whose target is the English hub (this page has no
+    // translation, so the link must not dead-end).
+    try testing.expect(std.mem.indexOf(u8, html, "このページの目次") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "hreflang=\"en\" lang=\"en\" href=\"../learn/en/index.html\"") != null or
+        std.mem.indexOf(u8, html, "href=\"../learn/en/index.html\" hreflang=\"en\"") != null);
     try testing.expect(std.mem.endsWith(u8, html, "</html>\n"));
+}
+
+test "an English page renders English chrome and links back to its translation" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const html = try renderPage(arena, .{
+        .active_href = "docs/learn/en/index.html",
+        .title = "Learn",
+        .body = "<p>body</p>\n",
+        .plain = "one two three",
+        .lang = .en,
+        .alt_href = "docs/learn/ja/index.html",
+    }, "docs/learn/en/index.html");
+
+    try testing.expect(std.mem.indexOf(u8, html, "<html lang=\"en\"") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "Search…") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "Skip to content") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "<span class=\"footer-meta\">3 words</span>") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "hreflang=\"ja\" href=\"../ja/index.html\"") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "href=\"../../../en/index.html\"") != null);
 }

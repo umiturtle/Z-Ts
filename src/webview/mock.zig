@@ -93,7 +93,7 @@ pub const MockWindow = struct {
     background_color: ?types.Color,
     /// Parent handle for overlay embedding; non-null means the window supports `fitParent()`.
     parent_native_handle: ?*anyopaque,
-    /// Number of `fitParent()` calls that targeted this window (`M3-03` embedding contract).
+    /// Number of `fitParent()` calls that targeted this window.
     fit_count: usize = 0,
     /// URL the window last navigated to (owned copy).
     current_url: []u8,
@@ -484,7 +484,7 @@ pub const HeadlessMock = struct {
         (try self.requireWin(win_id)).size = size;
     }
 
-    /// Overlay embedding (`M3-03`): a mock has no real parent to measure, so it only records the
+    /// Overlay embedding: a mock has no real parent to measure, so it only records the
     /// request — the *contract* (embedded windows support it, toplevel windows do not) is what the
     /// cross-platform unit tests assert.
     pub fn fitParent(self: *HeadlessMock, win_id: types.WindowId) types.WebviewError!void {

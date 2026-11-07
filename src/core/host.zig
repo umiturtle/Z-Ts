@@ -1,6 +1,6 @@
 //! OS-Independent Platform Host Interface (`Host` VTable) & Test Spy (`RecordingHost`).
 //!
-//! Resolves the circular-dependency problem identified in `ADR-0002` (Rev 4):
+//! Resolves the circular-dependency problem that a directly-imports graph would create:
 //! - Neither `zts_rpc` nor `zts_tauri` imports `zts_webview` (GTK / Cocoa / Win32) or `zts_bridge`.
 //! - Instead, runtime contexts carry a 2-word `Host` fat pointer (`userdata + vtable`), allowing
 //!    identical command modules (`window`, `event`, `webview`, user RPC handlers) to execute

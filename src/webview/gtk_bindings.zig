@@ -190,7 +190,7 @@ pub extern "c" fn gtk_window_begin_move_drag(
 ) void;
 
 pub extern "c" fn gtk_container_add(container: *GtkContainer, widget: *GtkWidget) void;
-/// Overlay embedding (`M3-03`): a child added to a `GtkBox` only fills it when it expands, and
+/// Overlay embedding: a child added to a `GtkBox` only fills it when it expands, and
 /// `gtk_widget_get_parent` is the structural proof that the WebView really lives in the host tree.
 pub extern "c" fn gtk_box_new(orientation: c_int, spacing: gint) *GtkWidget;
 pub extern "c" fn gtk_widget_set_hexpand(widget: *GtkWidget, expand: gboolean) void;

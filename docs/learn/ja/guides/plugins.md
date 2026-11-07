@@ -1,7 +1,8 @@
-# Tauri 標準プラグインの使い方（`zts_tauri`）
+# Tauri 標準プラグイン（`zts_tauri`）
 
 > **対象読者**: `@tauri-apps/api` の `window` / `event` / `path` / `fs` / `dialog` / `menu` / `tray`
-> を使いたい人。API の一覧は [`../api/zts_tauri/index.html`](../api/zts_tauri/index.html)。
+> を使いたい人。API の一覧は [`zts_tauri`](../../../api/zts_tauri/index.html)。
+> **所要時間**: 8 分。**前提**: コマンドを 1 つ書いたことがある（[コマンド](rpc.md)）。
 
 Z-Ts は Tauri v2 の**ワイヤプロトコル**（`plugin:window|set_title` のようなコマンド名と JSON の形）を
 そのまま実装しています。したがってフロントエンドは**無改造の `@tauri-apps/api` v2** が使え、
@@ -32,19 +33,19 @@ const plugins = try tauri.CorePluginStates.create(allocator, io, app_config, pat
 defer plugins.destroy();
 ```
 
-[`CorePluginStates`](../api/zts_tauri/mod.html#CorePluginStates) は 7 つのプラグインの状態を
+[`CorePluginStates`](../../../api/zts_tauri/mod.html#CorePluginStates) は 7 つのプラグインの状態を
 **1 つのヒープ確保**にまとめたものです（`events` が `windows` を指すなど、内部で相互参照するため
 アドレスが固定されている必要があります）。
 
 | フィールド | プラグイン | 型 |
 |---|---|---|
-| `windows` | `plugin:window\|*` | [`WindowRegistry`](../api/zts_tauri/window.html#WindowRegistry) |
-| `events` | `plugin:event\|*` | [`EventBus`](../api/zts_tauri/event.html#EventBus) |
-| `paths` | `plugin:path\|*` | [`PathState`](../api/zts_tauri/path.html#PathState) |
-| `app_state` | `plugin:app\|*` | [`AppState`](../api/zts_tauri/app.html#AppState) |
+| `windows` | `plugin:window\|*` | [`WindowRegistry`](../../../api/zts_tauri/window.html#WindowRegistry) |
+| `events` | `plugin:event\|*` | [`EventBus`](../../../api/zts_tauri/event.html#EventBus) |
+| `paths` | `plugin:path\|*` | [`PathState`](../../../api/zts_tauri/path.html#PathState) |
+| `app_state` | `plugin:app\|*` | [`AppState`](../../../api/zts_tauri/app.html#AppState) |
 | `resources` | `plugin:resources\|*` | `ResourceTable` |
-| `menu_state` | `plugin:menu\|*` | [`MenuState`](../api/zts_tauri/menu/mod.html#MenuState) |
-| `tray_state` | `plugin:tray\|*` | [`TrayState`](../api/zts_tauri/tray/mod.html#TrayState) |
+| `menu_state` | `plugin:menu\|*` | [`MenuState`](../../../api/zts_tauri/menu/mod.html#MenuState) |
+| `tray_state` | `plugin:tray\|*` | [`TrayState`](../../../api/zts_tauri/tray/mod.html#TrayState) |
 
 ---
 
@@ -72,14 +73,14 @@ var router = FullSchema.bind(.{
 ```
 
 名前空間が `tauri_*` に分かれているので、**ユーザー側は `.app` / `.window` / `.event` を自由に使えます**
-（衝突しません）。[`withCorePlugins`](../api/zts_tauri/mod.html#withCorePlugins) は
+（衝突しません）。[`withCorePlugins`](../../../api/zts_tauri/mod.html#withCorePlugins) は
 `rpc.merge` の薄いラッパで、`zts_rpc` の `comptime` 検査はそのまま効きます。
 
 ---
 
 ## 3. プラグインごとの入り口
 
-### window — [`Commands`](../api/zts_tauri/window.html#Commands)
+### window — [`Commands`](../../../api/zts_tauri/window.html#Commands)
 
 ```ts
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -95,10 +96,10 @@ const win = try plugins.windows.create(allocator, .{
 try plugins.windows.setTitle(&win, "Renamed");
 ```
 
-サイズ・位置は **論理 / 物理**の両方を受け付けます（[`WireSize`](../api/zts_tauri/window.html#WireSize)）。
+サイズ・位置は **論理 / 物理**の両方を受け付けます（[`WireSize`](../../../api/zts_tauri/window.html#WireSize)）。
 `Xvfb` のようなヘッドレス CI でも同じ値が返るよう、`HeadlessMock` でも同じ経路を通ります。
 
-### event — [`EventBus`](../api/zts_tauri/event.html#EventBus)
+### event — [`EventBus`](../../../api/zts_tauri/event.html#EventBus)
 
 バックエンド → フロントエンドの通知です。
 
@@ -112,22 +113,22 @@ _ = try plugins.events.onNative("counter:changed", null, struct {
 }.on);
 ```
 
-イベント名は [`isValidEventName`](../api/zts_tauri/event.html#isValidEventName) で検証されます
-（英数字・`-`・`/`・`:`・`_`）。配信先は [`EventTarget`](../api/zts_tauri/event.html#EventTarget)
+イベント名は [`isValidEventName`](../../../api/zts_tauri/event.html#isValidEventName) で検証されます
+（英数字・`-`・`/`・`:`・`_`）。配信先は [`EventTarget`](../../../api/zts_tauri/event.html#EventTarget)
 （`Any` / `App` / `Window` / `Webview`）で絞れます。
 
-### path — [`PathState`](../api/zts_tauri/path.html#PathState)
+### path — [`PathState`](../../../api/zts_tauri/path.html#PathState)
 
 ```ts
 import { appDataDir } from "@tauri-apps/api/path";
 const dir = await appDataDir();
 ```
 
-[`BaseDirectory`](../api/zts_tauri/path.html#BaseDirectory)（`audio` … `video` の 12 種）と、
-POSIX / Windows の**両方の流儀**を 1 つの実装で扱う [`PathStyle`](../api/zts_tauri/path.html#PathStyle)
+[`BaseDirectory`](../../../api/zts_tauri/path.html#BaseDirectory)（`audio` … `video` の 12 種）と、
+POSIX / Windows の**両方の流儀**を 1 つの実装で扱う [`PathStyle`](../../../api/zts_tauri/path.html#PathStyle)
 があります。Windows のパスを Linux 上で正規化する必要があるテストでも同じ関数が使えます。
 
-### fs — [`Commands`](../api/zts_tauri/fs/commands.html#Commands)
+### fs — [`Commands`](../../../api/zts_tauri/fs/commands.html#Commands)
 
 `plugin:fs|*` は **スコープ付き**です。`base_dir` を起点に正規化 → シンボリックリンク解決 →
 包含判定を行い、外に出るパスは `forbidden path` で拒否します。
@@ -140,9 +141,9 @@ var scope = try tauri.fs.Scope.init(allocator, &.{
 defer scope.deinit();
 ```
 
-設計の全文は [`../architecture/tauri-fs-plugin.md`](../architecture/tauri-fs-plugin.md)（内部資料）。
+設計の全文は [`../architecture/tauri-fs-plugin.md`](../../../architecture/tauri-fs-plugin.md)（内部資料）。
 
-### dialog / clipboard — [`dialog`](../api/zts_tauri/dialog/mod.html) / [`clipboard`](../api/zts_tauri/clipboard/mod.html)
+### dialog / clipboard — [`dialog`](../../../api/zts_tauri/dialog/mod.html) / [`clipboard`](../../../api/zts_tauri/clipboard/mod.html)
 
 どちらも **vtable + ネイティブ分離**です。ヘッドレスでは `Mock` が入り、CI でも同じコードが走ります。
 
@@ -157,11 +158,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 const file = await open({ multiple: false });
 ```
 
-### menu / tray — [`menu`](../api/zts_tauri/menu/mod.html) / [`tray`](../api/zts_tauri/tray/mod.html)
+### menu / tray — [`menu`](../../../api/zts_tauri/menu/mod.html) / [`tray`](../../../api/zts_tauri/tray/mod.html)
 
 デスクトップでは **ネイティブ**（macOS は `NSApp setMainMenu:`、Windows は `CreateMenu` +
 `WM_COMMAND`）、それ以外は `StubBackend` です。バックエンドは差し替え可能なので、
-テストでは [`Mock`](../api/zts_tauri/menu/mod.html#Mock) で「どの項目が押されたか」を再現できます。
+テストでは [`Mock`](../../../api/zts_tauri/menu/mod.html#Mock) で「どの項目が押されたか」を再現できます。
 
 ```zig
 plugins.menu_state.setBackend(tauri.menu.Mock.backend());
@@ -206,12 +207,12 @@ if (!policy.allows("main-window", "plugin:fs|read_text_file")) return error.Forb
 
 ## 次に読むもの
 
-- API: [`zts_tauri`](../api/zts_tauri/index.html) / [`withCorePlugins`](../api/zts_tauri/mod.html#withCorePlugins) /
-  [`window`](../api/zts_tauri/window.html) / [`event`](../api/zts_tauri/event.html) /
-  [`fs`](../api/zts_tauri/fs/commands.html) / [`menu`](../api/zts_tauri/menu/mod.html)
-- コマンドの書き方: [`using-rpc.md`](using-rpc.md)
-- API ページの読み方（`@import` の 1 行・`L43` の意味）: [`using-the-api-reference.md`](using-the-api-reference.md)
-- 移行: [`migrating-from-tauri.md`](migrating-from-tauri.md)
-- 内部資料: [`../architecture/tauri-menu-tray.md`](../architecture/tauri-menu-tray.md) /
-  [`../architecture/tauri-dialog-clipboard.md`](../architecture/tauri-dialog-clipboard.md) /
-  [`../decisions/0014-config-import-and-acl.md`](../decisions/0014-config-import-and-acl.md)
+- API: [`zts_tauri`](../../../api/zts_tauri/index.html) / [`withCorePlugins`](../../../api/zts_tauri/mod.html#withCorePlugins) /
+  [`window`](../../../api/zts_tauri/window.html) / [`event`](../../../api/zts_tauri/event.html) /
+  [`fs`](../../../api/zts_tauri/fs/commands.html) / [`menu`](../../../api/zts_tauri/menu/mod.html)
+- コマンドの書き方: [`rpc.md`](rpc.md)
+- API ページの読み方（`@import` の 1 行・`L43` の意味）: [API リファレンスの索引](../../../api/index.html)
+- 移行: [`migrate-from-tauri.md`](migrate-from-tauri.md)
+- 内部資料: [`../architecture/tauri-menu-tray.md`](../../../architecture/tauri-menu-tray.md) /
+  [`../architecture/tauri-dialog-clipboard.md`](../../../architecture/tauri-dialog-clipboard.md) /
+  [`../decisions/0014-config-import-and-acl.md`](../../../decisions/0014-config-import-and-acl.md)

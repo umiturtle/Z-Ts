@@ -1,6 +1,10 @@
 # Zig build artifacts
 .zig-cache/
 zig-out/
+# Loose outputs from ad-hoc `zig build-obj` / `zig build-exe` runs (`-Mroot=x.zig` writes the
+# binary next to the cwd, which is the repo root).
+*.o
+/root
 
 # Rust build artifacts
 target/

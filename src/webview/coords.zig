@@ -1,4 +1,4 @@
-//! CSS ⇔ Cocoa Coordinate Conversion (`src/webview/coords.zig`, `M3-01`).
+//! CSS ⇔ Cocoa Coordinate Conversion.
 //!
 //! Z-Ts' public geometry (`zts_foundation.geometry.LogicalPoint`) uses the **CSS / Win32 / GTK
 //! convention**: the origin is the TOP-LEFT of the screen with Y growing downwards.

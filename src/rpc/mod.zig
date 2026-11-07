@@ -1,6 +1,6 @@
 //! `zts_rpc` — Standalone `comptime` RPC Router, Type-Safe JSON Codec & TypeScript Generator (`link_libc = false`).
 //!
-//! Exports the full RPC layer (`M1-03` + `M1-04`) built cleanly atop `zts_core`:
+//! Exports the full RPC layer built cleanly atop `zts_core`:
 //! - `Schema` / `merge` & `bind`: Zero-overhead `comptime` multi-namespace router composition.
 //! - `Ctx` & `Handler`: Platform-independent per-call context & 2-word fat-pointer dispatcher.
 //! - `tsgen`: Strict TypeScript bindings & client generator (`--strict --exactOptionalPropertyTypes --erasableSyntaxOnly`).

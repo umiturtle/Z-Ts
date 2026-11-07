@@ -1,5 +1,8 @@
 # `zts` コマンドリファレンス
 
+> **対象読者**: `zts` のコマンドとフラグを引く人。
+> **所要時間**: 引きたいコマンドの節だけ。
+
 アプリ作者が使う CLI の仕様です。`zts` は **自分のプロジェクト**を操作します。
 
 > **Z-Ts リポジトリ自体の操作**（`./zigw`、`zig build` のステップ、CI スクリプト）は
@@ -58,7 +61,7 @@ zts init my-app --force           # 既存ファイルがあっても書く
 | ディレクトリ名がパッケージ名にできない | `cannot derive a package name from '…' — pass --name <name>` |
 | パッケージ名が規約外 | `'…' is not a usable package name (…` |
 
-生成される `build.zig` は `M5-01` の共通エンベッダを依存パッケージのソースから起動し、
+生成される `build.zig` は共通エンベッダを依存パッケージのソースから起動し、
 `web/` を `embedded_frontend` モジュールとして埋め込みます。ステップは `run` と `frontend`
 の 2 つです。
 
@@ -71,7 +74,7 @@ zts init my-app --force           # 既存ファイルがあっても書く
 | `--dir <path>` | `.` | プロジェクト |
 | `--host <addr>` | `127.0.0.1` | バインドアドレス。`0.0.0.0` で外部公開 |
 | `--port <n>` | `5173` | 1〜65535 |
-| `--browser` | 無効 | 起動後に既定ブラウザを開く |
+| `--browser` / `--open` | 無効 | 起動後に既定ブラウザを開く（`--open` は別名） |
 
 仕様:
 
@@ -98,6 +101,7 @@ curl http://127.0.0.1:5173/__zts_dev__/state    # {"v":3,"ok":true}
 | `--dir <path>` | `.` | プロジェクト |
 | `--target <triple>` | ホスト | Zig のターゲット（例 `aarch64-macos`、`x86_64-windows-gnu`） |
 | `--debug` | 無効 | `Debug` でビルド（既定は `ReleaseSmall`） |
+| `--release` | 有効 | `ReleaseSmall` を明示（既定値の再確認用。`--debug` と同時指定はエラー） |
 | `--frontend-only` | 無効 | `build.zig` の `frontend` ステップだけ実行（`web/` の再埋め込み） |
 
 ```bash
@@ -172,7 +176,7 @@ sudo dpkg -i zig-out/package/my_app_0.1.0_amd64.deb   # Debian/Ubuntu
 tar -xzf zig-out/package/my-app-0.1.0-amd64.tar.gz    # どこでも
 ```
 
-形式ごとの前提は [`../guides/packaging.md`](../guides/packaging.md) にまとめてあります。
+形式ごとの前提は [`../learn/ja/guides/package.md`](../learn/ja/guides/package.md) にまとめてあります。
 
 ## `zts doctor`
 
@@ -200,7 +204,19 @@ all checks passed
 | `dependency` | `.z_ts.path` が解決できるか | `… does not exist (resolved from …)` |
 | `web/` | フロントエンドのディレクトリ | `missing — the embedder needs a front end` |
 
-`--dir <path>` で対象プロジェクトを指定できます（他のフラグは受け付けません）。
+`--dir <path>` で対象プロジェクトを指定できます。**それ以外のフラグは受け付けません** —
+未知のフラグは `UnknownFlag` として拒否します（黙って無視しないので、綴り間違いに気付けます）。
+
+## `zts --help` / `--version`
+
+どのサブコマンドにも属さない全体フラグです。`help` / `-h`、`version` / `-V` も同じ意味で、
+`zts`（引数なし）はヘルプを表示して終了コード 0 で終わります。
+
+```bash
+zts --help
+zts --version
+zts help          # 同上
+```
 
 ## 環境変数
 
@@ -213,7 +229,7 @@ all checks passed
 
 ## 次に読むもの
 
-- 使い始める: [`../guides/getting-started.md`](../guides/getting-started.md)
-- `zts` の入手: [`../guides/installing-zts.md`](../guides/installing-zts.md)
-- 配布物の作り方: [`../guides/packaging.md`](../guides/packaging.md)
+- 使い始める: [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md)
+- `zts` の入手: [`../learn/ja/guides/install.md`](../learn/ja/guides/install.md)
+- 配布物の作り方: [`../learn/ja/guides/package.md`](../learn/ja/guides/package.md)
 - リポジトリ開発のコマンド: [`../contributing/README.md`](../contributing/README.md)
