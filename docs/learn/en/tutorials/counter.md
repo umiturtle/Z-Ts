@@ -2,6 +2,7 @@
 
 > **Audience**: first contact with Z-Ts. You are expected to know basic Zig.
 > **Time**: 15 minutes, typing included.
+> **Never run Z-Ts?** [Your first ten minutes](../start.md) comes first; it makes chapter 0 shorter.
 
 Create a project with `zts init`, **call a Zig function from a button**, grow it with reload on
 save, and finish with a single binary. **Every command on this page is `zts`**. Repository work

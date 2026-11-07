@@ -1,11 +1,53 @@
 # Concepts
 
-> **Audience**: readers who want to know how Z-Ts is assembled before writing code.
+> **Audience**: readers who have run `zts dev` at least once. If not, start with [Your first ten minutes](../start.md).
 > **Time**: four pages, about 15 minutes.
 
-Z-Ts is not just "Tauri, but in Zig". To produce **three artefacts from one source**, the
-dependency graph is split into six layers and everything that touches the OS is pushed to the
-outside. After these four pages, the guides stop looking like arbitrary rules.
+## Restating what you just saw, with three moving parts
+
+In [Your first ten minutes](../start.md) you changed `web/index.html` and watched the browser
+follow. Turn that into **a button calling a Zig function** and there are exactly three parts.
+
+```text
+  ①  the page          ②  the bridge                  ③  the command
+  web/index.html  ──►  invoke("increment")  ──►  fn increment(state: *State) !i32
+  (HTML / JS)          plain @tauri-apps/api          (an ordinary function in src/main.zig)
+                              ▲                              │
+                              └──── return value (number, struct, error) ────┘
+```
+
+| Part | Job | Where you write it |
+|---|---|---|
+| the page | UI and interaction; the same `@tauri-apps/api` as Tauri | `web/` |
+| the bridge | match names and types, carry JSON; nothing hand-written | `Schema`, assembled by `comptime` |
+| the command | a Zig function: take arguments, touch state, return a value | `src/` |
+
+**Part 2 is Z-Ts's job.** Routing, serialisation, type checks and the TypeScript declarations are
+all generated from `Schema`, so you only ever write parts 1 and 3.
+
+```zig check
+const std = @import("std");
+const rpc = @import("zts_rpc");
+
+const State = struct { count: i32 = 0 };
+const Commands = struct {
+    pub fn increment(state: *State) !i32 {
+        state.count += 1;
+        return state.count;
+    }
+};
+
+const Schema = rpc.Schema(.{ .app = Commands });
+
+test "the command table holds exactly one command" {
+    try std.testing.expectEqual(@as(usize, 1), Schema.commands.len);
+}
+```
+
+## The four questions the other pages answer
+
+The diagram covers *one* command. Four questions remain: where state lives, which plugins are
+linked, who is allowed to call a command, and what each package may depend on.
 
 | Page | In one sentence | You will learn |
 |---|---|---|
@@ -15,6 +57,8 @@ outside. After these four pages, the guides stop looking like arbitrary rules.
 | [Security](security.md) | deny by default, allow in a capability | ACL, scopes, CSP, what is *not* protected |
 
 ## Five words to learn first
+
+These come up on every page below; come back here when one slips.
 
 | Word | Meaning |
 |---|---|
@@ -28,6 +72,8 @@ The [glossary](../../../glossary.md) defines 31 terms in more detail.
 
 ## Reading order
 
+Knowing **Pack** and **Host** first makes the rest read faster.
+
 1. [Package layout](architecture.md) — the map. Do not skip this one.
 2. [How a command travels](commands.md) — the part you touch every day.
 3. [Plugins](plugins.md) — windows, files, menus.
@@ -37,3 +83,4 @@ The [glossary](../../../glossary.md) defines 31 terms in more detail.
 
 - Hands on → [Tutorial: the counter](../tutorials/counter.md)
 - Just write it → [Guide: commands](../guides/rpc.md)
+- Lost in terminology → [Glossary](../../../glossary.md)

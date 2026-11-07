@@ -16,6 +16,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const markdown = @import("markdown.zig");
 const paths = @import("paths.zig");
+const learn_path = @import("learn_path.zig");
 const i18n = @import("i18n.zig");
 
 /// Re-exported from `paths.zig` so existing callers (`main.zig`, the API generator) keep using
@@ -133,6 +134,7 @@ const head_template =
     \\</aside>
     \\<main id="main" class="content" tabindex="-1">
     \\<div class="page-head">{page_head}</div>
+    \\{path_rail}
     \\<div class="doc">
     \\  <article class="prose">{body}</article>
     \\  <aside class="rail" aria-label="{toc}">{rail}</aside>
@@ -242,6 +244,38 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
         try rail.writer.writeAll("</ul></nav>");
     }
 
+    // ------------------------------------------------------- learning-path rail
+    // Every page that belongs to the beginner path carries the same four steps, with the current
+    // one marked. It answers "where am I / what is left" without a trip to the hub, and it makes
+    // the concept pages reachable *from* the hands-on pages rather than before them.
+    var step_rail: std.Io.Writer.Allocating = .init(arena);
+    defer step_rail.deinit();
+    if (learn_path.indexOfHref(href)) |current| {
+        const lang: learn_path.Lang = switch (learn_path.langOfHref(href) orelse .ja) {
+            .ja => if (layout.lang == .ja) .ja else .en,
+            .en => .en,
+        };
+        try step_rail.writer.writeAll("<nav class=\"path-rail\" aria-label=\"");
+        try writeEscaped(&step_rail.writer, s.path_label);
+        try step_rail.writer.print("\" data-step=\"{d}\"><ol>", .{current + 1});
+        for (learn_path.steps, 0..) |step, i| {
+            const target = learn_path.pageHref(arena, lang, step) catch return error.OutOfMemory;
+            const state: []const u8 = if (i == current)
+                " class=\"current\" aria-current=\"step\""
+            else if (i < current)
+                " class=\"done\""
+            else
+                "";
+            try step_rail.writer.print("<li{s}><a href=\"{s}\">", .{ state, try relativeHref(arena, href, target) });
+            try step_rail.writer.print("<span class=\"path-num\" aria-hidden=\"true\">{d}</span><span class=\"path-title\">{s}</span>", .{ i + 1, step.title.get(lang) });
+            if (step.minutes > 0) {
+                try step_rail.writer.print("<span class=\"path-min\">{d} {s}</span>", .{ step.minutes, if (lang == .ja) "分" else "min" });
+            }
+            try step_rail.writer.writeAll("</a></li>");
+        }
+        try step_rail.writer.writeAll("</ol></nav>");
+    }
+
     // ------------------------------------------------------------------- body
     var body: std.Io.Writer.Allocating = .init(arena);
     defer body.deinit();
@@ -342,6 +376,7 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
         .lang_links = langs.written(),
         .nav = nav.written(),
         .page_head = head.written(),
+        .path_rail = step_rail.written(),
         .rail = rail.written(),
         .body = body.written(),
         // The word-count template is runtime data (`{d} 語` / `{d} words`), so the number is

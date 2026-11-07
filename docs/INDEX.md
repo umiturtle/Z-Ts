@@ -11,14 +11,14 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 
 | あなたは | 入口 | 使うコマンド |
 |---|---|---|
-| **Z-Ts でアプリを作りたい** | [`learn/ja/index.md`](learn/ja/index.md)（英語は [`learn/en/index.md`](learn/en/index.md)） → [`learn/ja/tutorials/counter.md`](learn/ja/tutorials/counter.md) | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
+| **Z-Ts でアプリを作りたい** | [`learn/ja/start.md`](learn/ja/start.md)（英語は [`learn/en/start.md`](learn/en/start.md)） → [`learn/ja/index.md`](learn/ja/index.md)（4 ステップの学習パス） | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
 | **Z-Ts 本体を開発・公開したい** | [`contributing/README.md`](contributing/README.md) | `./zigw` / `zig build` / `scripts/*` |
 
 ## 読み手ごとの 3 層（+ 内部資料）
 
 | 層 | 正本 | 読むもの |
 |---|---|---|
-| ① 学ぶ | 手順と最小例 | [`learn/`](learn/ja/index.md) — 概念 → チュートリアル → ガイド（日英 2 言語・同名ファイル） |
+| ① 学ぶ | 手順と最小例 | [`learn/`](learn/ja/index.md) — **はじめての Z-Ts → 仕組み → アプリ → 引く**の 1 本道（日英 2 言語・同名ファイル） |
 | ② 引く | **Zig のソース**（`///`） | API リファレンス（生成物・非コミット。`./zigw build docs`） |
 | ③ 確かめる | 振る舞いの約束 | [`reference/cli.md`](reference/cli.md)（`zts` の仕様）/ [`reference/tauri-usage.md`](reference/tauri-usage.md) |
 | ④ 中を読む | ADR・設計メモ・タスク | 下の `architecture/` `decisions/` `roadmap/` `tasks/` `environment/`（任意） |
@@ -52,7 +52,8 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
 | [`roadmap/m1-foundation-packages.md`](roadmap/m1-foundation-packages.md) | M1 詳細仕様（コア 5 パッケージのファイル境界・公開型・DoD） | 実装仕様リファレンス |
 | [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
-| [`learn/ja/index.md`](learn/ja/index.md) | **学習の道筋**: 4 つの入口（概念 / チュートリアル / ガイド / API）と前提知識。英語版は `learn/en/index.md` | 入門（最初に読む） |
+| [`learn/ja/start.md`](learn/ja/start.md) | **はじめての Z-Ts**（10 分）: `./zigw build` → `zts doctor` → `init` → `dev` → `build` を 1 ページで。英語版は `learn/en/start.md` | 入門（最初に読む） |
+| [`learn/ja/index.md`](learn/ja/index.md) | **学習パス**: 4 ステップの道順・30 秒の全体像・前提知識・目的別の入口。英語版は `learn/en/index.md` | 入門（最初に読む） |
 | [`learn/ja/guides/install.md`](learn/ja/guides/install.md) | `zts` コマンドの入手（チェックアウトからビルド・`PATH`・`ZTS_ZIG`） | 入門（最初に読む） |
 | [`learn/ja/tutorials/counter.md`](learn/ja/tutorials/counter.md) | チュートリアル（15 分）: `zts init` → コマンド → `dev` → `build` → `doctor` | 入門（最初に読む） |
 | [`learn/ja/guides/package.md`](learn/ja/guides/package.md) | 配布物の作り方: `zts package`（`.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`）・アイコン・クロスビルド・CI | アプリが 1 つ動いたら |
