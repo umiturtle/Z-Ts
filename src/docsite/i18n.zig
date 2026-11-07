@@ -173,7 +173,7 @@ pub fn strings(lang: Lang) Strings {
             .landing_path_title = "学習パス",
             .landing_path_lede = "未経験から最初のバイナリまで、40 分。道順は 1 本だけで、各ページの上に常に出ています。",
             .landing_path_total = "全体 {d} 分",
-            .landing_paths_title = "目的から引く",
+            .landing_paths_title = "目的から選ぶ",
             .landing_all_pages = "すべてのページ",
             .landing_meta = "対応: Zig 0.17.0 / Tauri v2 / Linux・macOS・Windows",
             .landing_feature_title = "なぜ Z-Ts か",
