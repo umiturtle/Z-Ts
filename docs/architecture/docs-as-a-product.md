@@ -167,7 +167,7 @@ Rust は 3 つの層がはっきり分かれています。
 | **Kubernetes** | `/docs/concepts/` | 概念トップが**索引**で、各サブセクションに**1 文の説明**が付く（"The Kubernetes cluster architecture…"）。分類は技術ではなく**タスク**順 | §2.5.2 |
 | **Go** | `/blog/examples` | **Testable Examples**。例はパッケージのテストとしてコンパイル・実行され、`// Output:` と出力を突き合わせる。`Output:` が無ければコンパイルのみ。命名規約 `ExampleFoo` / `ExampleBar_Qux` で**例と対象が機械的に対応** | §2.5.3 |
 | **Python** | `/3/glossary.html` | 用語集の各項目が**定義元（実装ページ）へリンク**し、項目同士が相互参照（`duck typing` ↔ `abstract base class`）。PEP・HOWTO へのインラインリンクも | §2.5.4 |
-| **Deno** | `ts_config_migration` | 移行ガイドが **「あなたの tsconfig の項目 | Deno では」の 1 行表**。delete / keep を**断定**し、選択肢を残さない | §2.5.5 |
+| **Deno** | `ts_config_migration` | 移行ガイドが **「あなたの tsconfig の項目 \| Deno では」の 1 行表**。delete / keep を**断定**し、選択肢を残さない | §2.5.5 |
 | **TypeScript** | `/tsconfig/` | 参照ページは**カテゴリ索引 + 安定アンカー**。各項目が **Default / Related（他項目へのリンク）/ Released** のメタデータを持つ | §2.5.6 |
 
 #### 2.5.1 React — 「何を学ぶか」を先に宣言し、術語を初出でリンクする

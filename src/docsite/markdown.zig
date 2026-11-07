@@ -403,10 +403,7 @@ const Parser = struct {
 
         if (simple) {
             try out.writeAll("<span class=\"li-text\">");
-            for (body, 0..) |line, index| {
-                if (index > 0) try out.writeAll(" ");
-                try self.renderInline(out, std.mem.trim(u8, line, " \t"));
-            }
+            try self.renderInline(out, try joinInline(self.arena, body));
             try out.writeAll("</span>");
             return;
         }
@@ -422,6 +419,31 @@ const Parser = struct {
             try out.writeAll("\n");
         }
         return i;
+    }
+
+    /// Joins the source lines of one paragraph (or one tight list item) into the single string that
+    /// inline parsing needs. CommonMark lets emphasis, code spans and links span a line break, so
+    /// hard-wrapping the prose must not leak literal `**` into the page. A trailing `\\` is the
+    /// author's hard break: it becomes `hard_break` and `renderInline` turns that into `<br />`.
+    const hard_break = '\x01';
+
+    fn joinInline(arena: Allocator, lines: []const []const u8) Error![]const u8 {
+        var out: std.Io.Writer.Allocating = .init(arena);
+        defer out.deinit();
+        var after_break = false;
+        for (lines, 0..) |raw, index| {
+            const line = std.mem.trim(u8, raw, " \t");
+            if (index > 0 and !after_break) try out.writer.writeAll(" ");
+            after_break = false;
+            if (std.mem.endsWith(u8, line, "\\")) {
+                try out.writer.writeAll(line[0 .. line.len - 1]);
+                try out.writer.writeAll(&.{hard_break});
+                after_break = true;
+            } else {
+                try out.writer.writeAll(line);
+            }
+        }
+        return out.toOwnedSlice();
     }
 
     fn renderParagraph(self: *Parser, out: *std.Io.Writer, lines: []const []const u8, start: usize) Error!usize {
@@ -441,19 +463,7 @@ const Parser = struct {
         }
 
         try out.writeAll("<p>");
-        var previous_broke = false;
-        for (out_lines.items, 0..) |line, index| {
-            // A trailing `\` forces a hard break; everything else joins with a space.
-            if (index > 0 and !previous_broke) try out.writeAll(" ");
-            if (std.mem.endsWith(u8, line, "\\")) {
-                try self.renderInline(out, line[0 .. line.len - 1]);
-                try out.writeAll("<br />");
-                previous_broke = true;
-            } else {
-                try self.renderInline(out, line);
-                previous_broke = false;
-            }
-        }
+        try self.renderInline(out, try joinInline(self.arena, out_lines.items));
         try out.writeAll("</p>\n");
         return i;
     }
@@ -464,6 +474,12 @@ const Parser = struct {
         var i: usize = 0;
         while (i < text.len) {
             const ch = text[i];
+
+            if (ch == hard_break) {
+                try out.writeAll("<br />");
+                i += 1;
+                continue;
+            }
 
             if (ch == '\\' and i + 1 < text.len) {
                 try writeEscaped(out, text[i + 1 .. i + 2]);
@@ -1283,6 +1299,19 @@ test "images, autolinks and inline HTML pass through" {
         "<p><img src=\"a.png\" alt=\"alt text\" loading=\"lazy\" /> and <kbd>Ctrl</kbd> plus <a href=\"https://x.dev\" target=\"_blank\" rel=\"noopener\">https://x.dev</a></p>\n",
         "![alt text](a.png) and <kbd>Ctrl</kbd> plus <https://x.dev>",
     );
+}
+
+test "emphasis may span a line break" {
+    // Hard-wrapped prose is the normal case in this repository; GitHub lets `**` close on the next
+    // line, and so must the site.
+    try expectRender("<p><strong>bold text</strong></p>\n", "**bold\ntext**");
+    try expectRender("<p>a <strong>bold span</strong></p>\n", "a **bold\nspan**");
+    try expectRender("<p>a <code>x y</code> span</p>\n", "a `x\ny` span");
+    // A bullet that wraps keeps its emphasis too.
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const doc = try render(arena_state.allocator(), "- one **two\n  three** four\n", .{});
+    try std.testing.expect(std.mem.indexOf(u8, doc.html, "<strong>two three</strong>") != null);
 }
 
 test "hard breaks with a trailing backslash" {
