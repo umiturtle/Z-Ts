@@ -90,6 +90,11 @@ pub const Strings = struct {
     edit: []const u8,
     words_fmt: []const u8,
     footer_note: []const u8,
+    /// Name of the beginner path, used as the step rail's accessible label and as the sidebar
+    /// heading of the first group.
+    path_label: []const u8,
+    /// Label of the "continue to the next step" call to action under the rail.
+    path_continue: []const u8,
 
     // ------------------------------------------------------------------ 404
     not_found_title: []const u8,
@@ -104,6 +109,14 @@ pub const Strings = struct {
     landing_cta_api: []const u8,
     landing_cta_samples: []const u8,
     landing_cta_source: []const u8,
+    /// Hero's secondary button: jump into the build-an-app step.
+    landing_cta_tutorial: []const u8,
+    /// Heading of the four-step path block on the landing page.
+    landing_path_title: []const u8,
+    /// One sentence introducing that block ("this is the whole path, 40 minutes").
+    landing_path_lede: []const u8,
+    /// `{d}` is replaced with the total minutes of the path.
+    landing_path_total: []const u8,
     landing_paths_title: []const u8,
     landing_all_pages: []const u8,
     landing_meta: []const u8,
@@ -142,6 +155,8 @@ pub fn strings(lang: Lang) Strings {
             .edit = "このページを GitHub で編集",
             .words_fmt = "{d} 語",
             .footer_note = "Tauri v2 の思想を Zig 0.17 で再実装",
+            .path_label = "学習パス",
+            .path_continue = "次のステップへ",
 
             .not_found_title = "ページが見つかりません",
             .not_found_body = "URL が変わったか、まだ存在しません。検索（<kbd>/</kbd>）か、下の入口から辿ってください。",
@@ -150,11 +165,15 @@ pub fn strings(lang: Lang) Strings {
             .landing_title_a = "デスクトップも、WebAssembly も、",
             .landing_title_b = "静的サイトも。1 言語で。",
             .landing_lede = "Z-Ts は Tauri v2 のプロトコルとプラグインを Zig で再実装したツールキットです。同じアプリコードからネイティブ WebView・ブラウザ Live Preview・静的 SSG の 3 つの成果物を生成し、3 OS で同じピクセルを描きます。",
-            .landing_cta_start = "チュートリアルをはじめる",
+            .landing_cta_start = "10 分ではじめる",
             .landing_cta_api = "API リファレンス",
             .landing_cta_samples = "動くサンプル",
             .landing_cta_source = "ソース",
-            .landing_paths_title = "4 つの入口",
+            .landing_cta_tutorial = "アプリを作る",
+            .landing_path_title = "学習パス",
+            .landing_path_lede = "未経験から最初のバイナリまで、40 分。道順は 1 本だけで、各ページの上に常に出ています。",
+            .landing_path_total = "全体 {d} 分",
+            .landing_paths_title = "目的から選ぶ",
             .landing_all_pages = "すべてのページ",
             .landing_meta = "対応: Zig 0.17.0 / Tauri v2 / Linux・macOS・Windows",
             .landing_feature_title = "なぜ Z-Ts か",
@@ -189,6 +208,8 @@ pub fn strings(lang: Lang) Strings {
             .edit = "Edit this page on GitHub",
             .words_fmt = "{d} words",
             .footer_note = "Tauri v2, reimplemented in Zig 0.17",
+            .path_label = "Learning path",
+            .path_continue = "Next step",
 
             .not_found_title = "Page not found",
             .not_found_body = "The URL moved, or the page never existed. Try the search (<kbd>/</kbd>), or start from one of the entry points below.",
@@ -197,11 +218,15 @@ pub fn strings(lang: Lang) Strings {
             .landing_title_a = "Desktop, WebAssembly,",
             .landing_title_b = "static sites. One language.",
             .landing_lede = "Z-Ts reimplements the Tauri v2 protocol and its plugins in Zig. One application source produces three artifacts — a native WebView binary, a browser Live Preview, and a static site — and draws the same pixels on all three operating systems.",
-            .landing_cta_start = "Start the tutorial",
+            .landing_cta_start = "Start in 10 minutes",
             .landing_cta_api = "API reference",
             .landing_cta_samples = "Examples",
             .landing_cta_source = "Source",
-            .landing_paths_title = "Four ways in",
+            .landing_cta_tutorial = "Build an app",
+            .landing_path_title = "The learning path",
+            .landing_path_lede = "From never having run it to your first binary, in 40 minutes. One order, always shown at the top of the page you are on.",
+            .landing_path_total = "{d} minutes in total",
+            .landing_paths_title = "Choose by job",
             .landing_all_pages = "All pages",
             .landing_meta = "Requires: Zig 0.17.0 / Tauri v2 / Linux, macOS or Windows",
             .landing_feature_title = "Why Z-Ts",

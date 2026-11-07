@@ -3,6 +3,10 @@
 > **Audience**: readers who want to know where code belongs and why the split is what it is.
 > **Time**: 5 minutes.
 
+The three parts you saw on the [previous page](index.md) — the page, the bridge, the command — are
+really **six packages**. This page is the map. There is exactly one reason for the split: producing
+**three artefacts from one source**.
+
 ## The dependency graph on one screen
 
 Dependencies point **downwards only**. Nothing ever reaches back up.

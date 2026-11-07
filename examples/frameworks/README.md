@@ -1,4 +1,4 @@
-# `examples/frameworks` — 9 フレームワーク同一画面デモ（`M5-05`）
+# `examples/frameworks` — 9 フレームワーク同一画面デモ
 
 Angular / Solid / Svelte / SolidStart / Next.js / Nuxt / Astro / SvelteKit / React の 9 つで
 **まったく同じ 1 画面**（760×520 のダッシュボード風カウンター）を作り、それぞれの静的出力を

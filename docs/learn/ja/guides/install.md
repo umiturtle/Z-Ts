@@ -8,6 +8,10 @@
 `init` / `dev` / `build` / `doctor` の 4 つだけ覚えれば、プロジェクトの生成から
 単一バイナリのビルドまで完結します。
 
+> [!TIP]
+> このページは**インストールだけ**を詳しく知りたい人向けです。とにかく動かしたいなら
+> [はじめての Z-Ts](../start.md)（10 分）の 1〜2 章が同じ内容を 4 分で終わらせます。
+
 > Z-Ts の**リポジトリ自体**をビルド・テストする手順は
 > [`docs/contributing/README.md`](../../../contributing/README.md) にあります。このページは
 > 「`zts` というコマンドを手に入れる」ところまでです。
@@ -44,8 +48,8 @@ zts version             # → zts 0.1.0
 **同じ 0.17 系の Zig が `PATH` に必要**です。
 
 ```bash
-export ZTS_ZIG=/path/to/zig     # PATH に無い場合はここで指定
-zts doctor                      # zig / z_ts / package / dependency / web を点検
+export ZTS_ZIG="$(./zigw zig-path)"   # チェックアウト内で 1 回。PATH に無い場合の指定
+zts doctor                            # zig / z_ts / package / dependency / web を点検
 ```
 
 `zts doctor` が `all checks passed` と言えば準備完了です。

@@ -54,6 +54,7 @@ bash scripts/status.sh          # ブランチ・未コミット・並列エー�
 | `./zigw build docs` | ドキュメントサイトを `zig-out/docs/` に生成（リンク・アンカー検査つき） | 約 4 秒 |
 | `python3 scripts/check-docs.py` | 構造・相対リンク・層違反・CLI 乖離・パッケージ名・用語集・ページ骨格 | 0.1 秒 |
 | `./zigw doctest` | `zig check` フェンスを実際にコンパイル（doctest-lite） | 2 ブロックで 1〜5 秒 |
+| `./zigw zig-path` | このチェックアウトが使う Zig のパスを 1 行で出力（`ZTS_ZIG` に渡す用） | 即時 |
 
 個別モジュールだけ回すときは `./zigw test src/docsite/mod.zig` のように書きます
 （`src/cli/mod.zig` だけは `main.zig` を含まないので、CLI 本体は `./zigw build` が型検査します）。
