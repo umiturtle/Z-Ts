@@ -20,6 +20,7 @@ const Allocator = std.mem.Allocator;
 const Error = Allocator.Error || error{WriteFailed};
 const paths = @import("paths.zig");
 const links = @import("links.zig");
+const i18n = @import("i18n.zig");
 
 pub const RenderOptions = struct {
     /// `[x](../tasks/M5-01-build-tools.md)` → `…html` so the rendered site has no dead links.
@@ -39,6 +40,9 @@ pub const RenderOptions = struct {
     /// 「このページに出てくる API」box, which is how every guide gets a table of contents into the
     /// API without anyone maintaining a second list by hand.
     xrefs: ?*std.ArrayListUnmanaged(Xref) = null,
+    /// Language of the chrome this renderer emits (admonition titles). The prose comes from the
+    /// source file; these labels are ours, so they must follow the page's language.
+    lang: i18n.Lang = .ja,
     /// Links the same name only once per page: a paragraph that says `Schema` five times keeps one
     /// destination instead of five. The API pages relax it (`repeat_xrefs`), because a declaration
     /// page is read as a reference, not as prose.
@@ -271,7 +275,7 @@ const Parser = struct {
             try out.writeAll("<blockquote class=\"admonition\" data-kind=\"");
             try writeEscaped(out, k);
             try out.writeAll("\">\n");
-            try out.print("<p class=\"admonition-title\">{s}</p>\n", .{admonitionLabel(k)});
+            try out.print("<p class=\"admonition-title\">{s}</p>\n", .{admonitionLabel(k, self.options.lang)});
         } else {
             try out.writeAll("<blockquote>\n");
         }
@@ -911,11 +915,25 @@ fn isRawHtmlBlock(line: []const u8) bool {
     return false;
 }
 
-fn admonitionLabel(kind: []const u8) []const u8 {
-    if (std.mem.eql(u8, kind, "NOTE")) return "注記";
-    if (std.mem.eql(u8, kind, "TIP")) return "ヒント";
-    if (std.mem.eql(u8, kind, "WARNING")) return "注意";
-    return "重要";
+fn admonitionLabel(kind: []const u8, lang: i18n.Lang) []const u8 {
+    return switch (lang) {
+        .ja => if (std.mem.eql(u8, kind, "NOTE"))
+            "注記"
+        else if (std.mem.eql(u8, kind, "TIP"))
+            "ヒント"
+        else if (std.mem.eql(u8, kind, "WARNING"))
+            "注意"
+        else
+            "重要",
+        .en => if (std.mem.eql(u8, kind, "NOTE"))
+            "Note"
+        else if (std.mem.eql(u8, kind, "TIP"))
+            "Tip"
+        else if (std.mem.eql(u8, kind, "WARNING"))
+            "Warning"
+        else
+            "Important",
+    };
 }
 
 fn isSafeInlineHtml(inner: []const u8) bool {
@@ -1315,6 +1333,9 @@ test "blockquote admonitions keep the marker out of the text" {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     const doc = try render(arena, "> [!NOTE]\n> ここに注意。\n", .{});
+    // The label is chrome, not prose: it follows the page's language, not the source text's.
+    const en = try render(arena, "> [!TIP]\n> Read this.\n", .{ .lang = .en });
+    try testing.expect(std.mem.indexOf(u8, en.html, ">Tip<") != null);
     try std.testing.expect(std.mem.indexOf(u8, doc.html, "class=\"admonition\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, doc.html, "[!NOTE]") == null);
     try std.testing.expect(std.mem.indexOf(u8, doc.html, "ここに注意。") != null);

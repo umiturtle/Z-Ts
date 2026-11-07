@@ -340,7 +340,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
 
     for (rendered) |page| {
         const sidebar = if (page.lang == .en) groups_en else groups_ja;
-        const related = if (page.key == .internals) "" else try renderRelatedApi(arena, page.href, page.xrefs);
+        const related = if (page.key == .internals) "" else try renderRelatedApi(arena, page.href, page.lang, page.xrefs);
         const body = if (page.key == .internals)
             try std.fmt.allocPrint(arena, "{s}{s}", .{ try internalsBanner(arena, page.href), page.document.html })
         else
@@ -622,6 +622,7 @@ fn renderIntoWithRewrites(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype, r
     var xrefs: std.ArrayListUnmanaged(markdown.Xref) = .empty;
     const document = try markdown.render(arena, content, .{
         .page = out.href,
+        .lang = out.lang,
         .rewrites = rewrites,
         .linker = index,
         .xrefs = &xrefs,
@@ -1175,12 +1176,16 @@ fn altHref(arena: Allocator, io: Io, source_path: []const u8, lang: i18n.Lang) !
     return try htmlPath(arena, md);
 }
 
-fn renderRelatedApi(arena: Allocator, page_href: []const u8, xrefs: []const markdown.Xref) ![]const u8 {
+fn renderRelatedApi(arena: Allocator, page_href: []const u8, lang: i18n.Lang, xrefs: []const markdown.Xref) ![]const u8 {
     if (xrefs.len == 0) return "";
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
     const w = &out.writer;
-    try w.writeAll("<aside class=\"related\"><h2>このページに出てくる API</h2><ul>");
+    const title = switch (lang) {
+        .ja => "このページに出てくる API",
+        .en => "API mentioned on this page",
+    };
+    try w.print("<aside class=\"related\"><h2>{s}</h2><ul>", .{title});
     var seen: usize = 0;
     outer: for (xrefs) |xref| {
         for (xrefs[0..seen]) |earlier| {

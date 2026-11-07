@@ -39,6 +39,8 @@ zts doctor                        # 環境とプロジェクトの点検
 ```
 
 `zts` は Angular CLI のような位置づけで、**自分のプロジェクトだけ**を操作します。
+**はじめてなら [`docs/learn/ja/start.md`](docs/learn/ja/start.md)（10 分）を上から順に**
+進めるのが最短です（英語は [`en/start.md`](docs/learn/en/start.md)）。
 入手方法・前提は [`docs/learn/ja/guides/install.md`](docs/learn/ja/guides/install.md)、
 全オプションは [`docs/reference/cli.md`](docs/reference/cli.md) にあります。
 
@@ -74,9 +76,10 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 
 | 目的 | 行き先 |
 |---|---|
-| **学習の道筋（まずここ）** | [`docs/learn/ja/index.md`](docs/learn/ja/index.md) — 英語は [`docs/learn/en/index.md`](docs/learn/en/index.md) |
+| **10 分で動かす（まずここ）** | [`docs/learn/ja/start.md`](docs/learn/ja/start.md) — 英語は [`docs/learn/en/start.md`](docs/learn/en/start.md) |
+| 学習の道筋（4 ステップ） | [`docs/learn/ja/index.md`](docs/learn/ja/index.md) — 英語は [`docs/learn/en/index.md`](docs/learn/en/index.md) |
 | `zts` を手元に用意する | [`docs/learn/ja/guides/install.md`](docs/learn/ja/guides/install.md) |
-| 15 分で動かす | [`docs/learn/ja/tutorials/counter.md`](docs/learn/ja/tutorials/counter.md) |
+| カウンターを作る（15 分） | [`docs/learn/ja/tutorials/counter.md`](docs/learn/ja/tutorials/counter.md) |
 | コマンドの書き方（`invoke`） | [`docs/learn/ja/guides/rpc.md`](docs/learn/ja/guides/rpc.md) |
 | Tauri 標準プラグイン | [`docs/learn/ja/guides/plugins.md`](docs/learn/ja/guides/plugins.md) |
 | 静的サイト書き出し（`dist/`） | [`docs/learn/ja/guides/static-site.md`](docs/learn/ja/guides/static-site.md) |

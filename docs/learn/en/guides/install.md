@@ -6,6 +6,10 @@
 `zts` is the CLI for building Z-Ts apps — roughly where Angular CLI sits. Learn four verbs
 (`init`, `dev`, `build`, `doctor`) and you can go from an empty directory to a single binary.
 
+> [!TIP]
+> This page is for the install in detail. If you would rather have something running, see
+> [Your first ten minutes](../start.md) — its steps 1–2 cover the same ground in four minutes.
+
 > Building and testing the **Z-Ts repository itself** is documented in
 > [`docs/contributing/README.md`](../../../contributing/README.md). This page stops at "I have a
 > `zts` command".

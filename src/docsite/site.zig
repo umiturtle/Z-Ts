@@ -261,12 +261,18 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
         for (learn_path.steps, 0..) |step, i| {
             const target = learn_path.pageHref(arena, lang, step) catch return error.OutOfMemory;
             const state: []const u8 = if (i == current)
-                " class=\"current\" aria-current=\"step\""
+                " class=\"current\""
             else if (i < current)
                 " class=\"done\""
             else
                 "";
-            try step_rail.writer.print("<li{s}><a href=\"{s}\">", .{ state, try relativeHref(arena, href, target) });
+            // `aria-current` goes on the link, which is the element a screen reader announces as
+            // the current item of a navigation landmark.
+            try step_rail.writer.print("<li{s}><a{s} href=\"{s}\">", .{
+                state,
+                if (i == current) " aria-current=\"step\"" else "",
+                try relativeHref(arena, href, target),
+            });
             try step_rail.writer.print("<span class=\"path-num\" aria-hidden=\"true\">{d}</span><span class=\"path-title\">{s}</span>", .{ i + 1, step.title.get(lang) });
             if (step.minutes > 0) {
                 try step_rail.writer.print("<span class=\"path-min\">{d} {s}</span>", .{ step.minutes, if (lang == .ja) "分" else "min" });
