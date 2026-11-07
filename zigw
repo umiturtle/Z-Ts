@@ -12,7 +12,8 @@ set -euo pipefail
 # 3. `./zigw docs-check` runs the documentation gates: renderer tests, the static lints, the
 #    doctest compiler and `zig build docs` (which verifies every link and anchor it emits).
 #    `./zigw doctest` is just the compiler step (used by CI, where `zig` is not yet on PATH).
-# 4. `./zigw full-test [extra args...]` runs the full 27-step `zig build test` graph including
+# 4. `./zigw zig-path` prints the Zig binary this checkout uses (for `ZTS_ZIG`).
+# 5. `./zigw full-test [extra args...]` runs the full 27-step `zig build test` graph including
 #    standalone extractability, C99 ABI static library verification, `tsc --strict`, `esbuild`,
 #    Node 22 Live `BridgeServer` E2E, and native GTK/WebKit2GTK tests.
 
@@ -93,6 +94,14 @@ EOF
 }
 
 ZIG_BIN="$(find_zig || install_zig_fast)"
+
+# `./zigw zig-path` — print the Zig this checkout uses. `zts` runs `zig` as a child process, so a
+# reader whose Zig lives only in /tmp/zts-toolchains needs this to set ZTS_ZIG without guessing
+# the path (`zts doctor` reports `zig MISSING` otherwise).
+if [[ "${1:-}" == "zig-path" ]]; then
+  echo "$ZIG_BIN"
+  exit 0
+fi
 
 if [[ "${1:-}" == "quick-test" ]]; then
   shift

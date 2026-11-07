@@ -48,8 +48,8 @@ zts version             # → zts 0.1.0
 **同じ 0.17 系の Zig が `PATH` に必要**です。
 
 ```bash
-export ZTS_ZIG=/path/to/zig     # PATH に無い場合はここで指定
-zts doctor                      # zig / z_ts / package / dependency / web を点検
+export ZTS_ZIG="$(./zigw zig-path)"   # チェックアウト内で 1 回。PATH に無い場合の指定
+zts doctor                            # zig / z_ts / package / dependency / web を点検
 ```
 
 `zts doctor` が `all checks passed` と言えば準備完了です。

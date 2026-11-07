@@ -33,6 +33,13 @@ export PATH="$HOME/.local/bin:$PATH"
 zts version             # → zts 0.1.0
 ```
 
+`zts` はビルドのたびに **`zig` を子プロセスとして**起動します。`zig` が `PATH` に無い環境
+（`./zigw` が `/tmp` に入れただけの環境）では、次の 1 行を**チェックアウトの中**で打ってください。
+
+```bash
+export ZTS_ZIG="$(./zigw zig-path)"   # → /tmp/zts-toolchains/zig-0.17.0/ziglang/zig
+```
+
 > [!NOTE]
 > `./zigw` が要求するのは Python 3.8 以上だけです。Zig が既に手元にあるなら
 > `zig build` でも同じものができます。導入先や詳細は
@@ -48,7 +55,7 @@ zts doctor
 
 | 表示 | 意味 | 対処 |
 |---|---|---|
-| `zig MISSING` | `zts` が Zig を起動できない | `export ZTS_ZIG=/path/to/zig` |
+| `zig MISSING` | `zts` が Zig を起動できない | `export ZTS_ZIG="$(./zigw zig-path)"`（チェックアウト内） |
 | `z_ts MISSING at …` | `zts` を作ったチェックアウトが見つからない | そのパスに置くか `zts init --zts-path` |
 | `gtk` / `webkit` の警告 | Linux の GUI ライブラリが無い | 開発だけなら無視してよい（後述） |
 
@@ -103,7 +110,7 @@ zts: my_app — serving web/ at http://127.0.0.1:5173/
 <h1>my_app — hello Z-Ts</h1>
 ```
 
-保存から 1 秒以内にブラウザがリロードされ、変更が反映されます。
+保存から 1 秒ほどでブラウザがリロードされ、変更が反映されます。
 これで「書く → 見る」のループが閉じました。ここから先はこのループを回すだけです。
 
 ## 6. 単一バイナリにする（1 分）

@@ -45,8 +45,8 @@ into the `build.zig.zon` of every project it generates. At run time it spawns `z
 process, so **a 0.17-series `zig` must be on `PATH`**.
 
 ```bash
-export ZTS_ZIG=/path/to/zig     # when zig is not on PATH
-zts doctor                      # checks zig / z_ts / package / dependency / web
+export ZTS_ZIG="$(./zigw zig-path)"   # once, inside the checkout: the Zig this repo uses
+zts doctor                            # checks zig / z_ts / package / dependency / web
 ```
 
 `all checks passed` means you are done.

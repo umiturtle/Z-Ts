@@ -34,6 +34,13 @@ export PATH="$HOME/.local/bin:$PATH"
 zts version             # → zts 0.1.0
 ```
 
+`zts` runs **`zig` as a child process** on every build. If `zig` is not on your `PATH` (the
+`./zigw` case: it installs into `/tmp`), run this line **inside the checkout** once.
+
+```bash
+export ZTS_ZIG="$(./zigw zig-path)"   # → /tmp/zts-toolchains/zig-0.17.0/ziglang/zig
+```
+
 > [!NOTE]
 > `./zigw` needs Python 3.8+ and nothing else; `zig build` produces the same binary if you already
 > have Zig 0.17. Platform packages and the `ZTS_ZIG` override are in
@@ -49,7 +56,7 @@ zts doctor
 
 | Output | Meaning | Fix |
 |---|---|---|
-| `zig MISSING` | `zts` cannot start the Zig compiler | `export ZTS_ZIG=/path/to/zig` |
+| `zig MISSING` | `zts` cannot start the Zig compiler | `export ZTS_ZIG="$(./zigw zig-path)"` (inside the checkout) |
 | `z_ts MISSING at …` | the checkout that built `zts` is gone | move the checkout there, or pass `zts init --zts-path` |
 | a `gtk` / `webkit` warning | Linux GUI libraries are absent | ignore it while you are only serving the front end |
 
@@ -104,7 +111,7 @@ Change the `<h1>` in `web/index.html` and save. **Do not touch the terminal.**
 <h1>my_app — hello Z-Ts</h1>
 ```
 
-The browser reloads within a second. The write → see loop is now closed; everything else in these
+The browser reloads within about a second. The write → see loop is now closed; everything else in these
 docs is that loop with more in it.
 
 ## 6. Build a single binary (1 minute)
