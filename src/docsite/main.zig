@@ -1610,6 +1610,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\      <a class="button primary" href="{s}{s}/start.html">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
         \\      <a class="button" href="{s}{s}/tutorials/counter.html">{s}</a>
         \\      <a class="button ghost" href="{s}docs/api/index.html">{s}</a>
+        \\      <a class="button ghost" href="https://github.com/umiturtle/Z-Ts/releases/latest" target="_blank" rel="noopener">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" /></svg></a>
         \\    </div>
         \\    <p class="hero-meta">{s}</p>
         \\  </section>
@@ -1639,7 +1640,8 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         learn,                                                              str.landing_cta_start,
         prefix,                                                             learn,
         str.landing_cta_tutorial,                                           prefix,
-        str.landing_cta_api,                                                str.landing_meta,
+        str.landing_cta_api,                                                str.landing_cta_download,
+        str.landing_meta,
     });
 
     // ---- the path, before any other choice ------------------------------------

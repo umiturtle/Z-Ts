@@ -110,6 +110,8 @@ jobs:
             darwin) os=macos ;;
           esac
           out="zts-${{ needs.archive.outputs.version }}-$os-$arch"
+          # Keep `.exe` in the name: the artifact pattern below and the smoke step both rely on it.
+          [ "$os" = windows ] && out="$out.exe"
           cp "$exe" "$out"
           ls -l "$out"
           echo "ASSET=$out" >> "$GITHUB_ENV"
@@ -172,19 +174,23 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          notes="$(printf '%s\n' \
-            "Z-Ts \`$VERSION\`." \
-            "" \
-            "Install: download \`zts-<version>-<os>-<arch>\`, make it executable, put it on \`PATH\`." \
-            "Zig 0.17 is the only other requirement (\`zts\` runs it; it does not bundle it)." \
-            "" \
-            "Projects scaffolded by this binary depend on the archive below:" \
-            "" \
-            '```' \
-            ".z_ts = .{ .url = \"https://github.com/$REPO/releases/download/$TAG/z_ts-$VERSION.tar.gz\", .hash = \"$HASH\" }," \
-            '```')"
+          # A heredoc, not nested quotes: the notes contain backticks and double quotes, and both
+          # are punctuation in this text rather than shell syntax.
+          cat > notes.md <<EOF
+          Z-Ts \`$VERSION\`.
+
+          Install: download \`zts-<version>-<os>-<arch>\`, make it executable, put it on \`PATH\`.
+          Zig 0.17 is the only other requirement (\`zts\` runs it; it does not bundle it).
+
+          Projects scaffolded by this binary depend on the archive below:
+
+          \`\`\`zig
+          .z_ts = .{ .url = "https://github.com/$REPO/releases/download/$TAG/z_ts-$VERSION.tar.gz", .hash = "$HASH" },
+          \`\`\`
+          EOF
+          cat notes.md
           gh release create "$TAG" dist/* \
             --repo "$REPO" \
             --title "Z-Ts $VERSION" \
-            --notes "$notes" \
+            --notes-file notes.md \
             --verify-tag

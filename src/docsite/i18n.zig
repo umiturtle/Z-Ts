@@ -107,6 +107,8 @@ pub const Strings = struct {
     landing_lede: []const u8,
     landing_cta_start: []const u8,
     landing_cta_api: []const u8,
+    /// Hero button that goes straight to the downloadable `zts` binaries.
+    landing_cta_download: []const u8,
     landing_cta_samples: []const u8,
     landing_cta_source: []const u8,
     /// Hero's secondary button: jump into the build-an-app step.
@@ -167,6 +169,7 @@ pub fn strings(lang: Lang) Strings {
             .landing_lede = "Z-Ts は Tauri v2 のプロトコルとプラグインを Zig で再実装したツールキットです。同じアプリコードからネイティブ WebView・ブラウザ Live Preview・静的 SSG の 3 つの成果物を生成し、3 OS で同じピクセルを描きます。",
             .landing_cta_start = "10 分ではじめる",
             .landing_cta_api = "API リファレンス",
+            .landing_cta_download = "ダウンロード",
             .landing_cta_samples = "動くサンプル",
             .landing_cta_source = "ソース",
             .landing_cta_tutorial = "アプリを作る",
@@ -220,6 +223,7 @@ pub fn strings(lang: Lang) Strings {
             .landing_lede = "Z-Ts reimplements the Tauri v2 protocol and its plugins in Zig. One application source produces three artifacts — a native WebView binary, a browser Live Preview, and a static site — and draws the same pixels on all three operating systems.",
             .landing_cta_start = "Start in 10 minutes",
             .landing_cta_api = "API reference",
+            .landing_cta_download = "Download",
             .landing_cta_samples = "Examples",
             .landing_cta_source = "Source",
             .landing_cta_tutorial = "Build an app",
