@@ -208,6 +208,14 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 `src/docsite/` `src/cli/` `src/bundler/` `src/build_tools/` はツールなので対象外です
 （公開 API ではない）。
 
+同じ理由で、読者向けページには**リポジトリ専用の道具**も出しません。`zigw` は Releases に
+含めていない（チェックアウト専用のブートストラップ）ので、読者が `./zigw build` を打つと
+ファイルが無いところで止まります。読者向けページに書いてよいのは **`zts` と通常の `zig`**
+だけで、`zigw` の手順は `docs/contributing/` に隔離します。`check-docs.py` の規約 10 が
+`README.md`・`docs/INDEX.md`・`docs/learn/`・`docs/reference/`・`examples/*/README.md` を走査し、
+`zigw` が 1 語でもあれば落とします（「`./zigw build` でビルドできます」は、いちばん最初に
+踏む壊れた手順になります）。
+
 ## 9. 2 言語で書く（英語と日本語）
 
 読者向けのページは **`docs/learn/ja/` と `docs/learn/en/` に同じファイル名で 1 本ずつ**置きます。
@@ -252,6 +260,7 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `internal reference 'M4-03' in a doc comment` | 層の混線 | 理由を `docs/decisions/` へ、用法を `///` に |
 | `duplicate glossary term` | 同じ用語を 2 回定義 | 1 つに統合し、片方からリンク |
 | `docs/learn/en/…: missing translation (exists in ja)` | 片方の言語にしか無い | 同じパスで翻訳を足す（規約 8） |
+| `docs/learn/…: mentions 'zigw'` | 読者向けページに開発用ラッパーを書いた | `zts` と `zig` の手順に直す（規約 10）。`zigw` は `docs/contributing/` だけ |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

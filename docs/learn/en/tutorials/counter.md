@@ -6,7 +6,7 @@
 
 Create a project with `zts init`, **call a Zig function from a button**, grow it with reload on
 save, and finish with a single binary. **Every command on this page is `zts`**. Repository work
-(`./zigw`, CI) lives in [`docs/contributing/README.md`](../../../contributing/README.md).
+(build steps, CI) lives in [`docs/contributing/README.md`](../../../contributing/README.md).
 
 | Step | You do | You end up with |
 |---|---|---|
@@ -128,7 +128,7 @@ test "increment adds one" {
 }
 ```
 
-CI compiles this block (`./zigw doctest`), so **writing a stale API turns CI red** — what you read
+CI compiles this block in its doctest pass, so **writing a stale API turns CI red** — what you read
 here builds today.
 
 The frontend is plain Tauri. `@tauri-apps/api` works unchanged.

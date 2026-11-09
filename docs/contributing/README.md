@@ -13,7 +13,9 @@
 | **`./zigw` と `zig build`**（このリポジトリ専用） | `./zigw quick-test` / `./zigw build test` | Z-Ts を直す人 | ライブラリ本体・サンプル・ドキュメントサイトを作る。**このページ** |
 
 `zts` は「アプリ作者が叩くもの」、`./zigw` は「Z-Ts のビルド環境を整えて Zig を叩くもの」です。
-アプリ作者の手順に `./zigw` が出てきたら、それは書き間違いです。
+アプリ作者の手順に `./zigw` が出てきたら、それは書き間違いです。読者向けページ
+（`README.md`・`docs/learn/`・`docs/reference/`・`examples/*/README.md`）に `zigw` が 1 語でも
+あると `check-docs.py` の**規約 10** が落とします。
 
 ---
 

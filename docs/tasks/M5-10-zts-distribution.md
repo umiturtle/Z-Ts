@@ -60,3 +60,31 @@
   1 つの `defer { … }` ブロックにまとめる（今回の ABRT の原因）。
 - **CI の `file://` 制約**: Windows ランナーはドライブが違い `file://` URL が壊れるので、
   release モードの E2E は Linux に限定。3 OS での確認は `release.yml` の各ランナーが行う。
+
+---
+
+## 4. 追記: 読者向け Doc から `zigw` を外した
+
+配布物が `zts` 1 個になったので、**アプリ作者向けのページに `./zigw` が出てくるのは誤り**です。
+`zigw` は Releases に無く、チェックアウトした人だけが持つブートストラップなので、読者が
+`./zigw build` を打つと「そんなファイルは無い」で止まります。実際、学習パス
+（`start.md`・`tutorials/counter.md`・`guides/install.md`）と `README.md` のサンプル手順、
+`docs/INDEX.md`、`examples/*/README.md` に残っていました。
+
+| 場所 | 直した内容 |
+|---|---|
+| `docs/learn/{ja,en}/start.md` | 「clone も `./zigw` も要りません」→「リポジトリ専用のツールも要りません」。ソースビルドの注意は `zig build` + Zig 0.17 の説明だけに |
+| `docs/learn/{ja,en}/guides/install.md` | 「`./zigw` は配布物ではありません」という説明自体を削除し、**必要なのは `zts` と `zig` の 2 つ**だと 1 文で言う。開発者向け手順は `contributing/README.md` へのリンクに置換 |
+| `docs/learn/{ja,en}/tutorials/counter.md` | 冒頭の「`./zigw` や CI」→「ビルド手順や CI」。doctest の説明からコマンド名を外す |
+| `docs/learn/{ja,en}/guides/troubleshooting.md` | 参照先の説明から `./zigw` を削除 |
+| `README.md` | サンプルの `../../zigw build …` → `zig build …`。開発者向け表も `zig build` に統一 |
+| `docs/INDEX.md` / `docs/reference/cli.md` | リポジトリ操作の表記を `zig build` に。`zts` リファレンスからは `zigw` の語を削除 |
+| `examples/{c_embed,gallery}/README.md` | `./zigw build` / `../../zigw build …` → `zig build …` |
+
+**再発防止（規約 10）**: `scripts/check-docs.py` に、読者向けページ（`README.md`・
+`docs/INDEX.md`・`docs/learn/`・`docs/reference/`・`examples/*/README.md`）を走査して `zigw` が
+1 語でもあれば落とす規則を追加しました。`zigw` の説明は `docs/contributing/` と
+`docs/architecture/`・`docs/decisions/`・`docs/environment/` にだけ残ります（開発者向け）。
+
+`zig build` で足りることは確認済みです: `examples/counter` は `build.zig.zon` が
+`.path = "../.."` を指すので、チェックアウト内なら `zig build desktop|preview|dist` がそのまま動きます。

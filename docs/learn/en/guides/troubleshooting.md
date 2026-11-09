@@ -5,7 +5,7 @@
 
 One page for "my app will not build". If you are stuck **building the Z-Ts repository itself**,
 go to [`docs/contributing/troubleshooting.md`](../../../contributing/troubleshooting.md) instead —
-that page is about `./zigw` and CI, which app authors never need.
+that page is about repository development and CI, which app authors never need.
 
 ---
 

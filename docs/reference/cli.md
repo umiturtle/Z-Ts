@@ -5,7 +5,7 @@
 
 アプリ作者が使う CLI の仕様です。`zts` は **自分のプロジェクト**を操作します。
 
-> **Z-Ts リポジトリ自体の操作**（`./zigw`、`zig build` のステップ、CI スクリプト）は
+> **Z-Ts リポジトリ自体の操作**（`zig build` のステップ、CI スクリプト）は
 > [`../contributing/README.md`](../contributing/README.md) にまとめてあります。このページには
 > 出てきません。
 

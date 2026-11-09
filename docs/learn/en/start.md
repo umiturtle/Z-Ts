@@ -32,13 +32,13 @@ export PATH="$HOME/.local/bin:$PATH"
 zts version             # → zts 0.1.0
 ```
 
-**No clone, no `./zigw`.** `zts` only spawns `zig`. The PowerShell command, `ZTS_ZIG`, and platform
-packages are in [`guides/install.md`](guides/install.md).
+**No clone, and no repository tooling.** `zts` only spawns `zig`. The PowerShell command, `ZTS_ZIG`,
+and platform packages are in [`guides/install.md`](guides/install.md).
 
 > [!NOTE]
 > Working on Z-Ts itself, or prefer source builds? `git clone` + `zig build` produces the same
-> binary (`./zigw` is that repository's bootstrap wrapper, not a distributed artifact). A `zts`
-> built that way makes generated projects depend on the checkout via `.path`.
+> binary; all it needs is Zig 0.17 on `PATH`. A `zts` built that way makes generated projects
+> depend on the checkout via `.path`.
 
 ## 2. Check the environment (1 minute)
 

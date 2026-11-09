@@ -49,9 +49,8 @@ clone は要りません（初回ビルドで Zig が取得し、以降はキャ
 .z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
 ```
 
-> ソースから `zts` を作る場合: `git clone … && cd Z-Ts && zig build`（`./zigw` は Zig を自動導入する
-> リポジトリ開発者向けのラッパーで、配布物ではありません）。その場合の生成物は `.path` 依存に
-> なります。詳細は [`docs/learn/ja/guides/install.md`](docs/learn/ja/guides/install.md)。
+> ソースから `zts` を作る場合: `git clone … && cd Z-Ts && zig build`（Zig 0.17 系が `PATH` に
+> あれば十分です）。その場合の生成物は `.path` 依存になります。詳細は [`docs/learn/ja/guides/install.md`](docs/learn/ja/guides/install.md)。
 
 `zts` は Angular CLI のような位置づけで、**自分のプロジェクトだけ**を操作します。
 **はじめてなら [`docs/learn/ja/start.md`](docs/learn/ja/start.md)（10 分）を上から順に**
@@ -62,9 +61,9 @@ clone は要りません（初回ビルドで Zig が取得し、以降はキャ
 ```bash
 # 出来合いのサンプルを動かす場合（サンプルは独自の build.zig を持つ）
 cd examples/counter
-../../zigw build desktop          # ネイティブ WebView の単一バイナリ
-../../zigw build preview          # ブラウザで Live Preview（0.0.0.0:8788）
-../../zigw build dist             # サーバ不要の静的サイト（zig-out/dist/）
+zig build desktop                 # ネイティブ WebView の単一バイナリ
+zig build preview                 # ブラウザで Live Preview（0.0.0.0:8788）
+zig build dist                    # サーバ不要の静的サイト（zig-out/dist/）
 ```
 
 ## アーキテクチャ
@@ -92,7 +91,7 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 | 目的 | 行き先 |
 |---|---|
 | **10 分で動かす（まずここ）** | [`docs/learn/ja/start.md`](docs/learn/ja/start.md) — 英語は [`docs/learn/en/start.md`](docs/learn/en/start.md) |
-| 学習の道筋（4 ステップ） | [`docs/learn/ja/index.md`](docs/learn/ja/index.md) — 英語は [`docs/learn/en/index.md`](docs/learn/en/index.md) |
+| 学習の道筋（5 ステップ） | [`docs/learn/ja/index.md`](docs/learn/ja/index.md) — 英語は [`docs/learn/en/index.md`](docs/learn/en/index.md) |
 | `zts` を手元に用意する | [`docs/learn/ja/guides/install.md`](docs/learn/ja/guides/install.md) |
 | カウンターを作る（15 分） | [`docs/learn/ja/tutorials/counter.md`](docs/learn/ja/tutorials/counter.md) |
 | コマンドの書き方（`invoke`） | [`docs/learn/ja/guides/rpc.md`](docs/learn/ja/guides/rpc.md) |
@@ -100,17 +99,17 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 | 静的サイト書き出し（`dist/`） | [`docs/learn/ja/guides/static-site.md`](docs/learn/ja/guides/static-site.md) |
 | Tauri v2 からの移行 | [`docs/learn/ja/guides/migrate-from-tauri.md`](docs/learn/ja/guides/migrate-from-tauri.md) |
 | うまく動かないとき | [`docs/learn/ja/guides/troubleshooting.md`](docs/learn/ja/guides/troubleshooting.md) |
-| **API リファレンス**（ソースから自動生成） | <https://umiturtle.github.io/Z-Ts/docs/api/index.html>（`./zigw build docs` で手元にも生成） |
+| **API リファレンス**（ソースから自動生成） | <https://umiturtle.github.io/Z-Ts/docs/api/index.html>（`zig build docs` で手元にも生成） |
 | `zts` の全オプション | [`docs/reference/cli.md`](docs/reference/cli.md) |
 
-**Z-Ts 本体を開発する人向け**（コマンドは `./zigw` と `zig build`）
+**Z-Ts 本体を開発する人向け**（コマンドは `zig build`）
 
 | 目的 | 行き先 |
 |---|---|
 | **リポジトリ開発の入口** | [`docs/contributing/README.md`](docs/contributing/README.md) |
-| `./zigw` / `zig build` のステップ・スクリプト | [`docs/contributing/README.md`](docs/contributing/README.md) §3 |
+| `zig build` のステップ・スクリプト | [`docs/contributing/README.md`](docs/contributing/README.md) §3 |
 | 本体のトラブルシューティング | [`docs/contributing/troubleshooting.md`](docs/contributing/troubleshooting.md) |
-| ドキュメントサイトを生成する | `./zigw build docs`（→ `zig-out/docs/`） |
+| ドキュメントサイトを生成する | `zig build docs`（→ `zig-out/docs/`） |
 
 **中を読む人向け**（実装の意図・経緯）
 

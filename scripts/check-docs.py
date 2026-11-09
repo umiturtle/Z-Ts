@@ -26,6 +26,10 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       implements, or a real `zig` subcommand it forwards. The wrapper is the
                       easiest thing in the repository to document from memory, and "run
                       `./zigw quick-tests`" reads plausibly right up until someone types it.
+10. Reader toolchain — reader-facing docs (README, `docs/INDEX.md`, `docs/learn/`,
+                      `docs/reference/`, example READMEs) must not mention `zigw` at all. It is
+                      a bootstrap for *this* checkout, not a distributed artifact, so an app
+                      author cannot run it. The toolchain those pages may name is `zts` + `zig`.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -334,6 +338,31 @@ for md in md_files:
         zigw_uses.add(match.group(1))
 for verb in sorted(zigw_uses - ZIGW_SUBCOMMANDS - ZIG_SUBCOMMANDS):
     errors.append(f"docs: './zigw {verb}' is not something zigw (or the zig it forwards to) accepts")
+
+# ---------------------------------------------------------------------------
+# 10. Reader-facing docs must not name the repository's bootstrap wrapper
+# ---------------------------------------------------------------------------
+
+# `zigw` downloads Zig into /tmp and then runs `zig build` in this checkout. It is not in
+# Releases, so an app author who follows a page that says `./zigw build` hits a missing file
+# before they have a project. The toolchain those pages may use is `zts` plus a normal `zig`;
+# what `zigw` does is still documented where repository contributors read it
+# (docs/contributing/README.md), and this rule keeps the two audiences from bleeding.
+READER_DOCS = ["README.md", "docs/INDEX.md", "docs/learn", "docs/reference"]
+reader_files = [
+    md for md in md_files
+    if any(md == root or md.startswith(root + "/") for root in READER_DOCS)
+]
+reader_files += sorted(glob.glob("examples/*/README.md")) + sorted(glob.glob("examples/*/*/README.md"))
+for md in sorted(set(reader_files)):
+    if not os.path.isfile(md):
+        continue
+    text = open(md, encoding="utf-8").read()
+    if re.search(r"\bzigw\b", text):
+        errors.append(
+            f"{md}: mentions `zigw`; reader-facing pages must only use `zts` and `zig` "
+            f"(`zigw` is a checkout bootstrap, not a distributed artifact)"
+        )
 
 if warnings:
     for w in warnings:

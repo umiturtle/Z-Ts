@@ -7,10 +7,8 @@
 `zts` is the CLI for building Z-Ts apps — roughly where Angular CLI sits. Learn four verbs
 (`init`, `dev`, `build`, `doctor`) and you can go from an empty directory to a single binary.
 
-What we distribute is **one `zts` binary**. `./zigw` — the wrapper that installs Zig for you — is a
-tool for people working *on* this repository, not a distribution artifact (see
-[`../../contributing/README.md`](../../../contributing/README.md)). If you only build apps, put `zts`
-next to the `zig` you already have.
+What we distribute is **one `zts` binary**. It carries no compiler, so put a 0.17-series `zig` on
+`PATH` as well. **Those two files are the whole toolchain** an app author needs.
 
 > [!TIP]
 > This page is for the install in detail. If you would rather have something running, see
@@ -114,9 +112,10 @@ Move the checkout and existing projects lose that path. Pick one fix:
 | repair a project in place | change `.z_ts` in `build.zig.zon` to `.url`+`.hash` or a new `.path` |
 | rebuild `zts` | `zig build` in the new checkout |
 
-> `./zigw` (which installs Zig into `/tmp`) is still handy for building and testing the repository.
-> It is **not a distribution artifact**; installing `zts` does not involve it. See
-> [`../../contributing/README.md`](../../../contributing/README.md).
+> Building and testing the repository itself (CI, scripts, generating the documentation site) is a
+> **developer** workflow, described in
+> [`../../contributing/README.md`](../../../contributing/README.md). You do not need any of it to
+> build apps.
 
 ## 5. Per-platform prerequisites
 

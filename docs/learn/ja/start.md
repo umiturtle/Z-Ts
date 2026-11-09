@@ -32,13 +32,13 @@ export PATH="$HOME/.local/bin:$PATH"
 zts version             # → zts 0.1.0
 ```
 
-**チェックアウトの clone も `./zigw` も要りません。** `zts` は Zig を子プロセスで起動するだけです。
+**チェックアウトの clone も、リポジトリ専用のツールも要りません。** `zts` は Zig を子プロセスで起動するだけです。
 Windows の PowerShell 版や、Zig を `PATH` 以外に置いた場合の `ZTS_ZIG` は
 [`guides/install.md`](guides/install.md) にまとめてあります。
 
 > [!NOTE]
 > Z-Ts 本体を直したい人・ソースから `zts` を作りたい人は `git clone` + `zig build` でも同じ
-> ものが作れます（`./zigw` はそのリポジトリ専用のブートストラップで、配布物ではありません）。
+> ものが作れます（必要なのは Zig 0.17 系だけです）。
 > その場合、生成したプロジェクトはそのチェックアウトを `.path` 依存として指します。
 
 ## 2. 環境を点検する（1 分）

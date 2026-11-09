@@ -5,7 +5,7 @@
 
 `zts` でアプリを作っていて詰まったときの 1 ページです。**Z-Ts リポジトリ自体のビルド**で
 詰まった場合は [`../contributing/troubleshooting.md`](../../../contributing/troubleshooting.md) へ
-（そちらは `./zigw` と CI の話で、アプリ作者には不要です）。
+（そちらはリポジトリ開発と CI の話で、アプリ作者には不要です）。
 
 ---
 

@@ -9,9 +9,9 @@
 
 ```bash
 cd examples/gallery
-../../zigw build test --summary all      # 3 本の単体テスト
-../../zigw build screenshots             # zig-out/screenshots/ に 17 枚 + manifest.json
-../../zigw build install
+zig build test --summary all             # 3 本の単体テスト
+zig build screenshots                    # zig-out/screenshots/ に 17 枚 + manifest.json
+zig build install
 ./zig-out/bin/zts_gallery --out /tmp/shots --require-native
 ./zig-out/bin/zts_gallery --out /tmp/shots --only js-roundtrip
 cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --require-counts 17
