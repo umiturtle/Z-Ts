@@ -1,7 +1,7 @@
 # Learn Z-Ts
 
 > **Audience**: people building an app with Z-Ts (Zig and web basics help).
-> **Time**: 2 minutes for this page, about an hour for the whole path (45 minutes of doing, 15 of concepts).
+> **Time**: 2 minutes for this page, about 95 minutes for the whole path (80 minutes of doing, 15 of concepts).
 
 **Run it first.** Ten minutes of doing beats an hour of reading, and the first link below takes you
 from a clone to a built binary on a single page.
@@ -20,7 +20,7 @@ later instead of now.
 |---|---|
 | 1. [Your first ten minutes](start.md) | your app runs in a browser and a single binary sits in `zig-out/bin/` |
 | 2. [How it works](concepts/index.md) | you can say what happens between a button and a Zig function |
-| 3. [Build an app](tutorials/index.md) | you can write a command, test it, and package it |
+| 3. [Build an app](tutorials/index.md) | you have built the counter, the todo list and the screen |
 | 4. [Patterns that hold up](patterns/index.md) | you can defend a command/state/error design, and you have done the exercises |
 | 5. [Look things up](guides/index.md) | you reach the page you need from a job description in one hop |
 
@@ -99,7 +99,7 @@ Once you have finished the path, most reading is one page at a time.
 
 - Have not run it yet → [**Your first ten minutes**](start.md)
 - Design first → [Concepts](concepts/index.md)
-- Hands on → [Tutorial: the counter](tutorials/counter.md)
+- Hands on → [Tutorials](tutorials/index.md) (counter, todo list, screen)
 - Stuck on a design choice → [Patterns](patterns/index.md)
 - Lost in terminology → [Glossary](../../glossary.md)
 - Every page in one place → [Documentation index](../../INDEX.md)

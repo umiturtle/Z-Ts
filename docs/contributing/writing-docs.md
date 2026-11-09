@@ -222,6 +222,20 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 の全ページ（と用語集）が索引からリンクされているかを検査します。**順番は検査しません** —
 並びは `src/docsite/main.zig` の `GroupKey` が正本です。
 
+**左メニューは全ページ・両言語で同じ並び**です。`GroupKey.order()` は言語を引数に取らず、
+先頭 6 グループは「学習パスの入口 + 5 つの番号付きステップ」と決まっています。グループ内の
+順番は [`src/docsite/learn_path.zig`](../../src/docsite/learn_path.zig) の `page_order`
+（章の読み順）と `main.zig` の `navRank()`（索引・サンプルなど）が決めます。ファイル名の
+アルファベット順は**読み順ではありません**。新しいページを足したら `page_order` に 1 行足し、
+[`../INDEX.md`](../INDEX.md) にも 1 行足してください。未掲載のページは落とされず末尾に
+アルファベット順で出るので、まずは追加だけでも壊れません。
+
+`learn_path.steps` の `minutes` はランディングの合計・各ページ上部のレール・`<!-- learn-path -->`
+に展開されます。`README.md`・[`../INDEX.md`](../INDEX.md)・日英の学習ハブに書いた「およそ N 分」
+とステップ表の分は**手書き**なので、チュートリアルを 1 本足したら必ず更新します。
+規約 12 が `learn_path.zig` の合計と 4 か所の記述、2 つのステップ表を突き合わせ、
+`GroupKey.order()` が言語依存に戻っていないかも検査します。
+
 ## 9. 2 言語で書く（英語と日本語）
 
 読者向けのページは **`docs/learn/ja/` と `docs/learn/en/` に同じファイル名で 1 本ずつ**置きます。
@@ -268,6 +282,8 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `docs/learn/en/…: missing translation (exists in ja)` | 片方の言語にしか無い | 同じパスで翻訳を足す（規約 8） |
 | `docs/learn/…: mentions 'zigw'` | 読者向けページに開発用ラッパーを書いた | `zts` と `zig` の手順に直す（規約 10）。`zigw` は `docs/contributing/` だけ |
 | `docs/INDEX.md: does not link 'learn/ja/…'` | ページを足して索引を忘れた | [`../INDEX.md`](../INDEX.md) の該当グループに 1 行足す（規約 11） |
+| `does not say 'およそ 95 分'` / `step 3 says … minutes` | チュートリアルを足したが所要分を直していない | `learn_path.zig` の `minutes` を決め、README・索引・日英ハブの分を合わせる（規約 12） |
+| `GroupKey.order() takes a language` | 言語でメニューを分岐させた | `order()` を 1 本に戻す。未翻訳ページは日本語タイトルのまま両方に出す |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

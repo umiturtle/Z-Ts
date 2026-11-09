@@ -4,7 +4,7 @@
 > keep adding them.
 > **Time**: 6 minutes (+15 for the three exercises).
 > **Before this**: [How it works: commands](../concepts/commands.md) and
-> [Build a counter](../tutorials/counter.md).
+> [Tutorials](../tutorials/index.md).
 
 A command is a **boundary**: the only Zig the page can see, and the only page Zig can see.
 That is why the shape you pick decides whether a later one-line change takes a minute or an hour.

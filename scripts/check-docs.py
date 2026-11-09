@@ -34,6 +34,10 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       index is a hand-written mirror of the sidebar, and a page added without a
                       row is a page only the sidebar knows about. The rule checks coverage, not
                       order: the order lives in `src/docsite/main.zig`.
+12. Path budget      — the minutes quoted in README, the index and both learning hubs come from
+                      `learn_path.zig`, and the sidebar's first six groups are the five numbered
+                      steps. A third tutorial that leaves the rail at "15 min" is a lie; a
+                      language-dependent `GroupKey.order()` is the menu changing as you navigate.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -393,6 +397,63 @@ else:
             errors.append(
                 f"{INDEX_MD}: does not link '{rel}' (add a row under the group it belongs to)"
             )
+
+# ---------------------------------------------------------------------------
+# 12. The learning path's budget and the sidebar's shape are one truth
+# ---------------------------------------------------------------------------
+
+# `learn_path.steps` drives the rail on every page and the total on the landing page. README,
+# `docs/INDEX.md` and the two learning hubs quote those numbers by hand, so adding a tutorial
+# without editing them leaves the site claiming a 60-minute path that now takes 95 minutes.
+LEARN_PATH_ZIG = "src/docsite/learn_path.zig"
+MAIN_ZIG = "src/docsite/main.zig"
+if not os.path.isfile(LEARN_PATH_ZIG):
+    errors.append(f"{LEARN_PATH_ZIG}: missing (the learning path has no single source of truth)")
+else:
+    lp = open(LEARN_PATH_ZIG, encoding="utf-8").read()
+    step_minutes = [int(n) for n in re.findall(r"^\s*\.minutes = (\d+),", lp, re.M)]
+    if len(step_minutes) != 5:
+        errors.append(f"{LEARN_PATH_ZIG}: expected 5 steps with a `.minutes` field, found {len(step_minutes)}")
+    else:
+        total = sum(step_minutes)
+        for path, phrase in (
+            ("docs/INDEX.md", f"およそ {total} 分"),
+            ("README.md", f"およそ {total} 分"),
+            ("docs/learn/ja/index.md", f"{total} 分"),
+            ("docs/learn/en/index.md", f"{total} minutes"),
+        ):
+            text = open(path, encoding="utf-8").read() if os.path.isfile(path) else ""
+            if phrase not in text:
+                errors.append(
+                    f"{path}: does not say '{phrase}' (the total comes from {LEARN_PATH_ZIG}; rule 12)"
+                )
+        # Both step tables are hand-written too: compare their minute column row by row.
+        for path in ("docs/INDEX.md", "README.md"):
+            text = open(path, encoding="utf-8").read() if os.path.isfile(path) else ""
+            rows = {
+                int(num): (0 if mins == "—" else int(mins))
+                for num, mins in re.findall(r"^\|\s*(\d)\s*\|[^|]*\|\s*(\d+|—)\s*\|", text, re.M)
+            }
+            for i, minutes in enumerate(step_minutes, 1):
+                if rows.get(i) != minutes:
+                    errors.append(
+                        f"{path}: step {i} says {rows.get(i, 'nothing')} minutes but "
+                        f"{LEARN_PATH_ZIG} says {minutes} (rule 12)"
+                    )
+
+    main = open(MAIN_ZIG, encoding="utf-8").read() if os.path.isfile(MAIN_ZIG) else ""
+    if re.search(r"fn order\(lang: i18n\.Lang\)", main):
+        errors.append(
+            f"{MAIN_ZIG}: GroupKey.order() takes a language — the left menu must be the same list "
+            f"on every page and in both languages (rule 12)"
+        )
+    order = re.search(r"fn order\(\) \[\]const GroupKey \{\s*return &\.\{(.*?)\};", main, re.S)
+    keys = re.findall(r"\.([a-z_]+)", order.group(1)) if order else []
+    if keys[:6] != ["learn", "start", "concepts", "tutorials", "patterns", "guides"]:
+        errors.append(
+            f"{MAIN_ZIG}: the sidebar must open with the learning hub and the five numbered steps "
+            f"(got {keys[:6]}; rule 12)"
+        )
 
 if warnings:
     for w in warnings:

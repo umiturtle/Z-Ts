@@ -76,6 +76,7 @@
 | `src/ssg/` | `zts_ssg` | 低 |
 | `src/cli/` | `zts` CLI（`init` / `dev` / `build` / `package` / `doctor`） | サブコマンドごとに独立 |
 | `src/docsite/` | このサイトの生成器（Markdown・リンク検査・API 生成） | 中（`main.zig` は大きい） |
+| `src/docsite/learn_path.zig` | 学習パスの 5 ステップ・所要分・**左メニューの章内読み順**（`page_order`） | 中（チュートリアルを足すとき。規約 12 が索引と分を突き合わせる） |
 | `build.zig` / `build.zig.zon` | モジュール定義とステップ | **高い**（触る前に他ブランチを確認） |
 | `examples/counter/` | 3 成果物ショーケース | 追記のみ |
 | `examples/gallery/` | スクリーンショット回帰（17 パターン） | 追記のみ |

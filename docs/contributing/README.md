@@ -1,7 +1,7 @@
 # Z-Ts 自体を開発する（コントリビュータ向け）
 
 > **アプリを作りたい人はこのページを読む必要はありません。**
-> [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md) が「`zts` CLI で自分のアプリを作る」
+> [チュートリアル（3 本）](../learn/ja/tutorials/index.md) が「`zts` CLI で自分のアプリを作る」
 > 手順です。ここは **Z-Ts のリポジトリそのものをビルド・テスト・公開する**ためのコマンドと作法を
 > まとめたページです（コントリビュータ・エージェント・将来の自分向け）。
 
@@ -220,7 +220,7 @@ Linux では加えて、**公開アーカイブを焼き込んだ release ビル
 
 | 知りたいこと | 行き先 |
 |---|---|
-| アプリを作る（利用者向け） | [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md) |
+| アプリを作る（利用者向け） | [チュートリアル（3 本）](../learn/ja/tutorials/index.md) |
 | `zts` CLI の仕様 | [`../reference/cli.md`](../reference/cli.md) |
 | 全体アーキテクチャ | [`../architecture/00-overview.md`](../architecture/00-overview.md) |
 | 設計判断の記録 | [`../decisions/`](../decisions/) |

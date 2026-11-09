@@ -20,7 +20,7 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 | **名前から引きたい** | [API リファレンス](api/index.html) / [用語集](glossary.md) / [エラー索引](reference/errors.html) | — |
 | **Z-Ts 本体を開発したい** | [コントリビュータ向け](contributing/README.md) → [リポジトリの地図](contributing/repository-map.md) | `zig build` / `scripts/*` |
 
-## 学習パス（5 ステップ・およそ 60 分）
+## 学習パス（5 ステップ・およそ 95 分）
 
 サイトのランディングと各ページ上部のレールに出ている道順と同じです。順番を飛ばすのも自由ですが、
 飛ばした分だけ後のページで用語を引き直すことになります。
@@ -29,7 +29,7 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 |---|---|---|---|---|
 | 1 | はじめての Z-Ts | 10 | 自分のアプリがブラウザで動き、`zig-out/bin/` に単一バイナリがある | [start.md](learn/ja/start.md) |
 | 2 | 仕組みを知る | 15 | 「ボタン → Zig の関数」がどこを通るか説明できる | [concepts/](learn/ja/concepts/index.md) |
-| 3 | アプリを作る | 15 | 自作コマンドを書き、テストし、配れる形にできる | [tutorials/](learn/ja/tutorials/index.md) |
+| 3 | アプリを作る | 50 | 3 本のチュートリアルを通し、コマンド・状態・画面を書いて配れる | [tutorials/](learn/ja/tutorials/index.md) |
 | 4 | 実用パターン | 20 | コマンド・状態・エラーの設計を、練習問題で自分の言葉にできる | [patterns/](learn/ja/patterns/index.md) |
 | 5 | 目的から引く | — | やりたいことから必要なページに 1 ホップで行ける | [guides/](learn/ja/guides/index.md) |
 
@@ -46,6 +46,11 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 | ページ | 1 文でいうと |
 |---|---|
 | [Z-Ts を学ぶ](learn/ja/index.md) | 道順・30 秒の全体像・前提知識・目的別の入口。まずここから |
+
+### 1 · はじめての Z-Ts
+
+| ページ | 1 文でいうと |
+|---|---|
 | [はじめての Z-Ts](learn/ja/start.md) | バイナリを置く → `doctor` → `init` → `dev` → `build` を 1 ページで（10 分） |
 
 ### 2 · 仕組みを知る
@@ -62,8 +67,10 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 
 | ページ | 1 文でいうと |
 |---|---|
-| [チュートリアル](learn/ja/tutorials/index.md) | 手を動かす章の入口。進め方と前提 |
+| [チュートリアル](learn/ja/tutorials/index.md) | 手を動かす章の入口。3 本の順番・進め方・前提 |
 | [カウンターを作る](learn/ja/tutorials/counter.md) | `zts init` → コマンド → 画面 → `dev` → `build` → `doctor`（15 分） |
+| [Todo リストを作る](learn/ja/tutorials/todo.md) | 構造体に閉じた状態、3 つのコマンド、`error{}` の返し方とテスト（20 分） |
+| [画面を作る](learn/ja/tutorials/ui.md) | 読み込み中 / 空 / エラーを出し分ける画面、CSS 差し替え、CSP（15 分） |
 
 ### 4 · 実用パターン
 
@@ -92,11 +99,10 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 
 | ページ | 1 文でいうと |
 |---|---|
-| [`zts` コマンドリファレンス](reference/cli.md) | アプリ作者が使う CLI の全コマンドと全フラグ |
 | [用語集](glossary.md) | Pack・Host・Capability など、本文に出てくる言葉の定義 |
-| [エラー索引](reference/errors.html) | `error{…}` の名前から定義元へ（自動生成） |
+| [`zts` コマンドリファレンス](reference/cli.md) | アプリ作者が使う CLI の全コマンドと全フラグ |
 | [Tauri v2 の使い方](reference/tauri-usage.md) | 上流 Rust/JS API・設定・Capabilities の対応 |
-| [Tauri v2 の内部実装](reference/tauri-internals.md) | IPC プロトコル・マクロ・内蔵プラグインの解剖（移植の参考） |
+| [エラー索引](reference/errors.html) | `error{…}` の名前から定義元へ（自動生成） |
 
 ### API
 
@@ -149,6 +155,7 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 | [`roadmap/milestones.md`](roadmap/milestones.md) | M0〜M5 のマイルストーンと並列 Wave の依存マップ |
 | [`tasks/`](tasks/TEMPLATE.md) | 1 タスク = 1 ファイルの作業計画と記憶チェックポイント |
 | [`environment/`](environment/arena-and-caching.md) | Arena のキャッシュ・GitHub Actions の運用 |
+| [`reference/tauri-internals.md`](reference/tauri-internals.md) | IPC プロトコル・マクロ・内蔵プラグインの解剖（移植の参考・内部資料扱い） |
 | [`decisions/0018-documentation-site.md`](decisions/0018-documentation-site.md) | このサイト自体の設計（4 層・リンク検査・検索・`llms.txt`） |
 
 ## 名前から引く
@@ -167,3 +174,6 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 > が正本です。ページを足したら、このページにも 1 行足してください。**足し忘れは
 > `check-docs.py` の規約 11 が落とします**（全ページがこの索引からリンクされているかを検査）。
 > リンク切れと「`learn/ja` と `learn/en` のファイル名の不一致」も同じスクリプトが見ています。
+> 左メニューの並びは両言語・全ページで共通（`GroupKey.order()` は言語を取りません）。
+> 章内の読み順は `learn_path.zig` の `page_order`、所要分は `steps` が正本で、
+> **規約 12** がこのページ・`README.md`・日英の学習ハブに書いた分と突き合わせます。

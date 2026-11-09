@@ -75,7 +75,7 @@ cd my-app
 
 **画面と Zig の対応は、まだ 1 本もありません。** `web/` を配信し、ビルド時に埋め込む、
 という土台だけが先にできています。この土台に「ボタン → Zig の関数」を載せるのが、
-2 つ先の[アプリを作る](tutorials/counter.md)です。
+2 つ先の[アプリを作る](tutorials/index.md)です。
 
 ## 4. 動かす（2 分）
 
@@ -153,12 +153,12 @@ my_app: 1 embedded assets
 
 ここから先の 4 ステップ（このページを入れて 5 つ）は、常にページ上部の**学習パス**に出ています。
 順番は自由です。
-このまま [仕組みを知る](concepts/index.md) へ進むと、[アプリを作る](tutorials/counter.md) で
+このまま [仕組みを知る](concepts/index.md) へ進むと、[アプリを作る](tutorials/index.md) で
 出てくる `Schema` と `invoke` に 15 分の地図を持って臨めます。**先に手を動かしたい**なら、
-[アプリを作る](tutorials/counter.md) へ飛んでも構いません（詰まったら戻ってきてください）。
+[アプリを作る](tutorials/index.md) へ飛んでも構いません（詰まったら戻ってきてください）。
 
 1. **[仕組みを知る](concepts/index.md)**（15 分）— 3 つの登場人物と、ボタンが Zig に届くまで
-2. **[アプリを作る](tutorials/counter.md)**（15 分）— 自作コマンド、テスト、単一バイナリ
+2. **[アプリを作る](tutorials/index.md)**（50 分・3 本）— カウンター → Todo → 画面
 3. **[実用パターン](patterns/index.md)**（20 分）— コマンド・状態・エラーの設計と練習問題
 4. **[目的から引く](guides/index.md)** — ここから先は必要なページだけ
 

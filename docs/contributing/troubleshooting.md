@@ -222,5 +222,5 @@ Winsock が「そのソケットには無効な操作」と判断した、とい
 
 - リポジトリの操作全般: [`README.md`](README.md)
 - アプリ作者向けのトラブル: [`../learn/ja/guides/troubleshooting.md`](../learn/ja/guides/troubleshooting.md)
-- 使い方の全体像: [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md)
+- 使い方の全体像: [チュートリアル（3 本）](../learn/ja/tutorials/index.md)
 - ログの取得: [`../../scripts/ci-logs.sh`](../../scripts/ci-logs.sh) / [`../../AGENTS.md`](../../AGENTS.md)

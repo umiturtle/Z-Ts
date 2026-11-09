@@ -74,7 +74,7 @@ cd my-app
 
 **There is no link between the page and Zig yet.** The scaffolding only serves `web/` and embeds it
 at build time. Attaching "button → Zig function" to that scaffolding is the job of
-[Build an app](tutorials/counter.md), two steps from here.
+[Build an app](tutorials/index.md), two steps from here.
 
 ## 4. Serve it (2 minutes)
 
@@ -151,12 +151,13 @@ means shipping one file. Stop `zts dev` before running the binary.
 
 The four steps after this page (five including it) are the learning path; the same rail is at the top of every page on
 it. The order is a suggestion. Going on to [How it works](concepts/index.md) gives you a 15-minute
-map before the `Schema` and `invoke` in [Build an app](tutorials/counter.md) show up. **If you would
+map before the `Schema` and `invoke` in [Build an app](tutorials/index.md) show up. **If you would
 rather build first**, jump straight to the tutorial and come back when a word stops you.
 
 1. **[How it works](concepts/index.md)** (15 min) — the three moving parts, and how a button reaches Zig
-2. **[Build an app](tutorials/counter.md)** (15 min) — your own command, a test, one binary
-3. **[Look things up](guides/index.md)** — from here on, read only what you need
+2. **[Build an app](tutorials/index.md)** (50 min, three tutorials) — counter, todo list, screen
+3. **[Patterns](patterns/index.md)** (20 min) — command, state and error design, with exercises
+4. **[Look things up](guides/index.md)** — from here on, read only what you need
 
 Stuck on a word? [Glossary](../../glossary.md). Stuck on an error?
 [Troubleshooting](guides/troubleshooting.md) and the [error index](../../reference/errors.html).

@@ -81,7 +81,7 @@ test "コマンド表には increment が 1 本だけ入る" {
 
 ## 次に読むもの
 
-- 手を動かす → [チュートリアル: カウンター](../tutorials/counter.md)
+- 手を動かす → [チュートリアル](../tutorials/index.md)（カウンター / Todo / 画面の 3 本）
 - 書きはじめて迷った → [実用パターン](../patterns/index.md)
 - すぐ書きたい → [ガイド: コマンド](../guides/rpc.md)
 - 言葉で迷った → [用語集](../../../glossary.md)

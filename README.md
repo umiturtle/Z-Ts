@@ -88,13 +88,13 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 
 **アプリを作る人向け**（コマンドは `zts`）
 
-学習パスはドキュメントサイトと同じ **5 ステップ・およそ 60 分**です。まず 1 つ目を開いてください。
+学習パスはドキュメントサイトと同じ **5 ステップ・およそ 95 分**です。まず 1 つ目を開いてください。
 
 | # | ステップ | 分 | 終わったとき | 行き先 |
 |---|---|---|---|---|
 | 1 | はじめての Z-Ts | 10 | ブラウザでアプリが動き、`zig-out/bin/` に単一バイナリがある | [`learn/ja/start.md`](docs/learn/ja/start.md)（[English](docs/learn/en/start.md)） |
 | 2 | 仕組みを知る | 15 | 「ボタン → Zig の関数」がどこを通るか説明できる | [`learn/ja/concepts/`](docs/learn/ja/concepts/index.md) |
-| 3 | アプリを作る | 15 | 自作コマンドを書き、テストし、配れる形にできる | [`learn/ja/tutorials/`](docs/learn/ja/tutorials/index.md) |
+| 3 | アプリを作る | 50 | 3 本のチュートリアルを通し、コマンド・状態・画面を書いて配れる | [`learn/ja/tutorials/`](docs/learn/ja/tutorials/index.md) |
 | 4 | 実用パターン | 20 | コマンド・状態・エラーの設計を、練習問題で自分の言葉にできる | [`learn/ja/patterns/`](docs/learn/ja/patterns/index.md) |
 | 5 | 目的から引く | — | やりたいことから必要なページに 1 ホップで行ける | [`learn/ja/guides/`](docs/learn/ja/guides/index.md) |
 

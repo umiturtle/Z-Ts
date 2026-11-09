@@ -82,7 +82,7 @@ Knowing **Pack** and **Host** first makes the rest read faster.
 
 ## Next
 
-- Hands on → [Tutorial: the counter](../tutorials/counter.md)
+- Hands on → [Tutorials](../tutorials/index.md) (counter, todo list, screen)
 - Started writing and unsure → [Patterns](../patterns/index.md)
 - Just write it → [Guide: commands](../guides/rpc.md)
 - Lost in terminology → [Glossary](../../../glossary.md)
