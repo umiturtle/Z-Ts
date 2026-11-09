@@ -6,6 +6,7 @@
 
 pub const args = @import("args.zig");
 pub const devserver = @import("devserver.zig");
+pub const incremental = @import("incremental.zig");
 pub const project = @import("project.zig");
 pub const template = @import("template.zig");
 
@@ -17,6 +18,7 @@ pub const template = @import("template.zig");
 test {
     _ = args;
     _ = devserver;
+    _ = incremental;
     _ = project;
     _ = template;
 }

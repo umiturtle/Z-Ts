@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "59ea73e",
+    "commit": "2029866",
     "zts_version": "0.1.0",
     "zig_version": "0.17.0",
     "checks": [
@@ -24,7 +24,7 @@
       "src/docsite/site.zig",
       "scripts/check-docs.py"
     ],
-    "implementation_sha256": "c1034fba2f42765fbba8d544ab21ecdb6ffab1b9d1e05de6ffda486a38c315fb"
+    "implementation_sha256": "1cd02c33badbfb19a495429be3f2e0329e01090ab5a2e75f79e6a8478a5b6154"
   },
   "pages": [
     {
@@ -38,8 +38,8 @@
       "ja": "docs/INDEX.md",
       "en": "docs/INDEX.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "02c2d5b4204a95218551c24c5e0885105cfaa06a9da15e41596d9315535713b5",
-      "en_sha256": "f7defdc502366709dc55674f00a53a673c226136c44b39d06a5ec048d9e19767"
+      "ja_sha256": "3b75846206060146600727527269295ddaf05c5b0517ca7e3c91e2716c6b17f0",
+      "en_sha256": "1ec6b071c2d3ec46b5d05bfa60c0b104b030da4131bf26c82972c006cb521cd2"
     },
     {
       "ja": "docs/contributing/README.md",
@@ -52,15 +52,15 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "4eda98c92df0254c6dfd6e8bfec21ba569367e8fe902fb0b190f639755e2818a",
-      "en_sha256": "a2eff418ddad3ddde6bafc56de1861b6ee5b1f3cdccc8653289cef97922043f8"
+      "ja_sha256": "2422f77abc0b977f99bf4c2590193582a015a636e55e6595a16b8b0b48b4a7db",
+      "en_sha256": "291330a494a4da981970790105bd88debc16772352766247ba1b44ee341dbe37"
     },
     {
       "ja": "docs/contributing/repository-map.md",
       "en": "docs/contributing/repository-map.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "208559fa74a8210c2c33186eba8caa282d347442fa62d4a81dd37ea3203da1ee",
-      "en_sha256": "cb8bcc6dae27a4d436c0a41d1b73630231deaff195bdd5ea667e694b0709ccc5"
+      "ja_sha256": "23c2d8cf366988241bc2f49289f4afea9dddc76b88d125e8937d9968adf4ba69",
+      "en_sha256": "4029fc0018611f5026cc37f6d88bdfb805597a9af77ae1f937e1e952a0cbae15"
     },
     {
       "ja": "docs/contributing/troubleshooting.md",
@@ -171,8 +171,8 @@
       "ja": "docs/learn/ja/guides/troubleshooting.md",
       "en": "docs/learn/en/guides/troubleshooting.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "e20a6bfddc34f8a3d4e4c191c447cd1f907fcf61bfba85baa65b2f8d2d7333f1",
-      "en_sha256": "7e6cf8c535ed27479df31efe150dda833f49bf415e95ee2e9178eee9bca32176"
+      "ja_sha256": "980d72688ac5b8caf293e0ac4a3d5d0d422a8c2c1f197b2de090693580359e6e",
+      "en_sha256": "18e0d2da36a49efed1584aaeee1ac5548dba67ca3cb10b5aed3a856175bd1d70"
     },
     {
       "ja": "docs/learn/ja/index.md",
@@ -220,15 +220,15 @@
       "ja": "docs/learn/ja/start.md",
       "en": "docs/learn/en/start.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "5f359cff7f33494003dc45e8bdb2bb858309e1b47b8c4d9ff7a6298bd19c2a0a",
-      "en_sha256": "25be19ba6f9fe2a312b0247e9139510bcb0b165b1d93aed3be68fe19649df0b5"
+      "ja_sha256": "a8d762b6f2140af91d2d8ec993fc1cba7daf3f5ea59a6c34c9f46d8d88daa9b8",
+      "en_sha256": "c7e22e088a50e1d018f7642fe09f7e6213910798086f2899033ee7b0c96032f3"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter.md",
       "en": "docs/learn/en/tutorials/counter.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "e0dd7951f5d0ee0ee0338ae14cfc86c2cf9f17c6e6d5c268a7d863375dc71d34",
-      "en_sha256": "7d9a3678b7d9b94589ea6bbe20b029c6a11002925c68c7192bc2132ce88af583"
+      "ja_sha256": "d7f9b545956cb0807eb0865b357989ce49a97798afc8856d47c57ef025bb34d9",
+      "en_sha256": "5227b48948affad661efcbc1b60b6ec0e91b1b3edbde7de264d94eae7b9a64b8"
     },
     {
       "ja": "docs/learn/ja/tutorials/index.md",
@@ -255,8 +255,8 @@
       "ja": "docs/reference/cli.md",
       "en": "docs/reference/cli.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "2d62918b08e2fa095e37467ad3a700e53d68f4bcea2d0e80d5c7972b104b925c",
-      "en_sha256": "85476bb4ab814dc72f1e665f8aa83bbf4139cb0b164bc7454080b343cce69bcc"
+      "ja_sha256": "f4b0b02bfcf973599efdef6c843ff2d7204fda3336dbe486a9f8d2276603b4b7",
+      "en_sha256": "20523e8197b1a62514b19cfb64e8f966669cba714f0eee7b946c0d05fa6fce23"
     },
     {
       "ja": "docs/reference/tauri-internals.md",

@@ -1,10 +1,11 @@
 # Task M5-17: Zig ソース編集時のインクリメンタルビルドを高速化する
 
-- **Status**: `in_progress`
+- **Status**: `done`
 - **Branch**: `arena/e32503eb-z-ts`（main `aa2a054` 起点）
 - **Scope**: `src/cli/{devserver,main,template,mod,incremental}.zig`, `scripts/bench-dev-loop.py`（新規）, `docs/reference/cli{,.en}.md`, `docs/learn/{ja,en}/{start,tutorials/counter}.md`, `docs/architecture/incremental-dev-build.md`（新規）, `docs/decisions/0020-incremental-dev-build.md`（新規）, `scripts/doc-sync.json`
 - **Upstream Reference**: [`../architecture/00-overview.md`](../architecture/00-overview.md) / `AGENTS.md` §2（キャッシュ揮発）
-- **Next Step**: 技術選定の実測を終えた。`src/cli/incremental.zig` を新規作成し、依存グラフ + dirty flag + 決定ロジックを実装する。
+- **Next Step**: なし（完了）。リポジトリ改名時と同様、Zig 側の `-fincremental` が成熟したら
+  [`../architecture/incremental-dev-build.md`](../architecture/incremental-dev-build.md) §5 の再評価項目を見る。
 
 ---
 
@@ -13,12 +14,12 @@
 > 「Zigのソースをいじった時のインクリメンタルビルドを高速化して（dirty flag なり依存グラフなり
 > 良さげな技術を検討してから実装（ちゃんとその実装で早くなったか？バグがないかなどはしっかり検証して））」
 
-- [ ] 候補技術を**実測してから**選定する（完了・下記 §2）
-- [ ] 実装して、`zts dev` の Zig 編集→リロードまでの時間が短縮されたことを**再現可能なベンチ**で示す
-- [ ] 型エラーを依然として検出できること、失敗後に回復できること、不要な再ビルドが起きないことを検証
-- [ ] 既存の挙動（CSS 差し替え / `web/` リロード / 3 OS 同じポーリング）を壊さない
-- [ ] `./zigw quick-test` / `build test` / `docs-check` / `fmt --check` / 3 OS CI が緑
-- [ ] 設計判断を ADR・設計メモ・タスク票に残す
+- [x] 候補技術を**実測してから**選定（§2。`-fincremental` が 2.4x 遅いことを確認して却下）
+- [x] 実装して、`zts dev` の Zig 編集→リロードまでの時間が短縮されたことを**再現可能なベンチ**で示す
+- [x] 型エラーを依然として検出できること、失敗後に回復できること、不要な再ビルドが起きないことを検証
+- [x] 既存の挙動（CSS 差し替え / `web/` リロード / 3 OS 同じポーリング）を壊さない
+- [x] `./zigw quick-test` / `build test` / `docs-check` / `fmt --check` / 3 OS CI が緑
+- [x] 設計判断を ADR（`../decisions/0020-*.md`）・設計メモ・タスク票に残す
 
 ## 2. 技術選定（実測）
 
@@ -74,18 +75,60 @@
 - スタブ `embedded_frontend` で直接 `build-exe`: build runner を bypass しても 370 ms の下限は変わらず、
   `build.zig` のモジュール構成を CLI が推測することになり壊れやすい。
 
-## 3. 検証計画
+## 3. 検証（実施済み）
 
-- 再現可能ベンチ `scripts/bench-dev-loop.py`: `zts dev` を起動し、`src/main.zig` を編集して
-  `/__zts_dev__/state` の `v` が進むまでの**実時間**を N 回計測。`ZTS_DEV_BUILD=full`（旧挙動）と
-  既定（新挙動）を同じバイナリで比較。
-- 回帰: 型エラーを混入 → `ok:false` / `v` 据え置き → 修正 → `ok:true` / `v` 加算。
-- dirty flag: `touch` のみ → `v` 不変。到達不能ファイル編集 → `v` 不変。
-- `build.zig` 変更 → 完全ビルド。`web/**/*.css` → 差し替えのみ（ビルドなし）。
-- 単体テスト: 内容ハッシュ、構造変化、依存グラフ（循環・未解決 import・`@embedFile`）、`plan()` の全分岐。
+### 3.1 ベンチ（`scripts/bench-dev-loop.py bench --old-zts …`）
 
-## 4. 進捗チェックポイント
+変更前リビジョン `aa2a054` を `git archive` で別ディレクトリに展開して `zts` をビルドし、
+そのバイナリで生成したプロジェクトを baseline にした**真の A/B**。
 
-- **完了**: 現状調査・候補技術の実測・選定。このタスク票の作成と push（分散ロック）。
-- **作業中**: `src/cli/incremental.zig` の実装。
-- **未着手**: 実装・単体テスト・統合ベンチ・ドキュメント・ADR・同期台帳の再同期・PR。
+```text
+End-to-end: edit src/main.zig -> new build visible to the browser
+  legacy binary (pre-change)           median 1110.5 ms
+  full builds (ZTS_DEV_BUILD=full)     median 955.2 ms
+  incremental check                    median  637.9 ms
+  speedup vs legacy binary             1.74x
+  same-binary full vs check            1.50x
+
+Direct compiler step (no dev server, no polling)
+  zig build       median  720.8 ms
+  zig build check median  376.6 ms
+  speedup         1.91x
+```
+
+`--min-speedup 1.3` を下回るとベンチが失敗する回帰ゲート付き。
+
+### 3.2 `verify` の 7 不変条件（すべて PASS）
+
+| 検査 | 結果 |
+|---|---|
+| 同一内容の書き戻し（`touch`）で `v` が動かない | PASS |
+| import グラフ外のファイル編集で `v` が動かない | PASS |
+| `web/site.css` は `hot:"css"` で差し替え（ビルドなし） | PASS |
+| `web/index.html` は `hot:"full"` でリロード（ビルドなし） | PASS |
+| `main()` の型エラーで `ok:false` / `v` 据え置き → 修正で回復 | PASS |
+| `build.zig` 編集で完全ビルド | PASS |
+| 120 ms の待機ウィンドウ内の 2 編集が 1 回のビルドに畳まれる | PASS |
+
+`verify` は `.github/workflows/ci.yml` の CLI ジョブ（Linux）から常時実行。
+
+### 3.3 単体・全体テスト
+
+```text
+./zigw test -Mroot=src/cli/mod.zig   → 55 tests
+./zigw quick-test                    → 7 tests
+./zigw build test                    → EXIT=0
+./zigw fmt --check src/ build.zig build.zig.zon → OK
+python3 scripts/check-docs.py        → OK（--sync で台帳再同期）
+./zigw docs-check                    → OK
+```
+
+詳細は [`../architecture/incremental-dev-build.md`](../architecture/incremental-dev-build.md) §4。
+
+
+## 4. 最終状態
+
+- **完了**: 選定・実装・単体テスト・統合ベンチ・回帰検証・ドキュメント・ADR・同期台帳の再同期。
+- **残タスク**: なし。PR は 1 本（`arena/e32503eb-z-ts` → `main`）。
+- **既知の制約**: `zts dev` の「ok」は型検査の成功を意味する（実行ファイルの検証は `zts build`）。
+  依存グラフの根は `src/main.zig` 固定。詳細は設計メモ §5。

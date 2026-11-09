@@ -734,6 +734,15 @@ jobs:
           zig build
           ls -l zig-out/bin/
 
+      # `M5-17`: the incremental dev loop is an end-to-end behaviour, not just a unit test.
+      # Exercise it on Linux (the other two runners cover the same code through `zig build test`).
+      - name: Verify incremental dev-loop invariants
+        if: matrix.os == 'ubuntu-24.04'
+        shell: bash
+        run: |
+          set -eo pipefail
+          python3 scripts/bench-dev-loop.py verify
+
       - name: Scaffold, build, run and doctor a project outside the checkout
         shell: bash
         run: |

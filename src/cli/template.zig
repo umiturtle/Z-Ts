@@ -279,6 +279,14 @@ const build_zig =
     \\    const exe = b.addExecutable(.{ .name = "{{NAME}}", .root_module = app });
     \\    b.installArtifact(exe);
     \\
+    \\    // `zts dev` serves web/ from disk and never runs this executable; between full builds it
+    \\    // only needs to know whether the Zig side type-checks. A compile step whose emitted binary
+    \\    // nobody asks for gets `-fno-emit-bin` in Zig 0.17, skipping LLVM codegen, linking and
+    \\    // install. `zts build` still uses the `install` step above for the real binary.
+    \\    const check_exe = b.addExecutable(.{ .name = "{{NAME}}_check", .root_module = app });
+    \\    const check_step = b.step("check", "Type-check the app without emitting a binary");
+    \\    check_step.dependOn(&check_exe.step);
+    \\
     \\    const run_cmd = b.addRunArtifact(exe);
     \\    run_cmd.addPassthruArgs();
     \\    b.step("run", "Run the app").dependOn(&run_cmd.step);
@@ -428,6 +436,10 @@ test "scaffold is deterministic and every placeholder is substituted" {
     try testing.expect(std.mem.indexOf(u8, build_zig_source, "embed_main.zig") != null);
     try testing.expect(std.mem.indexOf(u8, build_zig_source, "embedded_frontend") != null);
     try testing.expect(std.mem.indexOf(u8, build_zig_source, ".name = \"demo_app_embed\"") != null);
+    // `zts dev` looks for this step via `zig build --list-steps`; without it, the dev loop would
+    // silently fall back to a full build (slower, but still correct).
+    try testing.expect(std.mem.indexOf(u8, build_zig_source, "b.step(\"check\"") != null);
+    try testing.expect(std.mem.indexOf(u8, build_zig_source, ".name = \"demo_app_check\"") != null);
 
     try testing.expect(std.mem.indexOf(u8, files[5].contents, "demo_app booted") != null);
 }

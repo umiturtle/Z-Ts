@@ -140,15 +140,29 @@ zts dev --port 5199
 
 ### Edits do not trigger a reload
 
-* The watcher compares **mtime + size** of `web/` and `src/` (no inotify / FSEvents). Atomic-save
-  editors that preserve mtime can be missed — touch the file.
+* The watcher covers `src/`, `web/`, `build.zig` and `build.zig.zon` (no inotify / FSEvents).
+  Zig sources are compared by **mtime + size + a content hash**, so a same-content rewrite
+  (`touch`, a formatter, re-saving) deliberately does **not** rebuild. If a real one-character
+  edit is ignored, check that you are not editing a file that `src/main.zig` never imports (below).
 * Poll state at `curl http://127.0.0.1:5173/__zts_dev__/state`. If `v` in
   `{"v":3,"ok":true,"hot":"full"}` rises, the change was seen.
 * **Editing CSS does not reload the page** — the `<link>` is swapped in place. If nothing appears
   to change, check whether the rule is in an inline `<style>` block instead: embedded styles are
   part of the HTML, so they go through a normal reload.
-* If `ok` stays `false`, **the build is failing**. `zts dev` keeps serving the last good output
-  and does not bump `v` (so it never shows a broken app). Fix the Zig error in the terminal.
+* If `ok` stays `false`, **the type-check is failing**. `zts dev` keeps serving the last good
+  output and does not bump `v` (so it never shows a broken app). Fix the Zig error in the terminal.
+
+### A Zig edit does not rebuild / types pass but linking fails
+
+`zts dev` keeps an **import graph** from `src/main.zig` (relative `@import` / `@embedFile`) and
+skips both the build and the reload for files it cannot reach — scratch files, notes, test-only
+sources. That is intentional: import the file from `main.zig`, or edit a reachable file instead.
+
+Ordinary Zig edits use **`zig build check`**, a type-check that skips LLVM codegen and linking:
+`zts dev` only serves `web/` and never starts the executable. To validate the real binary (link
+errors, undefined `extern` symbols), run `zts build`, or start the dev loop with
+`ZTS_DEV_BUILD=full zts dev`. Older templates without a `check` step, and `build.zig` files that
+link native libraries, automatically fall back to full builds on every edit.
 
 ### Caching behaves oddly between reloads
 

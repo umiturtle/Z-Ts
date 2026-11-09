@@ -97,9 +97,10 @@ Open <http://127.0.0.1:5173/> and you will see the `my_app` heading and the line
 
 | You changed | What happens | Wait |
 |---|---|---|
-| `web/index.html`, JS, images | no build; the page reloads | ~0.4 s |
-| `web/style.css` | no build, no reload; the stylesheet is swapped in place, so scroll position survives | ~0.4 s |
-| anything in `src/` | `zig build` type-checks the Zig side, then the page reloads | 1–2 s |
+| `web/index.html`, JS, images | no build; the page reloads | ~0.2 s |
+| `web/style.css` | no build, no reload; the stylesheet is swapped in place, so scroll position survives | ~0.2 s |
+| Zig source under `src/` | `zig build check` type-checks the Zig side (no LLVM codegen or linking), then the page reloads | ~0.4 s |
+| a `touch` / an unused `.zig` file | nothing happens (content hash + dependency graph) | 0 |
 
 `zts dev --browser` opens your default browser on start.
 

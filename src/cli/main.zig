@@ -23,6 +23,7 @@ const args_mod = @import("args.zig");
 const template = @import("template.zig");
 const project = @import("project.zig");
 const devserver = @import("devserver.zig");
+const incremental = @import("incremental.zig");
 const bundler = @import("zts_bundler");
 
 /// Absolute path of the ziggurats checkout that built this binary, injected by `build.zig`. `zts init`
@@ -40,6 +41,10 @@ var env_zig: ?[]const u8 = null;
 /// `PATH`, read once at startup, used only to prefer a real `zig` over the `zigw` wrapper.
 var env_path: ?[]const u8 = null;
 
+/// `ZTS_DEV_BUILD=full` forces full builds in `zts dev` (link validation, and the baseline side of
+/// the benchmark). Anything else uses the incremental check path when it is available.
+var env_dev_build: ?[]const u8 = null;
+
 pub fn main(init: std.process.Init) !u8 {
     const io = init.io;
     const gpa = init.gpa;
@@ -50,6 +55,7 @@ pub fn main(init: std.process.Init) !u8 {
 
     env_zig = init.environ_map.get("ZTS_ZIG");
     env_path = init.environ_map.get("PATH");
+    env_dev_build = init.environ_map.get("ZTS_DEV_BUILD");
     const argv = try init.minimal.args.toSlice(arena);
     const command = args_mod.parse(argv[1..]) catch |err| {
         printErr(io, "zts: {s}\n", .{describeParseError(err)});
@@ -286,32 +292,103 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     printOut(io, "     watching src/ and web/ — Ctrl+C to stop\n", .{});
     if (opts.browser) try openBrowser(io, arena, url);
 
-    // Build once so the first page load matches what `zts build` would produce.
-    server.recordBuild(try rebuild(io, gpa, arena, opts.dir, true));
+    const zig_path = resolveZig(io, arena, build_options.zts_root);
+    const force_full = if (env_dev_build) |value| std.mem.eql(u8, value, "full") else false;
+    var native_linkage = incremental.needsFullBuild(gpa, io, opts.dir);
+    var check_step = !force_full and !native_linkage and
+        incremental.hasCheckStep(gpa, io, zig_path, opts.dir);
+    if (!check_step) {
+        printOut(io, "     full rebuilds for Zig edits ({s})\n", .{if (force_full)
+            "ZTS_DEV_BUILD=full"
+        else if (native_linkage)
+            "build.zig links native libraries"
+        else
+            "generated build.zig has no check step"});
+    }
+
+    var graph = incremental.Graph.build(gpa, io, opts.dir, "src/main.zig") catch
+        incremental.Graph{ .gpa = gpa, .complete = false };
+    defer graph.deinit();
 
     const watched = [_][]const u8{ "src", "web" };
     var previous = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
+    // `scanAgainst` reuses content hashes whose stat is unchanged.
     defer previous.deinit(gpa);
+    // Adaptive poll (still plain polling on every OS): 250 ms while idle, 100 ms for ~2 s after
+    // an edit. Consecutive saves are what the incremental path is for, so this cuts the fixed
+    // wait before a rebuild without scanning a large `web/` tree too often on an idle session.
+    var fast_polls: u8 = 0;
+
+    // Build once so the first page load matches what `zts build` would produce. This stays a FULL
+    // build: it catches link errors and gives the project a real binary before the fast path takes
+    // over for subsequent edits. It runs AFTER all initialisation (and after the baseline
+    // snapshot), so a client that sees `v=1` knows the poll loop is ready and no early edit can
+    // be swallowed by the baseline scan.
+    server.recordBuild(try rebuild(io, gpa, arena, opts.dir, true));
 
     while (true) {
-        io.sleep(.fromMilliseconds(250), .awake) catch return 0;
-        var current = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
-        const changed = try previous.changed(arena, &current);
-        // A save often arrives as several writes (editor temp rename, formatter, fsync); waiting a
-        // beat turns three scans into one, and the second scan is the one we compare against.
-        io.sleep(.fromMilliseconds(120), .awake) catch return 0;
-        current.deinit(gpa);
-        current = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
+        const poll_ms: u32 = if (fast_polls > 0) 100 else 250;
+        if (fast_polls > 0) fast_polls -= 1;
+        io.sleep(.fromMilliseconds(poll_ms), .awake) catch return 0;
+        var first = try devserver.Snapshot.scanAgainst(gpa, io, opts.dir, &watched, &previous);
 
-        switch (devserver.Change.classify(changed)) {
-            .none => {
-                current.deinit(gpa);
-                continue;
+        var diff_arena_state = std.heap.ArenaAllocator.init(gpa);
+        defer diff_arena_state.deinit();
+        const diff_arena = diff_arena_state.allocator();
+
+        // An idle poll costs one scan and no settle. The old loop rescanned (and paid 120 ms) even
+        // when nothing had changed, stretching the effective poll period to 370 ms.
+        const preliminary = try previous.changed(diff_arena, &first);
+        if (preliminary.len == 0) {
+            first.deinit(gpa);
+            continue;
+        }
+
+        // A save often arrives as several writes (editor temp rename, formatter, fsync). Settle,
+        // then rescan and diff against the FINAL scan. Diffing the first scan (the old behaviour)
+        // silently swallowed edits that landed during this window; it also split one burst into two
+        // rebuilds. One diff against the final snapshot fixes both.
+        io.sleep(.fromMilliseconds(120), .awake) catch {
+            first.deinit(gpa);
+            return 0;
+        };
+        first.deinit(gpa);
+        // `previous` is still alive here; `first` has just been released. Use the live snapshot
+        // as the stat cache so unchanged files are not re-read for the settle scan.
+        var current = try devserver.Snapshot.scanAgainst(gpa, io, opts.dir, &watched, &previous);
+
+        const changed = try previous.changed(diff_arena, &current);
+        const structural = try previous.structural(diff_arena, &current);
+        if (changed.len > 0) fast_polls = 20;
+
+        // The import graph and the step list are build-graph state. Refresh them only when a file
+        // actually changed (cheap: a handful of source reads), never on an idle poll.
+        if (changed.len > 0) {
+            var any_build_file = false;
+            for (changed) |path| {
+                if (incremental.isBuildFile(path)) any_build_file = true;
+            }
+            if (any_build_file) {
+                native_linkage = incremental.needsFullBuild(gpa, io, opts.dir);
+                check_step = !force_full and !native_linkage and
+                    incremental.hasCheckStep(gpa, io, zig_path, opts.dir);
+            }
+            const fresh = incremental.Graph.build(gpa, io, opts.dir, "src/main.zig") catch
+                incremental.Graph{ .gpa = gpa, .complete = false };
+            graph.deinit();
+            graph = fresh;
+        }
+
+        switch (incremental.plan(changed, structural, &graph, check_step)) {
+            .none => {},
+            .skip => {
+                // A file outside the compiled dependency graph changed: neither the binary nor the
+                // page can be different, so do not reload either.
+                printOut(io, "zts: unrelated source changed — no rebuild\n", .{});
             },
             .css => {
                 // The preview is served from `web/` on disk, so the bytes the browser asks for are
-                // already new. Nothing to compile, nothing to reload — the injected script swaps
-                // the stylesheet when it sees `"hot":"css"`.
+                // already new. Nothing to compile, nothing to reload.
                 server.recordChange(.css, true);
                 printOut(io, "zts: stylesheet updated in place\n", .{});
             },
@@ -319,7 +396,10 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
                 server.recordChange(.assets, true);
                 printOut(io, "zts: web/ changed — reloading (no rebuild needed)\n", .{});
             },
-            .source => {
+            .check => {
+                server.recordChange(.source, try checkBuild(io, gpa, arena, opts.dir));
+            },
+            .full => {
                 server.recordChange(.source, try rebuild(io, gpa, arena, opts.dir, false));
             },
         }
@@ -328,32 +408,59 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     }
 }
 
+/// `0.0.0.0` is not an address a browser can open, but it is the right bind address in a
+/// container. The URL line is meant to be clicked, so print loopback in that case.
 fn displayHost(host: []const u8) []const u8 {
-    // `0.0.0.0` is not an address a browser can open, but it is the right bind address in a
-    // container. The URL line is meant to be clicked, so print loopback in that case.
     if (std.mem.eql(u8, host, "0.0.0.0")) return "127.0.0.1";
     return host;
 }
 
-fn rebuild(io: Io, gpa: Allocator, arena: Allocator, dir: []const u8, first: bool) !bool {
-    if (!first) printOut(io, "zts: change detected, rebuilding…\n", .{});
-    const result = runZig(io, gpa, arena, dir) catch |err| {
+/// Runs one build and reports the outcome. `label` is what the terminal line says, so a reader can
+/// tell a fast incremental type-check from a full build without guessing.
+fn buildWith(
+    io: Io,
+    gpa: Allocator,
+    arena: Allocator,
+    dir: []const u8,
+    extra: []const []const u8,
+    label: []const u8,
+    announce: bool,
+) !bool {
+    if (announce) printOut(io, "zts: change detected, {s}…\n", .{label});
+    const started = Io.Timestamp.now(io, .awake);
+    const result = runZigArgv(io, gpa, arena, dir, extra) catch |err| {
         printErr(io, "zts dev: could not run zig ({t})\n", .{err});
         return false;
     };
+    const elapsed_ms: i64 = @intCast(@divTrunc(
+        Io.Timestamp.now(io, .awake).nanoseconds - started.nanoseconds,
+        1_000_000,
+    ));
     defer gpa.free(result.stdout);
     defer gpa.free(result.stderr);
 
     if (result.stderr.len > 0) printErr(io, "{s}", .{result.stderr});
     if (result.stdout.len > 0) printOut(io, "{s}", .{result.stdout});
 
-    const ok = result.term.success();
-    if (ok) {
-        printOut(io, "zts: build ok\n", .{});
-    } else {
-        printErr(io, "zts: build failed — the page keeps the last good build\n", .{});
+    if (result.term.success()) {
+        printOut(io, "zts: {s} ok ({d} ms)\n", .{ label, elapsed_ms });
+        return true;
     }
-    return ok;
+    printErr(io, "zts: {s} failed — the page keeps the last good build\n", .{label});
+    return false;
+}
+
+/// Full `zig build`: the first build of a dev session, a changed build graph, and the fallback
+/// when a project predates the `check` step. Also the only path that catches link errors.
+fn rebuild(io: Io, gpa: Allocator, arena: Allocator, dir: []const u8, first: bool) !bool {
+    return buildWith(io, gpa, arena, dir, &.{ "build", "--summary", "failures" }, "build", !first);
+}
+
+/// `zig build check`: semantic analysis only. Zig emits `-fno-emit-bin` for a compile step whose
+/// output nobody asks for, so there is no LLVM codegen, no link and no install. `zts dev` serves
+/// `web/` from disk and never runs the binary — a type-check is exactly what it needs.
+fn checkBuild(io: Io, gpa: Allocator, arena: Allocator, dir: []const u8) !bool {
+    return buildWith(io, gpa, arena, dir, &.{ "build", "check", "--summary", "failures" }, "type-check", true);
 }
 
 /// Opens the system browser. Best effort: a missing opener is not an error the author can act on.
