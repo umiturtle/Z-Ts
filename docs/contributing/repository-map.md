@@ -31,7 +31,8 @@
 | パス | 役割 | 更新頻度・競合リスク |
 |---|---|---|
 | [`../../AGENTS.md`](../../AGENTS.md) | 全エージェント必読の運用ルール | 低頻度（進捗追記禁止・チェックボックスは編集しない） |
-| [`../INDEX.md`](../INDEX.md) | サイトのサイドバーと同じ並びの索引 | ページを足したときだけ 1 行 |
+| [`../INDEX.md`](../INDEX.md) / [`../INDEX.en.md`](../INDEX.en.md) | サイトのサイドバーと同じ並びの索引（日英） | ページを足したときだけ 1 行ずつ |
+| [`doc-sync.md`](doc-sync.md) / [`doc-sync.en.md`](doc-sync.en.md) | 最終書き換え日・確認バージョン・本文と実装の sha256（規約 13） | 再確認のたび（`--sync` が自動生成） |
 | `../learn/ja/` / `../learn/en/` | 学習パス 5 ステップ。`start.md` → `concepts/` → `tutorials/` → `patterns/` → `guides/` | 章ごとに独立。**ja と en は同名ファイル必須**（規約 8） |
 | [`../learn/ja/index.md`](../learn/ja/index.md) | 学習の入口。道順は `src/docsite/learn_path.zig` から展開される | 低頻度（`<!-- learn-path -->` の行は消さない） |
 | [`../learn/ja/start.md`](../learn/ja/start.md) | 10 分の導入。`zts` の入手 → `doctor` → `init` → `dev` → `build` | 低頻度（CLI の出力が変わったとき） |

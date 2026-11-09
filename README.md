@@ -133,8 +133,9 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 | 設計判断の記録（ADR） | [`docs/decisions/`](docs/decisions/) |
 | Tauri v2 の使い方 / 内部解剖 | [`docs/reference/tauri-usage.md`](docs/reference/tauri-usage.md) / [`docs/reference/tauri-internals.md`](docs/reference/tauri-internals.md) |
 | AI エージェント向け運用ルール | [`AGENTS.md`](AGENTS.md) |
-| ドキュメント索引（サイトと同じ並び） | [`docs/INDEX.md`](docs/INDEX.md) |
+| ドキュメント索引（サイトと同じ並び） | [`docs/INDEX.md`](docs/INDEX.md) / [`docs/INDEX.en.md`](docs/INDEX.en.md) |
 | ファイル配置・並列開発の分割単位 | [`docs/contributing/repository-map.md`](docs/contributing/repository-map.md) |
+| 最終書き換え日・確認バージョンの台帳 | [`docs/contributing/doc-sync.md`](docs/contributing/doc-sync.md) |
 
 ## サンプル
 

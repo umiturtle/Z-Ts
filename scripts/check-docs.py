@@ -30,21 +30,31 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       `docs/reference/`, example READMEs) must not mention `zigw` at all. It is
                       a bootstrap for *this* checkout, not a distributed artifact, so an app
                       author cannot run it. The toolchain those pages may name is `zts` + `zig`.
-11. Index coverage   — every page a reader can reach must be linked from `docs/INDEX.md`. The
-                      index is a hand-written mirror of the sidebar, and a page added without a
-                      row is a page only the sidebar knows about. The rule checks coverage, not
-                      order: the order lives in `src/docsite/main.zig`.
+11. Index coverage   — every page a reader can reach must be linked from its language's index
+                      (`docs/INDEX.md` / `docs/INDEX.en.md`). The index is a hand-written mirror of
+                      the sidebar; a page added without a row is a page only the sidebar knows
+                      about. The rule checks coverage, not order: the order lives in main.zig.
 12. Path budget      — the minutes quoted in README, the index and both learning hubs come from
                       `learn_path.zig`, and the sidebar's first six groups are the five numbered
                       steps. A third tutorial that leaves the rail at "15 min" is a lie; a
                       language-dependent `GroupKey.order()` is the menu changing as you navigate.
+13. Sync ledger      — `scripts/doc-sync.json` records, for every bilingual pair, when the page was
+                      last rewritten, which Z-Ts / Zig version and commit were verified consistent,
+                      which checks were run, and sha256 of both documents and of the implementation
+                      sources. A hash mismatch means something changed after verification. It also
+                      enforces a real English counterpart for every reader page. Refresh with
+                      `python3 scripts/check-docs.py --sync`.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
 
+import datetime
 import glob
+import hashlib
+import json
 import os
 import re
+import subprocess
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -127,7 +137,7 @@ def strip_fences(text: str) -> str:
 
 
 link_pat = re.compile(r"\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)")
-md_files = ["AGENTS.md"] + glob.glob("docs/**/*.md", recursive=True)
+md_files = ["AGENTS.md", "README.md", "README.en.md"] + glob.glob("docs/**/*.md", recursive=True)
 md_files = sorted(f for f in md_files if os.path.isfile(f))
 
 for md in md_files:
@@ -205,8 +215,12 @@ for line in args_src.splitlines():
     code_flags.update(re.findall(r'"(--[a-z][a-z0-9-]+)"', line))
 code_flags.discard("--nope")
 
-cli_ref_path = "docs/reference/cli.md"
-if os.path.isfile(cli_ref_path):
+# Both language versions are real references: a flag renamed in the parser must disappear from
+# `cli.md` AND `cli.en.md`, otherwise the English reader is taught a flag that no longer exists.
+commands = set(re.findall(r'std\.mem\.eql\(u8, head(?:\[\d\])?, "([a-z]+)"\)', args_src))
+for cli_ref_path in ("docs/reference/cli.md", "docs/reference/cli.en.md"):
+    if not os.path.isfile(cli_ref_path):
+        continue
     cli_ref = open(cli_ref_path, encoding="utf-8").read()
     doc_flags = set(re.findall(r"(?<![\w-])(--[a-z][a-z0-9-]+)", cli_ref))
     for flag in sorted(code_flags - doc_flags):
@@ -215,7 +229,6 @@ if os.path.isfile(cli_ref_path):
         errors.append(f"{cli_ref_path}: flag '{flag}' is documented but does not exist in src/cli/args.zig")
 
     # Subcommands: the parser matches on bare words, the reference uses `## `zts <cmd>``.
-    commands = set(re.findall(r'std\.mem\.eql\(u8, head(?:\[\d\])?, "([a-z]+)"\)', args_src))
     doc_commands = set(re.findall(r"^## `zts ([a-z]+)", cli_ref, re.M))
     for cmd in sorted(doc_commands - commands - {"help", "version"}):
         errors.append(f"{cli_ref_path}: subcommand 'zts {cmd}' is documented but not parsed by src/cli/args.zig")
@@ -356,7 +369,7 @@ for verb in sorted(zigw_uses - ZIGW_SUBCOMMANDS - ZIG_SUBCOMMANDS):
 # before they have a project. The toolchain those pages may use is `zts` plus a normal `zig`;
 # what `zigw` does is still documented where repository contributors read it
 # (docs/contributing/README.md), and this rule keeps the two audiences from bleeding.
-READER_DOCS = ["README.md", "docs/INDEX.md", "docs/learn", "docs/reference"]
+READER_DOCS = ["README.md", "README.en.md", "docs/INDEX.md", "docs/learn", "docs/reference"]
 reader_files = [
     md for md in md_files
     if any(md == root or md.startswith(root + "/") for root in READER_DOCS)
@@ -373,32 +386,61 @@ for md in sorted(set(reader_files)):
         )
 
 # ---------------------------------------------------------------------------
-# 11. `docs/INDEX.md` links every page a reader can reach
+# 11. Each language's index links every page a reader can reach
 # ---------------------------------------------------------------------------
 
-# The index mirrors the sidebar by hand. Coverage is the part a human forgets: adding
-# `patterns/boundaries.md` and not adding a row leaves the page discoverable only through
-# navigation. Order is not checked here — it is generated from `GroupKey` in main.zig.
-INDEX_MD = "docs/INDEX.md"
-index_text = open(INDEX_MD, encoding="utf-8").read() if os.path.isfile(INDEX_MD) else ""
-if not index_text:
-    errors.append(f"{INDEX_MD}: missing (the site's footer links it on every page)")
-else:
-    indexed = (
-        sorted(glob.glob("docs/learn/ja/**/*.md", recursive=True))
-        + sorted(glob.glob("docs/reference/*.md"))
-        + sorted(glob.glob("docs/contributing/*.md"))
-        + sorted(glob.glob("examples/*/README.md"))
-        + ["docs/glossary.md"]
-    )
-    for path in indexed:
-        rel = os.path.relpath(path, "docs")
-        if rel not in index_text:
+# The index mirrors the sidebar by hand. Coverage is the part a human forgets: adding a page and
+# not adding a row leaves it discoverable only through navigation. Order is not checked here — it
+# is generated from `GroupKey` in main.zig.
+def reader_pairs():
+    """(Japanese page, English page) for every page a reader can reach."""
+    pairs = []
+    for ja in sorted(glob.glob("docs/learn/ja/**/*.md", recursive=True)):
+        en = os.path.join("docs/learn/en", os.path.relpath(ja, "docs/learn/ja"))
+        pairs.append((ja, en))
+    # Pages that exist once use a `.en.md` mirror next to the original.
+    fixed = ["README.md", "docs/INDEX.md", "docs/glossary.md"]
+    fixed += sorted(p for p in glob.glob("docs/reference/*.md") if not p.endswith(".en.md"))
+    fixed += sorted(p for p in glob.glob("docs/contributing/*.md") if not p.endswith(".en.md"))
+    fixed += sorted(p for p in glob.glob("examples/*/README.md") if not p.endswith(".en.md"))
+    for ja in fixed:
+        pairs.append((ja, ja[: -len(".md")] + ".en.md"))
+    return sorted(pairs)
+
+
+def mirror_of(path):
+    if path.startswith("docs/learn/ja/"):
+        return os.path.join("docs/learn/en", os.path.relpath(path, "docs/learn/ja"))
+    return path[: -len(".md")] + ".en.md"
+
+
+def index_targets(en):
+    """Paths that the given language's index must mention, relative to `docs/`."""
+    out = []
+    for p in sorted(glob.glob("docs/learn/en/**/*.md" if en else "docs/learn/ja/**/*.md", recursive=True)):
+        out.append(os.path.relpath(p, "docs"))
+    for p in ["docs/glossary.md"] + sorted(glob.glob("docs/reference/*.md")) + sorted(
+        glob.glob("docs/contributing/*.md")
+    ) + sorted(glob.glob("examples/*/README.md")):
+        # A `.en.md` mirror is checked against the English index, the original against the
+        # Japanese one. `doc-sync.*` is a generated ledger; both indexes link their own half.
+        if p.endswith(".en.md") != en:
+            continue
+        out.append(os.path.relpath(p, "docs"))
+    return out
+
+
+for index, en in (("docs/INDEX.md", False), ("docs/INDEX.en.md", True)):
+    text = open(index, encoding="utf-8").read() if os.path.isfile(index) else ""
+    if not text:
+        errors.append(f"{index}: missing (the site's footer links it on every page)")
+        continue
+    for rel in index_targets(en):
+        if rel not in text:
             errors.append(
-                f"{INDEX_MD}: does not link '{rel}' (add a row under the group it belongs to)"
+                f"{index}: does not link '{rel}' (add a row under the group it belongs to)"
             )
 
-# ---------------------------------------------------------------------------
 # 12. The learning path's budget and the sidebar's shape are one truth
 # ---------------------------------------------------------------------------
 
@@ -419,6 +461,8 @@ else:
         for path, phrase in (
             ("docs/INDEX.md", f"およそ {total} 分"),
             ("README.md", f"およそ {total} 分"),
+            ("docs/INDEX.en.md", f"about {total} minutes"),
+            ("README.en.md", f"about {total} minutes"),
             ("docs/learn/ja/index.md", f"{total} 分"),
             ("docs/learn/en/index.md", f"{total} minutes"),
         ):
@@ -428,7 +472,7 @@ else:
                     f"{path}: does not say '{phrase}' (the total comes from {LEARN_PATH_ZIG}; rule 12)"
                 )
         # Both step tables are hand-written too: compare their minute column row by row.
-        for path in ("docs/INDEX.md", "README.md"):
+        for path in ("docs/INDEX.md", "docs/INDEX.en.md", "README.md", "README.en.md"):
             text = open(path, encoding="utf-8").read() if os.path.isfile(path) else ""
             rows = {
                 int(num): (0 if mins == "—" else int(mins))
@@ -454,6 +498,308 @@ else:
             f"{MAIN_ZIG}: the sidebar must open with the learning hub and the five numbered steps "
             f"(got {keys[:6]}; rule 12)"
         )
+
+# ---------------------------------------------------------------------------
+# 13. Sync ledger: when a page was last rewritten, and what was verified
+# ---------------------------------------------------------------------------
+
+SYNC_JSON = "scripts/doc-sync.json"
+LEDGER_JA = "docs/contributing/doc-sync.md"
+LEDGER_EN = "docs/contributing/doc-sync.en.md"
+
+SYNC_CHECKS = [
+    "python3 scripts/check-docs.py",
+    "./zigw docs-check",
+    "./zigw quick-test",
+    "./zigw test -Mroot=src/cli/mod.zig",
+    "./zigw fmt --check src/ build.zig build.zig.zon",
+]
+
+# The implementation surface the documentation makes claims about. One shared hash is enough: any
+# change to the CLI, the site generator, the path table or this checker means "re-verify", and a
+# per-page list would be both noisier and easier to lie in.
+SYNC_IMPL = [
+    "build.zig",
+    "build.zig.zon",
+    "src/cli/args.zig",
+    "src/cli/main.zig",
+    "src/cli/template.zig",
+    "src/docsite/main.zig",
+    "src/docsite/learn_path.zig",
+    "src/docsite/i18n.zig",
+    "src/docsite/site.zig",
+    "scripts/check-docs.py",
+]
+
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]")
+
+
+def sha256_file(path):
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read()).hexdigest()
+
+
+def sha256_files(paths):
+    h = hashlib.sha256()
+    for path in paths:
+        h.update(path.encode("utf-8"))
+        h.update(b"\0")
+        with open(path, "rb") as handle:
+            h.update(handle.read())
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def zon_versions():
+    zon = open("build.zig.zon", encoding="utf-8").read()
+    zts = re.search(r'\.version\s*=\s*"([^"]+)"', zon)
+    zig = re.search(r'\.minimum_zig_version\s*=\s*"([^"]+)"', zon)
+    return (zts.group(1) if zts else ""), (zig.group(1) if zig else "")
+
+
+def current_commit():
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        return out.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def render_ledger(verified, pages, date):
+    """Write the two human-readable views. Deliberately depends only on dates/versions/paths —
+    never on the hashes — so the ledger can contain its own pages without a fixed-point loop."""
+    rows = "\n".join(
+        f"| `{p['ja']}` | `{p['en']}` | {p['last_rewritten']} | {verified['zts_version']} |"
+        for p in pages
+    )
+    checks = " · ".join(f"`{c}`" for c in verified["checks"])
+    impl_files = ", ".join(f"`{p}`" for p in verified["implementation"])
+    ja_common = (
+        f"- **確認バージョン**: `zts {verified['zts_version']}` / Zig `{verified['zig_version']}`\n"
+        f"- **確認日**: `{date}`\n"
+        f"- **基準コミット**: `{verified['commit']}`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）\n"
+        f"- **確認コマンド**: {checks}\n"
+        f"- **実装ハッシュ**: `{verified['implementation_sha256']}`\n"
+    )
+    en_common = (
+        f"- **Verified version**: `zts {verified['zts_version']}` / Zig `{verified['zig_version']}`\n"
+        f"- **Verified on**: `{date}`\n"
+        f"- **Base commit**: `{verified['commit']}` (HEAD when verification began; the sha256 below identifies the implementation)\n"
+        f"- **Verified with**: {checks}\n"
+        f"- **Implementation hash**: `{verified['implementation_sha256']}`\n"
+    )
+    ja = (
+        "# ドキュメント同期台帳\n\n"
+        "> **対象読者**: ドキュメントを書き換える人・レビューする人。\n"
+        "> **このファイルは自動生成です。** 編集せず、`python3 scripts/check-docs.py --sync` を実行してください。\n\n"
+        "「いつ最後に書き換えたか」と「どのバージョンまで実装と無矛盾を確認したか」を、\n"
+        "**日英 1 組 = 1 行**で記録します。正本は [`scripts/doc-sync.json`](../../scripts/doc-sync.json) で、\n"
+        "`check-docs.py` の規約 13 が次を検査します。\n\n"
+        "1. すべての読者向けページに英語版があること（英語の H1 が日本語ではないこと、日本語版のコピーでないことも含む）\n"
+        "2. 日英それぞれの本文 sha256 が台帳と一致すること（**書き換えたのに日付を更新していない**ことを検出）\n"
+        "3. 実装ファイル群の sha256 が一致すること（**実装が変わったのに再確認していない**ことを検出）\n"
+        "4. `zts_version` / `zig_version` が `build.zig.zon` と一致すること\n"
+        "5. `last_rewritten` が確認日以前の ISO 日付であること\n\n"
+        "## 確認したバージョン\n\n" + ja_common + "\n"
+        "実装として突き合わせたファイル: " + impl_files + "\n\n"
+        "## ページごとの記録\n\n"
+        "| 日本語 | English | 最終書き換え | 確認バージョン |\n|---|---|---|---|\n" + rows + "\n\n"
+        "## 更新のしかた\n\n"
+        "```bash\n"
+        "# 実装か Doc を変えたあと、再確認して台帳を更新する（日付は既定で当日）\n"
+        "python3 scripts/check-docs.py --sync\n"
+        "python3 scripts/check-docs.py --sync --date 2026-10-21   # 日付を明示するとき\n"
+        "python3 scripts/check-docs.py                             # 検査のみ（CI はこれ）\n"
+        "```\n\n"
+        "`--sync` は本文が変わったページの `last_rewritten` だけを更新し、変わっていないページの\n"
+        "日付は保持します。内部資料（ADR・設計メモ・タスク票）は日本語専用なので台帳の対象外です。\n\n"
+        "## 関連\n\n"
+        "- [ドキュメントの書き方](writing-docs.md) — 規約 13 と 2 言語の規約\n"
+        "- [リポジトリの地図](repository-map.md) — ファイル配置\n"
+        "- [ドキュメント索引](../INDEX.md) — サイトの並び\n"
+    )
+    en = (
+        "# Documentation sync ledger\n\n"
+        "> **Audience**: anyone rewriting or reviewing a documentation page.\n"
+        "> **This file is generated.** Do not edit it; run `python3 scripts/check-docs.py --sync`.\n\n"
+        "One row per **Japanese/English pair** records when the page was last rewritten and which\n"
+        "version was verified consistent with the implementation. The source of truth is\n"
+        "[`scripts/doc-sync.json`](../../scripts/doc-sync.json); rule 13 of `check-docs.py` checks:\n\n"
+        "1. every reader page has a real English counterpart (its H1 is not Japanese, and it is not\n"
+        "   a byte-for-byte copy of the Japanese page);\n"
+        "2. the sha256 of both documents matches the ledger (**a rewrite without a new date** is caught);\n"
+        "3. the sha256 of the implementation files matches (**an implementation change without\n"
+        "   re-verification** is caught);\n"
+        "4. `zts_version` / `zig_version` match `build.zig.zon`;\n"
+        "5. `last_rewritten` is an ISO date no later than the verification date.\n\n"
+        "## Verified against\n\n" + en_common + "\n"
+        "Implementation files compared: " + impl_files + "\n\n"
+        "## Per-page record\n\n"
+        "| Japanese | English | Last rewritten | Verified version |\n|---|---|---|---|\n" + rows + "\n\n"
+        "## How to refresh\n\n"
+        "```bash\n"
+        "# after changing the implementation or a doc, re-verify and refresh the ledger\n"
+        "python3 scripts/check-docs.py --sync\n"
+        "python3 scripts/check-docs.py --sync --date 2026-10-21   # explicit date\n"
+        "python3 scripts/check-docs.py                             # check only (what CI runs)\n"
+        "```\n\n"
+        "`--sync` updates `last_rewritten` only for pages whose content changed, and keeps the date of\n"
+        "untouched pages. Internal documents (ADRs, design notes, task sheets) are Japanese-only and\n"
+        "are deliberately outside the ledger.\n\n"
+        "## Related\n\n"
+        "- [Writing the docs](writing-docs.en.md) — rule 13 and the bilingual conventions\n"
+        "- [Repository map](repository-map.en.md) — where files live\n"
+        "- [Documentation index](../INDEX.en.md) — the site's order\n"
+    )
+    open(LEDGER_JA, "w", encoding="utf-8").write(ja)
+    open(LEDGER_EN, "w", encoding="utf-8").write(en)
+
+
+def run_sync(date):
+    zts, zig = zon_versions()
+    verified = {
+        "date": date,
+        "commit": current_commit(),
+        "zts_version": zts,
+        "zig_version": zig,
+        "checks": SYNC_CHECKS,
+        "implementation": SYNC_IMPL,
+        "implementation_sha256": sha256_files(SYNC_IMPL),
+    }
+    old = {}
+    if os.path.isfile(SYNC_JSON):
+        try:
+            old = json.load(open(SYNC_JSON, encoding="utf-8"))
+        except (ValueError, OSError):
+            old = {}
+    old_pages = {(p.get("ja"), p.get("en")): p for p in old.get("pages", [])}
+
+    pairs = reader_pairs()
+    for ja, en in pairs:
+        if not os.path.isfile(en):
+            print(f"error: {en}: missing English counterpart — cannot verify", file=sys.stderr)
+            sys.exit(1)
+
+    new_pages = []
+    for ja, en in pairs:
+        jh, eh = sha256_file(ja), sha256_file(en)
+        prev = old_pages.get((ja, en), {})
+        changed = prev.get("ja_sha256") != jh or prev.get("en_sha256") != eh
+        last = date if changed or not prev.get("last_rewritten") else prev["last_rewritten"]
+        new_pages.append({"ja": ja, "en": en, "last_rewritten": last})
+
+    # The ledger views are themselves pages in the ledger. Render them first; their content does
+    # not depend on the hashes, so no fixed-point iteration is needed.
+    render_ledger(verified, new_pages, date)
+    for page in new_pages:
+        page["ja_sha256"] = sha256_file(page["ja"])
+        page["en_sha256"] = sha256_file(page["en"])
+
+    with open(SYNC_JSON, "w", encoding="utf-8") as handle:
+        json.dump(
+            {"schema": 1, "verified": verified, "pages": new_pages},
+            handle, indent=2, ensure_ascii=False,
+        )
+        handle.write("\n")
+    print(
+        f"Sync ledger updated: {len(new_pages)} bilingual pairs, "
+        f"zts {zts} / Zig {zig}, verified {date} at {verified['commit']}."
+    )
+
+
+if "--sync" in sys.argv:
+    idx = sys.argv.index("--sync")
+    date = sys.argv[idx + 2] if "--date" in sys.argv and idx + 2 < len(sys.argv) else datetime.date.today().isoformat()
+    if "--date" in sys.argv and not ISO_DATE.fullmatch(date):
+        print(f"error: --date must be YYYY-MM-DD, got '{date}'", file=sys.stderr)
+        sys.exit(1)
+    run_sync(date)
+    sys.exit(0)
+
+if not os.path.isfile(SYNC_JSON):
+    errors.append(f"{SYNC_JSON}: missing (run `python3 scripts/check-docs.py --sync`)")
+else:
+    try:
+        ledger = json.load(open(SYNC_JSON, encoding="utf-8"))
+    except ValueError as exc:
+        ledger = {}
+        errors.append(f"{SYNC_JSON}: invalid JSON ({exc})")
+    if ledger:
+        if ledger.get("schema") != 1:
+            errors.append(f"{SYNC_JSON}: unsupported schema {ledger.get('schema')!r}")
+        v = ledger.get("verified") or {}
+        zts, zig = zon_versions()
+        if v.get("zts_version") != zts:
+            errors.append(f"{SYNC_JSON}: zts_version {v.get('zts_version')!r} != build.zig.zon {zts!r}")
+        if v.get("zig_version") != zig:
+            errors.append(f"{SYNC_JSON}: zig_version {v.get('zig_version')!r} != build.zig.zon {zig!r}")
+        date = str(v.get("date", ""))
+        if not ISO_DATE.fullmatch(date):
+            errors.append(f"{SYNC_JSON}: verified.date '{date}' is not an ISO date")
+        if not v.get("commit"):
+            errors.append(f"{SYNC_JSON}: verified.commit is empty")
+        if not v.get("checks"):
+            errors.append(f"{SYNC_JSON}: verified.checks is empty (which commands proved consistency?)")
+        impl = v.get("implementation") or []
+        if not impl:
+            errors.append(f"{SYNC_JSON}: verified.implementation is empty")
+        else:
+            for path in impl:
+                if not os.path.isfile(path):
+                    errors.append(f"{SYNC_JSON}: implementation file '{path}' does not exist")
+            if all(os.path.isfile(p) for p in impl):
+                want = sha256_files(impl)
+                if v.get("implementation_sha256") != want:
+                    errors.append(
+                        f"{SYNC_JSON}: implementation changed since verification "
+                        f"(sha256 {v.get('implementation_sha256', '')[:12]}… != {want[:12]}…) — "
+                        f"re-check the docs and run `python3 scripts/check-docs.py --sync`"
+                    )
+
+        pairs = reader_pairs()
+        entries = {(p.get("ja"), p.get("en")): p for p in ledger.get("pages", [])}
+        for ja, en in pairs:
+            if not os.path.isfile(en):
+                errors.append(f"{en}: missing English counterpart (rule 13; every reader page is bilingual)")
+                continue
+            entry = entries.get((ja, en))
+            if entry is None:
+                errors.append(f"{SYNC_JSON}: no row for {ja} / {en} (run --sync)")
+                continue
+            for key, path in (("ja_sha256", ja), ("en_sha256", en)):
+                have = sha256_file(path)
+                if entry.get(key) != have:
+                    errors.append(
+                        f"{SYNC_JSON}: {path} changed after verification ({key} mismatch) — "
+                        f"update last_rewritten with `python3 scripts/check-docs.py --sync`"
+                    )
+            last = str(entry.get("last_rewritten", ""))
+            if not ISO_DATE.fullmatch(last):
+                errors.append(f"{SYNC_JSON}: {ja}: last_rewritten '{last}' is not an ISO date")
+            elif ISO_DATE.fullmatch(date) and last > date:
+                errors.append(f"{SYNC_JSON}: {ja}: last_rewritten {last} is after verified.date {date}")
+            en_text = open(en, encoding="utf-8").read()
+            h1 = next((line[2:].strip() for line in en_text.splitlines() if line.startswith("# ")), "")
+            if CJK.search(h1):
+                errors.append(f"{en}: the English H1 still contains Japanese text ('{h1}') — translate it")
+            if open(en, "rb").read() == open(ja, "rb").read():
+                errors.append(f"{en}: is a byte-for-byte copy of {ja} — translate it")
+        for key in entries:
+            if key not in pairs:
+                errors.append(f"{SYNC_JSON}: stale row for {key[0]} / {key[1]} (run --sync)")
+
+        for view in (LEDGER_JA, LEDGER_EN):
+            if not os.path.isfile(view):
+                errors.append(f"{view}: missing generated ledger view (run --sync)")
+            else:
+                text = open(view, encoding="utf-8").read()
+                for needle in (zts, date, v.get("commit", "")):
+                    if needle and needle not in text:
+                        errors.append(f"{view}: is out of date (missing '{needle}'; run --sync)")
 
 if warnings:
     for w in warnings:

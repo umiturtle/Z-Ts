@@ -216,11 +216,11 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 `zigw` が 1 語でもあれば落とします（「`./zigw build` でビルドできます」は、いちばん最初に
 踏む壊れた手順になります）。
 
-読者向けのページを足したら、[`../INDEX.md`](../INDEX.md) にも 1 行足します。索引は
-サイドバーを手で写したものなので、放っておくと「サイドバーにしか無いページ」ができます。
-規約 11 が、`docs/learn/ja/`・`docs/reference/`・`docs/contributing/`・`examples/*/README.md`
-の全ページ（と用語集）が索引からリンクされているかを検査します。**順番は検査しません** —
-並びは `src/docsite/main.zig` の `GroupKey` が正本です。
+読者向けのページを足したら、[`../INDEX.md`](../INDEX.md) と
+[`../INDEX.en.md`](../INDEX.en.md) の**両方**に 1 行足します。索引はサイドバーを手で写した
+ものなので、放っておくと「サイドバーにしか無いページ」ができます。規約 11 が、日本語版の
+全ページ（と用語集）が日本語の索引から、英語版の全ページが英語の索引からリンクされているかを
+検査します。**順番は検査しません** — 並びは `src/docsite/main.zig` の `GroupKey` が正本です。
 
 **左メニューは全ページ・両言語で同じ並び**です。`GroupKey.order()` は言語を引数に取らず、
 先頭 6 グループは「学習パスの入口 + 5 つの番号付きステップ」と決まっています。グループ内の
@@ -233,8 +233,18 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 `learn_path.steps` の `minutes` はランディングの合計・各ページ上部のレール・`<!-- learn-path -->`
 に展開されます。`README.md`・[`../INDEX.md`](../INDEX.md)・日英の学習ハブに書いた「およそ N 分」
 とステップ表の分は**手書き**なので、チュートリアルを 1 本足したら必ず更新します。
-規約 12 が `learn_path.zig` の合計と 4 か所の記述、2 つのステップ表を突き合わせ、
+規約 12 が `learn_path.zig` の合計と 4 か所の記述、4 つのステップ表を突き合わせ、
 `GroupKey.order()` が言語依存に戻っていないかも検査します。
+
+**「いつ最終書き換えか」「どのバージョンまで実装と無矛盾を確認したか」は台帳に記録します。**
+[`doc-sync.md`](doc-sync.md) と正本の `scripts/doc-sync.json` が、日英 1 組につき
+`last_rewritten`・確認バージョン（`build.zig.zon` の `.version` / `minimum_zig_version`）・
+確認コミット・確認コマンド・本文ふたつの sha256・実装ファイル群の sha256 を持ちます。
+規約 13 がこれらを検査するので、**本文を書き換えて日付を更新し忘れる**ことも、
+**実装が変わったのに再確認していない**ことも、片方の言語だけ直すことも CI で落ちます。
+更新は `python3 scripts/check-docs.py --sync`（日付は `--date YYYY-MM-DD` で明示可）。
+英語版の無いページも規約 13 が落とします。内部資料（ADR・設計メモ・タスク票）は
+日本語専用なので台帳の対象外です。
 
 ## 9. 2 言語で書く（英語と日本語）
 
@@ -284,6 +294,8 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `docs/INDEX.md: does not link 'learn/ja/…'` | ページを足して索引を忘れた | [`../INDEX.md`](../INDEX.md) の該当グループに 1 行足す（規約 11） |
 | `does not say 'およそ 95 分'` / `step 3 says … minutes` | チュートリアルを足したが所要分を直していない | `learn_path.zig` の `minutes` を決め、README・索引・日英ハブの分を合わせる（規約 12） |
 | `GroupKey.order() takes a language` | 言語でメニューを分岐させた | `order()` を 1 本に戻す。未翻訳ページは日本語タイトルのまま両方に出す |
+| `missing English counterpart` | 英語版を書き忘れた | `*.en.md` を足し、両方の索引に 1 行（規約 11・13） |
+| `changed after verification` / `implementation changed since verification` | 本文か実装を変えたが台帳を更新していない | 差分を読み直し、`python3 scripts/check-docs.py --sync` で日付とハッシュを更新（規約 13） |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

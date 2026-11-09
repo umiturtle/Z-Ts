@@ -148,6 +148,13 @@ Objective-C シムは macOS の SDK を要求します。Linux からは**構文
 `src/**.zig` のようなサイト外ファイルへのリンクは、リポジトリに実在すれば自動で GitHub の
 blob URL に差し替わります。
 
+### `missing English counterpart` / `changed after verification` で `check-docs.py` が落ちる
+
+規約 11・13 です。前者は英語版 `*.en.md` の書き忘れ（日英両方の索引にも 1 行必要）、
+後者は本文か実装を変えたのに[同期台帳](doc-sync.md)を更新していないことを意味します。
+差分を読み直してから `python3 scripts/check-docs.py --sync` を実行してください。台帳は
+「いつ最終書き換えか」「どのバージョンまで実装と無矛盾を確認したか」を記録しています。
+
 ### 検索が 0 件になる
 
 `assets/search-index.js` が読み込まれていない可能性があります。`file://` で開くと

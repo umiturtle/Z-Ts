@@ -477,16 +477,20 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
 
     // 5a-bis. GitHub Pages serves `404.html` for anything that does not exist. Without it a
     // renamed page loses the reader at a blank screen with no way back.
-    {
+    for ([_]i18n.Lang{ .ja, .en }) |lang| {
+        const path = if (lang == .en) "en/404.html" else "404.html";
         const html = try site.renderPage(arena, .{
-            .title = i18n.strings(.ja).not_found_title,
+            .title = i18n.strings(lang).not_found_title,
             .active_href = "",
-            .groups = groups_ja,
-            .body = try renderNotFoundBody(arena, .ja),
+            .groups = if (lang == .en) groups_en else groups_ja,
+            .body = try renderNotFoundBody(arena, lang, if (lang == .en) "../" else ""),
             .kind = "home",
-            .lang = .ja,
-        }, "404.html");
-        try writeInDir(io, arena, out_dir, "404.html", html);
+            .lang = lang,
+            // The switcher must work on a 404 too: a lost reader should be able to change language
+            // without first finding their way back to a real page.
+            .alt_href = if (lang == .en) "404.html" else "en/404.html",
+        }, path);
+        try writeInDir(io, arena, out_dir, path, html);
         report.bytes += html.len;
     }
 
@@ -733,6 +737,9 @@ fn buildSectionIndexes(arena: Allocator, rendered: anytype) ![]const Section {
         for (rendered) |page| {
             const page_dir = page.href[0 .. std.mem.lastIndexOfScalar(u8, page.href, '/') orelse 0];
             if (!std.mem.eql(u8, page_dir, dir)) continue;
+            // A `.en.html` mirror is reached through the language switcher, not by listing it as
+            // a second, unexplained page in the directory index.
+            if (std.mem.endsWith(u8, page.source, ".en.md")) continue;
             try entries.append(arena, .{
                 .href = page.href,
                 .title = page.title,
@@ -927,6 +934,7 @@ fn nextAssetUrl(html: []const u8, cursor: *usize) ?[]const u8 {
 fn collectSources(arena: Allocator, io: Io) ![]const Source {
     var list: std.ArrayListUnmanaged(Source) = .empty;
     try list.append(arena, .{ .path = "README.md", .key = .hidden, .lang = .ja });
+    try list.append(arena, .{ .path = "README.en.md", .key = .hidden, .lang = .en });
     // `AGENTS.md` is agent-facing: it belongs to the 内部資料 bucket like the design notes, not to
     // the reader's はじめに. Ask `groupFor` instead of hardcoding, so the sidebar and the search
     // index cannot disagree about it.
@@ -953,13 +961,20 @@ fn collectSources(arena: Allocator, io: Io) ![]const Source {
         });
     }
 
-    // Example READMEs are part of the public documentation surface.
+    // Example READMEs are part of the public documentation surface, in both languages.
     for ([_][]const u8{ "counter", "gallery", "c_embed", "frameworks" }) |example| {
-        const path = try std.fmt.allocPrint(arena, "examples/{s}/README.md", .{example});
-        // Missing examples are simply not part of the sidebar (no error: the corpus evolves).
-        const bytes = cwd.readFileAlloc(io, path, arena, .limited(1024 * 1024)) catch continue;
-        _ = bytes;
-        try list.append(arena, .{ .path = path, .key = .samples, .lang = .ja });
+        for ([_][]const u8{ "README.md", "README.en.md" }) |name| {
+            const path = try std.fmt.allocPrint(arena, "examples/{s}/{s}", .{ example, name });
+            // A missing example (or a translation still being written) is simply not part of the
+            // site; the checker is what makes a permanent gap fail CI.
+            const bytes = cwd.readFileAlloc(io, path, arena, .limited(1024 * 1024)) catch continue;
+            _ = bytes;
+            try list.append(arena, .{
+                .path = path,
+                .key = .samples,
+                .lang = i18n.Lang.fromPath(path) orelse .ja,
+            });
+        }
     }
 
     std.mem.sort(Source, list.items, {}, struct {
@@ -983,52 +998,64 @@ const errors_href = "docs/reference/errors.html";
 const glossary_href = "docs/glossary.html";
 
 fn groupFor(path: []const u8) GroupKey {
+    // `docs/glossary.en.md` is the English mirror of `docs/glossary.md`; both belong to the same
+    // sidebar group and the same position within it. Comparing the stem keeps one classification
+    // table for two languages.
+    const stem = docStem(path);
     // The translated learning tree is grouped by its own folders, and its language comes from the
     // path — `docs/learn/en/concepts/rpc.md` is both a concept page and an English page.
-    if (std.mem.startsWith(u8, path, i18n.learn_root)) {
-        const rest = path[i18n.learn_root.len..];
+    if (std.mem.startsWith(u8, stem, i18n.learn_root)) {
+        const rest = stem[i18n.learn_root.len..];
         if (std.mem.startsWith(u8, rest, "ja/concepts/") or std.mem.startsWith(u8, rest, "en/concepts/")) return .concepts;
         if (std.mem.startsWith(u8, rest, "ja/tutorials/") or std.mem.startsWith(u8, rest, "en/tutorials/")) return .tutorials;
         if (std.mem.startsWith(u8, rest, "ja/patterns/") or std.mem.startsWith(u8, rest, "en/patterns/")) return .patterns;
         if (std.mem.startsWith(u8, rest, "ja/guides/") or std.mem.startsWith(u8, rest, "en/guides/")) return .guides;
-        if (std.mem.eql(u8, rest, "ja/start.md") or std.mem.eql(u8, rest, "en/start.md")) return .start;
+        if (std.mem.eql(u8, rest, "ja/start") or std.mem.eql(u8, rest, "en/start")) return .start;
         return .learn;
     }
     // `tauri-internals.md` is an implementation autopsy — it belongs with the design notes even
     // though it lives in `docs/reference/`.
-    if (std.mem.eql(u8, path, "docs/reference/tauri-internals.md")) return .internals;
-    if (std.mem.eql(u8, path, "AGENTS.md")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/tasks/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/decisions/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/architecture/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/roadmap/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/environment/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/reference/")) return .reference;
-    if (std.mem.eql(u8, path, "docs/glossary.md")) return .reference;
-    if (std.mem.startsWith(u8, path, "docs/contributing/")) return .dev;
-    if (std.mem.startsWith(u8, path, "examples/")) return .samples;
+    if (std.mem.eql(u8, stem, "docs/reference/tauri-internals")) return .internals;
+    if (std.mem.eql(u8, stem, "AGENTS")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/tasks/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/decisions/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/architecture/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/roadmap/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/environment/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/reference/")) return .reference;
+    if (std.mem.eql(u8, stem, "docs/glossary")) return .reference;
+    if (std.mem.startsWith(u8, stem, "docs/contributing/")) return .dev;
+    if (std.mem.startsWith(u8, stem, "examples/")) return .samples;
     // `README.md` (the repository readme) and `docs/INDEX.md` (the map of the repository) are
     // published and linked, but they are not part of the reader's path.
     return .hidden;
 }
 
+/// `docs/glossary.en.md` → `docs/glossary`, `docs/INDEX.md` → `docs/INDEX`. Used by every path
+/// classifier so a mirror page cannot be filed under a different group.
+fn docStem(path: []const u8) []const u8 {
+    if (std.mem.endsWith(u8, path, ".en.md")) return path[0 .. path.len - ".en.md".len];
+    if (std.mem.endsWith(u8, path, ".md")) return path[0 .. path.len - ".md".len];
+    return path;
+}
+
 /// Page kind, derived from the path. It drives the badge next to the breadcrumbs, and the CSS
 /// that colours it — so the taxonomy is visible, not just documented.
 fn pageKind(path: []const u8) []const u8 {
-    if (std.mem.eql(u8, path, "README.md")) return "home";
-    if (std.mem.eql(u8, path, "docs/INDEX.md")) return "reference";
-    if (std.mem.startsWith(u8, path, "docs/learn/")) {
-        if (std.mem.indexOf(u8, path, "/concepts/") != null) return "concept";
-        if (std.mem.indexOf(u8, path, "/tutorials/") != null) return "tutorial";
-        if (std.mem.indexOf(u8, path, "/patterns/") != null) return "pattern";
-        if (std.mem.indexOf(u8, path, "/guides/") != null) return "guide";
+    const stem = docStem(path);
+    if (std.mem.eql(u8, stem, "README")) return "home";
+    if (std.mem.eql(u8, stem, "docs/INDEX")) return "reference";
+    if (std.mem.startsWith(u8, stem, "docs/learn/")) {
+        if (std.mem.indexOf(u8, stem, "/concepts/") != null) return "concept";
+        if (std.mem.indexOf(u8, stem, "/tutorials/") != null) return "tutorial";
+        if (std.mem.indexOf(u8, stem, "/patterns/") != null) return "pattern";
+        if (std.mem.indexOf(u8, stem, "/guides/") != null) return "guide";
         return "home";
     }
-    if (std.mem.startsWith(u8, path, "docs/recipes/")) return "recipe";
-    if (std.mem.eql(u8, path, "docs/glossary.md")) return "reference";
-    if (std.mem.startsWith(u8, path, "docs/reference/")) return "reference";
-    if (std.mem.startsWith(u8, path, "examples/")) return "recipe";
-    if (std.mem.startsWith(u8, path, "docs/")) return "internals";
+    if (std.mem.eql(u8, stem, "docs/glossary")) return "reference";
+    if (std.mem.startsWith(u8, stem, "docs/reference/")) return "reference";
+    if (std.mem.startsWith(u8, stem, "examples/")) return "recipe";
+    if (std.mem.startsWith(u8, stem, "docs/")) return "internals";
     return "home";
 }
 
@@ -1056,10 +1083,10 @@ fn buildGroups(arena: Allocator, lang: i18n.Lang, rendered: anytype, packages: [
         } else {
             for (rendered) |page| {
                 if (page.key != key) continue;
-                // Only the translated tree is filtered by language: `reference/`, `examples/` and
-                // `contributing/` exist once, so hiding them on English pages would silently
-                // shorten the menu when the reader flips the switcher.
-                if (isTranslated(page.source) and page.lang != lang) continue;
+                // A page with a real counterpart belongs to exactly one sidebar. A page without
+                // one (the internal notes, still Japanese-only) stays visible in both, so flipping
+                // the switcher never shortens the menu. `alt_href` is the existence probe.
+                if (page.alt_href != null and page.lang != lang) continue;
                 try entries.append(arena, .{
                     .href = page.href,
                     .title = if (lang == .en) englishNavTitle(page.source) orelse page.title else page.title,
@@ -1115,6 +1142,8 @@ fn groupHeading(arena: Allocator, key: GroupKey, lang: i18n.Lang) ![]const u8 {
 /// badge; only the navigation label is translated. `null` means "use the page's own title" (the
 /// translated learning tree, and anything not listed here).
 fn englishNavTitle(source: []const u8) ?[]const u8 {
+    // Mirror pages already have an English H1; only the Japanese originals need a translated label.
+    if (std.mem.endsWith(u8, source, ".en.md")) return null;
     const Table = struct { path: []const u8, label: []const u8 };
     const table = [_]Table{
         .{ .path = "docs/glossary.md", .label = "Glossary" },
@@ -1135,54 +1164,48 @@ fn englishNavTitle(source: []const u8) ?[]const u8 {
     return null;
 }
 
-/// True for pages that exist in two languages (`docs/learn/ja/…` and `…/en/…`). Everything else
-/// is written once and appears in both sidebars.
-fn isTranslated(source: []const u8) bool {
-    if (!std.mem.startsWith(u8, source, learn_path.learn_root)) return false;
-    const rest = source[learn_path.learn_root.len..];
-    return std.mem.startsWith(u8, rest, "ja/") or std.mem.startsWith(u8, rest, "en/");
-}
-
 /// Canonical position of a page inside its sidebar group, or `null` when nothing lists it.
 ///
 /// The learn sections delegate to [`learn_path.pageRank`]; the lookup groups have their own short
 /// tables because "the order the directory walk produced" is not a reading order (`examples/
 /// c_embed` sorted before `examples/counter`, and `glossary.md` after `cli.md`).
 fn navRank(key: GroupKey, source: []const u8) ?usize {
+    const stem = docStem(source);
     switch (key) {
         .learn, .start, .concepts, .tutorials, .patterns, .guides => return learn_path.pageRank(source),
         .reference => {
             const table = [_][]const u8{
-                "docs/glossary.md",
-                "docs/reference/cli.md",
-                "docs/reference/tauri-usage.md",
+                "docs/glossary",
+                "docs/reference/cli",
+                "docs/reference/tauri-usage",
             };
             for (table, 0..) |path, i| {
-                if (std.mem.eql(u8, path, source)) return i;
+                if (std.mem.eql(u8, path, stem)) return i;
             }
         },
         .samples => {
             // Bigger story first: one app → three artefacts, then the framework matrix, then the
             // screenshot gallery and the C embedding.
             const table = [_][]const u8{
-                "examples/counter/README.md",
-                "examples/frameworks/README.md",
-                "examples/gallery/README.md",
-                "examples/c_embed/README.md",
+                "examples/counter/README",
+                "examples/frameworks/README",
+                "examples/gallery/README",
+                "examples/c_embed/README",
             };
             for (table, 0..) |path, i| {
-                if (std.mem.eql(u8, path, source)) return i;
+                if (std.mem.eql(u8, path, stem)) return i;
             }
         },
         .dev => {
             const table = [_][]const u8{
-                "docs/contributing/README.md",
-                "docs/contributing/repository-map.md",
-                "docs/contributing/troubleshooting.md",
-                "docs/contributing/writing-docs.md",
+                "docs/contributing/README",
+                "docs/contributing/repository-map",
+                "docs/contributing/troubleshooting",
+                "docs/contributing/doc-sync",
+                "docs/contributing/writing-docs",
             };
             for (table, 0..) |path, i| {
-                if (std.mem.eql(u8, path, source)) return i;
+                if (std.mem.eql(u8, path, stem)) return i;
             }
         },
         // `api` and `internals` are assembled in order (index first, then packages / one entry),
@@ -1269,7 +1292,6 @@ fn buildCrumbs(arena: Allocator, lang: i18n.Lang, key: GroupKey, href: []const u
 /// `null` when the page is not part of the translated tree, which is what hides the language
 /// switcher on the Japanese-only pages instead of pointing it at a 404.
 fn altHref(arena: Allocator, io: Io, source_path: []const u8, lang: i18n.Lang) !?[]const u8 {
-    if (i18n.Lang.fromPath(source_path) == null) return null;
     const md = try i18n.alternateHref(arena, source_path, lang.other());
     // The counterpart is only promised when the file is really there; a half-translated tree
     // would otherwise produce a switcher that dead-ends. One byte is enough: the read is an
@@ -1814,15 +1836,15 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
             .blurb = "全公開宣言（`///` から自動生成）、用語集、そしてエラー名の索引。",
             .cta_label = "API リファレンス",
             .cta_href = "docs/api/index.html",
-            .links = &.{ "docs/api/zts_tauri/index.html", "docs/glossary.html", "docs/reference/errors.html" },
+            .links = &.{ "docs/api/zts_tauri/index.html", "docs/glossary.en.html", "docs/reference/errors.html" },
         },
         .{
             .icon = "M6 3v12a3 3 0 0 0 3 3h6M12 3v12M4 21h6M14 21h6",
             .title = "動くサンプルを見る",
             .blurb = "9 フレームワークが同じ画面を描くデモ、3 成果物のカウンター、C99 への埋め込み。すべて CI がビルドしています。",
             .cta_label = "サンプル",
-            .cta_href = "examples/frameworks/README.html",
-            .links = &.{ "examples/counter/README.html", "examples/c_embed/README.html", "examples/gallery/README.html" },
+            .cta_href = "examples/frameworks/README.en.html",
+            .links = &.{ "examples/counter/README.en.html", "examples/c_embed/README.en.html", "examples/gallery/README.en.html" },
         },
         .{
             .icon = "M9 12l2 2 4-4M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z",
@@ -1989,7 +2011,7 @@ fn renderSitemap(arena: Allocator, pages: []const []const u8) ![]const u8 {
     return out.toOwnedSlice();
 }
 
-fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang) ![]const u8 {
+fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang, prefix: []const u8) ![]const u8 {
     const s = i18n.strings(lang);
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
@@ -2004,7 +2026,7 @@ fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang) ![]const u8 {
         .{ .href = "en/index.html", .label = "Home" },
         .{ .href = "docs/learn/en/start.html", .label = "Your first ten minutes" },
         .{ .href = "docs/learn/en/index.html", .label = "The learning path" },
-        .{ .href = "docs/INDEX.html", .label = "Documentation index" },
+        .{ .href = "docs/INDEX.en.html", .label = "Documentation index" },
         .{ .href = "docs/api/index.html", .label = "API reference (A–Z)" },
     } else &.{
         .{ .href = "index.html", .label = "ホーム" },
@@ -2014,7 +2036,7 @@ fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang) ![]const u8 {
         .{ .href = "docs/api/index.html", .label = "API リファレンス（A–Z）" },
     };
     for (links) |link| {
-        try w.print("<li><a href=\"{s}\">{s}</a></li>", .{ link.href, link.label });
+        try w.print("<li><a href=\"{s}{s}\">{s}</a></li>", .{ prefix, link.href, link.label });
     }
     try w.writeAll("</ul>\n");
     return out.toOwnedSlice();
@@ -2144,7 +2166,8 @@ test "groupFor keeps the reader-facing sidebar reader-facing" {
 test "languages are detected from the path, and only there" {
     try std.testing.expectEqual(@as(?i18n.Lang, .ja), i18n.Lang.fromPath("docs/learn/ja/index.md"));
     try std.testing.expectEqual(@as(?i18n.Lang, .en), i18n.Lang.fromPath("docs/learn/en/guides/install.md"));
-    try std.testing.expectEqual(@as(?i18n.Lang, null), i18n.Lang.fromPath("docs/guides/using-rpc.md"));
+    try std.testing.expectEqual(@as(?i18n.Lang, .ja), i18n.Lang.fromPath("docs/guides/using-rpc.md"));
+    try std.testing.expectEqual(@as(?i18n.Lang, .en), i18n.Lang.fromPath("docs/INDEX.en.md"));
 }
 
 test "the learn-path directive expands only on its own line" {
@@ -2269,4 +2292,42 @@ test "English menu labels are translated only for Japanese-only pages" {
     // The translated tree has its own H1 in each language; never overwrite it.
     try std.testing.expectEqual(@as(?[]const u8, null), englishNavTitle("docs/learn/en/start.md"));
     try std.testing.expectEqual(@as(?[]const u8, null), englishNavTitle("docs/learn/ja/start.md"));
+}
+
+test "English mirror pages are classified exactly like their Japanese originals" {
+    try std.testing.expectEqual(GroupKey.reference, groupFor("docs/glossary.en.md"));
+    try std.testing.expectEqual(GroupKey.reference, groupFor("docs/reference/cli.en.md"));
+    try std.testing.expectEqual(GroupKey.internals, groupFor("docs/reference/tauri-internals.en.md"));
+    try std.testing.expectEqual(GroupKey.dev, groupFor("docs/contributing/doc-sync.en.md"));
+    try std.testing.expectEqual(GroupKey.samples, groupFor("examples/counter/README.en.md"));
+    try std.testing.expectEqual(GroupKey.hidden, groupFor("docs/INDEX.en.md"));
+    try std.testing.expectEqualStrings("reference", pageKind("docs/INDEX.en.md"));
+    try std.testing.expectEqualStrings("recipe", pageKind("examples/counter/README.en.md"));
+    // A mirror has its own English H1, and sorts to the same place in the group.
+    try std.testing.expectEqual(@as(?[]const u8, null), englishNavTitle("docs/glossary.en.md"));
+    try std.testing.expectEqual(@as(?usize, 0), navRank(.reference, "docs/glossary.en.md"));
+    try std.testing.expectEqual(@as(?usize, 1), navRank(.reference, "docs/reference/cli.en.md"));
+    try std.testing.expectEqual(@as(?usize, 0), navRank(.samples, "examples/counter/README.en.md"));
+}
+
+test "the language switcher resolves a mirror page that really exists" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+
+    try std.testing.expectEqualStrings(
+        "docs/glossary.en.html",
+        (try altHref(arena, io, "docs/glossary.md", .ja)).?,
+    );
+    try std.testing.expectEqualStrings(
+        "docs/glossary.html",
+        (try altHref(arena, io, "docs/glossary.en.md", .en)).?,
+    );
+    // A Japanese-only internal page has no mirror, so the switcher stays hidden instead of
+    // pointing at a 404.
+    try std.testing.expectEqual(
+        @as(?[]const u8, null),
+        try altHref(arena, io, "docs/decisions/0001-zig-017-and-sharded-agent-workflow.md", .ja),
+    );
 }
