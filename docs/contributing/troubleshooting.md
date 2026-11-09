@@ -2,7 +2,7 @@
 
 > **アプリを作っていてエラーが出た場合は [`../learn/ja/guides/troubleshooting.md`](../learn/ja/guides/troubleshooting.md)
 > を読んでください。** ここは `./zigw` / `zig build` / CI / ドキュメントサイトという
-> **Z-Ts 本体の開発**で実際に踏んだ問題だけを載せています。
+> **ziggurats 本体の開発**で実際に踏んだ問題だけを載せています。
 
 
 
@@ -147,6 +147,12 @@ Objective-C シムは macOS の SDK を要求します。Linux からは**構文
 リンク先を直すか、そのファイルをサイトに含めてください（`.md` は自動で含まれます）。
 `src/**.zig` のようなサイト外ファイルへのリンクは、リポジトリに実在すれば自動で GitHub の
 blob URL に差し替わります。
+
+### `legacy project name … in prose` で `check-docs.py` が落ちる
+
+規約 14 です。プロジェクトのフルネームは `ziggurats`（小文字）で、旧称はリポジトリ URL と
+チェックアウトのパス名にだけ残せます。本文・サイト UI・CLI ヘルプで見つけたら置換してください。
+大文字始まりの表記も落ちます。`zts` / `z_ts` / `zts_*` は識別子なので無関係です。
 
 ### `missing English counterpart` / `changed after verification` で `check-docs.py` が落ちる
 

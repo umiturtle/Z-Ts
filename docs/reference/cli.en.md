@@ -5,7 +5,7 @@
 
 The specification of the app author's CLI. `zts` operates on **your project**.
 
-> **Operating the Z-Ts repository itself** (`zig build` steps, CI scripts) is documented in
+> **Operating the ziggurats repository itself** (`zig build` steps, CI scripts) is documented in
 > [`../contributing/README.en.md`](../contributing/README.en.md). It is deliberately not on this page.
 
 ```text
@@ -61,7 +61,7 @@ zts init my-app --force           # overwrite existing files
 
 ### Where the dependency comes from (`.z_ts`)
 
-`zts init` writes one line into the generated `build.zig.zon` saying where the project gets Z-Ts.
+`zts init` writes one line into the generated `build.zig.zon` saying where the project gets ziggurats.
 A **`zts` built as a release** (the binary from GitHub Releases) points at the published archive:
 
 ```zig

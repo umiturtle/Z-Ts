@@ -1,4 +1,4 @@
-// Z-Ts `M4-06`: AppKit system tray (`NSStatusItem`) behind a Flat C ABI.
+// ziggurats `M4-06`: AppKit system tray (`NSStatusItem`) behind a Flat C ABI.
 //
 // Mirrors what upstream `muda` does through the `tray-icon` crate:
 //

@@ -52,7 +52,7 @@
   未掲載のページは**落とさず末尾に辞書順**で出す。新しいファイルを足した瞬間に
   「消えた」と思わせないため。純関数なので、walk がどんな順でページを渡しても同じ並び。
 - **ステップ 1 を独立グループに**: `GroupKey.start` を追加し `groupHeading` が
-  `learn_path.steps[0]` から `1 · はじめての Z-Ts` を引く。番号は全部 `learn_path.steps` 由来。
+  `learn_path.steps[0]` から `1 · はじめての ziggurats` を引く。番号は全部 `learn_path.steps` 由来。
 - **死んだ `.deep` グループを削除**: `docs/guides/` の旧ページはすでに `.internals` に
   畳まれており、`.deep` はどのページも返さなかった（`groupFor` の分岐も `pageKind` の
   `"deep"` 分岐も到達不能）。

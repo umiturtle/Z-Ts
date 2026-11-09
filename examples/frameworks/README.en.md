@@ -1,6 +1,6 @@
 # `examples/frameworks` — nine frameworks, one screen
 
-Nine frontend frameworks render **the same screen** so their output can be compared, and so Z-Ts's
+Nine frontend frameworks render **the same screen** so their output can be compared, and so ziggurats's
 embedding path is exercised with real bundler output rather than a hand-written HTML file.
 
 | Framework | Output used |

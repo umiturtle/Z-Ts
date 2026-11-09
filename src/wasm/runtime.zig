@@ -1,6 +1,6 @@
 //! Generic Isomorphic Wasm Application Container & C ABI Exporter (`src/wasm/runtime.zig`).
 //!
-//! Turns ANY Z-Ts application (`rpc.Schema` + `tauri.CorePluginStates` + user state) into a
+//! Turns ANY ziggurats application (`rpc.Schema` + `tauri.CorePluginStates` + user state) into a
 //! standalone `wasm32-freestanding` `.wasm` binary with a single `comptime` declaration:
 //!
 //! ```zig

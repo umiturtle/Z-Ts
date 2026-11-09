@@ -6,19 +6,19 @@
 公開サイト（<https://umiturtle.github.io/Z-Ts/>）の**サイドバーと同じ並び**で並べた索引です。
 サイトでは `/` キーで全文検索、右上の `日本語 / English` で言語を切り替えられます。
 
-**10 分だけあるなら** → [はじめての Z-Ts](learn/ja/start.md)。
-読み物として全体像から入るなら → [Z-Ts を学ぶ（学習パス）](learn/ja/index.md)。
+**10 分だけあるなら** → [はじめての ziggurats](learn/ja/start.md)。
+読み物として全体像から入るなら → [ziggurats を学ぶ（学習パス）](learn/ja/index.md)。
 
 ## 3 つの入口
 
-Z-Ts には読者が 3 種類いて、使うコマンドもページも別です。混ぜると、アプリを作りたい人に
+ziggurats には読者が 3 種類いて、使うコマンドもページも別です。混ぜると、アプリを作りたい人に
 リポジトリ運用の手順が、本体を直したい人にアプリの使い方が見えてしまいます。
 
 | あなたは | 入口 | 使うコマンド |
 |---|---|---|
-| **アプリを作りたい** | [はじめての Z-Ts](learn/ja/start.md) → [学習パス](learn/ja/index.md)（英語は [`learn/en/`](learn/en/index.md)） | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
+| **アプリを作りたい** | [はじめての ziggurats](learn/ja/start.md) → [学習パス](learn/ja/index.md)（英語は [`learn/en/`](learn/en/index.md)） | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
 | **名前から引きたい** | [API リファレンス](api/index.html) / [用語集](glossary.md) / [エラー索引](reference/errors.html) | — |
-| **Z-Ts 本体を開発したい** | [コントリビュータ向け](contributing/README.md) → [リポジトリの地図](contributing/repository-map.md) | `zig build` / `scripts/*` |
+| **ziggurats 本体を開発したい** | [コントリビュータ向け](contributing/README.md) → [リポジトリの地図](contributing/repository-map.md) | `zig build` / `scripts/*` |
 
 ## 学習パス（5 ステップ・およそ 95 分）
 
@@ -27,7 +27,7 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 
 | # | ステップ | 分 | 終わったとき | 入口 |
 |---|---|---|---|---|
-| 1 | はじめての Z-Ts | 10 | 自分のアプリがブラウザで動き、`zig-out/bin/` に単一バイナリがある | [start.md](learn/ja/start.md) |
+| 1 | はじめての ziggurats | 10 | 自分のアプリがブラウザで動き、`zig-out/bin/` に単一バイナリがある | [start.md](learn/ja/start.md) |
 | 2 | 仕組みを知る | 15 | 「ボタン → Zig の関数」がどこを通るか説明できる | [concepts/](learn/ja/concepts/index.md) |
 | 3 | アプリを作る | 50 | 3 本のチュートリアルを通し、コマンド・状態・画面を書いて配れる | [tutorials/](learn/ja/tutorials/index.md) |
 | 4 | 実用パターン | 20 | コマンド・状態・エラーの設計を、練習問題で自分の言葉にできる | [patterns/](learn/ja/patterns/index.md) |
@@ -47,13 +47,13 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 
 | ページ | 1 文でいうと |
 |---|---|
-| [Z-Ts を学ぶ](learn/ja/index.md) | 道順・30 秒の全体像・前提知識・目的別の入口。まずここから |
+| [ziggurats を学ぶ](learn/ja/index.md) | 道順・30 秒の全体像・前提知識・目的別の入口。まずここから |
 
-### 1 · はじめての Z-Ts
+### 1 · はじめての ziggurats
 
 | ページ | 1 文でいうと |
 |---|---|
-| [はじめての Z-Ts](learn/ja/start.md) | バイナリを置く → `doctor` → `init` → `dev` → `build` を 1 ページで（10 分） |
+| [はじめての ziggurats](learn/ja/start.md) | バイナリを置く → `doctor` → `init` → `dev` → `build` を 1 ページで（10 分） |
 
 ### 2 · 仕組みを知る
 
@@ -140,7 +140,7 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 
 | ページ | 1 文でいうと |
 |---|---|
-| [Z-Ts 自体を開発する](contributing/README.md) | ツールチェーン・`zig build` のステップ・変更の作法・CI |
+| [ziggurats 自体を開発する](contributing/README.md) | ツールチェーン・`zig build` のステップ・変更の作法・CI |
 | [リポジトリの地図](contributing/repository-map.md) | どのファイルが何で、どのくらい触るか（並列開発の分割単位） |
 | [トラブルシューティング（リポジトリ開発）](contributing/troubleshooting.md) | ツールチェーン・コールドビルド・0.17 API 差分・Pages |
 | [ドキュメント同期台帳](contributing/doc-sync.md) | いつ最終書き換えか・どのバージョンまで実装と無矛盾を確認したか |
@@ -183,3 +183,5 @@ Z-Ts には読者が 3 種類いて、使うコマンドもページも別です
 > **規約 12** がこのページ・`README.md`・日英の学習ハブに書いた分と突き合わせます。
 > **規約 13**（[同期台帳](contributing/doc-sync.md)）が「いつ最終書き換えか」「どのバージョンまで
 > 実装と無矛盾を確認したか」を日英 1 組ずつ記録し、本文・実装のハッシュのズレを落とします。
+> **規約 14** が、フルネーム `ziggurats`（小文字）と、リポジトリ URL / パスにだけ残る旧称の
+> 使い分けを検査します。`zts` / `z_ts` / `zts_*` は識別子なので対象外です。

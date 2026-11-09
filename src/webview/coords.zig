@@ -1,6 +1,6 @@
 //! CSS ⇔ Cocoa Coordinate Conversion.
 //!
-//! Z-Ts' public geometry (`zts_foundation.geometry.LogicalPoint`) uses the **CSS / Win32 / GTK
+//! ziggurats' public geometry (`zts_foundation.geometry.LogicalPoint`) uses the **CSS / Win32 / GTK
 //! convention**: the origin is the TOP-LEFT of the screen with Y growing downwards.
 //! AppKit (`NSWindow`, `NSView`, `NSScreen`) instead uses the **Cocoa convention**: the origin is the
 //! BOTTOM-LEFT with Y growing upwards (and multi-monitor origins can be negative).

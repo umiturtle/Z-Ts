@@ -657,7 +657,7 @@ pub fn build(b: *std.Build) void {
     // very version. `zts init` then writes `.url`/`.hash` into the user's `build.zig.zon`, so the
     // project builds on a machine that never saw a checkout, and `zts doctor` stops reporting a
     // checkout that is not there.
-    const pkg_url = b.option([]const u8, "zts-pkg-url", "Published Z-Ts archive URL baked into `zts init`") orelse "";
+    const pkg_url = b.option([]const u8, "zts-pkg-url", "Published ziggurats archive URL baked into `zts init`") orelse "";
     const pkg_hash = b.option([]const u8, "zts-pkg-hash", "`zig fetch` hash of --zts-pkg-url") orelse "";
     if ((pkg_url.len == 0) != (pkg_hash.len == 0)) {
         std.debug.panic("-Dzts-pkg-url and -Dzts-pkg-hash must be passed together", .{});
@@ -699,7 +699,7 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(zts_exe);
 
-    const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full Z-Ts & Tauri v2 E2E suite");
+    const test_step = b.step("test", "Run isolated standalone package tests + C99 ABI check + full ziggurats & Tauri v2 E2E suite");
     test_step.dependOn(&b.addRunArtifact(foundation_tests).step);
     test_step.dependOn(&b.addRunArtifact(web_tests).step);
     test_step.dependOn(&b.addRunArtifact(rpc_tests).step);

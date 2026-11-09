@@ -1,4 +1,4 @@
-// Z-Ts `M4-01`: native dialog & clipboard backend for macOS (`NSOpenPanel` / `NSSavePanel` /
+// ziggurats `M4-01`: native dialog & clipboard backend for macOS (`NSOpenPanel` / `NSSavePanel` /
 // `NSAlert` / `NSPasteboard`), exposed as a Flat C ABI so the Zig side never needs `@cImport`.
 //
 // Column-by-column this mirrors what upstream `tauri-plugin-dialog` does through `rfd`:

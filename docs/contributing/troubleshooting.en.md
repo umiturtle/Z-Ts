@@ -66,6 +66,7 @@ it in the macOS job. Do not add a target-specific `if` to shared Zig code.
 | `does not say 'およそ 95 分'` (rule 12) | the step minutes changed in `learn_path.zig`; update README, the index and both hubs |
 | `… missing translation` (rule 8) | `docs/learn/ja` and `docs/learn/en` must hold identical file names |
 | `missing counterpart / verification stamp` (rule 13) | add the `.en.md` mirror and re-run `python3 scripts/check-docs.py --sync` |
+| `legacy project name … in prose` (rule 14) | write `ziggurats` (lowercase); only repository URLs / checkout paths keep the old name |
 
 The full symptom list with commands is in [`../environment/github-actions.md`](../environment/github-actions.md)
 and [`../environment/arena-and-caching.md`](../environment/arena-and-caching.md) (Japanese, internal).

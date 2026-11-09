@@ -7,19 +7,19 @@ This is the map of the published site (<https://umiturtle.github.io/Z-Ts/>), in 
 the sidebar**. Press `/` for full-text search; the `日本語 / English` control in the top right
 switches language on every reader page, including this one.
 
-**Only ten minutes?** → [Your first ten minutes with Z-Ts](learn/en/start.md).
-Prefer the whole picture first? → [Learn Z-Ts (the learning path)](learn/en/index.md).
+**Only ten minutes?** → [Your first ten minutes with ziggurats](learn/en/start.md).
+Prefer the whole picture first? → [Learn ziggurats (the learning path)](learn/en/index.md).
 
 ## Three ways in
 
-Z-Ts has three kinds of reader, with different commands and different pages. Mixing them shows an
+ziggurats has three kinds of reader, with different commands and different pages. Mixing them shows an
 app author the repository's CI, or a contributor the app tutorial.
 
 | You are | Start here | Tool |
 |---|---|---|
 | **Building an app** | [Your first ten minutes](learn/en/start.md) → [Learning path](learn/en/index.md) (Japanese: [`learn/ja/`](learn/ja/index.md)) | `zts` (`init` / `dev` / `build` / `package` / `doctor`) |
 | **Looking a name up** | [API reference](api/index.html) / [Glossary](glossary.en.md) / [Error index](reference/errors.html) | — |
-| **Developing Z-Ts itself** | [Contributing](contributing/README.en.md) → [Repository map](contributing/repository-map.en.md) | `zig build` / `scripts/*` |
+| **Developing ziggurats itself** | [Contributing](contributing/README.en.md) → [Repository map](contributing/repository-map.en.md) | `zig build` / `scripts/*` |
 
 ## The learning path (5 steps, about 95 minutes)
 
@@ -47,13 +47,13 @@ pair, so a page added in one language fails CI.
 
 | Page | One line |
 |---|---|
-| [Learn Z-Ts](learn/en/index.md) | The route, a 30-second overview, prerequisites, and the entry for each goal. Start here |
+| [Learn ziggurats](learn/en/index.md) | The route, a 30-second overview, prerequisites, and the entry for each goal. Start here |
 
 ### 1 · Your first ten minutes
 
 | Page | One line |
 |---|---|
-| [Your first ten minutes with Z-Ts](learn/en/start.md) | Put the binary on `PATH`, then `doctor` → `init` → `dev` → `build` on one page (10 min) |
+| [Your first ten minutes with ziggurats](learn/en/start.md) | Put the binary on `PATH`, then `doctor` → `init` → `dev` → `build` on one page (10 min) |
 
 ### 2 · How it works
 
@@ -140,7 +140,7 @@ All four are built on three OSes in CI, with their screenshots compared pixel by
 
 | Page | One line |
 |---|---|
-| [Developing Z-Ts](contributing/README.en.md) | Toolchain, `zig build` steps, change etiquette, CI |
+| [Developing ziggurats](contributing/README.en.md) | Toolchain, `zig build` steps, change etiquette, CI |
 | [Repository map](contributing/repository-map.en.md) | Which file does what and how often it changes (the parallel-work unit) |
 | [Repository troubleshooting](contributing/troubleshooting.en.md) | Toolchain, cold builds, 0.17 API differences, Pages |
 | [Documentation sync ledger](contributing/doc-sync.en.md) | When each page was last rewritten and which version was verified |
@@ -181,4 +181,6 @@ when you are looking for why the implementation looks the way it does.
 > **rule 13** ([sync ledger](contributing/doc-sync.en.md)) fails if the Japanese and English halves drift apart.
 > The menu is the same in both languages and on every page (`GroupKey.order()` takes no language).
 > The chapter order comes from `page_order`, and **rule 12** cross-checks the minutes quoted here,
-> in `README.md`, and in both learning hubs.
+> in `README.md`, and in both learning hubs. **Rule 14** keeps the full name `ziggurats` (lowercase)
+> consistent in prose while leaving the legacy name in repository URLs/paths and the `zts` /
+> `z_ts` / `zts_*` identifiers alone.

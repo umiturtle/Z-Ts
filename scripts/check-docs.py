@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mechanical lint for the Z-Ts documentation set.
+"""Mechanical lint for the ziggurats documentation set.
 
 The point of this file is **drift**: every rule below exists because a human edit could
 otherwise leave the prose describing a library that no longer exists. The rules are all
@@ -39,11 +39,17 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       steps. A third tutorial that leaves the rail at "15 min" is a lie; a
                       language-dependent `GroupKey.order()` is the menu changing as you navigate.
 13. Sync ledger      — `scripts/doc-sync.json` records, for every bilingual pair, when the page was
-                      last rewritten, which Z-Ts / Zig version and commit were verified consistent,
+                      last rewritten, which ziggurats / Zig version and commit were verified consistent,
                       which checks were run, and sha256 of both documents and of the implementation
                       sources. A hash mismatch means something changed after verification. It also
                       enforces a real English counterpart for every reader page. Refresh with
                       `python3 scripts/check-docs.py --sync`.
+14. Project name     — the full name is `ziggurats`, always lowercase. The legacy hyphenated name
+                      may remain only inside repository URLs / checkout paths (the owner renames
+                      the repository later) and in source test data / demo fixtures. Reader prose,
+                      the site UI, CLI help, generated project templates, workflows and scripts
+                      must say `ziggurats`. `zts` / `z_ts` / `zts_*` / `ZTS_*` are identifiers and
+                      are deliberately not part of this rename.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -579,14 +585,14 @@ def render_ledger(verified, pages, date):
     checks = " · ".join(f"`{c}`" for c in verified["checks"])
     impl_files = ", ".join(f"`{p}`" for p in verified["implementation"])
     ja_common = (
-        f"- **確認バージョン**: `zts {verified['zts_version']}` / Zig `{verified['zig_version']}`\n"
+        f"- **確認バージョン**: `ziggurats {verified['zts_version']}` / Zig `{verified['zig_version']}`\n"
         f"- **確認日**: `{date}`\n"
         f"- **基準コミット**: `{verified['commit']}`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）\n"
         f"- **確認コマンド**: {checks}\n"
         f"- **実装ハッシュ**: `{verified['implementation_sha256']}`\n"
     )
     en_common = (
-        f"- **Verified version**: `zts {verified['zts_version']}` / Zig `{verified['zig_version']}`\n"
+        f"- **Verified version**: `ziggurats {verified['zts_version']}` / Zig `{verified['zig_version']}`\n"
         f"- **Verified on**: `{date}`\n"
         f"- **Base commit**: `{verified['commit']}` (HEAD when verification began; the sha256 below identifies the implementation)\n"
         f"- **Verified with**: {checks}\n"
@@ -707,7 +713,7 @@ def run_sync(date):
         handle.write("\n")
     print(
         f"Sync ledger updated: {len(new_pages)} bilingual pairs, "
-        f"zts {zts} / Zig {zig}, verified {date} at {verified['commit']}."
+        f"ziggurats {zts} / Zig {zig}, verified {date} at {verified['commit']}."
     )
 
 
@@ -800,6 +806,74 @@ else:
                 for needle in (zts, date, v.get("commit", "")):
                     if needle and needle not in text:
                         errors.append(f"{view}: is out of date (missing '{needle}'; run --sync)")
+
+# ---------------------------------------------------------------------------
+# 14. The project's full name is `ziggurats`
+# ---------------------------------------------------------------------------
+
+LEGACY_NAME = "Z-Ts"
+NEW_NAME = "ziggurats"
+
+
+def legacy_name_is_protected(line, j):
+    """A repository URL or checkout path is the only legitimate home of the old name."""
+    prev = line[j - 1] if j > 0 else ""
+    rest = line[j + len(LEGACY_NAME):]
+    nxt = rest[0] if rest else ""
+    return (
+        prev in ("/", "\\")
+        or rest.startswith(".git")
+        or (nxt == "/" and (j == 0 or prev.isspace() or prev in "\"'`([{"))
+        or line[max(0, j - 3):j] == "cd "
+    )
+
+
+# The reader-facing surface: Markdown, the site generator, the CLI's own help/templates, the
+# build step names, CI, and the bootstrap scripts. `scripts/check-docs.py` is intentionally not
+# scanned (this rule has to spell the old name), and neither are test fixtures, library default
+# titles or the rendered demo pages whose visible text is part of the pixel-parity gate.
+NAME_SCAN = sorted(set(
+    [
+        p for p in glob.glob("**/*.md", recursive=True)
+        if not p.startswith(("zig-out/", ".git/", "vendor/", "node_modules/"))
+    ]
+    + glob.glob("src/docsite/**/*.zig", recursive=True)
+    + glob.glob("src/docsite/assets/*.css")
+    + glob.glob("src/docsite/assets/*.js")
+    + glob.glob("src/cli/*.zig")
+    + ["build.zig", "zigw"]
+    + glob.glob(".github/workflows/*.yml")
+    + glob.glob("scripts/*.sh")
+))
+for path in NAME_SCAN:
+    if not os.path.isfile(path):
+        continue
+    for lineno, line in enumerate(open(path, encoding="utf-8"), 1):
+        cursor = 0
+        while True:
+            found = line.find(LEGACY_NAME, cursor)
+            if found < 0:
+                break
+            if not legacy_name_is_protected(line, found):
+                errors.append(
+                    f"{path}:{lineno}: legacy project name '{LEGACY_NAME}' in prose — "
+                    f"write '{NEW_NAME}' (rule 14)"
+                )
+            cursor = found + len(LEGACY_NAME)
+        for variant in ("Ziggurats", "ZIGGURATS", "ZigguRats"):
+            if variant in line:
+                errors.append(
+                    f"{path}:{lineno}: '{variant}' — the name is lowercase '{NEW_NAME}' (rule 14)"
+                )
+
+# The new name has to be visible on the two front doors and in the generated surfaces.
+for path in (
+    "README.md", "README.en.md", "docs/INDEX.md", "docs/INDEX.en.md",
+    "src/docsite/site.zig", "src/docsite/i18n.zig", "src/docsite/main.zig",
+    "src/cli/template.zig",
+):
+    if os.path.isfile(path) and NEW_NAME not in open(path, encoding="utf-8").read():
+        errors.append(f"{path}: does not say '{NEW_NAME}' (rule 14)")
 
 if warnings:
     for w in warnings:

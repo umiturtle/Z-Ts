@@ -1,7 +1,7 @@
 //! Pure-Zig replacement for Microsoft's `WebView2Loader.dll`.
 //!
 //! The official WebView2 SDK ships a per-architecture `WebView2Loader.dll` that must sit next to
-//! the `.exe`. Z-Ts refuses to ship a second binary: this module locates the already-installed
+//! the `.exe`. ziggurats refuses to ship a second binary: this module locates the already-installed
 //! Evergreen runtime through the same registry layout Microsoft's loader uses and calls the export
 //! `CreateWebViewEnvironmentWithOptionsInternal` inside
 //! `<runtime>\EBWebView\<arch>\EmbeddedBrowserWebView.dll` directly.

@@ -181,7 +181,7 @@ pub fn defaultUserDataFolder(buf: []u8, exe_dir: []const u8) ![]const u8 {
 // Custom protocol → http(s) origin mapping
 // ---------------------------------------------------------------------------
 
-/// The three virtual origins Z-Ts serves through `WebResourceRequested`.
+/// The three virtual origins ziggurats serves through `WebResourceRequested`.
 pub const Protocol = enum { tauri, ipc, asset };
 
 pub fn protocolFromScheme(scheme: []const u8) ?Protocol {
@@ -192,7 +192,7 @@ pub fn protocolFromScheme(scheme: []const u8) ?Protocol {
 }
 
 /// WebView2 has no custom-scheme API, so `tauri://localhost/x` is served as
-/// `http://tauri.localhost/x` (the same workaround wry/Tauri use). Non-Z-Ts URLs
+/// `http://tauri.localhost/x` (the same workaround wry/Tauri use). Non-ziggurats URLs
 /// (`https://…`, `about:blank`, `data:`) are copied byte-for-byte.
 pub fn toWebView2Url(buf: []u8, url: []const u8) ![]const u8 {
     const scheme_end = std.mem.indexOf(u8, url, "://") orelse return copy(buf, url);

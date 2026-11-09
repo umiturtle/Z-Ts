@@ -1,17 +1,17 @@
 # Migrating from Tauri v2
 
-> **Audience**: readers moving a Tauri v2 app onto Z-Ts.
+> **Audience**: readers moving a Tauri v2 app onto ziggurats.
 > **Time**: 30 minutes (the frontend needs no changes).
 
-How to move an existing Tauri v2 app (Rust + `@tauri-apps/api`) onto Z-Ts. **The goal is zero
-frontend edits.** Z-Ts implements Tauri's IPC protocol (`tauri://` internals,
+How to move an existing Tauri v2 app (Rust + `@tauri-apps/api`) onto ziggurats. **The goal is zero
+frontend edits.** ziggurats implements Tauri's IPC protocol (`tauri://` internals,
 `__TAURI_INTERNALS__`, plugin command names) verbatim, so JavaScript keeps working.
 
 ---
 
 ## 1. The mapping
 
-| Tauri (Rust) | Z-Ts (Zig) | Status |
+| Tauri (Rust) | ziggurats (Zig) | Status |
 |---|---|---|
 | `tauri.conf.json` | [`config_import.load`](../../../api/zts_tauri/config_import.html#load) | supported (unknown keys warn, wrong types error) |
 | `capabilities/*.json` + `acl` | [`acl.Policy`](../../../api/zts_tauri/acl.html#Policy) | supported (`fromImported`) |
@@ -81,7 +81,7 @@ typing for your own `bindings.gen.ts`.
 
 ## 5. Choose how the frontend is served
 
-Tauri switches between `devUrl` and `frontendDist`; Z-Ts **embeds at build time** by default (see
+Tauri switches between `devUrl` and `frontendDist`; ziggurats **embeds at build time** by default (see
 [build tools](../../../architecture/build-tools.md)). `dist/` is `@embedFile`d, so no asset
 directory has to ship next to the binary.
 
@@ -93,10 +93,10 @@ directory has to ship next to the binary.
 
 ## 6. Where migrations trip
 
-1. **`withGlobalTauri`**: Z-Ts always exposes `window.__TAURI_INTERNALS__`. Code that expects
+1. **`withGlobalTauri`**: ziggurats always exposes `window.__TAURI_INTERNALS__`. Code that expects
    `window.__TAURI__` is covered by the compatibility layer
    ([`js_bootstrap`](../../../api/zts_tauri/js_bootstrap.html)).
-2. **`invoke` return values**: Tauri returns `Result<T, E>` as JSON; Z-Ts uses the same envelope
+2. **`invoke` return values**: Tauri returns `Result<T, E>` as JSON; ziggurats uses the same envelope
    (`{"result": …}` / `{"error": …}`), so `try/catch` behaves identically.
 3. **ACL path scopes**: scopes like `{ "path": "$APPDATA/db/*" }` are resolved by `Policy`.
    Unresolvable variables **warn and deny** (fail-closed).

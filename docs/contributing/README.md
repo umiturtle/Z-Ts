@@ -1,8 +1,8 @@
-# Z-Ts 自体を開発する（コントリビュータ向け）
+# ziggurats 自体を開発する（コントリビュータ向け）
 
 > **アプリを作りたい人はこのページを読む必要はありません。**
 > [チュートリアル（3 本）](../learn/ja/tutorials/index.md) が「`zts` CLI で自分のアプリを作る」
-> 手順です。ここは **Z-Ts のリポジトリそのものをビルド・テスト・公開する**ためのコマンドと作法を
+> 手順です。ここは **ziggurats のリポジトリそのものをビルド・テスト・公開する**ためのコマンドと作法を
 > まとめたページです（コントリビュータ・エージェント・将来の自分向け）。
 
 このリポジトリには**2 種類のコマンド**があり、混ぜると危険です。
@@ -10,9 +10,9 @@
 | 系統 | 例 | 誰のため | 説明 |
 |---|---|---|---|
 | **`zts`**（アプリ作者向け） | `zts init` / `zts dev` / `zts build` | ライブラリを使う人 | 自分のプロジェクトを操作する。→ [`../reference/cli.md`](../reference/cli.md) |
-| **`./zigw` と `zig build`**（このリポジトリ専用） | `./zigw quick-test` / `./zigw build test` | Z-Ts を直す人 | ライブラリ本体・サンプル・ドキュメントサイトを作る。**このページ** |
+| **`./zigw` と `zig build`**（このリポジトリ専用） | `./zigw quick-test` / `./zigw build test` | ziggurats を直す人 | ライブラリ本体・サンプル・ドキュメントサイトを作る。**このページ** |
 
-`zts` は「アプリ作者が叩くもの」、`./zigw` は「Z-Ts のビルド環境を整えて Zig を叩くもの」です。
+`zts` は「アプリ作者が叩くもの」、`./zigw` は「ziggurats のビルド環境を整えて Zig を叩くもの」です。
 アプリ作者の手順に `./zigw` が出てきたら、それは書き間違いです。読者向けページ
 （`README.md`・`docs/learn/`・`docs/reference/`・`examples/*/README.md`）に `zigw` が 1 語でも
 あると `check-docs.py` の**規約 10** が落とします。
@@ -186,7 +186,7 @@ Linux では加えて、**公開アーカイブを焼き込んだ release ビル
 | 配るもの | 何か | 誰が使うか |
 |---|---|---|
 | `zts-<version>-<os>-<arch>[.exe]` | **`zts` の単体バイナリ**（約 300 KB、`link_libc = false`） | アプリを作る人 |
-| `z_ts-<version>.tar.gz` | Z-Ts のソースアーカイブ（`git archive`） | 生成したプロジェクトの `build.zig.zon` が `.url` で参照する |
+| `z_ts-<version>.tar.gz` | ziggurats のソースアーカイブ（`git archive`） | 生成したプロジェクトの `build.zig.zon` が `.url` で参照する |
 | `SHA256SUMS` | 上記のチェックサム | 検証したい人 |
 
 `./zigw` は**配りません**。Zig を `/tmp` に導入して `zig build` を呼ぶだけのリポジトリ専用

@@ -1,8 +1,8 @@
 # Tutorial: build a counter
 
-> **Audience**: first contact with Z-Ts. You are expected to know basic Zig.
+> **Audience**: first contact with ziggurats. You are expected to know basic Zig.
 > **Time**: 15 minutes, typing included.
-> **Never run Z-Ts?** [Your first ten minutes](../start.md) comes first; it makes chapter 0 shorter.
+> **Never run ziggurats?** [Your first ten minutes](../start.md) comes first; it makes chapter 0 shorter.
 
 Create a project with `zts init`, **call a Zig function from a button**, grow it with reload on
 save, and finish with a single binary. **Every command on this page is `zts`**. Repository work
@@ -42,7 +42,7 @@ You get six files.
 ```text
 my-app/
 ├── build.zig          # uses the shared embedder to inline web/
-├── build.zig.zon      # path dependency on Z-Ts
+├── build.zig.zon      # path dependency on ziggurats
 ├── src/main.zig       # your app (a minimal asset listing)
 ├── web/index.html     # the frontend
 ├── .gitignore         # ignores zig-out/ and .zig-cache/
@@ -93,7 +93,7 @@ curl http://127.0.0.1:5173/__zts_dev__/state
 
 ## 3. Write the counting command
 
-This is the heart of Z-Ts. **A Zig function becomes JavaScript's `invoke("…")`.** First add
+This is the heart of ziggurats. **A Zig function becomes JavaScript's `invoke("…")`.** First add
 `zts_rpc` to `build.zig`.
 
 ```zig

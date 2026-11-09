@@ -60,7 +60,7 @@ pub const steps = [_]Step{
         .id = "start",
         .slug = "start.md",
         .minutes = 10,
-        .title = .{ .ja = "はじめての Z-Ts", .en = "Your first ten minutes" },
+        .title = .{ .ja = "はじめての ziggurats", .en = "Your first ten minutes" },
         .blurb = .{
             .ja = "インストールして、プロジェクトを作って、ブラウザで動かす。",
             .en = "Install, create a project, and get it running in a browser.",
@@ -298,7 +298,7 @@ test "the markdown list numbers the steps and links them relatively" {
     var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena_state.deinit();
     const md = try markdownList(arena_state.allocator(), .ja);
-    try testing.expect(std.mem.indexOf(u8, md, "1. **[はじめての Z-Ts](start.html)** · 10 分 — ") != null);
+    try testing.expect(std.mem.indexOf(u8, md, "1. **[はじめての ziggurats](start.html)** · 10 分 — ") != null);
     try testing.expect(std.mem.indexOf(u8, md, "2. **[仕組みを知る](concepts/index.html)** · 15 分 — ") != null);
     try testing.expect(std.mem.indexOf(u8, md, "4. **[実用パターン](patterns/index.html)** · 20 分 — ") != null);
     try testing.expect(std.mem.indexOf(u8, md, "5. **[目的から引く](guides/index.html)** — ") != null);

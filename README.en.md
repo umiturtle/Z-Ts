@@ -1,7 +1,10 @@
-# Z-Ts
+# ziggurats
 
 **Tauri's ideas, in Zig 0.17.** — desktop apps, WebAssembly and static sites from one codebase and
 one toolchain.
+
+> The project's full name is **`ziggurats`** (lowercase). The CLI, package and module names stay
+> `zts` / `z_ts` / `zts_*`.
 
 [![CI](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml)
 [![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/Z-Ts/)
@@ -14,7 +17,7 @@ truth). Japanese and English are both available on every reader page.
 
 ## What this is
 
-Z-Ts is a toolkit that reimplements the Tauri v2 **IPC protocol, plugins, configuration files and
+ziggurats is a toolkit that reimplements the Tauri v2 **IPC protocol, plugins, configuration files and
 ACL** in Zig. There is no Rust runtime in between, so the artefact is small, the build is fast, and
 the core stays `link_libc = false` (Pure Zig).
 
@@ -118,7 +121,7 @@ step 1.
 | An error name | <https://umiturtle.github.io/Z-Ts/docs/reference/errors.html> |
 | Every `zts` option | [`docs/reference/cli.en.md`](docs/reference/cli.en.md) |
 
-**For people developing Z-Ts itself** (the command is `zig build`)
+**For people developing ziggurats itself** (the command is `zig build`)
 
 | Goal | Go to |
 |---|---|

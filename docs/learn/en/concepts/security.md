@@ -3,16 +3,16 @@
 > **Audience**: readers about to ship, who want to know what is and is not protected.
 > **Time**: 5 minutes.
 
-Tauri's security model centres on **capabilities**. Z-Ts implements it as-is: **a command that no
+Tauri's security model centres on **capabilities**. ziggurats implements it as-is: **a command that no
 capability grants cannot be called from the frontend.**
 
 ## 1. Three layers
 
 ```text
   ① the WebView sandbox
-     the boundary the OS provides. Z-Ts does not touch it (same as a bare WebView)
+     the boundary the OS provides. ziggurats does not touch it (same as a bare WebView)
 
-  ② capabilities (ACL)      ← implemented by Z-Ts
+  ② capabilities (ACL)      ← implemented by ziggurats
      "window `main` may call plugin:fs|read_text_file"
      decided by permission name + scope (which path). deny by default
 

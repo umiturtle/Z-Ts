@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Z-Ts Modular Toolchain & Sysroot Bootstrap Script
+# ziggurats Modular Toolchain & Sysroot Bootstrap Script
 #
 # Arena chat sandboxes start with a fresh container filesystem on every new chat/branch.
 # Install ONLY the profile needed for your current task:

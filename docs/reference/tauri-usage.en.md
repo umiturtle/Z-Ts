@@ -1,12 +1,12 @@
 # Tauri v2 API map (upstream reference)
 
-> **Audience**: readers comparing the upstream Tauri v2 surface with Z-Ts.
+> **Audience**: readers comparing the upstream Tauri v2 surface with ziggurats.
 > **Time**: just the section you need (this is a long reference).
 
 Based on the upstream reference (`vendor/tauri`), this page describes **how a Tauri application is
 laid out and which APIs the backend (Rust) and frontend (JS/TS) actually use**. It is the baseline
-for Z-Ts's public API and compatibility decisions. For the internal anatomy of those APIs, see
-[the implementation autopsy](tauri-internals.en.md); for the Z-Ts side, start with
+for ziggurats's public API and compatibility decisions. For the internal anatomy of those APIs, see
+[the implementation autopsy](tauri-internals.en.md); for the ziggurats side, start with
 [concepts](../learn/en/concepts/index.md).
 
 ---
@@ -78,30 +78,30 @@ fn streaming(channel: tauri::ipc::Channel<u8>) { /* emits values repeatedly */ }
 
 Automatically injected types (never supplied from JS): `State<'_, T>`, `AppHandle`, `Window`,
 `WebviewWindow`, `Manager` implementors, `ipc::Channel<T>`, `ipc::Request`, `ipc::Response`, and
-`Invoke` internals. Z-Ts mirrors this with `*Ctx`, `*State`, `RpcState`, and `Channel`.
+`Invoke` internals. ziggurats mirrors this with `*Ctx`, `*State`, `RpcState`, and `Channel`.
 
 ### 2.3 Events (bidirectional pub/sub)
 
 `emit` / `emit_to` / `listen` / `once` / `unlisten` on `AppHandle` and the JS `event` module. Events
-carry a name and a serialisable payload; `listen` returns an unlisten function. Z-Ts's `EventBus`
+carry a name and a serialisable payload; `listen` returns an unlisten function. ziggurats's `EventBus`
 and `changed_event` cover the same contract.
 
 ### 2.4 `Manager` and `ResourceTable`
 
 `Manager` is the universal lookup trait (`app.state::<T>()`, `app.get_webview_window("main")`,
 `app.path().app_data_dir()`). `ResourceTable` maps integer resource ids to owned values so a file or
-channel can be handed to JS and closed later — the same idea as Z-Ts's `HandlePool` and
+channel can be handed to JS and closed later — the same idea as ziggurats's `HandlePool` and
 `plugin:resources`.
 
 ### 2.5 Writing a plugin (`tauri::plugin::Builder`)
 
 A plugin bundles commands, state (`manage`), setup hooks and a JS API package. It is registered with
-`.plugin(...)` and its commands are namespaced `plugin:<name>|<command>`. Z-Ts's `CorePluginStates`
+`.plugin(...)` and its commands are namespaced `plugin:<name>|<command>`. ziggurats's `CorePluginStates`
 is the equivalent bundle for the built-in plugins.
 
 ## 3. Frontend API (JS/TS: `@tauri-apps/api`)
 
-Upstream: `vendor/tauri/packages/api/src/`. **Z-Ts uses this package unmodified.**
+Upstream: `vendor/tauri/packages/api/src/`. **ziggurats uses this package unmodified.**
 
 ```typescript
 import { invoke, Channel, convertFileSrc } from '@tauri-apps/api/core';
@@ -154,7 +154,7 @@ const imgUrl = convertFileSrc('/path/to/photo.png');
 
 ## Where to go next
 
-- [Concepts: security](../learn/en/concepts/security.md) — how Z-Ts enforces this
+- [Concepts: security](../learn/en/concepts/security.md) — how ziggurats enforces this
 - [Guide: standard plugins](../learn/en/guides/plugins.md) — the same plugins in Zig
 - [Migrating from Tauri v2](../learn/en/guides/migrate-from-tauri.md) — a side-by-side table
-- [Z-Ts API reference](../api/index.html) — the public declarations, generated from `///`
+- [ziggurats API reference](../api/index.html) — the public declarations, generated from `///`

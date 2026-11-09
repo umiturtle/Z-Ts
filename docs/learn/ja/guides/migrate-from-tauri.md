@@ -1,11 +1,11 @@
 # Tauri v2 からの移行
 
-> **対象読者**: Tauri v2 のアプリを Z-Ts に載せ替えたい人。
+> **対象読者**: Tauri v2 のアプリを ziggurats に載せ替えたい人。
 > **所要時間**: 30 分（フロントエンドは変更不要です）。
 > **前提**: Tauri v2 のプロジェクトが手元にあり、`zts` が使える（[インストール](install.md)）。
 
-既存の Tauri v2 アプリ（Rust + `@tauri-apps/api`）を Z-Ts に載せ替える手順です。
-**ゴールは「フロントエンドを 1 行も変えない」**こと。Z-Ts は Tauri の IPC プロトコル
+既存の Tauri v2 アプリ（Rust + `@tauri-apps/api`）を ziggurats に載せ替える手順です。
+**ゴールは「フロントエンドを 1 行も変えない」**こと。ziggurats は Tauri の IPC プロトコル
 （`tauri://` の内部呼び出し、`__TAURI_INTERNALS__`、plugin コマンド名）をそのまま実装しているので、
 JavaScript 側は原則そのまま動きます。
 
@@ -13,7 +13,7 @@ JavaScript 側は原則そのまま動きます。
 
 ## 1. 対応表
 
-| Tauri（Rust） | Z-Ts（Zig） | 状態 |
+| Tauri（Rust） | ziggurats（Zig） | 状態 |
 |---|---|---|
 | `tauri.conf.json` | [`config_import.load`](../../../api/zts_tauri/config_import.html#load) | 対応（未知キーは警告、型違いはエラー） |
 | `capabilities/*.json` + `acl` | [`acl.Policy`](../../../api/zts_tauri/acl.html#Policy) | 対応（`fromImported` で取り込み） |
@@ -83,7 +83,7 @@ zig build tsgen             # web/bindings.gen.ts を再生成
 
 ## 5. フロントエンドの配信方法を選ぶ
 
-Tauri は `devUrl` / `frontendDist` で切り替えますが、Z-Ts では**ビルド時に埋め込む**のが基本です
+Tauri は `devUrl` / `frontendDist` で切り替えますが、ziggurats では**ビルド時に埋め込む**のが基本です
 （[埋め込みの仕組み](../../../architecture/build-tools.md)）。`dist/` をそのまま `@embedFile` するので、実行時にアセットディレクトリを
 配る必要がありません。
 
@@ -95,9 +95,9 @@ Tauri は `devUrl` / `frontendDist` で切り替えますが、Z-Ts では**ビ�
 
 ## 6. 移行時に踏みやすいところ
 
-1. **`withGlobalTauri`**: Z-Ts は常に `window.__TAURI_INTERNALS__` を公開します。
+1. **`withGlobalTauri`**: ziggurats は常に `window.__TAURI_INTERNALS__` を公開します。
    `window.__TAURI__` を前提にした古いコードは互換レイヤ（[`js_bootstrap`](../../../api/zts_tauri/js_bootstrap.html)）で吸収済みです。
-2. **`invoke` の戻り値**: Tauri は `Result<T, E>` を JSON で返します。Z-Ts も同じ封筒
+2. **`invoke` の戻り値**: Tauri は `Result<T, E>` を JSON で返します。ziggurats も同じ封筒
    （`{"result": …}` / `{"error": …}`）を使うので、`try/catch` の挙動は変わりません。
 3. **ACL のパススコープ**: `{ "path": "$APPDATA/db/*" }` のようなスコープは
    `Policy` が解決します。解決できない変数は**警告して拒否**（fail-closed）です。

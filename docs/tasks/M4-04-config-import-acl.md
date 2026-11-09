@@ -17,7 +17,7 @@
 ## 1. 目的と完了条件（Definition of Done）
 
 **目的**: 既存 Tauri v2 プロジェクトの `src-tauri/tauri.conf.json` と
-`src-tauri/capabilities/*.json` を **書き換えずに** Z-Ts が読めるようにし、
+`src-tauri/capabilities/*.json` を **書き換えずに** ziggurats が読めるようにし、
 移行時に必要なコード変更を「数行（パスを渡すだけ）」に留める。
 
 - [x] `tauri.conf.json`（v2 スキーマ）のパース: `productName` / `version` / `identifier` /
@@ -72,7 +72,7 @@
 - **deny を allow より優先**（上流 `Authority` と同じ）。同じコマンドに複数 capability が
   マッチした場合、1 つでも deny があれば拒否。
 - **`local` / `remote`**: 上流はリクエスト URL がローカル（`tauri://` / `http://tauri.localhost` …）
-  か否かで capability を出し分ける。Z-Ts の `rpc.Ctx.origin` をそのまま使う。
+  か否かで capability を出し分ける。ziggurats の `rpc.Ctx.origin` をそのまま使う。
 - **`$RESOURCE` などのパス変数**は `fs` スコープ側で解決する（`config_import` は生の文字列を返し、
   `zts_foundation`/`tauri.path` の解決関数に渡す）。
 

@@ -17,11 +17,11 @@ version was verified consistent with the implementation. The source of truth is
 
 ## Verified against
 
-- **Verified version**: `zts 0.1.0` / Zig `0.17.0`
+- **Verified version**: `ziggurats 0.1.0` / Zig `0.17.0`
 - **Verified on**: `2026-10-21`
-- **Base commit**: `6613147` (HEAD when verification began; the sha256 below identifies the implementation)
+- **Base commit**: `59ea73e` (HEAD when verification began; the sha256 below identifies the implementation)
 - **Verified with**: `python3 scripts/check-docs.py` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
-- **Implementation hash**: `8dc38fd6f10ab45bf70d057f0f4ebb546d36b63c999e6b2cb6507e4c641490f8`
+- **Implementation hash**: `c1034fba2f42765fbba8d544ab21ecdb6ffab1b9d1e05de6ffda486a38c315fb`
 
 Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `scripts/check-docs.py`
 

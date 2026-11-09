@@ -5,7 +5,7 @@
 > **Before this**: [Designing commands](commands.md).
 
 State is not "something you put somewhere"; it is a decision about **who is responsible for being
-right**. Z-Ts gives you three places.
+right**. ziggurats gives you three places.
 
 | Place | What goes there | Lifetime | Example |
 |---|---|---|---|

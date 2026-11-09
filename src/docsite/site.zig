@@ -48,7 +48,7 @@ pub const Crumb = struct { label: []const u8, href: []const u8 = "" };
 pub const NavLink = struct { title: []const u8, href: []const u8 };
 
 pub const Layout = struct {
-    site_title: []const u8 = "Z-Ts",
+    site_title: []const u8 = "ziggurats",
     /// Currently rendered page; `""` for the landing page.
     active_href: []const u8 = "",
     /// Explicit `<title>`. Pages that are not listed in the sidebar (the generated API reference,
@@ -69,7 +69,7 @@ pub const Layout = struct {
     /// Repository path of the Markdown source, for the "edit this page" link. `""` on generated
     /// pages, which have no single source file.
     source: []const u8 = "",
-    /// Breadcrumb trail (`Z-Ts › ガイド › RPC`). Rendered above the body.
+    /// Breadcrumb trail (`ziggurats › ガイド › RPC`). Rendered above the body.
     crumbs: []const Crumb = &.{},
     /// Reading order neighbours. `null` at the ends of a group.
     prev: ?NavLink = null,
@@ -107,7 +107,7 @@ const head_template =
     \\  <button class="icon-btn menu-toggle" type="button" aria-label="{menu}" aria-expanded="false" data-menu-toggle>
     \\    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
     \\  </button>
-    \\  <a class="brand" href="{root}{home_href}"><span class="brand-mark">Z</span><span class="brand-name">Z-Ts</span></a>
+    \\  <a class="brand" href="{root}{home_href}"><span class="brand-mark">Z</span><span class="brand-name">ziggurats</span></a>
     \\  <span class="topbar-sep" aria-hidden="true"></span>
     \\  <span class="brand-tagline">Tauri in Zig</span>
     \\  <div class="topbar-actions">
@@ -142,7 +142,7 @@ const head_template =
     \\</main>
     \\</div>
     \\<footer class="footer">
-    \\  <span>© Z-Ts — {footer_note}</span>
+    \\  <span>© ziggurats — {footer_note}</span>
     \\  <span class="footer-meta">{words}</span>
     \\</footer>
     \\<script src="{root}assets/search-index.js"></script>
@@ -365,9 +365,9 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
         .root = root,
         .home_href = if (layout.lang == .en) "en/index.html" else "index.html",
         .description = if (layout.lang == .en)
-            "Z-Ts — Tauri v2 reimplemented in Zig 0.17: six orthogonal packages for desktop, WebAssembly and static sites."
+            "ziggurats — Tauri v2 reimplemented in Zig 0.17: six orthogonal packages for desktop, WebAssembly and static sites."
         else
-            "Z-Ts — Tauri の思想を Zig 0.17 で。6 つの直交パッケージでデスクトップ / WebAssembly / SSG を 1 言語で。",
+            "ziggurats — Tauri の思想を Zig 0.17 で。6 つの直交パッケージでデスクトップ / WebAssembly / SSG を 1 言語で。",
         .skip = try esc.e(arena, s.skip_to_content),
         .menu = try esc.e(arena, s.menu),
         .search_placeholder = try esc.e(arena, s.search_placeholder),
@@ -843,13 +843,13 @@ test "renderPage produces a full document with nav, toc and assets" {
         .toc = toc,
         .plain = "one two three",
         .kind = "guide",
-        .crumbs = &.{.{ .label = "Z-Ts", .href = "index.html" }},
+        .crumbs = &.{.{ .label = "ziggurats", .href = "index.html" }},
         .lang = .ja,
     }, "docs/tasks/a.html");
 
     try testing.expect(std.mem.startsWith(u8, html, "<!doctype html>"));
     try testing.expect(std.mem.indexOf(u8, html, "<html lang=\"ja\"") != null);
-    try testing.expect(std.mem.indexOf(u8, html, "<title>タスク A — Z-Ts</title>") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "<title>タスク A — ziggurats</title>") != null);
     try testing.expect(std.mem.indexOf(u8, html, "href=\"../../assets/site.css\"") != null);
     try testing.expect(std.mem.indexOf(u8, html, "class=\"active\" aria-current=\"page\" href=\"a.html\"><span>タスク A") != null);
     try testing.expect(std.mem.indexOf(u8, html, "href=\"../index.html\"") != null);

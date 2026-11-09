@@ -1,4 +1,4 @@
-//! Z-Ts: Modular Zig 0.17 Application & Engine Foundation Packages.
+//! ziggurats: Modular Zig 0.17 Application & Engine Foundation Packages.
 //!
 //! Exposes strictly layered, orthogonal Zig modules so downstream consumers (desktop apps,
 //! engines, media/streaming tools, servers, and CLIs) only compile and link what they use:

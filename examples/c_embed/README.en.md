@@ -1,6 +1,6 @@
 # `examples/c_embed` — overlay embedding in an existing app (pure C99)
 
-A host written in **pure C99** calls the Z-Ts C ABI and gets a WebView overlay. There are zero lines
+A host written in **pure C99** calls the ziggurats C ABI and gets a WebView overlay. There are zero lines
 of Zig in the host: this example proves the library can be consumed by an existing C/C++ application
 rather than requiring a Zig build.
 

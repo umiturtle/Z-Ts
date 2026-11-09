@@ -131,7 +131,7 @@ direction: writing English first tends to produce Japanese pages with untranslat
 ## 10. Record when it was rewritten and what was verified
 
 Rule 13 reads the [sync ledger](doc-sync.en.md): for every bilingual pair it records the last
-rewrite date, the Z-Ts / Zig version verified, the commit, the checked commands, the implementation
+rewrite date, the ziggurats / Zig version verified, the commit, the checked commands, the implementation
 files the page describes, and **sha256 hashes of both documents and of those implementation files**.
 If an implementation file changes, the hash check fails and asks you to re-verify. If a document
 changes, the hash check tells you to update its rewrite date. The two languages share one row, so
@@ -145,6 +145,15 @@ python3 scripts/check-docs.py --sync      # re-verify: refresh hashes, dates and
 **Internal documents (ADRs, design notes, task sheets, environment notes) are Japanese-only** — they
 are the project's memory and the parallel-agent protocol, not a reader manual. They stay published
 and reachable from both sidebars.
+
+**The project's full name is `ziggurats`**, always lowercase. The legacy hyphenated name may remain
+only in repository URLs and checkout paths, because the owner renames the repository later. Rule 14
+scans reader-facing Markdown, the site's UI strings, `zts` help and generated templates, CI and
+scripts, and fails on a leftover legacy name or a capitalised spelling.
+**`zts`, `z_ts`, `zts_*` and `ZTS_*` are identifiers, not the project name** — they are untouched by
+the rename. Test data in `src/`, library default window titles, and the visible text of the demos
+are deliberately left alone too: that text is part of the three-OS pixel-parity gate, so it should
+be regenerated together with the generator when the repository is renamed.
 
 ## 11. Generated output (do not create by hand)
 
@@ -167,6 +176,7 @@ and reachable from both sidebars.
 | `does not say 'およそ 95 分'` / `step 3 says …` | minutes drifted after a tutorial was added | fix `learn_path.zig` and all four prose copies (rule 12) |
 | `GroupKey.order() takes a language` | the menu was split again | one `order()` for both languages |
 | `missing English counterpart` / `hash mismatch` | half a pair edited, or implementation changed | add the mirror and run `check-docs.py --sync` (rule 13) |
+| `legacy project name … in prose` | the old name survived, or was capitalised | write `ziggurats` (lowercase); only URLs and checkout paths are exempt (rule 14) |
 | `doc-tests: 1 of 2 blocks failed` | example is stale | fix the example — or question the API change |
 
 ## Related

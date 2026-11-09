@@ -168,7 +168,7 @@ Check Summary に出します。
 | IPC | 小さい JSON 10,000 往復 + 64 MB Raw のスループット | 往復は `invoke` の round-trip、Raw は `Channel`/`RawPayload` |
 
 Rust ツールチェーンは `scripts/setup-toolchains.sh --rust` でしか入らないため、このベンチは
-**CI 専用ジョブ**にします。ローカルでは `--skip-rust` で Z-Ts 側だけ測ります。
+**CI 専用ジョブ**にします。ローカルでは `--skip-rust` で ziggurats 側だけ測ります。
 
 数値を README に手で書かないこと。ベンチは必ず CI の Check Summary を正とします（手で書いた
 数値は環境が変わると嘘になるため）。

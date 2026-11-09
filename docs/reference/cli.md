@@ -5,7 +5,7 @@
 
 アプリ作者が使う CLI の仕様です。`zts` は **自分のプロジェクト**を操作します。
 
-> **Z-Ts リポジトリ自体の操作**（`zig build` のステップ、CI スクリプト）は
+> **ziggurats リポジトリ自体の操作**（`zig build` のステップ、CI スクリプト）は
 > [`../contributing/README.md`](../contributing/README.md) にまとめてあります。このページには
 > 出てきません。
 
@@ -65,7 +65,7 @@ zts init my-app --force           # 既存ファイルがあっても書く
 
 ### 依存の書き方（`.z_ts`）
 
-`zts init` は、生成したプロジェクトが Z-Ts をどこから取るかを `build.zig.zon` に 1 行で書きます。
+`zts init` は、生成したプロジェクトが ziggurats をどこから取るかを `build.zig.zon` に 1 行で書きます。
 **release としてビルドされた `zts`**（GitHub Releases のバイナリ）は公開アーカイブを指します。
 
 ```zig

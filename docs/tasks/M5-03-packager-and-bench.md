@@ -15,7 +15,7 @@
 ## 1. 目的と完了条件（Definition of Done）
 
 配布物を作る工程を**ライブラリ（`src/bundler/`）としてテスト可能**にし、`zts` から呼べるようにする。
-ベンチは「同一機能のアプリを Z-Ts と本家 Rust Tauri で測る」ためのハーネスを `bench/` に置く。
+ベンチは「同一機能のアプリを ziggurats と本家 Rust Tauri で測る」ためのハーネスを `bench/` に置く。
 
 ### スライス A — Linux / macOS の配布物（完了）
 
@@ -37,9 +37,9 @@
 ### スライス C — ベンチマーク
 
 - [ ] `bench/`: 被測定アプリを「ビルドコマンド / 実行ファイル / 起動判定 / 停止」で記述する
-      依存ゼロのランナー（`bench/run.mjs`）と Z-Ts 側の定義
+      依存ゼロのランナー（`bench/run.mjs`）と ziggurats 側の定義
 - [ ] 6 指標（コールドビルド・インクリメンタル・サイズ・起動・RSS・IPC）を JSON + Markdown で出力
-- [ ] CI: Linux で Z-Ts 側を実測し Check Run Summary に出す（Rust 側はツールチェーンが
+- [ ] CI: Linux で ziggurats 側を実測し Check Run Summary に出す（Rust 側はツールチェーンが
       無いとき `skipped` と明示）
 
 ---

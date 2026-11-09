@@ -22,7 +22,7 @@ follow. Turn that into **a button calling a Zig function** and there are exactly
 | the bridge | match names and types, carry JSON; nothing hand-written | `Schema`, assembled by `comptime` |
 | the command | a Zig function: take arguments, touch state, return a value | `src/` |
 
-**Part 2 is Z-Ts's job.** Routing, serialisation, type checks and the TypeScript declarations are
+**Part 2 is ziggurats's job.** Routing, serialisation, type checks and the TypeScript declarations are
 all generated from `Schema`, so you only ever write parts 1 and 3.
 
 ```zig check

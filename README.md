@@ -1,7 +1,10 @@
-# Z-Ts
+# ziggurats
 
 **Tauri の思想を、Zig 0.17 で。** — デスクトップアプリ・WebAssembly・静的サイトを、
 1 つのコードベースと 1 つのツールチェーンで。
+
+> プロジェクトのフルネームは **`ziggurats`**（小文字）。CLI・パッケージ・モジュール名は
+> これまでどおり `zts` / `z_ts` / `zts_*` です。
 
 [![CI](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml)
 [![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/Z-Ts/)
@@ -13,7 +16,7 @@
 
 ## これは何か
 
-Z-Ts は、Tauri v2 の **IPC プロトコル・プラグイン・設定ファイル・ACL** を Zig で再実装した
+ziggurats は、Tauri v2 の **IPC プロトコル・プラグイン・設定ファイル・ACL** を Zig で再実装した
 ツールキットです。Rust ランタイムを挟まないため、配布物は小さく、ビルドは速く、コアは
 `link_libc = false`（Pure Zig）のまま保てます。
 
@@ -92,7 +95,7 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 
 | # | ステップ | 分 | 終わったとき | 行き先 |
 |---|---|---|---|---|
-| 1 | はじめての Z-Ts | 10 | ブラウザでアプリが動き、`zig-out/bin/` に単一バイナリがある | [`learn/ja/start.md`](docs/learn/ja/start.md)（[English](docs/learn/en/start.md)） |
+| 1 | はじめての ziggurats | 10 | ブラウザでアプリが動き、`zig-out/bin/` に単一バイナリがある | [`learn/ja/start.md`](docs/learn/ja/start.md)（[English](docs/learn/en/start.md)） |
 | 2 | 仕組みを知る | 15 | 「ボタン → Zig の関数」がどこを通るか説明できる | [`learn/ja/concepts/`](docs/learn/ja/concepts/index.md) |
 | 3 | アプリを作る | 50 | 3 本のチュートリアルを通し、コマンド・状態・画面を書いて配れる | [`learn/ja/tutorials/`](docs/learn/ja/tutorials/index.md) |
 | 4 | 実用パターン | 20 | コマンド・状態・エラーの設計を、練習問題で自分の言葉にできる | [`learn/ja/patterns/`](docs/learn/ja/patterns/index.md) |
@@ -114,7 +117,7 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 | エラー名から引く | <https://umiturtle.github.io/Z-Ts/docs/reference/errors.html> |
 | `zts` の全オプション | [`docs/reference/cli.md`](docs/reference/cli.md) |
 
-**Z-Ts 本体を開発する人向け**（コマンドは `zig build`）
+**ziggurats 本体を開発する人向け**（コマンドは `zig build`）
 
 | 目的 | 行き先 |
 |---|---|

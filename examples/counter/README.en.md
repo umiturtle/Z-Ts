@@ -1,4 +1,4 @@
-# Z-Ts Counter — one project, three artefacts
+# ziggurats Counter — one project, three artefacts
 
 A showcase sample: the **same application logic** produces a native desktop binary, a browser Live
 Preview, and a static site — with **zero target-specific branches**.

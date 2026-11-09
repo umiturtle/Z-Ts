@@ -4,7 +4,7 @@
 > を使いたい人。API の一覧は [`zts_tauri`](../../../api/zts_tauri/index.html)。
 > **所要時間**: 8 分。**前提**: コマンドを 1 つ書いたことがある（[コマンド](rpc.md)）。
 
-Z-Ts は Tauri v2 の**ワイヤプロトコル**（`plugin:window|set_title` のようなコマンド名と JSON の形）を
+ziggurats は Tauri v2 の**ワイヤプロトコル**（`plugin:window|set_title` のようなコマンド名と JSON の形）を
 そのまま実装しています。したがってフロントエンドは**無改造の `@tauri-apps/api` v2** が使え、
 バックエンドは「プラグインの状態を持つ → スキーマに合流させる」の 2 手順だけです。
 
@@ -91,7 +91,7 @@ Zig 側では `plugins.windows` を直接触れます。
 
 ```zig
 const win = try plugins.windows.create(allocator, .{
-    .label = "main", .title = "Z-Ts", .size = .wh(520, 620), .initial_url = "index.html",
+    .label = "main", .title = "ziggurats", .size = .wh(520, 620), .initial_url = "index.html",
 });
 try plugins.windows.setTitle(&win, "Renamed");
 ```

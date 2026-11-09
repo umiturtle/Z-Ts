@@ -342,7 +342,7 @@ pub fn machineName(arch: std.Target.Cpu.Arch) []const u8 {
 
 /// Maps the shared objects an ELF binary actually links against onto Debian package names.
 ///
-/// A Z-Ts app that never opens a window does not link GTK, so hard-coding `Depends: libgtk-3-0`
+/// A ziggurats app that never opens a window does not link GTK, so hard-coding `Depends: libgtk-3-0`
 /// would install 100 MB of toolkit for a headless program. Searching the binary's string table for
 /// the sonames is enough: `DT_NEEDED` entries are plain NUL-terminated strings inside the file.
 ///

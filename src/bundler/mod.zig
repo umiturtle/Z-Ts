@@ -1,4 +1,4 @@
-//! `M5-03` — turn a built Z-Ts executable into something a user can install.
+//! `M5-03` — turn a built ziggurats executable into something a user can install.
 //!
 //! The bundler is split so that everything except the final write is a pure function:
 //!

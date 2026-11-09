@@ -14,7 +14,7 @@
 **ケーパビリティ（スコープ）で許可された範囲外へ出られないこと**が唯一のセキュリティ境界になる。
 本家は `tauri-plugin-fs` の `Scope` / `GlobalScope` / `CommandScope` でこれを実現している。
 
-Z-Ts では `zts_tauri` が **`link_libc = false` の Pure Zig** で、GTK / Cocoa / Win32 に一切依存しない。
+ziggurats では `zts_tauri` が **`link_libc = false` の Pure Zig** で、GTK / Cocoa / Win32 に一切依存しない。
 したがってスコープ判定も「OS 固有 API に頼らない純粋なアルゴリズム」として実装できる必要がある。
 
 危険な実装は次の 3 つ。いずれも **文字列 prefix 比較** に起因する:

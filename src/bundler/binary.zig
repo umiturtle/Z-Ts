@@ -3,7 +3,7 @@
 //! `zts package` needs the architecture for the Debian `Architecture:` field and for the
 //! `demo-0.1.0-x86_64.tar.gz` file name. The host's architecture is the wrong answer whenever
 //! `zts build --target aarch64-linux` ran first, so the facts are read from the bytes that are
-//! about to be packaged. Only the three container formats Z-Ts can emit are recognised; anything
+//! about to be packaged. Only the three container formats ziggurats can emit are recognised; anything
 //! else is refused instead of being mislabelled.
 
 const std = @import("std");

@@ -22,7 +22,7 @@ if [[ "$CUR_BRANCH" != "detached" ]] && git rev-parse --verify "origin/${CUR_BRA
 fi
 
 echo "=================================================================="
-echo " Z-Ts Agent Status & Parallel Coordination Radar"
+echo " ziggurats Agent Status & Parallel Coordination Radar"
 echo "=================================================================="
 echo "Current branch : ${CUR_BRANCH}"
 echo "HEAD commit    : $(git log -1 --oneline 2>/dev/null || echo 'none')"

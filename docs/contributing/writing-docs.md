@@ -1,6 +1,6 @@
 # ドキュメントの書き方（機械で守る規約）
 
-> **対象読者**: Z-Ts のドキュメントを書く・直す人（人間とエージェント）。
+> **対象読者**: ziggurats のドキュメントを書く・直す人（人間とエージェント）。
 > **アプリを作る人は読む必要がありません** → [`../learn/ja/guides/index.md`](../learn/ja/guides/index.md)。
 > なぜこの形なのか（調査と原則）は [`../architecture/docs-as-a-product.md`](../architecture/docs-as-a-product.md)。
 
@@ -76,7 +76,7 @@ CI も同じ 4 段を回します（[`.github/workflows/ci.yml`](../../.github/w
 
 | 置き場所 | ステップ | ページ上部のレール |
 |---|---|---|
-| `docs/learn/<lang>/start.md` | 1 はじめての Z-Ts | 出る |
+| `docs/learn/<lang>/start.md` | 1 はじめての ziggurats | 出る |
 | `docs/learn/<lang>/concepts/*` | 2 仕組みを知る | 出る |
 | `docs/learn/<lang>/tutorials/*` | 3 アプリを作る | 出る |
 | `docs/learn/<lang>/guides/*` | 4 目的から引く | 出る |
@@ -246,6 +246,17 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 英語版の無いページも規約 13 が落とします。内部資料（ADR・設計メモ・タスク票）は
 日本語専用なので台帳の対象外です。
 
+**プロジェクトのフルネームは `ziggurats`**（常に小文字）です。旧称（ハイフン入りの大文字
+表記）は、**リポジトリ URL とチェックアウトのパス名にだけ**残せます。リポジトリ名は所有者が
+あとで変更するため、そこは書き換えません。規約 14 が読者向けの Markdown・サイトの UI
+文字列・`zts` のヘルプと生成テンプレート・CI・スクリプトを走査し、旧称が残っていたり
+頭文字を大文字にした表記で書かれていたりしたら落とします。
+**`zts` コマンド、`z_ts` パッケージ、`zts_*` モジュール、`ZTS_*` 環境変数は識別子なので
+改名の対象外**です（文字列としても旧称を含まないため、置換で壊れません）。
+ソースのテストデータ、ライブラリの既定ウィンドウタイトル、デモの画面内テキストも
+「関係ないものを巻き込まない」ため据え置いています。デモの可視テキストは 3 OS の画素一致
+ゲートの対象なので、リポジトリ名を変えるときに生成器と生成物をまとめて更新してください。
+
 ## 9. 2 言語で書く（英語と日本語）
 
 読者向けのページは **`docs/learn/ja/` と `docs/learn/en/` に同じファイル名で 1 本ずつ**置きます。
@@ -296,6 +307,7 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `GroupKey.order() takes a language` | 言語でメニューを分岐させた | `order()` を 1 本に戻す。未翻訳ページは日本語タイトルのまま両方に出す |
 | `missing English counterpart` | 英語版を書き忘れた | `*.en.md` を足し、両方の索引に 1 行（規約 11・13） |
 | `changed after verification` / `implementation changed since verification` | 本文か実装を変えたが台帳を更新していない | 差分を読み直し、`python3 scripts/check-docs.py --sync` で日付とハッシュを更新（規約 13） |
+| `legacy project name … in prose` | 旧称が本文に残っている／頭文字を大文字にした | `ziggurats`（小文字）に直す。URL とチェックアウトのパス名だけ例外（規約 14） |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

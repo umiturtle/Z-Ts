@@ -69,8 +69,8 @@ pub const GroupKey = enum {
                 .en => "Learning path",
             },
             .start => switch (lang) {
-                .ja => "はじめての Z-Ts",
-                .en => "Your first ten minutes with Z-Ts",
+                .ja => "はじめての ziggurats",
+                .en => "Your first ten minutes with ziggurats",
             },
             .concepts => switch (lang) {
                 .ja => "概念",
@@ -420,7 +420,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
             .body = body,
             .kind = "errors",
             .crumbs = &.{
-                .{ .label = "Z-Ts", .href = "index.html" },
+                .{ .label = "ziggurats", .href = "index.html" },
                 .{ .label = "リファレンス" },
             },
             .plain = try errorIndexPlain(arena, errors),
@@ -1153,7 +1153,7 @@ fn englishNavTitle(source: []const u8) ?[]const u8 {
         .{ .path = "examples/frameworks/README.md", .label = "Nine frameworks, one screen" },
         .{ .path = "examples/gallery/README.md", .label = "Screenshot regression gallery" },
         .{ .path = "examples/c_embed/README.md", .label = "C99 overlay embedding" },
-        .{ .path = "docs/contributing/README.md", .label = "Developing Z-Ts itself" },
+        .{ .path = "docs/contributing/README.md", .label = "Developing ziggurats itself" },
         .{ .path = "docs/contributing/repository-map.md", .label = "Repository map" },
         .{ .path = "docs/contributing/troubleshooting.md", .label = "Repository troubleshooting" },
         .{ .path = "docs/contributing/writing-docs.md", .label = "Writing the docs" },
@@ -1255,7 +1255,7 @@ fn neighbors(groups: []const site.Group, href: []const u8) struct { prev: ?site.
 /// click away without going through the sidebar.
 fn apiCrumbs(arena: Allocator, href: []const u8) ![]const site.Crumb {
     var list: std.ArrayListUnmanaged(site.Crumb) = .empty;
-    try list.append(arena, .{ .label = "Z-Ts", .href = "index.html" });
+    try list.append(arena, .{ .label = "ziggurats", .href = "index.html" });
     try list.append(arena, .{ .label = "API", .href = "docs/api/index.html" });
     // `docs/api/index.html` itself is the second crumb; do not repeat it as the third.
     if (!std.mem.eql(u8, href, "docs/api/index.html")) {
@@ -1279,7 +1279,7 @@ fn apiCrumbs(arena: Allocator, href: []const u8) ![]const site.Crumb {
 
 fn buildCrumbs(arena: Allocator, lang: i18n.Lang, key: GroupKey, href: []const u8, title: []const u8) ![]const site.Crumb {
     var list: std.ArrayListUnmanaged(site.Crumb) = .empty;
-    try list.append(arena, .{ .label = "Z-Ts", .href = if (lang == .en) "en/index.html" else "index.html" });
+    try list.append(arena, .{ .label = "ziggurats", .href = if (lang == .en) "en/index.html" else "index.html" });
     if (key != .hidden) {
         try list.append(arena, .{ .label = key.heading(lang) });
     }
@@ -1680,7 +1680,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\<meta charset="utf-8" />
         \\<meta name="viewport" content="width=device-width, initial-scale=1" />
         \\<meta name="color-scheme" content="light dark" />
-        \\<title>Z-Ts — Tauri in Zig</title>
+        \\<title>ziggurats — Tauri in Zig</title>
         \\<meta name="description" content="{s}" />
         \\<link rel="alternate" hreflang="{s}" href="{s}{s}" />
         \\<link rel="stylesheet" href="{s}assets/site.css" />
@@ -1689,7 +1689,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\</head>
         \\<body class="landing" data-root="{s}" data-lang="{s}">
         \\<header class="topbar landing-topbar">
-        \\  <a class="brand" href="{s}index.html"><span class="brand-mark">Z</span><span class="brand-name">Z-Ts</span></a>
+        \\  <a class="brand" href="{s}index.html"><span class="brand-mark">Z</span><span class="brand-name">ziggurats</span></a>
         \\  <span class="brand-tagline">Tauri in Zig</span>
         \\  <div class="topbar-actions">
         \\    <nav class="langs" aria-label="{s}"><a href="{s}index.html" hreflang="ja"{s}>日本語</a><a href="{s}en/index.html" hreflang="en"{s}>English</a></nav>
@@ -1816,7 +1816,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         .{
             .icon = "M9 12l2 2 4-4M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z",
             .title = "Lock it down",
-            .blurb = "Capabilities, scopes and CSP: what Z-Ts enforces, what it does not, and how to keep the default deny.",
+            .blurb = "Capabilities, scopes and CSP: what ziggurats enforces, what it does not, and how to keep the default deny.",
             .cta_label = "Security",
             .cta_href = concept_security,
             .links = &.{ concept_security, guide_plugins, "docs/api/zts_tauri/index.html" },
@@ -1849,7 +1849,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         .{
             .icon = "M9 12l2 2 4-4M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z",
             .title = "権限を絞る",
-            .blurb = "capability・scope・CSP。Z-Ts が守るもの、守らないもの、既定拒否の維持のしかた。",
+            .blurb = "capability・scope・CSP。ziggurats が守るもの、守らないもの、既定拒否の維持のしかた。",
             .cta_label = "セキュリティ",
             .cta_href = concept_security,
             .links = &.{ concept_security, guide_plugins, "docs/api/zts_tauri/index.html" },
@@ -1928,7 +1928,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
     try w.writeAll("</nav></details></section>");
     try w.writeAll("</main>");
     try w.print(
-        \\<footer class="footer landing-footer"><span>© Z-Ts — {s}</span><span class="footer-meta"><a href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener">{s}</a></span></footer>
+        \\<footer class="footer landing-footer"><span>© ziggurats — {s}</span><span class="footer-meta"><a href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener">{s}</a></span></footer>
         \\<script src="{s}assets/site.js"></script>
         \\</body>
         \\</html>
@@ -1943,7 +1943,7 @@ fn renderLlmsTxt(arena: Allocator, groups_ja: []const site.Group, groups_en: []c
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
     const w = &out.writer;
-    try w.writeAll("# Z-Ts\n\n");
+    try w.writeAll("# ziggurats\n\n");
     try w.writeAll("> Tauri v2 のプロトコルとプラグインを Zig 0.17 で再実装したツールキット。" ++
         "同じアプリコードからネイティブ WebView / Live Preview / 静的 SSG の 3 つを生成する。\n>\n" ++
         "> A Zig 0.17 reimplementation of the Tauri v2 protocol and plugins. One app source, " ++
@@ -2030,7 +2030,7 @@ fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang, prefix: []const u8) ![]
         .{ .href = "docs/api/index.html", .label = "API reference (A–Z)" },
     } else &.{
         .{ .href = "index.html", .label = "ホーム" },
-        .{ .href = "docs/learn/ja/start.html", .label = "はじめての Z-Ts（10 分）" },
+        .{ .href = "docs/learn/ja/start.html", .label = "はじめての ziggurats（10 分）" },
         .{ .href = "docs/learn/ja/index.html", .label = "学習パス" },
         .{ .href = "docs/INDEX.html", .label = "ドキュメント索引" },
         .{ .href = "docs/api/index.html", .label = "API リファレンス（A–Z）" },
@@ -2177,7 +2177,7 @@ test "the learn-path directive expands only on its own line" {
 
     // A marker alone on a line becomes the step list.
     const expanded = try expandDirectives(arena, "# Hub\n\n<!-- learn-path -->\n\nDone.\n", .ja);
-    try std.testing.expect(std.mem.indexOf(u8, expanded, "1. **[はじめての Z-Ts](start.html)**") != null);
+    try std.testing.expect(std.mem.indexOf(u8, expanded, "1. **[はじめての ziggurats](start.html)**") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded, "<!-- learn-path -->") == null);
 
     // A marker quoted inline (as the writing guide does) is left verbatim.
@@ -2195,7 +2195,7 @@ test "the sidebar heading of a path section carries its step number" {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
-    try std.testing.expectEqualStrings("1 · はじめての Z-Ts", try groupHeading(arena, .start, .ja));
+    try std.testing.expectEqualStrings("1 · はじめての ziggurats", try groupHeading(arena, .start, .ja));
     try std.testing.expectEqualStrings("2 · 仕組みを知る", try groupHeading(arena, .concepts, .ja));
     try std.testing.expectEqualStrings("3 · Build an app", try groupHeading(arena, .tutorials, .en));
     try std.testing.expectEqualStrings("4 · Patterns that hold up", try groupHeading(arena, .patterns, .en));
@@ -2216,8 +2216,8 @@ test "the hub opens its group, then the numbered step sections" {
     var entries: std.ArrayListUnmanaged(site.NavEntry) = .empty;
     // Deliberately out of order, and with a page that sorts before `index.md` alphabetically.
     try entries.append(arena, .{ .href = "docs/learn/ja/zzz.html", .title = "zzz", .source = "docs/learn/ja/zzz.md" });
-    try entries.append(arena, .{ .href = "docs/learn/ja/start.html", .title = "はじめての Z-Ts", .source = "docs/learn/ja/start.md" });
-    try entries.append(arena, .{ .href = "docs/learn/ja/index.html", .title = "Z-Ts を学ぶ", .source = "docs/learn/ja/index.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/start.html", .title = "はじめての ziggurats", .source = "docs/learn/ja/start.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/index.html", .title = "ziggurats を学ぶ", .source = "docs/learn/ja/index.md" });
     sortEntries(.learn, &entries);
 
     try std.testing.expectEqualStrings("docs/learn/ja/index.html", entries.items[0].href);

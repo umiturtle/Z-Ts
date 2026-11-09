@@ -4,7 +4,7 @@
 > from `@tauri-apps/api`.
 > **Time**: 4 minutes.
 
-Z-Ts implements Tauri v2's **wire protocol** verbatim (command names such as
+ziggurats implements Tauri v2's **wire protocol** verbatim (command names such as
 `plugin:window|set_title` and the JSON shapes). So the frontend needs no changes at all, and the
 backend is two steps: create the state, join it into your schema.
 

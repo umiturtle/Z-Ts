@@ -11,7 +11,7 @@
 //!
 //! The core's labels use GTK's marker: `_F` marks `F` as the mnemonic and `__` is a literal
 //! underscore.
-//! Upstream `muda` instead stores `&` in shared state; Z-Ts converts per backend, which keeps
+//! Upstream `muda` instead stores `&` in shared state; ziggurats converts per backend, which keeps
 //! the existing GTK behaviour (and its tests) intact:
 //!
 //! | platform | `_File` | `__x` | `Fish & Chips` |

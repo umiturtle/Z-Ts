@@ -1,6 +1,6 @@
 # Repository map (for maintainers)
 
-> **Audience**: people changing Z-Ts itself, and agents. What each file is, and how far you may go.
+> **Audience**: people changing ziggurats itself, and agents. What each file is, and how far you may go.
 > **Time**: 30 seconds to look up one row.
 > **Prerequisite**: the toolchain section of [`README.en.md`](README.en.md).
 

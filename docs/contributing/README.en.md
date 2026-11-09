@@ -1,8 +1,8 @@
-# Developing Z-Ts itself (contributor guide)
+# Developing ziggurats itself (contributor guide)
 
 > **If you are building an app, you do not need this page.** The [tutorials (3 walkthroughs)](../learn/en/tutorials/index.md)
 > are the "`zts` CLI builds your own app" instructions. This page is the commands and conventions
-> for **building, testing and publishing the Z-Ts repository itself** (contributors, agents, and
+> for **building, testing and publishing the ziggurats repository itself** (contributors, agents, and
 > our future selves).
 
 ## 1. Toolchain

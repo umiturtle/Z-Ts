@@ -4,7 +4,7 @@
 > **Time**: 15 minutes. **Prerequisite**: a project where `zts dev` works.
 > **After this page**: you can write a page that distinguishes loading, empty and error states.
 
-Everything so far was Zig. This page is about `web/`. Z-Ts asks nothing of your frontend — plain
+Everything so far was Zig. This page is about `web/`. ziggurats asks nothing of your frontend — plain
 HTML, CSS and TypeScript are enough — but `zts dev` and `zts build` own **updating and shipping**
 the page. Three things are worth knowing.
 

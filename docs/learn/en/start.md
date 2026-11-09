@@ -1,10 +1,10 @@
-# Your first ten minutes with Z-Ts
+# Your first ten minutes with ziggurats
 
-> **Audience**: anyone who has not run Z-Ts yet. No Zig or Web knowledge assumed.
+> **Audience**: anyone who has not run ziggurats yet. No Zig or Web knowledge assumed.
 > **Time**: 10 minutes. **What you need**: a terminal, Zig 0.17, and the `zts` binary (one file).
 > **What you get**: your own project running in a browser, plus a single binary in `zig-out/bin/`.
 
-Work through this page top to bottom and you will have Z-Ts running. There is no architecture
+Work through this page top to bottom and you will have ziggurats running. There is no architecture
 talk here: **run it first, understand it second**, which is how the rest of these docs are ordered.
 
 ```text
@@ -16,7 +16,7 @@ talk here: **run it first, understand it second**, which is how the rest of thes
 
 ## 1. Get `zts` (3 minutes)
 
-`zts` is the CLI that drives a Z-Ts project. What you install is **one binary** (about 300 KB, no
+`zts` is the CLI that drives a ziggurats project. What you install is **one binary** (about 300 KB, no
 libc dependency); you bring Zig.
 
 ```bash
@@ -36,7 +36,7 @@ zts version             # → zts 0.1.0
 and platform packages are in [`guides/install.md`](guides/install.md).
 
 > [!NOTE]
-> Working on Z-Ts itself, or prefer source builds? `git clone` + `zig build` produces the same
+> Working on ziggurats itself, or prefer source builds? `git clone` + `zig build` produces the same
 > binary; all it needs is Zig 0.17 on `PATH`. A `zts` built that way makes generated projects
 > depend on the checkout via `.path`.
 
@@ -108,7 +108,7 @@ Open <http://127.0.0.1:5173/> and you will see the `my_app` heading and the line
 Change the `<h1>` in `web/index.html` and save. **Do not touch the terminal.**
 
 ```html
-<h1>my_app — hello Z-Ts</h1>
+<h1>my_app — hello ziggurats</h1>
 ```
 
 The browser reloads in about half a second. The write → see loop is now closed; everything else in these

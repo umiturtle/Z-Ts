@@ -1,6 +1,6 @@
 # Glossary
 
-The words used by Z-Ts's documentation and API, collected in one place. Each entry has **a one-line
+The words used by ziggurats's documentation and API, collected in one place. Each entry has **a one-line
 definition** and **a link to the page where it first appears**. A code span such as `` `Engine` `` in
 the text is linked automatically to a heading here (names that are not in the glossary go to the
 API reference instead).

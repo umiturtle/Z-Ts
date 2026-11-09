@@ -1,13 +1,13 @@
 # SSG（静的サイト生成）& WebAssembly 同型実行アーキテクチャ
 
-> 対象読者: Z-Ts 上でデスクトップアプリ／Web 体験版／静的サイトの **3 成果物を 1 コードベースから出したい** 開発者・エージェント。
+> 対象読者: ziggurats 上でデスクトップアプリ／Web 体験版／静的サイトの **3 成果物を 1 コードベースから出したい** 開発者・エージェント。
 > 意思決定の背景は [`../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md`](../decisions/0005-isomorphic-ssg-and-wasm-pipeline.md) を参照。
 
 ---
 
 ## 1. 4 モード同型（Quad-Target Isomorphism）マトリクス
 
-Z-Ts のアプリコード（Zig コマンド実装 ＋ TypeScript UI）は、**1 行も分岐させずに** 次の 4 つの実行形態へ出力できます。
+ziggurats のアプリコード（Zig コマンド実装 ＋ TypeScript UI）は、**1 行も分岐させずに** 次の 4 つの実行形態へ出力できます。
 
 | # | 実行形態 | `zts_core.Host` 実装 | トランスポート | 起動方法 |
 |---|---|---|---|---|

@@ -18,7 +18,7 @@
   - ポート `0`（OS エフェメラルポート）および `127.0.0.1` / `0.0.0.0`（Arena Live Preview 等）両対応の `BridgeServer`
   - `GET` / `HEAD` `/*`: `zts_web.Assets` による HTML（初期化スクリプト自動 `<head>` 注入 & 初回 `Set-Cookie` 発行）・JS・CSS・SPA フォールバック・**RFC 9110 `206 Partial Content` / `416` メディア配信**
   - `POST /__zts_ipc__/<cmd>`: パーセントデコード（`plugin%3Awindow%7Cset_title` 等）+ 三重セキュリティ検査 → `zts_rpc.Handler` ディスパッチ（JSON / Raw `application/octet-stream` 両対応、`Tauri-Response: ok|error` ヘッダ付与）
-  - 単体切り出し可能な公開モジュール `zts_bridge`（`zts_foundation` + `zts_web` + `zts_rpc` のみ依存、Window/GUI 依存ゼロ）＋ Z-Ts デスクトップ `zts_core.Host` VTable 実装アダプタ `BridgeHost`（`src/bridge_host.zig`）
+  - 単体切り出し可能な公開モジュール `zts_bridge`（`zts_foundation` + `zts_web` + `zts_rpc` のみ依存、Window/GUI 依存ゼロ）＋ ziggurats デスクトップ `zts_core.Host` VTable 実装アダプタ `BridgeHost`（`src/bridge_host.zig`）
 - [x] 自動結合テスト（`tests/bridge/verify_bridge_e2e.ts`: 実 Node `v22` `fetch` + ストリーミング SSE + 6 パターン CSRF/盗聴攻撃 `403` 遮断 + 注入 `<script>` 本体実行検証 + `tsc --strict` ゼロエラー）& Debug / `ReleaseFast` 全 7 バイナリ `62/62` テスト完全通過 & 3-OS GitHub Actions CI グリーン
 
 ---

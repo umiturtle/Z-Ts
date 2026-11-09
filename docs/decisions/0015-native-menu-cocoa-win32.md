@@ -24,13 +24,13 @@ Linux 上で検証できないコードが増える。`snapshot_wire.zig` に寄
 `./zigw quick-test`（Linux）で全 OS 分のロジックが回り、
 バックエンドは「ツールキットを呼ぶだけ」の薄い層になる。
 
-`muda` は共有状態のラベルに `&` を採用しているが、Z-Ts は既存の GTK 実装
+`muda` は共有状態のラベルに `&` を採用しているが、ziggurats は既存の GTK 実装
 （`gtk_menu_item_new_with_mnemonic` とそのテスト）を壊さないため `_` を維持し、
 **バックエンド側で変換**する。
 
 ### 2.2 Win32 のアクティベーションは `SetWindowSubclass` で拾う
 
-Win32 のメニューは `WM_COMMAND` をウィンドウプロシージャへ送る。Z-Ts の wndproc は
+Win32 のメニューは `WM_COMMAND` をウィンドウプロシージャへ送る。ziggurats の wndproc は
 `zts_webview`（`link_libc = false` の純 Zig モジュール）にあり、**コアが
 `zts_tauri` に依存してはならない**（`zts_webview` は `zts_foundation` のみ依存）。
 したがって webview にメニュー用フックを足すのではなく、メニュー側が
@@ -53,7 +53,7 @@ AppKit のメニューバーはアプリ全体で 1 本だが、`NSWindow.menu` 
 ### 2.5 Win32 のショートカットは「表示のみ」
 
 `HMENU` にはアイテム単位のアクセラレータ欄が無く、実際のキー入力は
-メッセージループの `TranslateAcceleratorW` が解決する。Z-Ts はホストの
+メッセージループの `TranslateAcceleratorW` が解決する。ziggurats はホストの
 イベントループを持たない（`zts_webview` が持つ）ため、`\tCtrl+N` の**表示**に留め、
 キー動作は既知の制限として文書化する。macOS は `keyEquivalent` が AppKit 側で
 解決されるので制限が無い。

@@ -4,7 +4,7 @@
 > **所要時間**: 5 分（練習 3 問で +15 分）。
 > **前提**: [コマンドの設計](commands.md)。
 
-Z-Ts では、コマンドのエラーは **`error{…}` の名前だけ**が画面に届きます。
+ziggurats では、コマンドのエラーは **`error{…}` の名前だけ**が画面に届きます。
 
 ```text
 Zig:   return error.OutOfStock;
