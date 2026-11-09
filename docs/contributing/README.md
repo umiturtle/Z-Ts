@@ -21,11 +21,35 @@
 
 | 必要なもの | 用途 | 無い場合 |
 |---|---|---|
-| Python 3.8+ | `./zigw` が Zig 0.17.0 を PyPI wheel から導入する | `zig` を自前で入れて `zig build` を直接使う |
+| Zig 0.17.0 | すべてのビルドとテスト。`PATH` に 0.17 があれば `./zigw` はそれをそのまま使う | `./zigw` が PyPI の wheel から `/tmp/zts-toolchains/` に導入する（そのときだけ Python 3.8+ が要る） |
+| Python 3.8+ | Zig が無いときの導入と、`scripts/*.py` のドキュメント検査 | Zig を自前で入れる。`check-docs.py` / `doc-tests.py` は必須 |
 | Node.js 22 | E2E（`node tests/…`）とフレームワークデモの再生成 | 該当ステップだけスキップされる |
 | GTK3 + WebKit2GTK 4.1 | Linux のネイティブ WebView | `bash scripts/setup-toolchains.sh --sysroot` |
 
-`./zigw` は初回に約 4 秒かけて `/tmp/zts-toolchains/` へ Zig を展開します。`/tmp` は
+### 1.1 `./zigw` は何をするラッパーか
+
+`zigw` は「このリポジトリ専用の環境整え役」で、**配布物ではありません**（[`§6`](#6-ci-と配布)）。
+やることは 2 つだけです。
+
+1. **Zig を見つける**（`PATH` の `zig` が 0.17.0 なら採用 → `/tmp/zts-toolchains/…` →
+   PyPI wheel を展開）。sudo が使える環境では `/usr/local/bin/zig` にもリンクします。
+2. **下の 5 つのサブコマンドだけ横取りし、それ以外は `zig` にそのまま渡す。**
+
+| `./zigw <verb>` | 実体 | 何のため |
+|---|---|---|
+| `quick-test` | `zig test` をモジュールごとに直接実行 | `std.Build` ランナーのビルド（約 90 秒）を飛ばして TDD を回す |
+| `full-test` | `zig build test --summary all` | E2E・C ABI・バインディング鮮度まで含む全ステップ |
+| `docs-check` | docsite のテスト → `check-docs.py` → `doc-tests.py` → `zig build docs` | ドキュメントの全ゲート |
+| `doctest` | `scripts/doc-tests.py` だけ | CI など、他のゲートを省きたいとき |
+| `zig-path` | Zig のパスを 1 行 | `ZTS_ZIG` に渡す（`zts doctor` の `zig MISSING` 対策） |
+
+**それ以外は `zig` に丸投げ**です。`./zigw build docs` は `zig build docs`、`./zigw fmt --check src/`
+は `zig fmt --check src/`、`./zigw version` は `zig version`（`0.17.0`）。`zigw` 自身のバージョンを
+問い合わせるコマンドはありません。この対応は `scripts/check-docs.py` の 9 番目の規則が
+**ドキュメントの記述と `zigw` 本体を突き合わせて**検証します（存在しないサブコマンドを書くと
+`docs-check` が落ちます）。
+
+Zig が `PATH` に無い場合、初回は約 4 秒かけて `/tmp/zts-toolchains/` へ展開します。`/tmp` は
 コンテナごとに消えるので、**チャットをまたぐたびに再導入が走るのは仕様**です
 （詳細は [`../environment/arena-and-caching.md`](../environment/arena-and-caching.md)）。
 
@@ -35,8 +59,8 @@
 
 ```bash
 bash scripts/status.sh          # ブランチ・未コミット・並列エージェント・直近 CI
-./zigw quick-test               # 全単体テスト（コールド 8 秒 / 2 回目以降 0.03 秒）
-./zigw docs-check               # ドキュメントの 4 段ゲート（12 秒）
+./zigw quick-test               # 全単体テスト（キャッシュ無し 12 秒 / 温まれば 0.2 秒）
+./zigw docs-check               # ドキュメントの 4 段ゲート（温まって 14 秒）
 ```
 
 3 つとも通れば「壊れているのは自分の変更」です。
@@ -47,12 +71,12 @@ bash scripts/status.sh          # ブランチ・未コミット・並列エー�
 
 | コマンド | 内容 | 目安 |
 |---|---|---|
-| `./zigw quick-test` | `std.Build` を介さず全モジュールの単体テスト | コールド 8 秒 / 2 回目 0.03 秒 |
+| `./zigw quick-test` | `std.Build` を介さず全モジュールの単体テスト | キャッシュ無し 12 秒 / 温まれば 0.2 秒 |
 | `./zigw full-test` | `zig build test` と同じ（E2E・C ABI・バインディング鮮度を含む） | コールド 90 秒以上 |
 | `./zigw build test -Dgtk=false` | GTK を切って `test` ステップを実行（CI と同じ形） | キャッシュ次第 |
-| `./zigw docs-check` | ドキュメントの**全ゲート**（下記 4 段）。PR 前に必ずこれ | 約 7 秒（温） |
-| `./zigw build docs` | ドキュメントサイトを `zig-out/docs/` に生成（リンク・アンカー検査つき） | 約 4 秒 |
-| `python3 scripts/check-docs.py` | 構造・相対リンク・層違反・CLI 乖離・パッケージ名・用語集・ページ骨格 | 0.1 秒 |
+| `./zigw docs-check` | ドキュメントの**全ゲート**（下記 4 段）。PR 前に必ずこれ | 約 14 秒（温） |
+| `./zigw build docs` | ドキュメントサイトを `zig-out/docs/` に生成（リンク・アンカー検査つき） | 約 8 秒 |
+| `python3 scripts/check-docs.py` | 構造・相対リンク・層違反・CLI 乖離・パッケージ名・用語集・ページ骨格・`./zigw` の記述 | 0.1 秒 |
 | `./zigw doctest` | `zig check` フェンスを実際にコンパイル（doctest-lite） | 2 ブロックで 1〜5 秒 |
 | `./zigw zig-path` | このチェックアウトが使う Zig のパスを 1 行で出力（`ZTS_ZIG` に渡す用） | 即時 |
 

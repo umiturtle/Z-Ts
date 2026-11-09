@@ -71,7 +71,7 @@ CI も同じ 4 段を回します（[`.github/workflows/ci.yml`](../../.github/w
 
 ### 学習パスに乗る・降りる
 
-読者向けページは、**`src/docsite/learn_path.zig` の表**で決まる 4 ステップのどれかに属するのが
+読者向けページは、**`src/docsite/learn_path.zig` の表**で決まる 5 ステップのどれかに属するのが
 既定です。属し方はパスだけで決まります。
 
 | 置き場所 | ステップ | ページ上部のレール |
@@ -80,11 +80,11 @@ CI も同じ 4 段を回します（[`.github/workflows/ci.yml`](../../.github/w
 | `docs/learn/<lang>/concepts/*` | 2 仕組みを知る | 出る |
 | `docs/learn/<lang>/tutorials/*` | 3 アプリを作る | 出る |
 | `docs/learn/<lang>/guides/*` | 4 目的から引く | 出る |
-| `docs/learn/<lang>/index.md`（入口） | — | 出ない（4 ステップを本文に列挙） |
+| `docs/learn/<lang>/index.md`（入口） | — | 出ない（5 ステップを本文に列挙） |
 | `docs/reference/`・`docs/api/`・用語集・内部資料 | — | 出ない（引く専用） |
 
 **新しい概念ページは `concepts/` に置けば、それだけで道順に入ります**（表の編集は不要）。逆に
-`docs/learn/<lang>/` の直下に置けるのは `index.md` と `start.md` だけです。学習入口の 4 ステップ
+`docs/learn/<lang>/` の直下に置けるのは `index.md` と `start.md` だけです。学習入口の 5 ステップ
 一覧は `<!-- learn-path -->` と書くと `learn_path.zig` から展開されるので、**手で書き写さない**で
 ください（同じ表がページ・サイドバー・レール・ランディングの 4 か所を駆動しています）。
 

@@ -194,11 +194,27 @@ pub fn assetPath(alloc: Allocator, target: []const u8) Allocator.Error!?[]const 
 /// A polling `fetch` (not `EventSource`) keeps the dev server single-threaded and stateless: any
 /// `GET` answers with the current build number, so no connection has to stay open while a rebuild
 /// is running.
+///
+/// The state carries `hot`: `"css"` means the only files that changed were stylesheets, so the
+/// page replaces its `<link rel="stylesheet">` elements and keeps its state (scroll position, form
+/// inputs, an open devtools console). Anything else reloads. If a swap fails to load, the script
+/// falls back to a reload rather than leaving the page half-styled.
 pub fn reloadScript(alloc: Allocator, build: u64) Allocator.Error![]u8 {
     return std.fmt.allocPrint(
         alloc,
-        "<script data-zts-dev>(function(){{var v={d};var poll=function(){{fetch('/__zts_dev__/state',{{cache:'no-store'}})" ++
-            ".then(function(r){{return r.json()}}).then(function(s){{if(s.v!==v)location.reload()}})" ++
+        "<script data-zts-dev>(function(){{var v={d};" ++
+            "var swap=function(n){{var links=document.querySelectorAll('link[rel~=\"stylesheet\"]');" ++
+            "if(!links.length)return false;var done=0,failed=false;" ++
+            "Array.prototype.forEach.call(links,function(old){{" ++
+            "var href=old.href.replace(/[?&]zts=\\d+/,'');" ++
+            "var next=document.createElement('link');next.rel='stylesheet';" ++
+            "next.href=href+(href.indexOf('?')<0?'?':'&')+'zts='+n;" ++
+            "next.onload=function(){{if(!failed&&++done===links.length)old.parentNode.removeChild(old)}};" ++
+            "next.onerror=function(){{failed=true;location.reload()}};" ++
+            "old.parentNode.insertBefore(next,old.nextSibling)}});return true}};" ++
+            "var poll=function(){{fetch('/__zts_dev__/state',{{cache:'no-store'}})" ++
+            ".then(function(r){{return r.json()}})" ++
+            ".then(function(s){{if(s.v===v)return;if(s.hot==='css'&&swap(s.v)){{v=s.v;return}}location.reload()}})" ++
             ".catch(function(){{}})}};setInterval(poll,700)}})()</script>",
         .{build},
     );

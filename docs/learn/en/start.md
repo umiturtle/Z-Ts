@@ -93,7 +93,13 @@ Open <http://127.0.0.1:5173/> and you will see the `my_app` heading and the line
 `zts dev` does two things at once:
 
 - serves `web/` over HTTP, and keeps serving the last good output when a build fails
-- watches `src/` and `web/`, rebuilds on change, and reloads the browser
+- watches `src/` and `web/`, and does the **smallest** update that shows your edit
+
+| You changed | What happens | Wait |
+|---|---|---|
+| `web/index.html`, JS, images | no build; the page reloads | ~0.4 s |
+| `web/style.css` | no build, no reload; the stylesheet is swapped in place, so scroll position survives | ~0.4 s |
+| anything in `src/` | `zig build` type-checks the Zig side, then the page reloads | 1–2 s |
 
 `zts dev --browser` opens your default browser on start.
 
@@ -105,7 +111,7 @@ Change the `<h1>` in `web/index.html` and save. **Do not touch the terminal.**
 <h1>my_app — hello Z-Ts</h1>
 ```
 
-The browser reloads within about a second. The write → see loop is now closed; everything else in these
+The browser reloads in about half a second. The write → see loop is now closed; everything else in these
 docs is that loop with more in it.
 
 ## 6. Build a single binary (1 minute)
@@ -143,7 +149,7 @@ means shipping one file. Stop `zts dev` before running the binary.
 
 ## Where to go next
 
-The four steps above this page are the learning path; the same rail is at the top of every page on
+The four steps after this page (five including it) are the learning path; the same rail is at the top of every page on
 it. The order is a suggestion. Going on to [How it works](concepts/index.md) gives you a 15-minute
 map before the `Schema` and `invoke` in [Build an app](tutorials/counter.md) show up. **If you would
 rather build first**, jump straight to the tutorial and come back when a word stops you.

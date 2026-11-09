@@ -1,7 +1,7 @@
 # Learn Z-Ts
 
 > **Audience**: people building an app with Z-Ts (Zig and web basics help).
-> **Time**: 2 minutes for this page, about 40 minutes for the whole path.
+> **Time**: 2 minutes for this page, about an hour for the whole path (40 minutes of hands-on steps).
 
 **Run it first.** Ten minutes of doing beats an hour of reading, and the first link below takes you
 from a clone to a built binary on a single page.
@@ -10,7 +10,7 @@ from a clone to a built binary on a single page.
 
 ## The learning path
 
-These four steps are the official order. **The same rail appears at the top of every page on the
+These five steps are the official order. **The same rail appears at the top of every page on the
 path**, so you cannot lose your place. Skipping ahead is allowed; you will just be looking words up
 later instead of now.
 
@@ -21,7 +21,8 @@ later instead of now.
 | 1. Your first ten minutes | your app runs in a browser and a single binary sits in `zig-out/bin/` |
 | 2. How it works | you can say what happens between a button and a Zig function |
 | 3. Build an app | you can write a command, test it, and package it |
-| 4. Look things up | you reach the page you need from a job description in one hop |
+| 4. Patterns that hold up | you can defend a command/state/error design, and you have done the exercises |
+| 5. Look things up | you reach the page you need from a job description in one hop |
 
 > [!NOTE]
 > **The concepts are not a prerequisite.** They are faster *after* you have run something: once

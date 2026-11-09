@@ -245,7 +245,7 @@ pub fn renderPage(arena: Allocator, layout: Layout, href: []const u8) Error![]u8
     }
 
     // ------------------------------------------------------- learning-path rail
-    // Every page that belongs to the beginner path carries the same four steps, with the current
+    // Every page that belongs to the beginner path carries the same steps, with the current
     // one marked. It answers "where am I / what is left" without a trip to the hub, and it makes
     // the concept pages reachable *from* the hands-on pages rather than before them.
     var step_rail: std.Io.Writer.Allocating = .init(arena);

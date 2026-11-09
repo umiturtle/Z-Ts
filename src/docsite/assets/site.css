@@ -462,8 +462,8 @@ html[data-theme="dark"] .kind-badge[data-kind] {
 }
 .path-rail ol {
   display: grid;
-  /* Four columns = the four steps in `learn_path.zig`; the responsive block below halves it. */
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* One column per step in `learn_path.zig`; the responsive block below halves it. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .25rem;
   margin: 0;
   padding: 0;
@@ -931,7 +931,7 @@ body.landing { background:
   text-transform: uppercase;
 }
 
-/* The four-step path on the landing page. Bigger and earlier than the job cards below it: a
+/* The step path on the landing page. Bigger and earlier than the job cards below it: a
    newcomer needs one obvious route, not a menu. Numbers are the *same* ones the per-page rail
    shows, and both come from `learn_path.zig`. */
 .landing-path { margin-top: -.2rem; }
@@ -956,7 +956,7 @@ body.landing { background:
 }
 .landing-path ol {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .7rem;
   margin: 0;
   padding: 0;

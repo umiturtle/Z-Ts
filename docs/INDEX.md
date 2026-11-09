@@ -11,7 +11,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 
 | あなたは | 入口 | 使うコマンド |
 |---|---|---|
-| **Z-Ts でアプリを作りたい** | [`learn/ja/start.md`](learn/ja/start.md)（英語は [`learn/en/start.md`](learn/en/start.md)） → [`learn/ja/index.md`](learn/ja/index.md)（4 ステップの学習パス） | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
+| **Z-Ts でアプリを作りたい** | [`learn/ja/start.md`](learn/ja/start.md)（英語は [`learn/en/start.md`](learn/en/start.md)） → [`learn/ja/index.md`](learn/ja/index.md)（5 ステップの学習パス） | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
 | **Z-Ts 本体を開発・公開したい** | [`contributing/README.md`](contributing/README.md) | `./zigw` / `zig build` / `scripts/*` |
 
 ## 読み手ごとの 3 層（+ 内部資料）
@@ -52,9 +52,9 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
 | [`roadmap/m1-foundation-packages.md`](roadmap/m1-foundation-packages.md) | M1 詳細仕様（コア 5 パッケージのファイル境界・公開型・DoD） | 実装仕様リファレンス |
 | [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
-| [`learn/ja/start.md`](learn/ja/start.md) | **はじめての Z-Ts**（10 分）: `./zigw build` → `zts doctor` → `init` → `dev` → `build` を 1 ページで。英語版は `learn/en/start.md` | 入門（最初に読む） |
-| [`learn/ja/index.md`](learn/ja/index.md) | **学習パス**: 4 ステップの道順・30 秒の全体像・前提知識・目的別の入口。英語版は `learn/en/index.md` | 入門（最初に読む） |
-| [`learn/ja/guides/install.md`](learn/ja/guides/install.md) | `zts` コマンドの入手（チェックアウトからビルド・`PATH`・`ZTS_ZIG`） | 入門（最初に読む） |
+| [`learn/ja/start.md`](learn/ja/start.md) | **はじめての Z-Ts**（10 分）: `zts` バイナリを置く → `zts doctor` → `init` → `dev` → `build` を 1 ページで。英語版は `learn/en/start.md` | 入門（最初に読む） |
+| [`learn/ja/index.md`](learn/ja/index.md) | **学習パス**: 5 ステップの道順・30 秒の全体像・前提知識・目的別の入口。英語版は `learn/en/index.md` | 入門（最初に読む） |
+| [`learn/ja/guides/install.md`](learn/ja/guides/install.md) | `zts` コマンドの入手（配布バイナリ・`PATH`・`ZTS_ZIG`・ソースからのビルド） | 入門（最初に読む） |
 | [`learn/ja/tutorials/counter.md`](learn/ja/tutorials/counter.md) | チュートリアル（15 分）: `zts init` → コマンド → `dev` → `build` → `doctor` | 入門（最初に読む） |
 | [`learn/ja/guides/package.md`](learn/ja/guides/package.md) | 配布物の作り方: `zts package`（`.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`）・アイコン・クロスビルド・CI | アプリが 1 つ動いたら |
 | [`learn/ja/guides/rpc.md`](learn/ja/guides/rpc.md) | RPC 層の使い方: コマンド定義 → `Schema` → `bind` → `dispatch` → TypeScript 生成 | 入門（コマンドを書く前に） |

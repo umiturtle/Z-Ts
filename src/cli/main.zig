@@ -289,18 +289,42 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     // Build once so the first page load matches what `zts build` would produce.
     server.recordBuild(try rebuild(io, gpa, arena, opts.dir, true));
 
-    var previous = try watchFingerprint(io, gpa, opts.dir);
-    while (true) {
-        io.sleep(.fromMilliseconds(400), .awake) catch return 0;
-        const current = try watchFingerprint(io, gpa, opts.dir);
-        if (current == previous) continue;
-        previous = current;
-        // A save often arrives as several writes (editor temp rename, formatter, fsync); waiting a
-        // beat turns three rebuilds into one.
-        io.sleep(.fromMilliseconds(200), .awake) catch return 0;
-        previous = try watchFingerprint(io, gpa, opts.dir);
+    const watched = [_][]const u8{ "src", "web" };
+    var previous = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
+    defer previous.deinit(gpa);
 
-        server.recordBuild(try rebuild(io, gpa, arena, opts.dir, false));
+    while (true) {
+        io.sleep(.fromMilliseconds(250), .awake) catch return 0;
+        var current = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
+        const changed = try previous.changed(arena, &current);
+        // A save often arrives as several writes (editor temp rename, formatter, fsync); waiting a
+        // beat turns three scans into one, and the second scan is the one we compare against.
+        io.sleep(.fromMilliseconds(120), .awake) catch return 0;
+        current.deinit(gpa);
+        current = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
+
+        switch (devserver.Change.classify(changed)) {
+            .none => {
+                current.deinit(gpa);
+                continue;
+            },
+            .css => {
+                // The preview is served from `web/` on disk, so the bytes the browser asks for are
+                // already new. Nothing to compile, nothing to reload — the injected script swaps
+                // the stylesheet when it sees `"hot":"css"`.
+                server.recordChange(.css, true);
+                printOut(io, "zts: stylesheet updated in place\n", .{});
+            },
+            .assets => {
+                server.recordChange(.assets, true);
+                printOut(io, "zts: web/ changed — reloading (no rebuild needed)\n", .{});
+            },
+            .source => {
+                server.recordChange(.source, try rebuild(io, gpa, arena, opts.dir, false));
+            },
+        }
+        previous.deinit(gpa);
+        previous = current;
     }
 }
 
@@ -309,19 +333,6 @@ fn displayHost(host: []const u8) []const u8 {
     // container. The URL line is meant to be clicked, so print loopback in that case.
     if (std.mem.eql(u8, host, "0.0.0.0")) return "127.0.0.1";
     return host;
-}
-
-fn watchFingerprint(io: Io, gpa: Allocator, dir: []const u8) !u64 {
-    const cwd = Io.Dir.cwd();
-    var hash: u64 = 0;
-    for ([_][]const u8{ "src", "web" }) |sub| {
-        const full = try std.fmt.allocPrint(gpa, "{s}/{s}", .{ dir, sub });
-        defer gpa.free(full);
-        const handle = cwd.openDir(io, full, .{ .iterate = true }) catch continue;
-        defer handle.close(io);
-        hash ^= try devserver.fingerprint(io, gpa, handle);
-    }
-    return hash;
 }
 
 fn rebuild(io: Io, gpa: Allocator, arena: Allocator, dir: []const u8, first: bool) !bool {

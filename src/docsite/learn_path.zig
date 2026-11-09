@@ -78,6 +78,16 @@ pub const steps = [_]Step{
         },
     },
     .{
+        .id = "patterns",
+        .slug = "patterns/",
+        .minutes = 20,
+        .title = .{ .ja = "実用パターン", .en = "Patterns that hold up" },
+        .blurb = .{
+            .ja = "コマンド・状態・エラーの設計。動く例と、壊れる書き方と、練習問題。",
+            .en = "Command, state and error design — worked examples, the shapes that break, and exercises.",
+        },
+    },
+    .{
         .id = "guides",
         .slug = "guides/",
         .minutes = 0,
@@ -141,7 +151,8 @@ pub fn indexOf(source: []const u8) ?usize {
     if (std.mem.eql(u8, tail, "start.md")) return 0;
     if (std.mem.startsWith(u8, tail, "concepts/")) return 1;
     if (std.mem.startsWith(u8, tail, "tutorials/")) return 2;
-    if (std.mem.startsWith(u8, tail, "guides/")) return 3;
+    if (std.mem.startsWith(u8, tail, "patterns/")) return 3;
+    if (std.mem.startsWith(u8, tail, "guides/")) return 4;
     return null;
 }
 
@@ -155,7 +166,8 @@ pub fn indexOfHref(href: []const u8) ?usize {
     if (std.mem.startsWith(u8, tail, "start.html") or std.mem.startsWith(u8, tail, "start/index.html")) return 0;
     if (std.mem.startsWith(u8, tail, "concepts/")) return 1;
     if (std.mem.startsWith(u8, tail, "tutorials/")) return 2;
-    if (std.mem.startsWith(u8, tail, "guides/")) return 3;
+    if (std.mem.startsWith(u8, tail, "patterns/")) return 3;
+    if (std.mem.startsWith(u8, tail, "guides/")) return 4;
     return null;
 }
 
@@ -168,7 +180,7 @@ pub fn langOfHref(href: []const u8) ?Lang {
     return null;
 }
 
-/// Markdown block substituted for the `<!-- learn-path -->` marker: the same four steps the rail
+/// Markdown block substituted for the `<!-- learn-path -->` marker: the same steps the rail
 /// renders, with relative links so the site's link checker verifies them like any other link.
 pub fn markdownList(allocator: std.mem.Allocator, lang: Lang) anyerror![]const u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
@@ -204,7 +216,8 @@ test "pages inside a section inherit the section's step" {
     try testing.expectEqual(@as(?usize, 1), indexOf("docs/learn/ja/concepts/commands.md"));
     try testing.expectEqual(@as(?usize, 1), indexOf("docs/learn/en/concepts/security.md"));
     try testing.expectEqual(@as(?usize, 2), indexOf("docs/learn/ja/tutorials/counter.md"));
-    try testing.expectEqual(@as(?usize, 3), indexOf("docs/learn/en/guides/rpc.md"));
+    try testing.expectEqual(@as(?usize, 3), indexOf("docs/learn/en/patterns/commands.md"));
+    try testing.expectEqual(@as(?usize, 4), indexOf("docs/learn/en/guides/rpc.md"));
 }
 
 test "the hub, the reference and the internals are not on the path" {
@@ -222,7 +235,8 @@ test "step pages exist in both languages under the same name" {
     const arena = arena_state.allocator();
     try testing.expectEqualStrings("docs/learn/ja/start.md", try sourcePath(arena, .ja, steps[0]));
     try testing.expectEqualStrings("docs/learn/en/concepts/index.md", try sourcePath(arena, .en, steps[1]));
-    try testing.expectEqualStrings("docs/learn/ja/guides/index.html", try pageHref(arena, .ja, steps[3]));
+    try testing.expectEqualStrings("docs/learn/ja/patterns/index.html", try pageHref(arena, .ja, steps[3]));
+    try testing.expectEqualStrings("docs/learn/ja/guides/index.html", try pageHref(arena, .ja, steps[4]));
 }
 
 test "the markdown list numbers the steps and links them relatively" {
@@ -231,13 +245,15 @@ test "the markdown list numbers the steps and links them relatively" {
     const md = try markdownList(arena_state.allocator(), .ja);
     try testing.expect(std.mem.indexOf(u8, md, "1. **[はじめての Z-Ts](start.html)** · 10 分 — ") != null);
     try testing.expect(std.mem.indexOf(u8, md, "2. **[仕組みを知る](concepts/index.html)** · 15 分 — ") != null);
-    try testing.expect(std.mem.indexOf(u8, md, "4. **[目的から引く](guides/index.html)** — ") != null);
+    try testing.expect(std.mem.indexOf(u8, md, "4. **[実用パターン](patterns/index.html)** · 20 分 — ") != null);
+    try testing.expect(std.mem.indexOf(u8, md, "5. **[目的から引く](guides/index.html)** — ") != null);
 }
 
 test "hrefs resolve to steps and languages" {
     try testing.expectEqual(@as(?usize, 0), indexOfHref("docs/learn/ja/start.html"));
     try testing.expectEqual(@as(?usize, 2), indexOfHref("docs/learn/en/tutorials/counter.html"));
-    try testing.expectEqual(@as(?usize, 3), indexOfHref("docs/learn/en/guides/index.html"));
+    try testing.expectEqual(@as(?usize, 3), indexOfHref("docs/learn/en/patterns/index.html"));
+    try testing.expectEqual(@as(?usize, 4), indexOfHref("docs/learn/en/guides/index.html"));
     try testing.expectEqual(@as(?usize, null), indexOfHref("docs/learn/ja/index.html"));
     try testing.expectEqual(@as(?usize, null), indexOfHref("docs/api/zts_web/index.html"));
     try testing.expectEqual(Lang.ja, langOfHref("docs/learn/ja/index.html").?);
@@ -246,5 +262,5 @@ test "hrefs resolve to steps and languages" {
 }
 
 test "the path has a finite time budget" {
-    try testing.expectEqual(@as(u8, 40), totalMinutes());
+    try testing.expectEqual(@as(u8, 60), totalMinutes());
 }

@@ -43,6 +43,8 @@ pub const GroupKey = enum {
     learn,
     concepts,
     tutorials,
+    /// After the tutorial and before the examples: how to shape commands, state and errors.
+    patterns,
     guides,
     /// Hand-written lookup pages (`docs/reference/`, the glossary, the error index).
     reference,
@@ -71,6 +73,10 @@ pub const GroupKey = enum {
             .tutorials => switch (lang) {
                 .ja => "チュートリアル",
                 .en => "Tutorials",
+            },
+            .patterns => switch (lang) {
+                .ja => "実用パターン",
+                .en => "Patterns",
             },
             .guides => switch (lang) {
                 .ja => "ガイド",
@@ -105,8 +111,8 @@ pub const GroupKey = enum {
     /// Japanese-only content that would be noise for an English reader.
     fn order(lang: i18n.Lang) []const GroupKey {
         return switch (lang) {
-            .ja => &.{ .learn, .concepts, .tutorials, .guides, .reference, .api, .samples, .deep, .dev, .internals },
-            .en => &.{ .learn, .concepts, .tutorials, .guides, .api },
+            .ja => &.{ .learn, .concepts, .tutorials, .patterns, .guides, .reference, .api, .samples, .deep, .dev, .internals },
+            .en => &.{ .learn, .concepts, .tutorials, .patterns, .guides, .api },
         };
     }
 };
@@ -566,7 +572,7 @@ fn repoPathKind(io: Io, path: []const u8) RepoPath {
 
 /// Renders one source file into `out` (no link rewrites).
 /// Expands the `<!-- learn-path -->` directive. A line that is *only* the marker is replaced by
-/// the four-step list; the marker mentioned inline (inside backticks, in prose) is left alone, so
+/// the step list; the marker mentioned inline (inside backticks, in prose) is left alone, so
 /// the docs that describe this mechanism do not expand it. Pages without a marker line are
 /// returned untouched (no copy), so the hot path is unchanged.
 fn expandDirectives(arena: Allocator, bytes: []const u8, lang: i18n.Lang) ![]const u8 {
@@ -981,6 +987,7 @@ fn groupFor(path: []const u8) GroupKey {
         const rest = path[i18n.learn_root.len..];
         if (std.mem.startsWith(u8, rest, "ja/concepts/") or std.mem.startsWith(u8, rest, "en/concepts/")) return .concepts;
         if (std.mem.startsWith(u8, rest, "ja/tutorials/") or std.mem.startsWith(u8, rest, "en/tutorials/")) return .tutorials;
+        if (std.mem.startsWith(u8, rest, "ja/patterns/") or std.mem.startsWith(u8, rest, "en/patterns/")) return .patterns;
         if (std.mem.startsWith(u8, rest, "ja/guides/") or std.mem.startsWith(u8, rest, "en/guides/")) return .guides;
         return .learn;
     }
@@ -1013,6 +1020,7 @@ fn pageKind(path: []const u8) []const u8 {
     if (std.mem.startsWith(u8, path, "docs/learn/")) {
         if (std.mem.indexOf(u8, path, "/concepts/") != null) return "concept";
         if (std.mem.indexOf(u8, path, "/tutorials/") != null) return "tutorial";
+        if (std.mem.indexOf(u8, path, "/patterns/") != null) return "pattern";
         if (std.mem.indexOf(u8, path, "/guides/") != null) return "guide";
         return "home";
     }
@@ -2039,6 +2047,7 @@ test "groupFor keeps the reader-facing sidebar reader-facing" {
     try std.testing.expectEqual(GroupKey.learn, groupFor("docs/learn/ja/index.md"));
     try std.testing.expectEqual(GroupKey.concepts, groupFor("docs/learn/ja/concepts/rpc.md"));
     try std.testing.expectEqual(GroupKey.tutorials, groupFor("docs/learn/en/tutorials/counter.md"));
+    try std.testing.expectEqual(GroupKey.patterns, groupFor("docs/learn/en/patterns/commands.md"));
     try std.testing.expectEqual(GroupKey.guides, groupFor("docs/learn/en/guides/install.md"));
     // Lookups, samples, and the pre-rewrite guides kept as deep dives.
     try std.testing.expectEqual(GroupKey.reference, groupFor("docs/reference/cli.md"));
@@ -2061,7 +2070,7 @@ test "groupFor keeps the reader-facing sidebar reader-facing" {
     }
 
     // English sidebars stop after the guides: the Japanese deep dives are not translated.
-    try std.testing.expectEqualSlices(GroupKey, &.{ .learn, .concepts, .tutorials, .guides, .api }, GroupKey.order(.en));
+    try std.testing.expectEqualSlices(GroupKey, &.{ .learn, .concepts, .tutorials, .patterns, .guides, .api }, GroupKey.order(.en));
     try std.testing.expect(std.mem.indexOfScalar(GroupKey, GroupKey.order(.ja), .deep) != null);
 }
 
@@ -2076,7 +2085,7 @@ test "the learn-path directive expands only on its own line" {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
-    // A marker alone on a line becomes the four-step list.
+    // A marker alone on a line becomes the step list.
     const expanded = try expandDirectives(arena, "# Hub\n\n<!-- learn-path -->\n\nDone.\n", .ja);
     try std.testing.expect(std.mem.indexOf(u8, expanded, "1. **[はじめての Z-Ts](start.html)**") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded, "<!-- learn-path -->") == null);

@@ -113,9 +113,9 @@ pub const Strings = struct {
     landing_cta_source: []const u8,
     /// Hero's secondary button: jump into the build-an-app step.
     landing_cta_tutorial: []const u8,
-    /// Heading of the four-step path block on the landing page.
+    /// Heading of the step-path block on the landing page.
     landing_path_title: []const u8,
-    /// One sentence introducing that block ("this is the whole path, 40 minutes").
+    /// One sentence introducing that block; the total is rendered separately from `learn_path`.
     landing_path_lede: []const u8,
     /// `{d}` is replaced with the total minutes of the path.
     landing_path_total: []const u8,
@@ -174,7 +174,7 @@ pub fn strings(lang: Lang) Strings {
             .landing_cta_source = "ソース",
             .landing_cta_tutorial = "アプリを作る",
             .landing_path_title = "学習パス",
-            .landing_path_lede = "未経験から最初のバイナリまで、40 分。道順は 1 本だけで、各ページの上に常に出ています。",
+            .landing_path_lede = "未経験から最初のバイナリまで、道順は 1 本だけ。各ページの上に常に出ています（所要時間は下の合計）。",
             .landing_path_total = "全体 {d} 分",
             .landing_paths_title = "目的から選ぶ",
             .landing_all_pages = "すべてのページ",
@@ -228,7 +228,7 @@ pub fn strings(lang: Lang) Strings {
             .landing_cta_source = "Source",
             .landing_cta_tutorial = "Build an app",
             .landing_path_title = "The learning path",
-            .landing_path_lede = "From never having run it to your first binary, in 40 minutes. One order, always shown at the top of the page you are on.",
+            .landing_path_lede = "From never having run it to your first binary, one order — always shown at the top of the page you are on (total below).",
             .landing_path_total = "{d} minutes in total",
             .landing_paths_title = "Choose by job",
             .landing_all_pages = "All pages",
