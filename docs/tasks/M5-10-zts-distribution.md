@@ -4,7 +4,7 @@
 - **Branch**: `arena/7ef6be00-z-ts`
 - **Scope**: `src/cli/{args,main,project,template}.zig`, `build.zig`, `.github/workflows/{ci,release}.yml`, `docs/reference/cli.md`, `docs/learn/{ja,en}/guides/install.md`, `docs/learn/{ja,en}/start.md`, `docs/contributing/README.md`, `docs/architecture/packaging-and-bench.md`, `README.md`, 本ファイル
 - **Upstream Reference**: Angular CLI（`npm i -g` で CLI 1 個）／`cargo install`（ツールチェーンは利用者側）／Tauri v2 の配布ページ
-- **Next Step**: `gh pr checks` で CI（特に `ci-cli` の release モード）を確認し、`release.yml` を `workflow_dispatch` で 1 回ドライランする
+- **Next Step**: 実タグ `v0.1.0` を打って `release.yml` を 1 回流す（アーカイブ・3 OS バイナリ・`SHA256SUMS` が公開されるか）。`workflow_dispatch` は既定ブランチにファイルが無いと選べないため、タグで確認する
 
 ---
 
@@ -39,7 +39,8 @@
   - 実測: 焼き込みバイナリ 302,160 B。`file://` アーカイブ（2.1 MB）を焼き込んだ `zts` で
     `init` → `doctor` → 空キャッシュから `build` → 実行（`1 embedded assets`）まで確認。
 - **作業中・直前の状態**:
-  - CI の `ci-cli` に release モードのステップを追加済み（Linux のみ）。`release.yml` は未実行。
+  - CI 7/7 緑（run `42546223071`）。`ci-cli` の Linux が release モードの E2E を含めて通過。
+  - `release.yml` はまだ実行していない（タグ未作成）。
 
 ---
 
