@@ -24,7 +24,7 @@ Backend.applyAppMenu(Snapshot) / applyWindowMenu / popup
 
 上流 Rust は `muda` のオブジェクトグラフを直接操作する。Zig で同じことをすると
 「ツリーを差分更新するコード」が 3 OS 分必要になり、しかも**どの OS でも検証できない**。
-Z-Ts は **コアが唯一の真実**を持ち、バックエンドには平坦化した `Snapshot` だけを渡す:
+ziggurats は **コアが唯一の真実**を持ち、バックエンドには平坦化した `Snapshot` だけを渡す:
 
 ```zig
 pub const Entry = struct {
@@ -125,7 +125,7 @@ wire 層は共通なので、将来 `libayatana-appindicator` に差し替えて
 | コマンド ID | `NSMenuItem.tag` | `AppendMenuW` の ID（1 始まり、`WM_COMMAND` で戻る） |
 | 深さ検証 | 「飛び級は `error.InvalidMenuDepth`」を 3 実装で共有 | 同左 |
 
-`muda` は共有状態のラベルに `&` を使うが、Z-Ts は GTK の `_` を採用している
+`muda` は共有状態のラベルに `&` を使うが、ziggurats は GTK の `_` を採用している
 （既存の GTK 実装とそのテストを壊さないため）。**変換はバックエンド側** で行う。
 
 ### 4.3 AppKit / Win32 のアタッチ契約

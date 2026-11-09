@@ -3,7 +3,7 @@
 > **Audience**: readers who want to know how `invoke("…")` reaches a Zig function.
 > **Time**: 5 minutes.
 
-The idea at the centre of Z-Ts: **write a function and it becomes a command**. The routing
+The idea at the centre of ziggurats: **write a function and it becomes a command**. The routing
 table, the JSON serialiser and the TypeScript declarations are all generated at `comptime`.
 
 ## 1. The path

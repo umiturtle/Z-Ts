@@ -2,7 +2,7 @@
 
 > **アプリを作っていてエラーが出た場合は [`../learn/ja/guides/troubleshooting.md`](../learn/ja/guides/troubleshooting.md)
 > を読んでください。** ここは `./zigw` / `zig build` / CI / ドキュメントサイトという
-> **Z-Ts 本体の開発**で実際に踏んだ問題だけを載せています。
+> **ziggurats 本体の開発**で実際に踏んだ問題だけを載せています。
 
 
 
@@ -148,6 +148,19 @@ Objective-C シムは macOS の SDK を要求します。Linux からは**構文
 `src/**.zig` のようなサイト外ファイルへのリンクは、リポジトリに実在すれば自動で GitHub の
 blob URL に差し替わります。
 
+### `legacy project name … in prose` で `check-docs.py` が落ちる
+
+規約 14 です。プロジェクトのフルネームは `ziggurats`（小文字）で、旧称はリポジトリ URL と
+チェックアウトのパス名にだけ残せます。本文・サイト UI・CLI ヘルプで見つけたら置換してください。
+大文字始まりの表記も落ちます。`zts` / `z_ts` / `zts_*` は識別子なので無関係です。
+
+### `missing English counterpart` / `changed after verification` で `check-docs.py` が落ちる
+
+規約 11・13 です。前者は英語版 `*.en.md` の書き忘れ（日英両方の索引にも 1 行必要）、
+後者は本文か実装を変えたのに[同期台帳](doc-sync.md)を更新していないことを意味します。
+差分を読み直してから `python3 scripts/check-docs.py --sync` を実行してください。台帳は
+「いつ最終書き換えか」「どのバージョンまで実装と無矛盾を確認したか」を記録しています。
+
 ### 検索が 0 件になる
 
 `assets/search-index.js` が読み込まれていない可能性があります。`file://` で開くと
@@ -222,5 +235,5 @@ Winsock が「そのソケットには無効な操作」と判断した、とい
 
 - リポジトリの操作全般: [`README.md`](README.md)
 - アプリ作者向けのトラブル: [`../learn/ja/guides/troubleshooting.md`](../learn/ja/guides/troubleshooting.md)
-- 使い方の全体像: [`../learn/ja/tutorials/counter.md`](../learn/ja/tutorials/counter.md)
+- 使い方の全体像: [チュートリアル（3 本）](../learn/ja/tutorials/index.md)
 - ログの取得: [`../../scripts/ci-logs.sh`](../../scripts/ci-logs.sh) / [`../../AGENTS.md`](../../AGENTS.md)

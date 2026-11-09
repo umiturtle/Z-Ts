@@ -137,7 +137,7 @@ pub const Commands = struct {
         state.dock_visible = args.visible;
     }
 
-    /// `plugin:app|fetch_data_store_identifiers` — always empty: Z-Ts keeps no data stores.
+    /// `plugin:app|fetch_data_store_identifiers` — always empty: ziggurats keeps no data stores.
     pub fn fetch_data_store_identifiers(_: *AppState) []const [16]u8 {
         return &.{};
     }

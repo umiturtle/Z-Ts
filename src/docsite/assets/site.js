@@ -1,4 +1,4 @@
-/* Z-Ts documentation site — vanilla JS, no build step, no dependency.
+/* ziggurats documentation site — vanilla JS, no build step, no dependency.
  *
  * Everything here is progressive enhancement: with JS disabled the pages still read, the code
  * blocks still scroll, and every navigation link is a real <a href>.

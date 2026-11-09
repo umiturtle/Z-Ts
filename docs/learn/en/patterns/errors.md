@@ -4,7 +4,7 @@
 > **Time**: 5 minutes (+15 for the three exercises).
 > **Before this**: [Designing commands](commands.md).
 
-In Z-Ts, only the **name** of an error reaches the page.
+In ziggurats, only the **name** of an error reaches the page.
 
 ```text
 Zig:   return error.OutOfStock;

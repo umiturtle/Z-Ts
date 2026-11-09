@@ -1,4 +1,4 @@
-# ADR-0002: Z-Ts 最適実装方針（Rev 3）— 「Rust コピー病」の完全排除と 6 パッケージ直交分離
+# ADR-0002: ziggurats 最適実装方針（Rev 3）— 「Rust コピー病」の完全排除と 6 パッケージ直交分離
 
 - **Date**: 2026-10-22
 - **Status**: Accepted（アーキテクチャ・境界規約確定 — 以降は実装 & 実機検証を通じて反復改善）
@@ -116,7 +116,7 @@ pub fn main(init: std.process.Init) !void {
     var app: zts.App = undefined;
     try app.init(init.gpa, init.io, .{
         .app_id = "dev.zts.app",
-        .windows = &.{.{ .label = "main", .title = "Z-Ts", .width = 1024, .height = 768 }},
+        .windows = &.{.{ .label = "main", .title = "ziggurats", .width = 1024, .height = 768 }},
         .assets = zts.core.Assets.fromModule(@import("zts_assets")),
         .handler = router.handler(),
     });

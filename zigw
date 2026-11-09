@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ./zigw — Zero-config, cold-cache-optimized Zig 0.17.0 wrapper for Z-Ts
+# ./zigw — Zero-config, cold-cache-optimized Zig 0.17.0 wrapper for ziggurats
 #
 # Key features:
 # 1. Auto-bootstraps Zig 0.17.0 (with bundled LLVM 22.1.8 / Clang 22.1.8 / LLD) in ~3.5s

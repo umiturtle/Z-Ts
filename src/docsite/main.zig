@@ -41,6 +41,9 @@ const learn_path = @import("learn_path.zig");
 pub const GroupKey = enum {
     /// Landing spot of the reader's learning path (`docs/learn/<lang>/index.md`).
     learn,
+    /// Step 1's only page (`start.md`): one page, one section, so the sidebar numbers it like the
+    /// four sections that follow.
+    start,
     concepts,
     tutorials,
     /// After the tutorial and before the examples: how to shape commands, state and errors.
@@ -50,8 +53,6 @@ pub const GroupKey = enum {
     reference,
     api,
     samples,
-    /// The pre-rewrite Japanese guides, kept as deep dives.
-    deep,
     /// Operating the repository itself.
     dev,
     internals,
@@ -60,11 +61,16 @@ pub const GroupKey = enum {
 
     pub fn heading(self: GroupKey, lang: i18n.Lang) []const u8 {
         return switch (self) {
-            // `buildGroups` overrides this with `path_label`; the fallback keeps `heading()`
-            // total for callers that have no allocator (the `llms.txt` writer).
+            // `buildGroups` overrides the five path groups with `groupHeading()` (it needs an
+            // allocator for the step number); this fallback keeps `heading()` total for callers
+            // that have none (the `llms.txt` writer).
             .learn => switch (lang) {
                 .ja => "学習パス",
                 .en => "Learning path",
+            },
+            .start => switch (lang) {
+                .ja => "はじめての ziggurats",
+                .en => "Your first ten minutes with ziggurats",
             },
             .concepts => switch (lang) {
                 .ja => "概念",
@@ -91,10 +97,6 @@ pub const GroupKey = enum {
                 .ja => "サンプル",
                 .en => "Examples",
             },
-            .deep => switch (lang) {
-                .ja => "詳細ガイド（日本語）",
-                .en => "Deep dives",
-            },
             .dev => switch (lang) {
                 .ja => "リポジトリ開発",
                 .en => "Repository",
@@ -107,13 +109,13 @@ pub const GroupKey = enum {
         };
     }
 
-    /// The reading order. The English sidebar stops after the guides: everything below is
-    /// Japanese-only content that would be noise for an English reader.
-    fn order(lang: i18n.Lang) []const GroupKey {
-        return switch (lang) {
-            .ja => &.{ .learn, .concepts, .tutorials, .patterns, .guides, .reference, .api, .samples, .deep, .dev, .internals },
-            .en => &.{ .learn, .concepts, .tutorials, .patterns, .guides, .api },
-        };
+    /// The reading order — **the same list in both languages and on every page**.
+    ///
+    /// The English sidebar used to stop after the guides, so switching language silently shortened
+    /// the left menu; it now shows every group. Pages with no translation keep their Japanese H1
+    /// (and a `ja` badge), but `englishNavTitle()` gives them an English navigation label.
+    fn order() []const GroupKey {
+        return &.{ .learn, .start, .concepts, .tutorials, .patterns, .guides, .reference, .api, .samples, .dev, .internals };
     }
 };
 
@@ -418,7 +420,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
             .body = body,
             .kind = "errors",
             .crumbs = &.{
-                .{ .label = "Z-Ts", .href = "index.html" },
+                .{ .label = "ziggurats", .href = "index.html" },
                 .{ .label = "リファレンス" },
             },
             .plain = try errorIndexPlain(arena, errors),
@@ -475,16 +477,20 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
 
     // 5a-bis. GitHub Pages serves `404.html` for anything that does not exist. Without it a
     // renamed page loses the reader at a blank screen with no way back.
-    {
+    for ([_]i18n.Lang{ .ja, .en }) |lang| {
+        const path = if (lang == .en) "en/404.html" else "404.html";
         const html = try site.renderPage(arena, .{
-            .title = i18n.strings(.ja).not_found_title,
+            .title = i18n.strings(lang).not_found_title,
             .active_href = "",
-            .groups = groups_ja,
-            .body = try renderNotFoundBody(arena, .ja),
+            .groups = if (lang == .en) groups_en else groups_ja,
+            .body = try renderNotFoundBody(arena, lang, if (lang == .en) "../" else ""),
             .kind = "home",
-            .lang = .ja,
-        }, "404.html");
-        try writeInDir(io, arena, out_dir, "404.html", html);
+            .lang = lang,
+            // The switcher must work on a 404 too: a lost reader should be able to change language
+            // without first finding their way back to a real page.
+            .alt_href = if (lang == .en) "404.html" else "en/404.html",
+        }, path);
+        try writeInDir(io, arena, out_dir, path, html);
         report.bytes += html.len;
     }
 
@@ -731,6 +737,9 @@ fn buildSectionIndexes(arena: Allocator, rendered: anytype) ![]const Section {
         for (rendered) |page| {
             const page_dir = page.href[0 .. std.mem.lastIndexOfScalar(u8, page.href, '/') orelse 0];
             if (!std.mem.eql(u8, page_dir, dir)) continue;
+            // A `.en.html` mirror is reached through the language switcher, not by listing it as
+            // a second, unexplained page in the directory index.
+            if (std.mem.endsWith(u8, page.source, ".en.md")) continue;
             try entries.append(arena, .{
                 .href = page.href,
                 .title = page.title,
@@ -925,6 +934,7 @@ fn nextAssetUrl(html: []const u8, cursor: *usize) ?[]const u8 {
 fn collectSources(arena: Allocator, io: Io) ![]const Source {
     var list: std.ArrayListUnmanaged(Source) = .empty;
     try list.append(arena, .{ .path = "README.md", .key = .hidden, .lang = .ja });
+    try list.append(arena, .{ .path = "README.en.md", .key = .hidden, .lang = .en });
     // `AGENTS.md` is agent-facing: it belongs to the 内部資料 bucket like the design notes, not to
     // the reader's はじめに. Ask `groupFor` instead of hardcoding, so the sidebar and the search
     // index cannot disagree about it.
@@ -951,13 +961,20 @@ fn collectSources(arena: Allocator, io: Io) ![]const Source {
         });
     }
 
-    // Example READMEs are part of the public documentation surface.
+    // Example READMEs are part of the public documentation surface, in both languages.
     for ([_][]const u8{ "counter", "gallery", "c_embed", "frameworks" }) |example| {
-        const path = try std.fmt.allocPrint(arena, "examples/{s}/README.md", .{example});
-        // Missing examples are simply not part of the sidebar (no error: the corpus evolves).
-        const bytes = cwd.readFileAlloc(io, path, arena, .limited(1024 * 1024)) catch continue;
-        _ = bytes;
-        try list.append(arena, .{ .path = path, .key = .samples, .lang = .ja });
+        for ([_][]const u8{ "README.md", "README.en.md" }) |name| {
+            const path = try std.fmt.allocPrint(arena, "examples/{s}/{s}", .{ example, name });
+            // A missing example (or a translation still being written) is simply not part of the
+            // site; the checker is what makes a permanent gap fail CI.
+            const bytes = cwd.readFileAlloc(io, path, arena, .limited(1024 * 1024)) catch continue;
+            _ = bytes;
+            try list.append(arena, .{
+                .path = path,
+                .key = .samples,
+                .lang = i18n.Lang.fromPath(path) orelse .ja,
+            });
+        }
     }
 
     std.mem.sort(Source, list.items, {}, struct {
@@ -981,62 +998,70 @@ const errors_href = "docs/reference/errors.html";
 const glossary_href = "docs/glossary.html";
 
 fn groupFor(path: []const u8) GroupKey {
+    // `docs/glossary.en.md` is the English mirror of `docs/glossary.md`; both belong to the same
+    // sidebar group and the same position within it. Comparing the stem keeps one classification
+    // table for two languages.
+    const stem = docStem(path);
     // The translated learning tree is grouped by its own folders, and its language comes from the
     // path — `docs/learn/en/concepts/rpc.md` is both a concept page and an English page.
-    if (std.mem.startsWith(u8, path, i18n.learn_root)) {
-        const rest = path[i18n.learn_root.len..];
+    if (std.mem.startsWith(u8, stem, i18n.learn_root)) {
+        const rest = stem[i18n.learn_root.len..];
         if (std.mem.startsWith(u8, rest, "ja/concepts/") or std.mem.startsWith(u8, rest, "en/concepts/")) return .concepts;
         if (std.mem.startsWith(u8, rest, "ja/tutorials/") or std.mem.startsWith(u8, rest, "en/tutorials/")) return .tutorials;
         if (std.mem.startsWith(u8, rest, "ja/patterns/") or std.mem.startsWith(u8, rest, "en/patterns/")) return .patterns;
         if (std.mem.startsWith(u8, rest, "ja/guides/") or std.mem.startsWith(u8, rest, "en/guides/")) return .guides;
+        if (std.mem.eql(u8, rest, "ja/start") or std.mem.eql(u8, rest, "en/start")) return .start;
         return .learn;
     }
     // `tauri-internals.md` is an implementation autopsy — it belongs with the design notes even
     // though it lives in `docs/reference/`.
-    if (std.mem.eql(u8, path, "docs/reference/tauri-internals.md")) return .internals;
-    if (std.mem.eql(u8, path, "AGENTS.md")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/tasks/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/decisions/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/architecture/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/roadmap/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/environment/")) return .internals;
-    if (std.mem.startsWith(u8, path, "docs/reference/")) return .reference;
-    if (std.mem.eql(u8, path, "docs/glossary.md")) return .reference;
-    // The pre-rewrite guides stay published (internal notes link to them) but they are no longer
-    // the front door, so they ride below the new learning path under their own heading.
-    if (std.mem.startsWith(u8, path, "docs/guides/")) return .deep;
-    if (std.mem.startsWith(u8, path, "docs/contributing/")) return .dev;
-    if (std.mem.startsWith(u8, path, "examples/")) return .samples;
+    if (std.mem.eql(u8, stem, "docs/reference/tauri-internals")) return .internals;
+    if (std.mem.eql(u8, stem, "AGENTS")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/tasks/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/decisions/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/architecture/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/roadmap/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/environment/")) return .internals;
+    if (std.mem.startsWith(u8, stem, "docs/reference/")) return .reference;
+    if (std.mem.eql(u8, stem, "docs/glossary")) return .reference;
+    if (std.mem.startsWith(u8, stem, "docs/contributing/")) return .dev;
+    if (std.mem.startsWith(u8, stem, "examples/")) return .samples;
     // `README.md` (the repository readme) and `docs/INDEX.md` (the map of the repository) are
     // published and linked, but they are not part of the reader's path.
     return .hidden;
 }
 
+/// `docs/glossary.en.md` → `docs/glossary`, `docs/INDEX.md` → `docs/INDEX`. Used by every path
+/// classifier so a mirror page cannot be filed under a different group.
+fn docStem(path: []const u8) []const u8 {
+    if (std.mem.endsWith(u8, path, ".en.md")) return path[0 .. path.len - ".en.md".len];
+    if (std.mem.endsWith(u8, path, ".md")) return path[0 .. path.len - ".md".len];
+    return path;
+}
+
 /// Page kind, derived from the path. It drives the badge next to the breadcrumbs, and the CSS
 /// that colours it — so the taxonomy is visible, not just documented.
 fn pageKind(path: []const u8) []const u8 {
-    if (std.mem.eql(u8, path, "README.md")) return "home";
-    if (std.mem.eql(u8, path, "docs/INDEX.md")) return "reference";
-    if (std.mem.startsWith(u8, path, "docs/learn/")) {
-        if (std.mem.indexOf(u8, path, "/concepts/") != null) return "concept";
-        if (std.mem.indexOf(u8, path, "/tutorials/") != null) return "tutorial";
-        if (std.mem.indexOf(u8, path, "/patterns/") != null) return "pattern";
-        if (std.mem.indexOf(u8, path, "/guides/") != null) return "guide";
+    const stem = docStem(path);
+    if (std.mem.eql(u8, stem, "README")) return "home";
+    if (std.mem.eql(u8, stem, "docs/INDEX")) return "reference";
+    if (std.mem.startsWith(u8, stem, "docs/learn/")) {
+        if (std.mem.indexOf(u8, stem, "/concepts/") != null) return "concept";
+        if (std.mem.indexOf(u8, stem, "/tutorials/") != null) return "tutorial";
+        if (std.mem.indexOf(u8, stem, "/patterns/") != null) return "pattern";
+        if (std.mem.indexOf(u8, stem, "/guides/") != null) return "guide";
         return "home";
     }
-    if (std.mem.startsWith(u8, path, "docs/recipes/")) return "recipe";
-    if (std.mem.eql(u8, path, "docs/glossary.md")) return "reference";
-    if (std.mem.startsWith(u8, path, "docs/reference/")) return "reference";
-    if (std.mem.startsWith(u8, path, "docs/guides/migrating")) return "migration";
-    if (std.mem.startsWith(u8, path, "docs/guides/")) return "deep";
-    if (std.mem.startsWith(u8, path, "examples/")) return "recipe";
-    if (std.mem.startsWith(u8, path, "docs/")) return "internals";
+    if (std.mem.eql(u8, stem, "docs/glossary")) return "reference";
+    if (std.mem.startsWith(u8, stem, "docs/reference/")) return "reference";
+    if (std.mem.startsWith(u8, stem, "examples/")) return "recipe";
+    if (std.mem.startsWith(u8, stem, "docs/")) return "internals";
     return "home";
 }
 
 fn buildGroups(arena: Allocator, lang: i18n.Lang, rendered: anytype, packages: []const apidoc.Package) ![]const site.Group {
     var groups: std.ArrayListUnmanaged(site.Group) = .empty;
-    for (GroupKey.order(lang)) |key| {
+    for (GroupKey.order()) |key| {
         var entries: std.ArrayListUnmanaged(site.NavEntry) = .empty;
 
         if (key == .api) {
@@ -1058,12 +1083,13 @@ fn buildGroups(arena: Allocator, lang: i18n.Lang, rendered: anytype, packages: [
         } else {
             for (rendered) |page| {
                 if (page.key != key) continue;
-                // A page only appears in a sidebar written in its own language. Japanese deep
-                // dives therefore never leak into the English navigation.
-                if (page.lang != lang) continue;
+                // A page with a real counterpart belongs to exactly one sidebar. A page without
+                // one (the internal notes, still Japanese-only) stays visible in both, so flipping
+                // the switcher never shortens the menu. `alt_href` is the existence probe.
+                if (page.alt_href != null and page.lang != lang) continue;
                 try entries.append(arena, .{
                     .href = page.href,
-                    .title = page.title,
+                    .title = if (lang == .en) englishNavTitle(page.source) orelse page.title else page.title,
                     .source = page.source,
                 });
             }
@@ -1072,10 +1098,7 @@ fn buildGroups(arena: Allocator, lang: i18n.Lang, rendered: anytype, packages: [
             if (key == .reference) {
                 try entries.append(arena, .{ .href = errors_href, .title = if (lang == .en) "Error index (generated)" else "エラー索引（自動生成）", .source = "src/" });
             }
-            switch (key) {
-                .learn, .concepts, .tutorials, .guides => try orderLearnEntries(arena, lang, &entries),
-                else => {},
-            }
+            sortEntries(key, &entries);
         }
 
         if (entries.items.len == 0) continue;
@@ -1084,14 +1107,20 @@ fn buildGroups(arena: Allocator, lang: i18n.Lang, rendered: anytype, packages: [
     return groups.toOwnedSlice(arena);
 }
 
-/// Sidebar heading. The three sections that are also steps of the beginner path carry that step's
-/// number and its name from `learn_path.zig`, so the sidebar reads as a numbered path instead of
-/// three parallel folders. Everything else keeps its plain name.
+/// Sidebar heading. The five steps of the beginner path carry their number and their name from
+/// `learn_path.zig`, so the sidebar reads exactly like the rail at the top of every path page.
+/// Everything else keeps its plain name.
 fn groupHeading(arena: Allocator, key: GroupKey, lang: i18n.Lang) ![]const u8 {
+    // The index into `learn_path.steps` — the numbers themselves come from the table, so inserting
+    // a chapter renumbers the sidebar by editing one line. `patterns` sits between the tutorial and
+    // the guides, which makes the guides step 5. A literal "4 ·" in `GroupKey.heading` is how the
+    // guides ended up labelled "4 · 実用パターン" the day the patterns chapter landed.
     const step: ?usize = switch (key) {
+        .start => 0,
         .concepts => 1,
         .tutorials => 2,
-        .guides => 3,
+        .patterns => 3,
+        .guides => 4,
         else => null,
     };
     if (step) |i| {
@@ -1105,41 +1134,104 @@ fn groupHeading(arena: Allocator, key: GroupKey, lang: i18n.Lang) ![]const u8 {
     return key.heading(lang);
 }
 
-/// Within the first group, the ordered steps come before the alphabetical rest, and each step
-/// landing page is numbered — `1 · はじめての Z-Ts` sits right under the hub. Without this the
-/// sidebar sorted `concepts/` above `start.md` and a beginner opened the concepts first.
-fn orderLearnEntries(arena: Allocator, lang: i18n.Lang, entries: *std.ArrayListUnmanaged(site.NavEntry)) !void {
-    const path_lang: learn_path.Lang = switch (lang) {
-        .ja => .ja,
-        .en => .en,
+/// English label for a page that is published once, in Japanese.
+///
+/// The menu is the same list in both languages, but the H1 of an untranslated page is Japanese —
+/// showing `用語集` in an otherwise English sidebar is the kind of detail that makes a reader
+/// think they followed a wrong link. The page itself still carries the Japanese H1 and a `ja`
+/// badge; only the navigation label is translated. `null` means "use the page's own title" (the
+/// translated learning tree, and anything not listed here).
+fn englishNavTitle(source: []const u8) ?[]const u8 {
+    // Mirror pages already have an English H1; only the Japanese originals need a translated label.
+    if (std.mem.endsWith(u8, source, ".en.md")) return null;
+    const Table = struct { path: []const u8, label: []const u8 };
+    const table = [_]Table{
+        .{ .path = "docs/glossary.md", .label = "Glossary" },
+        .{ .path = "docs/reference/cli.md", .label = "zts command reference" },
+        .{ .path = "docs/reference/tauri-usage.md", .label = "Tauri v2 API map" },
+        .{ .path = "examples/counter/README.md", .label = "Counter — one project, three artefacts" },
+        .{ .path = "examples/frameworks/README.md", .label = "Nine frameworks, one screen" },
+        .{ .path = "examples/gallery/README.md", .label = "Screenshot regression gallery" },
+        .{ .path = "examples/c_embed/README.md", .label = "C99 overlay embedding" },
+        .{ .path = "docs/contributing/README.md", .label = "Developing ziggurats itself" },
+        .{ .path = "docs/contributing/repository-map.md", .label = "Repository map" },
+        .{ .path = "docs/contributing/troubleshooting.md", .label = "Repository troubleshooting" },
+        .{ .path = "docs/contributing/writing-docs.md", .label = "Writing the docs" },
     };
-    const Sort = struct {
-        fn rank(source: []const u8) usize {
-            // A section index opens its own group: `concepts/index.md` before `concepts/*.md`,
-            // and the hub before everything.
-            if (std.mem.endsWith(u8, source, "/index.md")) return 0;
-            // The numbered path steps follow, in path order …
-            if (learn_path.indexOf(source)) |i| return i + 1;
-            // … and the rest of a section keeps its alphabetical order.
-            return 100;
+    for (table) |row| {
+        if (std.mem.eql(u8, source, row.path)) return row.label;
+    }
+    return null;
+}
+
+/// Canonical position of a page inside its sidebar group, or `null` when nothing lists it.
+///
+/// The learn sections delegate to [`learn_path.pageRank`]; the lookup groups have their own short
+/// tables because "the order the directory walk produced" is not a reading order (`examples/
+/// c_embed` sorted before `examples/counter`, and `glossary.md` after `cli.md`).
+fn navRank(key: GroupKey, source: []const u8) ?usize {
+    const stem = docStem(source);
+    switch (key) {
+        .learn, .start, .concepts, .tutorials, .patterns, .guides => return learn_path.pageRank(source),
+        .reference => {
+            const table = [_][]const u8{
+                "docs/glossary",
+                "docs/reference/cli",
+                "docs/reference/tauri-usage",
+            };
+            for (table, 0..) |path, i| {
+                if (std.mem.eql(u8, path, stem)) return i;
+            }
+        },
+        .samples => {
+            // Bigger story first: one app → three artefacts, then the framework matrix, then the
+            // screenshot gallery and the C embedding.
+            const table = [_][]const u8{
+                "examples/counter/README",
+                "examples/frameworks/README",
+                "examples/gallery/README",
+                "examples/c_embed/README",
+            };
+            for (table, 0..) |path, i| {
+                if (std.mem.eql(u8, path, stem)) return i;
+            }
+        },
+        .dev => {
+            const table = [_][]const u8{
+                "docs/contributing/README",
+                "docs/contributing/repository-map",
+                "docs/contributing/troubleshooting",
+                "docs/contributing/doc-sync",
+                "docs/contributing/writing-docs",
+            };
+            for (table, 0..) |path, i| {
+                if (std.mem.eql(u8, path, stem)) return i;
+            }
+        },
+        // `api` and `internals` are assembled in order (index first, then packages / one entry),
+        // and `hidden` never reaches the sidebar.
+        .api, .internals, .hidden => {},
+    }
+    return null;
+}
+
+/// Sorts one group into reading order. Ties — and everything the tables do not mention — fall back
+/// to the href, so the result is a pure function of the group's contents: the same list on every
+/// page, in every language, no matter what order the filesystem handed the pages over in.
+fn sortEntries(key: GroupKey, entries: *std.ArrayListUnmanaged(site.NavEntry)) void {
+    const Ctx = struct {
+        key: GroupKey,
+        fn rank(ctx: @This(), source: []const u8) usize {
+            return navRank(ctx.key, source) orelse std.math.maxInt(usize);
         }
-        fn lessThan(_: void, a: site.NavEntry, b: site.NavEntry) bool {
-            const ra = rank(a.source);
-            const rb = rank(b.source);
+        fn lessThan(ctx: @This(), a: site.NavEntry, b: site.NavEntry) bool {
+            const ra = ctx.rank(a.source);
+            const rb = ctx.rank(b.source);
             if (ra != rb) return ra < rb;
             return std.mem.order(u8, a.href, b.href) == .lt;
         }
     };
-    std.mem.sort(site.NavEntry, entries.items, {}, Sort.lessThan);
-
-    for (entries.items) |*entry| {
-        const idx = learn_path.indexOf(entry.source) orelse continue;
-        if (idx != 0) continue;
-        // Only the step's own landing page gets the number, not every page inside the section.
-        const landing = try learn_path.sourcePath(arena, path_lang, learn_path.steps[idx]);
-        if (!std.mem.eql(u8, landing, entry.source)) continue;
-        entry.title = try std.fmt.allocPrint(arena, "{d} · {s}", .{ idx + 1, entry.title });
-    }
+    std.mem.sort(site.NavEntry, entries.items, Ctx{ .key = key }, Ctx.lessThan);
 }
 
 fn neighbors(groups: []const site.Group, href: []const u8) struct { prev: ?site.NavLink, next: ?site.NavLink } {
@@ -1163,7 +1255,7 @@ fn neighbors(groups: []const site.Group, href: []const u8) struct { prev: ?site.
 /// click away without going through the sidebar.
 fn apiCrumbs(arena: Allocator, href: []const u8) ![]const site.Crumb {
     var list: std.ArrayListUnmanaged(site.Crumb) = .empty;
-    try list.append(arena, .{ .label = "Z-Ts", .href = "index.html" });
+    try list.append(arena, .{ .label = "ziggurats", .href = "index.html" });
     try list.append(arena, .{ .label = "API", .href = "docs/api/index.html" });
     // `docs/api/index.html` itself is the second crumb; do not repeat it as the third.
     if (!std.mem.eql(u8, href, "docs/api/index.html")) {
@@ -1187,7 +1279,7 @@ fn apiCrumbs(arena: Allocator, href: []const u8) ![]const site.Crumb {
 
 fn buildCrumbs(arena: Allocator, lang: i18n.Lang, key: GroupKey, href: []const u8, title: []const u8) ![]const site.Crumb {
     var list: std.ArrayListUnmanaged(site.Crumb) = .empty;
-    try list.append(arena, .{ .label = "Z-Ts", .href = if (lang == .en) "en/index.html" else "index.html" });
+    try list.append(arena, .{ .label = "ziggurats", .href = if (lang == .en) "en/index.html" else "index.html" });
     if (key != .hidden) {
         try list.append(arena, .{ .label = key.heading(lang) });
     }
@@ -1200,7 +1292,6 @@ fn buildCrumbs(arena: Allocator, lang: i18n.Lang, key: GroupKey, href: []const u
 /// `null` when the page is not part of the translated tree, which is what hides the language
 /// switcher on the Japanese-only pages instead of pointing it at a 404.
 fn altHref(arena: Allocator, io: Io, source_path: []const u8, lang: i18n.Lang) !?[]const u8 {
-    if (i18n.Lang.fromPath(source_path) == null) return null;
     const md = try i18n.alternateHref(arena, source_path, lang.other());
     // The counterpart is only promised when the file is really there; a half-translated tree
     // would otherwise produce a switcher that dead-ends. One byte is enough: the read is an
@@ -1589,7 +1680,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\<meta charset="utf-8" />
         \\<meta name="viewport" content="width=device-width, initial-scale=1" />
         \\<meta name="color-scheme" content="light dark" />
-        \\<title>Z-Ts — Tauri in Zig</title>
+        \\<title>ziggurats — Tauri in Zig</title>
         \\<meta name="description" content="{s}" />
         \\<link rel="alternate" hreflang="{s}" href="{s}{s}" />
         \\<link rel="stylesheet" href="{s}assets/site.css" />
@@ -1598,7 +1689,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\</head>
         \\<body class="landing" data-root="{s}" data-lang="{s}">
         \\<header class="topbar landing-topbar">
-        \\  <a class="brand" href="{s}index.html"><span class="brand-mark">Z</span><span class="brand-name">Z-Ts</span></a>
+        \\  <a class="brand" href="{s}index.html"><span class="brand-mark">Z</span><span class="brand-name">ziggurats</span></a>
         \\  <span class="brand-tagline">Tauri in Zig</span>
         \\  <div class="topbar-actions">
         \\    <nav class="langs" aria-label="{s}"><a href="{s}index.html" hreflang="ja"{s}>日本語</a><a href="{s}en/index.html" hreflang="en"{s}>English</a></nav>
@@ -1616,7 +1707,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\    <p class="lede">{s}</p>
         \\    <div class="cta">
         \\      <a class="button primary" href="{s}{s}/start.html">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
-        \\      <a class="button" href="{s}{s}/tutorials/counter.html">{s}</a>
+        \\      <a class="button" href="{s}{s}/tutorials/index.html">{s}</a>
         \\      <a class="button ghost" href="{s}docs/api/index.html">{s}</a>
         \\      <a class="button ghost" href="https://github.com/umiturtle/Z-Ts/releases/latest" target="_blank" rel="noopener">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" /></svg></a>
         \\    </div>
@@ -1653,7 +1744,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
     });
 
     // ---- the path, before any other choice ------------------------------------
-    // Four numbered steps, generated from the same table the per-page rail uses. A newcomer should
+    // Five numbered steps, generated from the same table the per-page rail uses. A newcomer should
     // never have to choose between "concepts" and "tutorial" before seeing what either is.
     try w.print("<section class=\"landing-path\" aria-labelledby=\"path-title\"><div class=\"landing-path-head\"><h2 class=\"section-title\" id=\"path-title\">{s}</h2><p class=\"landing-path-lede\">{s}</p><span class=\"landing-path-total\">{s}</span></div><ol>", .{
         str.landing_path_title,
@@ -1725,7 +1816,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         .{
             .icon = "M9 12l2 2 4-4M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z",
             .title = "Lock it down",
-            .blurb = "Capabilities, scopes and CSP: what Z-Ts enforces, what it does not, and how to keep the default deny.",
+            .blurb = "Capabilities, scopes and CSP: what ziggurats enforces, what it does not, and how to keep the default deny.",
             .cta_label = "Security",
             .cta_href = concept_security,
             .links = &.{ concept_security, guide_plugins, "docs/api/zts_tauri/index.html" },
@@ -1742,23 +1833,23 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         .{
             .icon = "M4 5h16v12H4zM8 21h8M12 17v4",
             .title = "名前から引く",
-            .blurb = "全公開宣言（`///` から自動生成）、31 語の用語集、そしてエラー名の索引。",
+            .blurb = "全公開宣言（`///` から自動生成）、用語集、そしてエラー名の索引。",
             .cta_label = "API リファレンス",
             .cta_href = "docs/api/index.html",
-            .links = &.{ "docs/api/zts_tauri/index.html", "docs/glossary.html", "docs/reference/errors.html" },
+            .links = &.{ "docs/api/zts_tauri/index.html", "docs/glossary.en.html", "docs/reference/errors.html" },
         },
         .{
             .icon = "M6 3v12a3 3 0 0 0 3 3h6M12 3v12M4 21h6M14 21h6",
             .title = "動くサンプルを見る",
             .blurb = "9 フレームワークが同じ画面を描くデモ、3 成果物のカウンター、C99 への埋め込み。すべて CI がビルドしています。",
             .cta_label = "サンプル",
-            .cta_href = "examples/frameworks/README.html",
-            .links = &.{ "examples/counter/README.html", "examples/c_embed/README.html", "examples/gallery/README.html" },
+            .cta_href = "examples/frameworks/README.en.html",
+            .links = &.{ "examples/counter/README.en.html", "examples/c_embed/README.en.html", "examples/gallery/README.en.html" },
         },
         .{
             .icon = "M9 12l2 2 4-4M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z",
             .title = "権限を絞る",
-            .blurb = "capability・scope・CSP。Z-Ts が守るもの、守らないもの、既定拒否の維持のしかた。",
+            .blurb = "capability・scope・CSP。ziggurats が守るもの、守らないもの、既定拒否の維持のしかた。",
             .cta_label = "セキュリティ",
             .cta_href = concept_security,
             .links = &.{ concept_security, guide_plugins, "docs/api/zts_tauri/index.html" },
@@ -1837,7 +1928,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
     try w.writeAll("</nav></details></section>");
     try w.writeAll("</main>");
     try w.print(
-        \\<footer class="footer landing-footer"><span>© Z-Ts — {s}</span><span class="footer-meta"><a href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener">{s}</a></span></footer>
+        \\<footer class="footer landing-footer"><span>© ziggurats — {s}</span><span class="footer-meta"><a href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener">{s}</a></span></footer>
         \\<script src="{s}assets/site.js"></script>
         \\</body>
         \\</html>
@@ -1852,7 +1943,7 @@ fn renderLlmsTxt(arena: Allocator, groups_ja: []const site.Group, groups_en: []c
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
     const w = &out.writer;
-    try w.writeAll("# Z-Ts\n\n");
+    try w.writeAll("# ziggurats\n\n");
     try w.writeAll("> Tauri v2 のプロトコルとプラグインを Zig 0.17 で再実装したツールキット。" ++
         "同じアプリコードからネイティブ WebView / Live Preview / 静的 SSG の 3 つを生成する。\n>\n" ++
         "> A Zig 0.17 reimplementation of the Tauri v2 protocol and plugins. One app source, " ++
@@ -1920,37 +2011,32 @@ fn renderSitemap(arena: Allocator, pages: []const []const u8) ![]const u8 {
     return out.toOwnedSlice();
 }
 
-fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang) ![]const u8 {
+fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang, prefix: []const u8) ![]const u8 {
     const s = i18n.strings(lang);
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
     const w = &out.writer;
     try w.print("<h1>{s}</h1>\n<p>{s}</p>\n", .{ s.not_found_title, s.not_found_body });
     try w.writeAll("<ul class=\"notfound\">");
-    // The four entry points, in the same order as the landing page: a lost reader should not have
-    // to guess where to go next.
+    // Five links, not a menu: two ways back into the path (the first step and its hub), the map of
+    // every page, and the dictionary. The 404 used to list six section pages, which asked a lost
+    // reader to pick a section before knowing where they were.
     const Link = struct { href: []const u8, label: []const u8 };
-    // `start.html` is first: a reader who mistyped a URL is a beginner more often than not, and a
-    // 404 is the worst place to hand them a five-way menu.
     const links: []const Link = if (lang == .en) &.{
         .{ .href = "en/index.html", .label = "Home" },
         .{ .href = "docs/learn/en/start.html", .label = "Your first ten minutes" },
         .{ .href = "docs/learn/en/index.html", .label = "The learning path" },
-        .{ .href = "docs/learn/en/tutorials/counter.html", .label = "Tutorial: counter" },
-        .{ .href = "docs/learn/en/concepts/index.html", .label = "Concepts" },
-        .{ .href = "docs/learn/en/guides/rpc.html", .label = "Guides: commands" },
+        .{ .href = "docs/INDEX.en.html", .label = "Documentation index" },
         .{ .href = "docs/api/index.html", .label = "API reference (A–Z)" },
     } else &.{
         .{ .href = "index.html", .label = "ホーム" },
-        .{ .href = "docs/learn/ja/start.html", .label = "はじめての Z-Ts（10 分）" },
+        .{ .href = "docs/learn/ja/start.html", .label = "はじめての ziggurats（10 分）" },
         .{ .href = "docs/learn/ja/index.html", .label = "学習パス" },
-        .{ .href = "docs/learn/ja/tutorials/counter.html", .label = "チュートリアル: カウンター" },
-        .{ .href = "docs/learn/ja/concepts/index.html", .label = "概念" },
-        .{ .href = "docs/learn/ja/guides/rpc.html", .label = "ガイド: コマンド" },
+        .{ .href = "docs/INDEX.html", .label = "ドキュメント索引" },
         .{ .href = "docs/api/index.html", .label = "API リファレンス（A–Z）" },
     };
     for (links) |link| {
-        try w.print("<li><a href=\"{s}\">{s}</a></li>", .{ link.href, link.label });
+        try w.print("<li><a href=\"{s}{s}\">{s}</a></li>", .{ prefix, link.href, link.label });
     }
     try w.writeAll("</ul>\n");
     return out.toOwnedSlice();
@@ -2045,14 +2131,15 @@ test "verifyAssets explains a dangling anchor" {
 test "groupFor keeps the reader-facing sidebar reader-facing" {
     // The new learning path is the front door, and it is grouped by folder.
     try std.testing.expectEqual(GroupKey.learn, groupFor("docs/learn/ja/index.md"));
+    try std.testing.expectEqual(GroupKey.start, groupFor("docs/learn/ja/start.md"));
+    try std.testing.expectEqual(GroupKey.start, groupFor("docs/learn/en/start.md"));
     try std.testing.expectEqual(GroupKey.concepts, groupFor("docs/learn/ja/concepts/rpc.md"));
     try std.testing.expectEqual(GroupKey.tutorials, groupFor("docs/learn/en/tutorials/counter.md"));
     try std.testing.expectEqual(GroupKey.patterns, groupFor("docs/learn/en/patterns/commands.md"));
     try std.testing.expectEqual(GroupKey.guides, groupFor("docs/learn/en/guides/install.md"));
-    // Lookups, samples, and the pre-rewrite guides kept as deep dives.
+    // Lookups and samples.
     try std.testing.expectEqual(GroupKey.reference, groupFor("docs/reference/cli.md"));
     try std.testing.expectEqual(GroupKey.samples, groupFor("examples/counter/README.md"));
-    try std.testing.expectEqual(GroupKey.deep, groupFor("docs/guides/using-rpc.md"));
     try std.testing.expectEqual(GroupKey.dev, groupFor("docs/contributing/README.md"));
     // Published but not in the reading path.
     try std.testing.expectEqual(GroupKey.hidden, groupFor("README.md"));
@@ -2069,15 +2156,18 @@ test "groupFor keeps the reader-facing sidebar reader-facing" {
         try std.testing.expectEqual(GroupKey.internals, groupFor(path));
     }
 
-    // English sidebars stop after the guides: the Japanese deep dives are not translated.
-    try std.testing.expectEqualSlices(GroupKey, &.{ .learn, .concepts, .tutorials, .patterns, .guides, .api }, GroupKey.order(.en));
-    try std.testing.expect(std.mem.indexOfScalar(GroupKey, GroupKey.order(.ja), .deep) != null);
+    // One order for every page and both languages: switching the language must not reshuffle or
+    // shorten the menu.
+    try std.testing.expectEqualSlices(GroupKey, &.{
+        .learn, .start, .concepts, .tutorials, .patterns, .guides, .reference, .api, .samples, .dev, .internals,
+    }, GroupKey.order());
 }
 
 test "languages are detected from the path, and only there" {
     try std.testing.expectEqual(@as(?i18n.Lang, .ja), i18n.Lang.fromPath("docs/learn/ja/index.md"));
     try std.testing.expectEqual(@as(?i18n.Lang, .en), i18n.Lang.fromPath("docs/learn/en/guides/install.md"));
-    try std.testing.expectEqual(@as(?i18n.Lang, null), i18n.Lang.fromPath("docs/guides/using-rpc.md"));
+    try std.testing.expectEqual(@as(?i18n.Lang, .ja), i18n.Lang.fromPath("docs/guides/using-rpc.md"));
+    try std.testing.expectEqual(@as(?i18n.Lang, .en), i18n.Lang.fromPath("docs/INDEX.en.md"));
 }
 
 test "the learn-path directive expands only on its own line" {
@@ -2087,7 +2177,7 @@ test "the learn-path directive expands only on its own line" {
 
     // A marker alone on a line becomes the step list.
     const expanded = try expandDirectives(arena, "# Hub\n\n<!-- learn-path -->\n\nDone.\n", .ja);
-    try std.testing.expect(std.mem.indexOf(u8, expanded, "1. **[はじめての Z-Ts](start.html)**") != null);
+    try std.testing.expect(std.mem.indexOf(u8, expanded, "1. **[はじめての ziggurats](start.html)**") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded, "<!-- learn-path -->") == null);
 
     // A marker quoted inline (as the writing guide does) is left verbatim.
@@ -2105,14 +2195,20 @@ test "the sidebar heading of a path section carries its step number" {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
+    try std.testing.expectEqualStrings("1 · はじめての ziggurats", try groupHeading(arena, .start, .ja));
     try std.testing.expectEqualStrings("2 · 仕組みを知る", try groupHeading(arena, .concepts, .ja));
     try std.testing.expectEqualStrings("3 · Build an app", try groupHeading(arena, .tutorials, .en));
+    try std.testing.expectEqualStrings("4 · Patterns that hold up", try groupHeading(arena, .patterns, .en));
+    // Every path group is numbered from the same table the rail uses, so the numbers cannot
+    // drift when a chapter is inserted. `patterns` is step 4, which makes the guides step 5.
+    try std.testing.expectEqualStrings("4 · 実用パターン", try groupHeading(arena, .patterns, .ja));
+    try std.testing.expectEqualStrings("5 · Look things up", try groupHeading(arena, .guides, .en));
     try std.testing.expectEqualStrings("学習パス", try groupHeading(arena, .learn, .ja));
     // Lookup groups keep their plain names: they are not steps of the path.
     try std.testing.expectEqualStrings("API", try groupHeading(arena, .api, .ja));
 }
 
-test "the first sidebar group opens with the hub, then step 1" {
+test "the hub opens its group, then the numbered step sections" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -2120,25 +2216,118 @@ test "the first sidebar group opens with the hub, then step 1" {
     var entries: std.ArrayListUnmanaged(site.NavEntry) = .empty;
     // Deliberately out of order, and with a page that sorts before `index.md` alphabetically.
     try entries.append(arena, .{ .href = "docs/learn/ja/zzz.html", .title = "zzz", .source = "docs/learn/ja/zzz.md" });
-    try entries.append(arena, .{ .href = "docs/learn/ja/start.html", .title = "はじめての Z-Ts", .source = "docs/learn/ja/start.md" });
-    try entries.append(arena, .{ .href = "docs/learn/ja/index.html", .title = "Z-Ts を学ぶ", .source = "docs/learn/ja/index.md" });
-    try orderLearnEntries(arena, .ja, &entries);
+    try entries.append(arena, .{ .href = "docs/learn/ja/start.html", .title = "はじめての ziggurats", .source = "docs/learn/ja/start.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/index.html", .title = "ziggurats を学ぶ", .source = "docs/learn/ja/index.md" });
+    sortEntries(.learn, &entries);
 
     try std.testing.expectEqualStrings("docs/learn/ja/index.html", entries.items[0].href);
-    try std.testing.expectEqualStrings("1 · はじめての Z-Ts", entries.items[1].title);
+    try std.testing.expectEqualStrings("docs/learn/ja/start.html", entries.items[1].href);
     try std.testing.expectEqualStrings("docs/learn/ja/zzz.html", entries.items[2].href);
 }
 
-test "a section index opens its own group" {
+test "a section index opens its own group and chapters keep their reading order" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
     var entries: std.ArrayListUnmanaged(site.NavEntry) = .empty;
-    try entries.append(arena, .{ .href = "docs/learn/ja/concepts/security.html", .title = "Security", .source = "docs/learn/ja/concepts/security.md" });
-    try entries.append(arena, .{ .href = "docs/learn/ja/concepts/index.html", .title = "概念", .source = "docs/learn/ja/concepts/index.md" });
-    try orderLearnEntries(arena, .ja, &entries);
+    try entries.append(arena, .{ .href = "docs/learn/ja/patterns/state.html", .title = "状態", .source = "docs/learn/ja/patterns/state.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/patterns/boundaries.html", .title = "境界", .source = "docs/learn/ja/patterns/boundaries.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/patterns/index.html", .title = "実用パターン", .source = "docs/learn/ja/patterns/index.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/patterns/commands.html", .title = "コマンド", .source = "docs/learn/ja/patterns/commands.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/patterns/errors.html", .title = "エラー", .source = "docs/learn/ja/patterns/errors.md" });
+    sortEntries(.patterns, &entries);
 
-    try std.testing.expectEqualStrings("docs/learn/ja/concepts/index.html", entries.items[0].href);
-    try std.testing.expectEqualStrings("docs/learn/ja/concepts/security.html", entries.items[1].href);
+    const expected = [_][]const u8{
+        "docs/learn/ja/patterns/index.html",
+        "docs/learn/ja/patterns/commands.html",
+        "docs/learn/ja/patterns/state.html",
+        "docs/learn/ja/patterns/errors.html",
+        "docs/learn/ja/patterns/boundaries.html",
+    };
+    try std.testing.expectEqual(expected.len, entries.items.len);
+    for (entries.items, expected) |entry, want| try std.testing.expectEqualStrings(want, entry.href);
+}
+
+test "sorting does not depend on the order the walk produced" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    // Same six pages, three input orders (as the filesystem, reversed, and shuffled-by-hand).
+    const inputs = [_][]const []const u8{
+        &.{ "examples/c_embed/README.md", "examples/counter/README.md", "examples/frameworks/README.md", "examples/gallery/README.md" },
+        &.{ "examples/gallery/README.md", "examples/frameworks/README.md", "examples/counter/README.md", "examples/c_embed/README.md" },
+        &.{ "examples/frameworks/README.md", "examples/c_embed/README.md", "examples/gallery/README.md", "examples/counter/README.md" },
+    };
+    const expected = [_][]const u8{
+        "examples/counter/README.md",
+        "examples/frameworks/README.md",
+        "examples/gallery/README.md",
+        "examples/c_embed/README.md",
+    };
+    for (inputs) |input| {
+        var entries: std.ArrayListUnmanaged(site.NavEntry) = .empty;
+        for (input) |source| {
+            try entries.append(arena, .{ .href = source, .title = source, .source = source });
+        }
+        sortEntries(.samples, &entries);
+        for (entries.items, expected) |entry, want| try std.testing.expectEqualStrings(want, entry.source);
+    }
+}
+
+test "the lookup groups have a reading order too" {
+    try std.testing.expectEqual(@as(?usize, 0), navRank(.reference, "docs/glossary.md"));
+    try std.testing.expectEqual(@as(?usize, 1), navRank(.reference, "docs/reference/cli.md"));
+    try std.testing.expectEqual(@as(?usize, 0), navRank(.dev, "docs/contributing/README.md"));
+    try std.testing.expectEqual(@as(?usize, 1), navRank(.dev, "docs/contributing/repository-map.md"));
+    // Unlisted pages are not dropped; they sort last.
+    try std.testing.expectEqual(@as(?usize, null), navRank(.reference, "docs/reference/new-page.md"));
+}
+
+test "English menu labels are translated only for Japanese-only pages" {
+    try std.testing.expectEqualStrings("Glossary", englishNavTitle("docs/glossary.md").?);
+    try std.testing.expectEqualStrings("Repository map", englishNavTitle("docs/contributing/repository-map.md").?);
+    try std.testing.expectEqualStrings("Nine frameworks, one screen", englishNavTitle("examples/frameworks/README.md").?);
+    // The translated tree has its own H1 in each language; never overwrite it.
+    try std.testing.expectEqual(@as(?[]const u8, null), englishNavTitle("docs/learn/en/start.md"));
+    try std.testing.expectEqual(@as(?[]const u8, null), englishNavTitle("docs/learn/ja/start.md"));
+}
+
+test "English mirror pages are classified exactly like their Japanese originals" {
+    try std.testing.expectEqual(GroupKey.reference, groupFor("docs/glossary.en.md"));
+    try std.testing.expectEqual(GroupKey.reference, groupFor("docs/reference/cli.en.md"));
+    try std.testing.expectEqual(GroupKey.internals, groupFor("docs/reference/tauri-internals.en.md"));
+    try std.testing.expectEqual(GroupKey.dev, groupFor("docs/contributing/doc-sync.en.md"));
+    try std.testing.expectEqual(GroupKey.samples, groupFor("examples/counter/README.en.md"));
+    try std.testing.expectEqual(GroupKey.hidden, groupFor("docs/INDEX.en.md"));
+    try std.testing.expectEqualStrings("reference", pageKind("docs/INDEX.en.md"));
+    try std.testing.expectEqualStrings("recipe", pageKind("examples/counter/README.en.md"));
+    // A mirror has its own English H1, and sorts to the same place in the group.
+    try std.testing.expectEqual(@as(?[]const u8, null), englishNavTitle("docs/glossary.en.md"));
+    try std.testing.expectEqual(@as(?usize, 0), navRank(.reference, "docs/glossary.en.md"));
+    try std.testing.expectEqual(@as(?usize, 1), navRank(.reference, "docs/reference/cli.en.md"));
+    try std.testing.expectEqual(@as(?usize, 0), navRank(.samples, "examples/counter/README.en.md"));
+}
+
+test "the language switcher resolves a mirror page that really exists" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+
+    try std.testing.expectEqualStrings(
+        "docs/glossary.en.html",
+        (try altHref(arena, io, "docs/glossary.md", .ja)).?,
+    );
+    try std.testing.expectEqualStrings(
+        "docs/glossary.html",
+        (try altHref(arena, io, "docs/glossary.en.md", .en)).?,
+    );
+    // A Japanese-only internal page has no mirror, so the switcher stays hidden instead of
+    // pointing at a 404.
+    try std.testing.expectEqual(
+        @as(?[]const u8, null),
+        try altHref(arena, io, "docs/decisions/0001-zig-017-and-sharded-agent-workflow.md", .ja),
+    );
 }

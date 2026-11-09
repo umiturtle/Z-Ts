@@ -4,7 +4,7 @@
 > を使いたい人。
 > **所要時間**: 4 分。
 
-Z-Ts は Tauri v2 の**ワイヤプロトコル**（`plugin:window|set_title` のようなコマンド名と
+ziggurats は Tauri v2 の**ワイヤプロトコル**（`plugin:window|set_title` のようなコマンド名と
 JSON の形）をそのまま実装しています。したがってフロントエンドは無改造で動き、バックエンドは
 「状態を作る → スキーマに合流させる」の 2 手順だけです。
 
@@ -72,7 +72,7 @@ const text = await readTextFile("notes.md", { baseDir: BaseDirectory.AppData });
 const chosen = await open({ multiple: false });
 ```
 
-Tauri のドキュメントに書いてあるコードが、そのまま動きます。これが Z-Ts の互換性の意味です。
+Tauri のドキュメントに書いてあるコードが、そのまま動きます。これが ziggurats の互換性の意味です。
 
 ## 5. 何が「互換」で、何が違うか
 

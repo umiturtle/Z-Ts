@@ -1,13 +1,21 @@
-//! The first-run path — the four pages a new reader is walked through, in order.
+//! The first-run path — the five steps a new reader is walked through, in order.
 //!
-//! This lives in code rather than in prose because three different surfaces render it: the step
-//! rail at the top of every path page, the "what next" card at the bottom, and the landing page.
-//! If the order lived in three hand-written copies, the first edit would desynchronise them.
+//! This file is also the **only** place that decides order: the renderer asks it which step a page
+//! belongs to and which position it takes inside that step's section. The directory walk hands
+//! pages over in filename order, which is why `patterns/boundaries.md` used to open the chapter
+//! and `guides/install.md` came after `rpc.md`.
+//!
+//! This lives in code rather than in prose because several surfaces render it: the step rail at the
+//! top of every path page, the "what next" card at the bottom, the landing page, the numbered
+//! sidebar headings, and the `<!-- learn-path -->` list in the learning hub. If the order lived in
+//! hand-written copies, the first edit would desynchronise them.
 //!
 //! Two properties are deliberate:
 //! * **Membership is derived from the directory layout.** Anything under
 //!   `docs/learn/<lang>/concepts/` is step 2, whatever its filename. Adding a concept page cannot
-//!   forget to register it, and the rail can never claim a page is outside the path.
+//!   forget to register it, and the rail can never claim a page is outside the path. The sidebar
+//!   heading for each section is numbered from this same table, so inserting a chapter renumbers
+//!   the navigation by itself.
 //! * **Every step's landing page is verified at build time.** `main.zig` stats each source before
 //!   rendering, so renaming `start.md` fails `zig build docs` instead of shipping a dead first step.
 
@@ -43,15 +51,16 @@ pub const Step = struct {
     blurb: Text,
 };
 
-/// The order is pedagogical: touch it, then understand it, then build with it, then look things up.
-/// Putting the concepts first (the original order) asked the reader to learn a mental model for a
-/// system they had not seen yet.
+/// The order is pedagogical: touch it, then understand it, then build with it, then choose a
+/// shape for it, then look things up. Putting the concepts first (the original order) asked the
+/// reader to learn a mental model for a system they had not seen yet; the patterns chapter exists
+/// because the tutorial produces code that works but has no room to grow.
 pub const steps = [_]Step{
     .{
         .id = "start",
         .slug = "start.md",
         .minutes = 10,
-        .title = .{ .ja = "はじめての Z-Ts", .en = "Your first ten minutes" },
+        .title = .{ .ja = "はじめての ziggurats", .en = "Your first ten minutes" },
         .blurb = .{
             .ja = "インストールして、プロジェクトを作って、ブラウザで動かす。",
             .en = "Install, create a project, and get it running in a browser.",
@@ -70,11 +79,11 @@ pub const steps = [_]Step{
     .{
         .id = "tutorial",
         .slug = "tutorials/",
-        .minutes = 15,
+        .minutes = 50,
         .title = .{ .ja = "アプリを作る", .en = "Build an app" },
         .blurb = .{
-            .ja = "カウンターを 1 本作り、テストして、単一バイナリにする。",
-            .en = "Build, test and ship a counter as a single binary.",
+            .ja = "カウンターで 1 本通し、Todo と画面でコマンド・状態・失敗の扱いを広げる。",
+            .en = "Walk the counter end to end, then widen it with the todo list and the screen.",
         },
     },
     .{
@@ -114,6 +123,52 @@ pub fn totalMinutes() u8 {
     var sum: u8 = 0;
     for (steps) |step| sum += step.minutes;
     return sum;
+}
+
+/// Reading order inside each section, after the section index.
+///
+/// This table is what makes the left menu the learning path instead of an alphabetical file list.
+/// A page missing from here is not an error: it sorts after the listed ones, alphabetically, so a
+/// new file is visible immediately and only its position is left to decide.
+pub const page_order = [_]struct { section: []const u8, pages: []const []const u8 }{
+    .{ .section = "concepts/", .pages = &.{
+        "architecture.md", "commands.md", "plugins.md", "security.md",
+    } },
+    .{ .section = "tutorials/", .pages = &.{
+        "counter.md", "todo.md", "ui.md",
+    } },
+    .{ .section = "patterns/", .pages = &.{
+        "commands.md", "state.md", "errors.md", "boundaries.md",
+    } },
+    .{ .section = "guides/", .pages = &.{
+        "install.md", "rpc.md",                "plugins.md",         "static-site.md",
+        "package.md", "migrate-from-tauri.md", "troubleshooting.md",
+    } },
+};
+
+/// Position of `source` inside its section, or `null` when nothing lists it.
+///
+/// `0` is the section index (`concepts/index.md`) and the single-page step (`start.md`); `1..` are
+/// the pages of [`page_order`] in reading order. The renderer sorts `null` last and keeps the
+/// filename order there, so an unlisted page still appears — just at the end.
+pub fn pageRank(source: []const u8) ?usize {
+    if (!std.mem.startsWith(u8, source, learn_root)) return null;
+    const rest = source[learn_root.len..];
+    if (rest.len < 4 or rest[2] != '/') return null;
+    const tail = rest[3..];
+    if (std.mem.eql(u8, tail, "index.md")) return 0;
+    if (std.mem.eql(u8, tail, "start.md")) return 0;
+    inline for (page_order) |entry| {
+        if (std.mem.startsWith(u8, tail, entry.section)) {
+            const name = tail[entry.section.len..];
+            if (std.mem.eql(u8, name, "index.md")) return 0;
+            inline for (entry.pages, 0..) |page, i| {
+                if (std.mem.eql(u8, name, page)) return i + 1;
+            }
+            return null;
+        }
+    }
+    return null;
 }
 
 /// Markdown source of the page a step starts on (`docs/learn/ja/start.md`,
@@ -243,7 +298,7 @@ test "the markdown list numbers the steps and links them relatively" {
     var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena_state.deinit();
     const md = try markdownList(arena_state.allocator(), .ja);
-    try testing.expect(std.mem.indexOf(u8, md, "1. **[はじめての Z-Ts](start.html)** · 10 分 — ") != null);
+    try testing.expect(std.mem.indexOf(u8, md, "1. **[はじめての ziggurats](start.html)** · 10 分 — ") != null);
     try testing.expect(std.mem.indexOf(u8, md, "2. **[仕組みを知る](concepts/index.html)** · 15 分 — ") != null);
     try testing.expect(std.mem.indexOf(u8, md, "4. **[実用パターン](patterns/index.html)** · 20 分 — ") != null);
     try testing.expect(std.mem.indexOf(u8, md, "5. **[目的から引く](guides/index.html)** — ") != null);
@@ -262,5 +317,51 @@ test "hrefs resolve to steps and languages" {
 }
 
 test "the path has a finite time budget" {
-    try testing.expectEqual(@as(u8, 60), totalMinutes());
+    try testing.expectEqual(@as(u8, 95), totalMinutes());
+}
+
+test "page order follows the chapter, not the filename" {
+    // The chapter index opens its own section.
+    try testing.expectEqual(@as(?usize, 0), pageRank("docs/learn/ja/patterns/index.md"));
+    try testing.expectEqual(@as(?usize, 0), pageRank("docs/learn/en/concepts/index.md"));
+    // `patterns` reads commands → state → errors → boundaries (alphabetical would be the reverse
+    // for two of them).
+    try testing.expectEqual(@as(?usize, 1), pageRank("docs/learn/ja/patterns/commands.md"));
+    try testing.expectEqual(@as(?usize, 2), pageRank("docs/learn/ja/patterns/state.md"));
+    try testing.expectEqual(@as(?usize, 3), pageRank("docs/learn/ja/patterns/errors.md"));
+    try testing.expectEqual(@as(?usize, 4), pageRank("docs/learn/ja/patterns/boundaries.md"));
+    // The guides start with the install page, not with `migrate-from-tauri.md`.
+    try testing.expectEqual(@as(?usize, 1), pageRank("docs/learn/en/guides/install.md"));
+    try testing.expect(pageRank("docs/learn/en/guides/install.md").? < pageRank("docs/learn/en/guides/rpc.md").?);
+    // An unlisted page is still on the path (it just sorts last); a page outside the tree is not.
+    try testing.expectEqual(@as(?usize, null), pageRank("docs/learn/ja/tutorials/not-written-yet.md"));
+    try testing.expectEqual(@as(?usize, null), pageRank("docs/reference/cli.md"));
+}
+
+test "every page listed in page_order exists in at least one language" {
+    // A typo in the table would silently demote a page to the end of the section.
+    for (page_order) |entry| {
+        for (entry.pages) |name| {
+            const ja = std.fmt.allocPrint(testing.allocator, "{s}ja/{s}{s}", .{ learn_root, entry.section, name }) catch unreachable;
+            defer testing.allocator.free(ja);
+            const en = std.fmt.allocPrint(testing.allocator, "{s}en/{s}{s}", .{ learn_root, entry.section, name }) catch unreachable;
+            defer testing.allocator.free(en);
+            std.Io.Dir.cwd().access(std.testing.io, ja, .{}) catch {
+                std.debug.print("missing {s}\n", .{ja});
+                return error.TestUnexpectedResult;
+            };
+            std.Io.Dir.cwd().access(std.testing.io, en, .{}) catch {
+                std.debug.print("missing {s}\n", .{en});
+                return error.TestUnexpectedResult;
+            };
+        }
+    }
+}
+
+test "the three tutorials are read in teaching order" {
+    try testing.expectEqual(@as(?usize, 1), pageRank("docs/learn/ja/tutorials/counter.md"));
+    try testing.expectEqual(@as(?usize, 2), pageRank("docs/learn/ja/tutorials/todo.md"));
+    try testing.expectEqual(@as(?usize, 3), pageRank("docs/learn/en/tutorials/ui.md"));
+    // The chapter index is always first, whatever the filenames are.
+    try testing.expectEqual(@as(?usize, 0), pageRank("docs/learn/ja/tutorials/index.md"));
 }

@@ -14,7 +14,7 @@
 `plugin:dialog` と `plugin:clipboard-manager` は、これまでの `zts_tauri` のプラグインと決定的に性質が異なる:
 **OS の GUI / クリップボード API を直接叩く必要がある**。
 
-一方、Z-Ts の `zts_tauri` は **`link_libc = false` の Pure Zig** であり、GTK / Cocoa / Win32 に依存できない。
+一方、ziggurats の `zts_tauri` は **`link_libc = false` の Pure Zig** であり、GTK / Cocoa / Win32 に依存できない。
 さらに上位の制約として、`zts_webview` は `zts_foundation` のみに依存する独立ライブラリであり続ける必要があり、
 共通基盤に OS GUI の型が漏れてはならない。
 

@@ -2,7 +2,7 @@
 //!
 //! Strictly depends ONLY on `zts_foundation` (plus optional build option `webview_options`) with
 //! ZERO JSON, RPC, HTTP server, or Tauri coupling:
-//! - Embeddable standalone in Zig engines, C/C++ hosts (`include/zts_webview.h`), or Z-Ts desktop apps.
+//! - Embeddable standalone in Zig engines, C/C++ hosts (`include/zts_webview.h`), or ziggurats desktop apps.
 //! - Step-driven event loop (`step(.blocking / .poll)`) so callers NEVER lose main-thread control
 //!   or `defer` leak-detection scopes, and 60fps/120fps render loops integrate trivially via `.poll`.
 

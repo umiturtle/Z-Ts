@@ -1193,7 +1193,7 @@ pub fn buildPages(arena: Allocator, packages_in: []const Package, index: *const 
                 try writer.writeAll("<p class=\"internal-banner\"><span>内部実装</span> ");
                 try writeInlineCode(writer, "このファイルは FFI 宣言・契約テストなどの内部実装です。ライブラリを使うだけなら読む必要はありません。");
                 try writer.print(
-                    " 使い方は <a href=\"{s}docs/learn/ja/tutorials/counter.html\">はじめかた</a> と API リファレンスの公開モジュールから入ってください。</p>\n",
+                    " 使い方は <a href=\"{s}docs/learn/ja/start.html\">はじめての ziggurats（10 分）</a> と API リファレンスの公開モジュールから入ってください。</p>\n",
                     .{try relativePrefix(arena, href)},
                 );
             }

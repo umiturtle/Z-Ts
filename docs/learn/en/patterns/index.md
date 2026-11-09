@@ -1,7 +1,7 @@
 # Patterns that hold up: code that keeps working after it grows
 
 > **Audience**: readers who finished [Your first ten minutes](../start.md) and
-> [Build a counter](../tutorials/counter.md).
+> [Tutorials](../tutorials/index.md) (start with the counter).
 > **Time**: 20 minutes (exercises not counted).
 > **What you get**: the choices you have when writing commands, state and errors — and the rule for
 > picking one.

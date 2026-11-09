@@ -1,12 +1,12 @@
 # チュートリアル: カウンターを作る
 
-> **対象読者**: はじめて Z-Ts に触る人。Zig の基本文法は知っている前提です。
+> **対象読者**: はじめて ziggurats に触る人。Zig の基本文法は知っている前提です。
 > **所要時間**: 15 分（写経すれば動くところまで）。
-> **前提**: まだ 1 度も動かしていないなら、[はじめての Z-Ts](../start.md)（10 分）が先です。
+> **前提**: まだ 1 度も動かしていないなら、[はじめての ziggurats](../start.md)（10 分）が先です。
 
 `zts init` でプロジェクトを作り、**Zig の関数をボタンから呼び**、保存で自動リロードしながら
 育てて、最後に単一バイナリにするまでの一本道です。**このページのコマンドは `zts` だけ**です。
-Z-Ts リポジトリの操作（ビルド手順や CI）は
+ziggurats リポジトリの操作（ビルド手順や CI）は
 [`docs/contributing/README.md`](../../../contributing/README.md) に分けてあります。
 
 | 章 | やること | 終わったとき |
@@ -45,7 +45,7 @@ cd my-app
 ```text
 my-app/
 ├── build.zig          # 共通エンベッダで web/ を埋め込む
-├── build.zig.zon      # Z-Ts への path 依存
+├── build.zig.zon      # ziggurats への path 依存
 ├── src/main.zig       # アプリ本体（assets を列挙する最小構成）
 ├── web/index.html     # フロントエンド
 ├── .gitignore         # zig-out/ と .zig-cache/ を無視
@@ -96,7 +96,7 @@ curl http://127.0.0.1:5173/__zts_dev__/state
 
 ## 3. 数えるコマンドを書く
 
-ここからが Z-Ts の本体です。**Zig に関数を書くと、それがそのまま JavaScript の
+ここからが ziggurats の本体です。**Zig に関数を書くと、それがそのまま JavaScript の
 `invoke("…")` になります。** まず `build.zig` に `zts_rpc` を足します。
 
 ```zig

@@ -30,10 +30,10 @@ pub const Init = struct {
     dir: []const u8 = ".",
     /// Package name; `null` means "derive from the directory base name".
     name: ?[]const u8 = null,
-    /// Path to the Z-Ts checkout the generated `build.zig.zon` depends on. `null` means "the
+    /// Path to the ziggurats checkout the generated `build.zig.zon` depends on. `null` means "the
     /// checkout that built this `zts` binary" — correct no matter where the project is created.
     zts_path: ?[]const u8 = null,
-    /// Published Z-Ts archive to depend on instead of a checkout (`--zts-url`). Must come with
+    /// Published ziggurats archive to depend on instead of a checkout (`--zts-url`). Must come with
     /// `zts_hash`; the pair is what a release build bakes in by default.
     zts_url: ?[]const u8 = null,
     /// `zig fetch` hash of `zts_url` (`--zts-hash`).
@@ -277,7 +277,7 @@ pub const usage_text =
     \\Usage: zts <command> [options]
     \\
     \\Commands:
-    \\  init [dir]          Scaffold a new Z-Ts project (default: the current directory)
+    \\  init [dir]          Scaffold a new ziggurats project (default: the current directory)
     \\  dev                 Serve `web/` with rebuild-on-change (`--browser` for Live Preview)
     \\  build               Bundle the front end and produce a single executable
     \\  package             Wrap the executable into .deb / AppDir / .app / .exe / .tar.gz
@@ -288,8 +288,8 @@ pub const usage_text =
     \\init options:
     \\  --dir <path>        Target directory                  (default ".")
     \\  --name <name>       Package name                      (default: directory base name)
-    \\  --zts-path <path>   Path to the Z-Ts checkout         (default: the one that built `zts`)
-    \\  --zts-url <url>     Published Z-Ts archive            (with --zts-hash: no checkout needed)
+    \\  --zts-path <path>   Path to the ziggurats checkout         (default: the one that built `zts`)
+    \\  --zts-url <url>     Published ziggurats archive            (with --zts-hash: no checkout needed)
     \\  --zts-hash <hash>   `zig fetch` hash of --zts-url
     \\  --force             Allow scaffolding into a non-empty directory
     \\

@@ -3,7 +3,7 @@
 > **対象読者**: `zts` でアプリを作っていて詰まった人。
 > **所要時間**: 症状から引く（1 分）。**前提**: なし。まず `zts doctor` を実行してください。
 
-`zts` でアプリを作っていて詰まったときの 1 ページです。**Z-Ts リポジトリ自体のビルド**で
+`zts` でアプリを作っていて詰まったときの 1 ページです。**ziggurats リポジトリ自体のビルド**で
 詰まった場合は [`../contributing/troubleshooting.md`](../../../contributing/troubleshooting.md) へ
 （そちらはリポジトリ開発と CI の話で、アプリ作者には不要です）。
 
@@ -70,7 +70,7 @@ zts init "my-app" --name my_app      # 表示名は my-app、パッケージ名�
 
 ## `zts build`
 
-### `cannot read <dir>/build.zig.zon — is this a Z-Ts project?`
+### `cannot read <dir>/build.zig.zon — is this a ziggurats project?`
 
 `--dir` の指す先がプロジェクトではありません。`zts init` をしたディレクトリで実行するか、
 `--dir` を正しく渡してください。
@@ -172,7 +172,7 @@ zts dev --port 5199
 
 ### Linux で文字が豆腐になる / OS ごとに表示が違う
 
-Z-Ts はフォントを同梱し、OS 間で同じ字形になるようにしています。独自 CSS でシステム
+ziggurats はフォントを同梱し、OS 間で同じ字形になるようにしています。独自 CSS でシステム
 フォント（`system-ui` など）を指定すると Linux だけ字形が変わります。同梱の
 `ZTS Sans` / `ZTS Mono` を使ってください。
 
@@ -232,4 +232,4 @@ cd my-app && zig build tsgen     # build.zig に tsgen ステップを足して�
 - 配布物を作る: [`package.md`](package.md)
 - `zts` の全オプション: [`../reference/cli.md`](../../../reference/cli.md)
 - エラーに対応する API の引き方: [API リファレンスの索引](../../../api/index.html)
-- Z-Ts 本体の開発で詰まったとき: [`../contributing/troubleshooting.md`](../../../contributing/troubleshooting.md)
+- ziggurats 本体の開発で詰まったとき: [`../contributing/troubleshooting.md`](../../../contributing/troubleshooting.md)

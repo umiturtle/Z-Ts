@@ -3,7 +3,7 @@
 > **Audience**: readers who want `window` / `event` / `path` / `fs` / `dialog` / `menu` / `tray`
 > from `@tauri-apps/api`. Full listing: [`zts_tauri`](../../../api/zts_tauri/index.html).
 
-Z-Ts implements Tauri v2's **wire protocol** verbatim (command names such as
+ziggurats implements Tauri v2's **wire protocol** verbatim (command names such as
 `plugin:window|set_title` plus the JSON shapes). So the frontend is **unmodified
 `@tauri-apps/api` v2**, and the backend is two steps: hold the plugin state, join it into the
 schema.
@@ -91,7 +91,7 @@ On the Zig side you can drive `plugins.windows` directly.
 
 ```zig
 const win = try plugins.windows.create(allocator, .{
-    .label = "main", .title = "Z-Ts", .size = .wh(520, 620), .initial_url = "index.html",
+    .label = "main", .title = "ziggurats", .size = .wh(520, 620), .initial_url = "index.html",
 });
 try plugins.windows.setTitle(&win, "Renamed");
 ```

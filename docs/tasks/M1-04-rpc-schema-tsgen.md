@@ -67,7 +67,7 @@
    var router = Rpc.bind(.{ .app = &app_state });
    const handler: zts.rpc.Handler = router.handler();
    ```
-2. **IPC トランスポート層（Tauri custom protocol / Z-Ts native bridge）からの呼び出し**:
+2. **IPC トランスポート層（Tauri custom protocol / ziggurats native bridge）からの呼び出し**:
    ```zig
    _ = worker_arena.reset(.retain_capacity);
    const call_ctx: zts.core.CallContext = .{ .host = host, .window_id = caller_window_id };

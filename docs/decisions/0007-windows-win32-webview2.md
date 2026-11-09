@@ -12,7 +12,7 @@
 ネイティブバックエンドを持った（[`ADR-0006`](0006-macos-appkit-wkwebview-backend.md)）。残るは Windows だが、
 macOS 以上に「素直な Zig」から遠い要素が 3 つある：
 
-1. **`WebView2Loader.dll` が SDK の必須同梱物**とされている。Z-Ts の「追加配布物ゼロ」という
+1. **`WebView2Loader.dll` が SDK の必須同梱物**とされている。ziggurats の「追加配布物ゼロ」という
    ポリシー（`include/` と 1 つの `.exe` 以外を配らない）に反する。
 2. **`ICoreWebView2*` は COM**。Zig 0.17 は `@cImport` を廃止しており、296 個の
    `MIDL_INTERFACE` を持つ 2.9 MB の `WebView2.h` を `addTranslateC` で取り込むと

@@ -1,10 +1,10 @@
-# Your first ten minutes with Z-Ts
+# Your first ten minutes with ziggurats
 
-> **Audience**: anyone who has not run Z-Ts yet. No Zig or Web knowledge assumed.
+> **Audience**: anyone who has not run ziggurats yet. No Zig or Web knowledge assumed.
 > **Time**: 10 minutes. **What you need**: a terminal, Zig 0.17, and the `zts` binary (one file).
 > **What you get**: your own project running in a browser, plus a single binary in `zig-out/bin/`.
 
-Work through this page top to bottom and you will have Z-Ts running. There is no architecture
+Work through this page top to bottom and you will have ziggurats running. There is no architecture
 talk here: **run it first, understand it second**, which is how the rest of these docs are ordered.
 
 ```text
@@ -16,7 +16,7 @@ talk here: **run it first, understand it second**, which is how the rest of thes
 
 ## 1. Get `zts` (3 minutes)
 
-`zts` is the CLI that drives a Z-Ts project. What you install is **one binary** (about 300 KB, no
+`zts` is the CLI that drives a ziggurats project. What you install is **one binary** (about 300 KB, no
 libc dependency); you bring Zig.
 
 ```bash
@@ -36,7 +36,7 @@ zts version             # → zts 0.1.0
 and platform packages are in [`guides/install.md`](guides/install.md).
 
 > [!NOTE]
-> Working on Z-Ts itself, or prefer source builds? `git clone` + `zig build` produces the same
+> Working on ziggurats itself, or prefer source builds? `git clone` + `zig build` produces the same
 > binary; all it needs is Zig 0.17 on `PATH`. A `zts` built that way makes generated projects
 > depend on the checkout via `.path`.
 
@@ -74,7 +74,7 @@ cd my-app
 
 **There is no link between the page and Zig yet.** The scaffolding only serves `web/` and embeds it
 at build time. Attaching "button → Zig function" to that scaffolding is the job of
-[Build an app](tutorials/counter.md), two steps from here.
+[Build an app](tutorials/index.md), two steps from here.
 
 ## 4. Serve it (2 minutes)
 
@@ -108,7 +108,7 @@ Open <http://127.0.0.1:5173/> and you will see the `my_app` heading and the line
 Change the `<h1>` in `web/index.html` and save. **Do not touch the terminal.**
 
 ```html
-<h1>my_app — hello Z-Ts</h1>
+<h1>my_app — hello ziggurats</h1>
 ```
 
 The browser reloads in about half a second. The write → see loop is now closed; everything else in these
@@ -151,12 +151,13 @@ means shipping one file. Stop `zts dev` before running the binary.
 
 The four steps after this page (five including it) are the learning path; the same rail is at the top of every page on
 it. The order is a suggestion. Going on to [How it works](concepts/index.md) gives you a 15-minute
-map before the `Schema` and `invoke` in [Build an app](tutorials/counter.md) show up. **If you would
+map before the `Schema` and `invoke` in [Build an app](tutorials/index.md) show up. **If you would
 rather build first**, jump straight to the tutorial and come back when a word stops you.
 
 1. **[How it works](concepts/index.md)** (15 min) — the three moving parts, and how a button reaches Zig
-2. **[Build an app](tutorials/counter.md)** (15 min) — your own command, a test, one binary
-3. **[Look things up](guides/index.md)** — from here on, read only what you need
+2. **[Build an app](tutorials/index.md)** (50 min, three tutorials) — counter, todo list, screen
+3. **[Patterns](patterns/index.md)** (20 min) — command, state and error design, with exercises
+4. **[Look things up](guides/index.md)** — from here on, read only what you need
 
 Stuck on a word? [Glossary](../../glossary.md). Stuck on an error?
 [Troubleshooting](guides/troubleshooting.md) and the [error index](../../reference/errors.html).

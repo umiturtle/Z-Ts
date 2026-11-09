@@ -26,9 +26,9 @@ pub const max_name_len = 64;
 pub const Options = struct {
     /// Package name: `[a-z][a-z0-9_]*`, at most [`max_name_len`] characters.
     name: []const u8,
-    /// Path to the Z-Ts checkout that `build.zig.zon` depends on. Ignored when [`zts_url`] is set.
+    /// Path to the ziggurats checkout that `build.zig.zon` depends on. Ignored when [`zts_url`] is set.
     zts_path: []const u8 = "../Z-Ts",
-    /// Published Z-Ts archive (`https://…/z_ts-0.1.0.tar.gz`). When both this and [`zts_hash`]
+    /// Published ziggurats archive (`https://…/z_ts-0.1.0.tar.gz`). When both this and [`zts_hash`]
     /// are set, the generated project depends on the *release* and needs no checkout on disk —
     /// which is what a `zts` installed from a release archive emits.
     zts_url: ?[]const u8 = null,
@@ -225,7 +225,7 @@ const gitignore =
 const readme =
     \\# {{NAME}}
     \\
-    \\A [Z-Ts](https://github.com/umiturtle/Z-Ts) desktop app.
+    \\A [ziggurats](https://github.com/umiturtle/Z-Ts) desktop app.
     \\
     \\```bash
     \\zts dev            # serve web/ with rebuild-on-change
@@ -434,7 +434,7 @@ test "scaffold is deterministic and every placeholder is substituted" {
 
 test "a release dependency replaces the checkout path" {
     // What a `zts` built for a release emits: the project can be built on a machine that has
-    // never seen the Z-Ts checkout.
+    // never seen the ziggurats checkout.
     const files = try scaffold(testing.allocator, .{
         .name = "demo_app",
         .zts_url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz",

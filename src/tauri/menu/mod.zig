@@ -5,7 +5,7 @@
 //! app `ResourceTable`, mutations (`append` / `insert` / `remove` / `set_text` …) address it by
 //! `rid`, and activations are pushed back over a `Channel<string>` carrying the node's `MenuId`.
 //!
-//! Z-Ts keeps that exact wire shape but stores the tree itself, so the whole plugin — including the
+//! ziggurats keeps that exact wire shape but stores the tree itself, so the whole plugin — including the
 //! flattening step every backend consumes — is deterministic Pure Zig:
 //!
 //! ```text
@@ -406,7 +406,7 @@ pub const Options = struct {
                 const entry = it.next() orelse return error.UnexpectedToken;
                 const tag = entry.key_ptr.*;
                 if (!std.mem.eql(u8, tag, "About")) return error.UnknownField;
-                // The metadata itself is not retained: Z-Ts renders the About panel from
+                // The metadata itself is not retained: ziggurats renders the About panel from
                 // `AppConfig` (name / version / identifier) instead of per-item strings, which keeps
                 // every node free of borrowed decoded memory.
                 return Predefined{ .About = null };

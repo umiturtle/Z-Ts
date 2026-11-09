@@ -1,0 +1,304 @@
+{
+  "schema": 1,
+  "verified": {
+    "date": "2026-10-21",
+    "commit": "59ea73e",
+    "zts_version": "0.1.0",
+    "zig_version": "0.17.0",
+    "checks": [
+      "python3 scripts/check-docs.py",
+      "./zigw docs-check",
+      "./zigw quick-test",
+      "./zigw test -Mroot=src/cli/mod.zig",
+      "./zigw fmt --check src/ build.zig build.zig.zon"
+    ],
+    "implementation": [
+      "build.zig",
+      "build.zig.zon",
+      "src/cli/args.zig",
+      "src/cli/main.zig",
+      "src/cli/template.zig",
+      "src/docsite/main.zig",
+      "src/docsite/learn_path.zig",
+      "src/docsite/i18n.zig",
+      "src/docsite/site.zig",
+      "scripts/check-docs.py"
+    ],
+    "implementation_sha256": "c1034fba2f42765fbba8d544ab21ecdb6ffab1b9d1e05de6ffda486a38c315fb"
+  },
+  "pages": [
+    {
+      "ja": "README.md",
+      "en": "README.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "96b4852270ddf85ccb48cdcd52873b34690427a60d9ee87dc71213e0c49975c6",
+      "en_sha256": "22f4ff0b088c184f4a05ec0c7f58d7f79e4308e7d82634b5b070b40c5c0bf93c"
+    },
+    {
+      "ja": "docs/INDEX.md",
+      "en": "docs/INDEX.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "02c2d5b4204a95218551c24c5e0885105cfaa06a9da15e41596d9315535713b5",
+      "en_sha256": "f7defdc502366709dc55674f00a53a673c226136c44b39d06a5ec048d9e19767"
+    },
+    {
+      "ja": "docs/contributing/README.md",
+      "en": "docs/contributing/README.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "ffcc287a96b81c77ff74ae6d9f65639989e8d133297f8c0a3418cc4761dc821a",
+      "en_sha256": "864c17dcbc0e2f2c1d51c4ed449d1fd0e13b182ddb1bf6c9abda0433062fa578"
+    },
+    {
+      "ja": "docs/contributing/doc-sync.md",
+      "en": "docs/contributing/doc-sync.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "4eda98c92df0254c6dfd6e8bfec21ba569367e8fe902fb0b190f639755e2818a",
+      "en_sha256": "a2eff418ddad3ddde6bafc56de1861b6ee5b1f3cdccc8653289cef97922043f8"
+    },
+    {
+      "ja": "docs/contributing/repository-map.md",
+      "en": "docs/contributing/repository-map.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "208559fa74a8210c2c33186eba8caa282d347442fa62d4a81dd37ea3203da1ee",
+      "en_sha256": "cb8bcc6dae27a4d436c0a41d1b73630231deaff195bdd5ea667e694b0709ccc5"
+    },
+    {
+      "ja": "docs/contributing/troubleshooting.md",
+      "en": "docs/contributing/troubleshooting.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "c96b5a45ca31705cdd8c939384fdee15925ef6db2caa7669331acaa1ed8b0cad",
+      "en_sha256": "2e7c57a35bbf2de72c63ac70c0d5cc9fbfd8ee9b907d8fbc808397e6cfb28fee"
+    },
+    {
+      "ja": "docs/contributing/writing-docs.md",
+      "en": "docs/contributing/writing-docs.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "24f1a4ce5fbcd30025144c3e977c324650bae411d092492bccb7adc262c0f5cb",
+      "en_sha256": "c7881b8629f8f076510d47941fd8d4fedaca2d30ffeaa7c57f411d3e6b2a391b"
+    },
+    {
+      "ja": "docs/glossary.md",
+      "en": "docs/glossary.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "a89fd06c504fe10344aa886cc34ac9c53e17f9367fb017345bb2e14ef14af54c",
+      "en_sha256": "c92e1f512ba21ed4af8e60655c42b46cae0909d1eb67479a45728d214dc31e46"
+    },
+    {
+      "ja": "docs/learn/ja/concepts/architecture.md",
+      "en": "docs/learn/en/concepts/architecture.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "845e6b15f389ec51c4641016ee440719323c75cd8cfd31c51482044443539cb8",
+      "en_sha256": "b63d31bcc34e22ae7893d6a4c2842e62d5426ceff7dcab283b129f83abfe5c71"
+    },
+    {
+      "ja": "docs/learn/ja/concepts/commands.md",
+      "en": "docs/learn/en/concepts/commands.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "88bd1acc81b6df81fa025813b959366811215611cb23a70dde34c501f2970844",
+      "en_sha256": "6ec6ad1e1bed68caeac25daea46ddddb43fbf7d2bb0dd2da3ded3e743e80e498"
+    },
+    {
+      "ja": "docs/learn/ja/concepts/index.md",
+      "en": "docs/learn/en/concepts/index.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "d8f15df66fdbf966df6e0b10a78b7d00e29765f2465c33f0fad6c5dcf647ac4a",
+      "en_sha256": "24bd8efba323818bd6c7e001f18177cba6eaf8f554e9b341b42b5e8f9aa1b307"
+    },
+    {
+      "ja": "docs/learn/ja/concepts/plugins.md",
+      "en": "docs/learn/en/concepts/plugins.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "d82adabe6594bf0debe5a98b6f50a99e8e66922576eeb09bc5f9bd704aa0bcb2",
+      "en_sha256": "85de4e08ece8ba0630d1a80b2e5bdb338e69b8b0661b956c593b69eed31c7e1a"
+    },
+    {
+      "ja": "docs/learn/ja/concepts/security.md",
+      "en": "docs/learn/en/concepts/security.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "2d0ba4ae6e263ceaff624c5389e3af262428e6e037a993774e1e26c0e0bafdce",
+      "en_sha256": "4bb3cb101243912c8796d6a611010770a5e7e6e84b6832b9542fa13b8342a814"
+    },
+    {
+      "ja": "docs/learn/ja/guides/index.md",
+      "en": "docs/learn/en/guides/index.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "0539f72d63eb6e2875085a33b9d8e60566b20d431d00599915c368bfcbcce00c",
+      "en_sha256": "ff7cb2ed709cae049749e656f3132d36bc45ad9af8bae420558468dd2552c5a5"
+    },
+    {
+      "ja": "docs/learn/ja/guides/install.md",
+      "en": "docs/learn/en/guides/install.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "3fa5e5abd9550892cd49ded1f72e2deddd115ed7804ba1f3439fcbe8d52ce185",
+      "en_sha256": "7996be75a48e28ac14965d7bccbe32e3fc47cd7f599571215c06af58428a8383"
+    },
+    {
+      "ja": "docs/learn/ja/guides/migrate-from-tauri.md",
+      "en": "docs/learn/en/guides/migrate-from-tauri.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "77dee20c43a7dd33cc6902af447715e7ab9ec73653d70be7d5552b69c59c1ba0",
+      "en_sha256": "513feb6822003809daf7ffca72ff5469e024aea1019a5b9cbe54025ebcfd5bfd"
+    },
+    {
+      "ja": "docs/learn/ja/guides/package.md",
+      "en": "docs/learn/en/guides/package.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "33a8b420865b48b0992295b5481d831ff755b2099b49f693590534833535b93d",
+      "en_sha256": "8cdb0b32e1d1a356ffb86f03b4925539b45f89aea4bcd04b46f67887489f97f7"
+    },
+    {
+      "ja": "docs/learn/ja/guides/plugins.md",
+      "en": "docs/learn/en/guides/plugins.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "f40c195e38936e99318cf87cf26f10bf7cc4365bbd7d721cf0ad30a8d207a311",
+      "en_sha256": "9a83fa5c633939debec71faeeceb08e54514894456f8cd0b0422873a746d54a9"
+    },
+    {
+      "ja": "docs/learn/ja/guides/rpc.md",
+      "en": "docs/learn/en/guides/rpc.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "171a9f0337e271879d5f58045df6f887da67b4f95a8db22003339edb2113b169",
+      "en_sha256": "9a94f18ec09cd3562e470b905f1afe0f6875f4fbc04936263f353a8690e4b086"
+    },
+    {
+      "ja": "docs/learn/ja/guides/static-site.md",
+      "en": "docs/learn/en/guides/static-site.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "e3cff238cff8cbac13ffafb5178ea60a813c14466547857b8112b710a05c500b",
+      "en_sha256": "61267dc1dfde62682b654aa25a512849527ba3f287f90c98eb7c0af4e2ce3f5b"
+    },
+    {
+      "ja": "docs/learn/ja/guides/troubleshooting.md",
+      "en": "docs/learn/en/guides/troubleshooting.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "e20a6bfddc34f8a3d4e4c191c447cd1f907fcf61bfba85baa65b2f8d2d7333f1",
+      "en_sha256": "7e6cf8c535ed27479df31efe150dda833f49bf415e95ee2e9178eee9bca32176"
+    },
+    {
+      "ja": "docs/learn/ja/index.md",
+      "en": "docs/learn/en/index.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "d77fbe8e013c1cf184ba65c3383f90bdea0e141eeb9dc53c24058f5a17908832",
+      "en_sha256": "11540fcb976d6bb56bfe0b656ddceea825de6be8fe6806eb4940883cdae57c7a"
+    },
+    {
+      "ja": "docs/learn/ja/patterns/boundaries.md",
+      "en": "docs/learn/en/patterns/boundaries.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "d506b9a765703ba8706c2c3251693578e6ad32727401e7d0cb66dcf13a916709",
+      "en_sha256": "de7bf668d92089c828cde79f478e363326c3c2131e7565549901cf1898b4c33a"
+    },
+    {
+      "ja": "docs/learn/ja/patterns/commands.md",
+      "en": "docs/learn/en/patterns/commands.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "a0c9fdf6c77948a7333e1251a78cf45c99f875461a0f2a40bb4f512f1ee8680d",
+      "en_sha256": "aee255507677e248940e526e96d7a2ac2f3bb9a228f838d2aa000d74abc1476a"
+    },
+    {
+      "ja": "docs/learn/ja/patterns/errors.md",
+      "en": "docs/learn/en/patterns/errors.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "e855ee74dce4337756b8d48a50882fb5585a20689242e4fa85c5538206e143fd",
+      "en_sha256": "5c51bcfff8d7c55cdb26f4d42202169d52018462862fa1540b2dccfb5f3d11aa"
+    },
+    {
+      "ja": "docs/learn/ja/patterns/index.md",
+      "en": "docs/learn/en/patterns/index.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "5b542057ab55ba2a5c2c6ac7f00a42752dcb529c7f00cc488eb2fd7e80c484a1",
+      "en_sha256": "455c1ae0014f69eadeb5723b97926e8a41ca040085e47b3819af8ce5e37ca91d"
+    },
+    {
+      "ja": "docs/learn/ja/patterns/state.md",
+      "en": "docs/learn/en/patterns/state.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "68c2ab6cf4e5edbfa46397f972c5bac5a7554b6fa65f2ccda980382e5a0430d6",
+      "en_sha256": "23a64cded150f97afd5130bdd04c1cb4905829dd4c9684292424b2dc0bc94dc1"
+    },
+    {
+      "ja": "docs/learn/ja/start.md",
+      "en": "docs/learn/en/start.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "5f359cff7f33494003dc45e8bdb2bb858309e1b47b8c4d9ff7a6298bd19c2a0a",
+      "en_sha256": "25be19ba6f9fe2a312b0247e9139510bcb0b165b1d93aed3be68fe19649df0b5"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/counter.md",
+      "en": "docs/learn/en/tutorials/counter.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "e0dd7951f5d0ee0ee0338ae14cfc86c2cf9f17c6e6d5c268a7d863375dc71d34",
+      "en_sha256": "7d9a3678b7d9b94589ea6bbe20b029c6a11002925c68c7192bc2132ce88af583"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/index.md",
+      "en": "docs/learn/en/tutorials/index.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "3d0e0156e945120968f8e9a60b8f54e00d5ac25721be1927cdae33e5f354e79b",
+      "en_sha256": "541173262872be7150d10c15488924cb868cb0b7203d781a06ca7fd7980df31c"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo.md",
+      "en": "docs/learn/en/tutorials/todo.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "8a8c9c90ae12143d326e037323c6c4de33081aeaa616f17f61a351f536a0968a",
+      "en_sha256": "8b29790614624fe1a4997d5a0c8e1a9c2339dcd7995ee1e206db3b95e4abf0dd"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui.md",
+      "en": "docs/learn/en/tutorials/ui.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "fd1b4ad5f157bf6fda42c9a5d4754e6a7925370a8773fa1db8ffdc030054d622",
+      "en_sha256": "f56a11e88041b629806a755c72403f30aac14f79c60b84f5837018a6e5ed3b68"
+    },
+    {
+      "ja": "docs/reference/cli.md",
+      "en": "docs/reference/cli.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "2d62918b08e2fa095e37467ad3a700e53d68f4bcea2d0e80d5c7972b104b925c",
+      "en_sha256": "85476bb4ab814dc72f1e665f8aa83bbf4139cb0b164bc7454080b343cce69bcc"
+    },
+    {
+      "ja": "docs/reference/tauri-internals.md",
+      "en": "docs/reference/tauri-internals.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "f7bda1943a2bfc45b7368881b593686e37f0ad95ff33707060a3609d4edbe79a",
+      "en_sha256": "dfd072efd0886e208756f656e3bb4fbb568de086886c8174676ce10ddb959ca9"
+    },
+    {
+      "ja": "docs/reference/tauri-usage.md",
+      "en": "docs/reference/tauri-usage.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "8ba05e0fe3cca20c29017ebb86a6eb2b4fa508f1f67360de22dbc2c30c40303d",
+      "en_sha256": "21745b27d7f02eb149a3e02385a20d9cbbbb445f00f7165a673c65ce751ff08d"
+    },
+    {
+      "ja": "examples/c_embed/README.md",
+      "en": "examples/c_embed/README.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "a3b568f2bc7221ca9888829028f1c74e509de6c93e1afd2367f3bc3b1673785c",
+      "en_sha256": "e84ebfc1cc95a10ccb25f779e21a3ac34ecfa90d01cbb39096e263da1e18f563"
+    },
+    {
+      "ja": "examples/counter/README.md",
+      "en": "examples/counter/README.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "f01bb295b9f6fc29453499d09d6a3346ed36cf47a338dbc9ca4d25b60945f52c",
+      "en_sha256": "ded5e7ae930fef919df27de54f206661bad5c2de0384a4205623b285ae668117"
+    },
+    {
+      "ja": "examples/frameworks/README.md",
+      "en": "examples/frameworks/README.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "0e80cd563bae9b23f515055594aba4cc170d32912262b65f5502597111b1664c",
+      "en_sha256": "22a9a9129d517a0ed97f297984747eacb72e895412ae2fa0d067f9a8f1c39489"
+    },
+    {
+      "ja": "examples/gallery/README.md",
+      "en": "examples/gallery/README.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "905ed5c17dcc91ce346ecc9fdfac698022a232d1279cf1b2148f6695490b0f22",
+      "en_sha256": "986d49087d1f8ce6338b7a8cef746ed2c04c6e7de4049838604de310029e39e4"
+    }
+  ]
+}

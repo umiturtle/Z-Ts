@@ -6,7 +6,7 @@
 
 ## 一覧マトリクス（10 大インピーダンス・ミスマッチと解決策）
 
-| # | 境界領域 | Web 側（HTML / CSS / JS / TS）の仕様 | Zig `0.17.0` / OS 側の仕様 | 放置すると起きるバグ | Z-Ts の解決規約（実装必須） |
+| # | 境界領域 | Web 側（HTML / CSS / JS / TS）の仕様 | Zig `0.17.0` / OS 側の仕様 | 放置すると起きるバグ | ziggurats の解決規約（実装必須） |
 |---|---|---|---|---|---|
 | **1** | **文字列とバイト列** | `string` は UTF-16（Lone Surrogate 許容）。バイナリは `Uint8Array` / `ArrayBuffer`。 | `str` 型が存在せず文字列も生バイト列もすべて `[]const u8`。Windows パスは WTF-8、Linux パスは任意バイト列。 | `[]const u8` の意味が曖昧になり、非 UTF-8 ファイルパスで `JSON.parse` が死ぬ／ラウンドトリップでパスが壊れる。 | **`[]const u8`（UTF-8 文字列）**、**`zts.Bytes`（`Uint8Array`）**、**`zts.OsPath`（ロスレス往復パス）** の 3 型を明確に分離する。 |
 | **2** | **`undefined` vs `null`** | `{}`（キー省略 = `undefined`）と `{ a: null }`（明示的 `null`）が明確に別物。 | オプショナル型は `?T` の 1 種類のみ。 | 部分更新（PATCH）で「未変更」と「NULL 削除」を区別できずデータを誤消去。TS `exactOptionalPropertyTypes` で型エラー。 | デフォルト値有無と `?T` を厳密対応させ、さらに 3 状態型 **`zts.Patch(T)`（`unchanged \| null \| value(T)`）** を提供する。 |

@@ -2,7 +2,7 @@
 //!
 //! `zts_rpc` depends **exclusively** on `zts_foundation` (zero windowing VTables, zero WebView
 //! headers, zero HTTP server coupling), making the entire `src/rpc/` package directly reusable in
-//! standalone engines, media/streaming tools, HTTP/WebSocket servers, CLI daemons, and Z-Ts apps:
+//! standalone engines, media/streaming tools, HTTP/WebSocket servers, CLI daemons, and ziggurats apps:
 //! - Callers inject any domain-specific runtime context (e.g. a desktop `CallContext`, a media
 //!   pipeline handle, or a session object) with zero heap allocations via `ctx.withEnv(&my_env)`,
 //!   and commands retrieve it with compile-time type-checked safety via `ctx.env(T)` / `ctx.requireEnv(T)`.

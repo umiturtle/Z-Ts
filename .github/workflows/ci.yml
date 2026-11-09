@@ -79,7 +79,7 @@ jobs:
         run: |
           set -eo pipefail
           # `zig build test` builds and executes `examples/c_embed` (a pure C99 host that owns its
-          # own GtkWindow/GtkBox and drives Z-Ts through `zts_webview_poll`). The marker only appears
+          # own GtkWindow/GtkBox and drives ziggurats through `zts_webview_poll`). The marker only appears
           # when the WebView was really mounted inside the host container and the fetch round trip
           # completed, so a headless skip cannot pass this gate.
           if ! grep -q "OK c-embed" ci-output.log; then
@@ -393,7 +393,7 @@ jobs:
         run: |
           set -eo pipefail
           # `examples/c_embed` is a plain C99 host: `NSWindow` + `contentView` created through the
-          # Objective-C runtime, then Z-Ts mounts its WKWebView inside it and the host drives the
+          # Objective-C runtime, then ziggurats mounts its WKWebView inside it and the host drives the
           # loop with `zts_webview_poll`.
           if ! grep -q "OK c-embed host=cocoa" ci-output.log; then
             echo "::error::C overlay embedding marker missing on macOS — examples/c_embed was skipped or failed."
@@ -607,7 +607,7 @@ jobs:
         run: |
           set -eo pipefail
           # `examples/c_embed` creates its own Win32 host window + child "dock area" in plain C99,
-          # then Z-Ts mounts the WebView2 child HWND inside it and the host drives the loop with
+          # then ziggurats mounts the WebView2 child HWND inside it and the host drives the loop with
           # `zts_webview_poll`. `GetParent(child) == host area` is asserted from the host side.
           if ! grep -q "OK c-embed host=win32" ci-output.log; then
             echo "::error::C overlay embedding marker missing on Windows — examples/c_embed was skipped or failed."
@@ -772,7 +772,7 @@ jobs:
       # built from. Baking a published archive (`.url` + `.hash`) into the binary makes `zts init`
       # emit a fetchable dependency, so a machine that only has the archive can build. Linux only:
       # `file://` URLs and `mktemp -d` paths do not translate to the Windows runners.
-      - name: Release build resolves Z-Ts from an archive, not the checkout
+      - name: Release build resolves ziggurats from an archive, not the checkout
         if: matrix.os == 'ubuntu-24.04'
         shell: bash
         run: |

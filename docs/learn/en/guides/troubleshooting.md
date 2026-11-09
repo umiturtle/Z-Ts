@@ -3,7 +3,7 @@
 > **Audience**: readers stuck while building an app with `zts`.
 > **Time**: look up your symptom (one minute).
 
-One page for "my app will not build". If you are stuck **building the Z-Ts repository itself**,
+One page for "my app will not build". If you are stuck **building the ziggurats repository itself**,
 go to [`docs/contributing/troubleshooting.md`](../../../contributing/troubleshooting.md) instead —
 that page is about repository development and CI, which app authors never need.
 
@@ -70,7 +70,7 @@ If `zts` moved, `zts doctor` says
 
 ## `zts build`
 
-### `cannot read <dir>/build.zig.zon — is this a Z-Ts project?`
+### `cannot read <dir>/build.zig.zon — is this a ziggurats project?`
 
 `--dir` does not point at a project. Run inside a directory made by `zts init`, or pass `--dir`.
 
@@ -168,7 +168,7 @@ prints `<name>: 1 embedded assets` and exits. For a desktop app with a window, s
 
 ### Linux renders tofu, or looks different from other OSes
 
-Z-Ts ships its own fonts so glyphs match across OSes. Asking for a system font in your CSS
+ziggurats ships its own fonts so glyphs match across OSes. Asking for a system font in your CSS
 (`system-ui`, …) reintroduces the difference on Linux. Use the bundled `ZTS Sans` / `ZTS Mono`.
 
 ### Screenshots come out black (CI / Xvfb)
@@ -224,4 +224,4 @@ Most packaging errors come from per-format preconditions (`dmg` is macOS-only, `
 - Producing artefacts: [Packaging](package.md)
 - Every `zts` flag: [`docs/reference/cli.md`](../../../reference/cli.md)
 - Finding the API behind an error: [API index](../../../api/index.html)
-- Stuck building Z-Ts itself: [`docs/contributing/troubleshooting.md`](../../../contributing/troubleshooting.md)
+- Stuck building ziggurats itself: [`docs/contributing/troubleshooting.md`](../../../contributing/troubleshooting.md)

@@ -126,7 +126,7 @@ Linux (GTK3)、macOS (AppKit)、Windows (Win32/WebView2) のいずれも、**ウ
 - ワーカースレッドや非同期コマンドが持つ `AppHandle` / `Window` ハンドルは、実ポインタではなく **`EventLoopProxy<Message>`（スレッドセーフな起床キュー）** を保持する。
 - 別スレッドから `window.set_title(...)` や `webview.eval(...)` が呼ばれると、`Message` enum をプロキシ経由でメインループへ送り（Linux なら `glib::MainContext::invoke`、macOS なら `CFRunLoop` / GCD main queue、Windows なら `PostMessageW`）、メインスレッド側で実際の OS API を実行し、必要なら `mpsc::channel` で結果を呼び出し元スレッドへ返す。
 
-### 4.2 各 OS バックエンドが実際に呼んでいるネイティブ API（Z-Ts L1/L2 実装対象）
+### 4.2 各 OS バックエンドが実際に呼んでいるネイティブ API（ziggurats L1/L2 実装対象）
 
 | OS | Window / EventLoop (`vendor/tao`) | WebView / IPC / Custom Protocol (`vendor/wry`) |
 |---|---|---|

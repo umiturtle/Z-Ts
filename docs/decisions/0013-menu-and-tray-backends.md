@@ -14,7 +14,7 @@
 `MenuItem` … はすべて `plugin:resources` の `rid` を持ち、`append` / `insert` / `remove` /
 `set_text` がツリーを直接書き換え、項目の押下は `Channel<string>` で `MenuId` が返る。
 
-Tauri 本家は `muda` が OS ごとにツリーを差分更新する。Z-Ts で同じ構成にすると:
+Tauri 本家は `muda` が OS ごとにツリーを差分更新する。ziggurats で同じ構成にすると:
 
 - GTK / AppKit / Win32 の 3 実装がそれぞれ「差分適用」ロジックを持ち、**Linux 以外は CI で
   実行できない**（ヘッドレスでメニューを開けない）。

@@ -208,13 +208,13 @@ pub fn renderIndex(arena: Allocator, names: []const []const u8) Error![]const u8
         \\<head>
         \\<meta charset="utf-8" />
         \\<meta name="viewport" content="width=device-width, initial-scale=1" />
-        \\<title>フレームワーク別デモ — Z-Ts</title>
+        \\<title>フレームワーク別デモ — ziggurats</title>
         \\<link rel="stylesheet" href="../../assets/site.css" />
         \\<script>try{const t=localStorage.getItem("zts-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
         \\</head>
         \\<body class="landing">
         \\<header class="topbar">
-        \\  <a class="brand" href="../../index.html"><span class="brand-mark">Z</span> Z-Ts <span class="brand-sub">Tauri in Zig</span></a>
+        \\  <a class="brand" href="../../index.html"><span class="brand-mark">Z</span> ziggurats <span class="brand-sub">Tauri in Zig</span></a>
         \\  <div class="topbar-actions"><a class="gh" href="../../index.html">Docs</a></div>
         \\</header>
         \\<main class="hero">

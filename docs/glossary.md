@@ -1,6 +1,6 @@
 # 用語集
 
-Z-Ts のドキュメントと API で使う言葉を、1 か所に集めたものです。各項目は **1 文の定義** と
+ziggurats のドキュメントと API で使う言葉を、1 か所に集めたものです。各項目は **1 文の定義** と
 **初出するページへのリンク** を持ちます。本文中の `` `Engine` `` のようなコード表記は、
 このページの該当する見出しへ自動でリンクされます（用語集にない名前は API リファレンスへ）。
 
@@ -172,4 +172,5 @@ SSG が出力する `_zts/manifest.json`。どのファイルがどのハッシ�
 - [API リファレンス](api/index.html) — 名前から引く辞書
 - [エラー索引](reference/errors.html) — `error.Name` から引く
 - [CLI リファレンス](reference/cli.md) — `zts` のサブコマンド
-- [はじめかた](learn/ja/tutorials/counter.md) — 5 分で動かす
+- [はじめての ziggurats](learn/ja/start.md) — 10 分で動かす
+- [ドキュメント索引](INDEX.md) — サイトのサイドバーと同じ並び

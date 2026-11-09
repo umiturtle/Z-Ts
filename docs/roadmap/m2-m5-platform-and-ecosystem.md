@@ -124,7 +124,7 @@
 - **専有スコープ**: `src/bundler/`, `bench/`
 - **内容**:
   1. 配布パッケージ生成：Linux `.deb` / AppDir、macOS `.app` バンドル / `.dmg`、Windows アイコン・マニフェスト埋め込み `.exe`。
-  2. **GitHub Actions 自動比較ベンチマークスイート (`bench/`)**: 同一機能のアプリを **本家 Rust 版 Tauri (`vendor/tauri`)** と **`Z-Ts`** の両方でビルド・実行し、以下の 6 指標を CI Check Summary に自動出力する：
+  2. **GitHub Actions 自動比較ベンチマークスイート (`bench/`)**: 同一機能のアプリを **本家 Rust 版 Tauri (`vendor/tauri`)** と **`ziggurats`** の両方でビルド・実行し、以下の 6 指標を CI Check Summary に自動出力する：
      - ① クリーンビルド時間（Cold Build Time）
      - ② 1 行変更時のインクリメンタルビルド時間
      - ③ 最終バイナリサイズ（`-O ReleaseSmall` / `ReleaseFast` vs Cargo `--release` strip）

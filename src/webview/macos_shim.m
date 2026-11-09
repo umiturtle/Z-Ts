@@ -1,6 +1,6 @@
-// Z-Ts macOS Native Backend Shim — Cocoa (`NSApplication` / `NSWindow`) + `WKWebView` (`M3-01`).
+// ziggurats macOS Native Backend Shim — Cocoa (`NSApplication` / `NSWindow`) + `WKWebView` (`M3-01`).
 //
-// This file is the ENTIRE Objective-C surface of Z-Ts. Everything it exposes is a flat C ABI
+// This file is the ENTIRE Objective-C surface of ziggurats. Everything it exposes is a flat C ABI
 // (`zts_macos_*`) so the Zig side (`src/webview/macos.zig`) never needs `@cImport`, `addTranslateC`,
 // or Objective-C runtime knowledge — keeping cold-compile time at ~2s and the boundary auditable.
 //
@@ -284,7 +284,7 @@ static void ZtsAnswerPreflight(ZtsBackend *b, id<WKURLSchemeTask> task,
     NSURLRequest *req = task.request;
     NSString *uri = req.URL.absoluteString ?: @"";
 
-    // Resolve the owning Z-Ts window by exact `WKWebView` identity.
+    // Resolve the owning ziggurats window by exact `WKWebView` identity.
     unsigned long long ident = 0;
     for (NSNumber *key in b.windows) {
         ZtsWindow *cand = b.windows[key];

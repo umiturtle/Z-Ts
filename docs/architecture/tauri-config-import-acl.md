@@ -1,7 +1,7 @@
 # `tauri.conf.json` インポート & ACL（`plugin:menu` の隣の移行レイヤ）
 
 `src/tauri/config_import.zig` と `src/tauri/acl.zig` は、**既存の Tauri v2 プロジェクトを
-書き換えずに Z-Ts へ移行する**ための互換レイヤ（`M4-04`）。設計判断は
+書き換えずに ziggurats へ移行する**ための互換レイヤ（`M4-04`）。設計判断は
 [ADR-0014](../decisions/0014-config-import-and-acl.md)。
 
 ```text
@@ -27,9 +27,9 @@ Tauri はマイナーごとに設定キーを増やす。移行レイヤが未�
 | 壊れた JSON | `error.InvalidJson` |
 | `capabilities/*.json` の壊れた JSON | そのファイルだけ警告して続行（他は移行できる） |
 
-## 2. `Config` ⇄ Z-Ts ランタイム
+## 2. `Config` ⇄ ziggurats ランタイム
 
-| `tauri.conf.json` | Z-Ts |
+| `tauri.conf.json` | ziggurats |
 |---|---|
 | `identifier` / `productName` / `version` | `tauri.app.AppConfig`（`plugin:app|getIdentifier` 等の応答） |
 | `app.windows[]` | `core.WindowSpec`（`windowSpecs()`、`create: false` は除外） |
@@ -37,7 +37,7 @@ Tauri はマイナーごとに設定キーを増やす。移行レイヤが未�
 | `app.security.capabilities` | `acl.Policy`（識別子参照 or インライン） |
 | `app.trayIcon` | `tray.TrayIconOptions` 相当（`M4-03`） |
 | `build.{devUrl,frontendDist,…}` | ビルド時のヒント（`beforeDevCommand` などは CLI が実行） |
-| `plugins` / `security.csp` | 生 JSON として保持（Z-Ts のプラグイン設定はコードで書く） |
+| `plugins` / `security.csp` | 生 JSON として保持（ziggurats のプラグイン設定はコードで書く） |
 
 `url` は上流の 3 形態（`"index.html"` / `{"url": …}` / `{"app": …}`）を受け、
 絶対 URL はそのまま `WindowSpec.initial_url` へ入る。
@@ -62,7 +62,7 @@ var router = FullSchema
 
 ## 4. 権限識別子は「実コマンド表」から機械生成
 
-手書きの対応表はコマンド追加で必ず腐る。Z-Ts は wire コマンド名から上流の識別子を機械的に作る:
+手書きの対応表はコマンド追加で必ず腐る。ziggurats は wire コマンド名から上流の識別子を機械的に作る:
 
 | wire コマンド | 権限識別子 |
 |---|---|

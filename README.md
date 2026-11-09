@@ -1,7 +1,10 @@
-# Z-Ts
+# ziggurats
 
 **Tauri の思想を、Zig 0.17 で。** — デスクトップアプリ・WebAssembly・静的サイトを、
 1 つのコードベースと 1 つのツールチェーンで。
+
+> プロジェクトのフルネームは **`ziggurats`**（小文字）。CLI・パッケージ・モジュール名は
+> これまでどおり `zts` / `z_ts` / `zts_*` です。
 
 [![CI](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml)
 [![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/Z-Ts/)
@@ -13,7 +16,7 @@
 
 ## これは何か
 
-Z-Ts は、Tauri v2 の **IPC プロトコル・プラグイン・設定ファイル・ACL** を Zig で再実装した
+ziggurats は、Tauri v2 の **IPC プロトコル・プラグイン・設定ファイル・ACL** を Zig で再実装した
 ツールキットです。Rust ランタイムを挟まないため、配布物は小さく、ビルドは速く、コアは
 `link_libc = false`（Pure Zig）のまま保てます。
 
@@ -88,21 +91,33 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 
 **アプリを作る人向け**（コマンドは `zts`）
 
+学習パスはドキュメントサイトと同じ **5 ステップ・およそ 95 分**です。まず 1 つ目を開いてください。
+
+| # | ステップ | 分 | 終わったとき | 行き先 |
+|---|---|---|---|---|
+| 1 | はじめての ziggurats | 10 | ブラウザでアプリが動き、`zig-out/bin/` に単一バイナリがある | [`learn/ja/start.md`](docs/learn/ja/start.md)（[English](docs/learn/en/start.md)） |
+| 2 | 仕組みを知る | 15 | 「ボタン → Zig の関数」がどこを通るか説明できる | [`learn/ja/concepts/`](docs/learn/ja/concepts/index.md) |
+| 3 | アプリを作る | 50 | 3 本のチュートリアルを通し、コマンド・状態・画面を書いて配れる | [`learn/ja/tutorials/`](docs/learn/ja/tutorials/index.md) |
+| 4 | 実用パターン | 20 | コマンド・状態・エラーの設計を、練習問題で自分の言葉にできる | [`learn/ja/patterns/`](docs/learn/ja/patterns/index.md) |
+| 5 | 目的から引く | — | やりたいことから必要なページに 1 ホップで行ける | [`learn/ja/guides/`](docs/learn/ja/guides/index.md) |
+
+**やりたいことから引く**
+
 | 目的 | 行き先 |
 |---|---|
-| **10 分で動かす（まずここ）** | [`docs/learn/ja/start.md`](docs/learn/ja/start.md) — 英語は [`docs/learn/en/start.md`](docs/learn/en/start.md) |
-| 学習の道筋（5 ステップ） | [`docs/learn/ja/index.md`](docs/learn/ja/index.md) — 英語は [`docs/learn/en/index.md`](docs/learn/en/index.md) |
-| `zts` を手元に用意する | [`docs/learn/ja/guides/install.md`](docs/learn/ja/guides/install.md) |
-| カウンターを作る（15 分） | [`docs/learn/ja/tutorials/counter.md`](docs/learn/ja/tutorials/counter.md) |
-| コマンドの書き方（`invoke`） | [`docs/learn/ja/guides/rpc.md`](docs/learn/ja/guides/rpc.md) |
-| Tauri 標準プラグイン | [`docs/learn/ja/guides/plugins.md`](docs/learn/ja/guides/plugins.md) |
-| 静的サイト書き出し（`dist/`） | [`docs/learn/ja/guides/static-site.md`](docs/learn/ja/guides/static-site.md) |
-| Tauri v2 からの移行 | [`docs/learn/ja/guides/migrate-from-tauri.md`](docs/learn/ja/guides/migrate-from-tauri.md) |
-| うまく動かないとき | [`docs/learn/ja/guides/troubleshooting.md`](docs/learn/ja/guides/troubleshooting.md) |
+| `zts` を手元に用意する | [`learn/ja/guides/install.md`](docs/learn/ja/guides/install.md) |
+| コマンドの書き方（`invoke`） | [`learn/ja/guides/rpc.md`](docs/learn/ja/guides/rpc.md) |
+| Tauri 標準プラグイン | [`learn/ja/guides/plugins.md`](docs/learn/ja/guides/plugins.md) |
+| 静的サイト書き出し（`dist/`） | [`learn/ja/guides/static-site.md`](docs/learn/ja/guides/static-site.md) |
+| 配布物を作る（`.deb` / `.dmg` / `.exe`） | [`learn/ja/guides/package.md`](docs/learn/ja/guides/package.md) |
+| Tauri v2 からの移行 | [`learn/ja/guides/migrate-from-tauri.md`](docs/learn/ja/guides/migrate-from-tauri.md) |
+| うまく動かないとき | [`learn/ja/guides/troubleshooting.md`](docs/learn/ja/guides/troubleshooting.md) |
 | **API リファレンス**（ソースから自動生成） | <https://umiturtle.github.io/Z-Ts/docs/api/index.html>（`zig build docs` で手元にも生成） |
+| 言葉の意味 | [`docs/glossary.md`](docs/glossary.md) |
+| エラー名から引く | <https://umiturtle.github.io/Z-Ts/docs/reference/errors.html> |
 | `zts` の全オプション | [`docs/reference/cli.md`](docs/reference/cli.md) |
 
-**Z-Ts 本体を開発する人向け**（コマンドは `zig build`）
+**ziggurats 本体を開発する人向け**（コマンドは `zig build`）
 
 | 目的 | 行き先 |
 |---|---|
@@ -121,7 +136,9 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 | 設計判断の記録（ADR） | [`docs/decisions/`](docs/decisions/) |
 | Tauri v2 の使い方 / 内部解剖 | [`docs/reference/tauri-usage.md`](docs/reference/tauri-usage.md) / [`docs/reference/tauri-internals.md`](docs/reference/tauri-internals.md) |
 | AI エージェント向け運用ルール | [`AGENTS.md`](AGENTS.md) |
-| ドキュメント索引 | [`docs/INDEX.md`](docs/INDEX.md) |
+| ドキュメント索引（サイトと同じ並び） | [`docs/INDEX.md`](docs/INDEX.md) / [`docs/INDEX.en.md`](docs/INDEX.en.md) |
+| ファイル配置・並列開発の分割単位 | [`docs/contributing/repository-map.md`](docs/contributing/repository-map.md) |
+| 最終書き換え日・確認バージョンの台帳 | [`docs/contributing/doc-sync.md`](docs/contributing/doc-sync.md) |
 
 ## サンプル
 

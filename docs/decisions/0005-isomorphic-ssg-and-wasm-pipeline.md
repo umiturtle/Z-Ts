@@ -8,11 +8,11 @@
 
 ## 1. 背景と目的
 
-Z-Ts で構築するデスクトップアプリおよび将来の別プロダクト（ビジュアルノベルエンジン・配信/メディア系ツール等）において、次の **2 つの方向の SSG（Static Site Generation）統合** が求められた：
+ziggurats で構築するデスクトップアプリおよび将来の別プロダクト（ビジュアルノベルエンジン・配信/メディア系ツール等）において、次の **2 つの方向の SSG（Static Site Generation）統合** が求められた：
 
 1. **Inbound SSG（フロントエンド SSG 成果物の取り込み）**:
    Astro、Next.js（`output: 'export'`）、SvelteKit（`adapter-static`）、Vite 等が出力した静的ディレクトリ（`dist/` / `out/`、ネストされた `/about/index.html` 等を含む）を、手書きマニフェスト不要で単一実行ファイルまたは Web バンドルへ自動埋め込みしたい。
-2. **Outbound SSG（Z-Ts アプリ自体のサーバー不要・静的サイト `dist/` 出力）**:
+2. **Outbound SSG（ziggurats アプリ自体のサーバー不要・静的サイト `dist/` 出力）**:
    同じ Zig バックエンドロジック（`zts_rpc.Schema` + `zts_tauri` コアプラグイン）と無改造の `@tauri-apps/api` v2 フロントエンドから、**バックエンドサーバーを一切必要としない純粋な静的ファイル群（`dist/`：プリレンダリング HTML + `.wasm` + スコープ済み静的アセット + ホスティング設定）** を生成し、GitHub Pages / Cloudflare Pages / Netlify / itch.io 等へそのまま配置可能にしたい。
 
 ---

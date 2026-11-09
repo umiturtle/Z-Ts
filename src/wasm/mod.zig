@@ -1,6 +1,6 @@
 //! `zts_wasm` — Standalone WebAssembly Isomorphic Runtime (`link_libc = false`).
 //!
-//! Enables compiling ANY Z-Ts application (`rpc.Schema` + `zts_tauri` plugins) directly to
+//! Enables compiling ANY ziggurats application (`rpc.Schema` + `zts_tauri` plugins) directly to
 //! `wasm32-freestanding` with zero application source modifications.
 
 pub const host = @import("host.zig");

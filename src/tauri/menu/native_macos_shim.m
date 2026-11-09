@@ -1,4 +1,4 @@
-// Z-Ts `M4-05`: AppKit menu backend (`NSMenu` / `NSMenuItem`) behind a Flat C ABI, so the Zig
+// ziggurats `M4-05`: AppKit menu backend (`NSMenu` / `NSMenuItem`) behind a Flat C ABI, so the Zig
 // side never needs `@cImport` and never touches an Objective-C object directly.
 //
 // The Zig backend hands over the *flattened* pre-order snapshot the core already produces
@@ -313,7 +313,7 @@ int zts_menu_popup(void *raw, void *ns_view, double x, double y, int has_positio
 
 // ---------------------------------------------------------------- windows
 
-/// Creates a hidden `NSWindow` (hosts that embed Z-Ts hand over *their* window; tests use this to
+/// Creates a hidden `NSWindow` (hosts that embed ziggurats hand over *their* window; tests use this to
 /// exercise per-window menus without spinning up a webview). Returns NULL when AppKit is missing.
 void *zts_menu_window_new(double width, double height) {
   if (!zts_menu_init()) return NULL;

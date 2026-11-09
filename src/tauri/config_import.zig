@@ -2,7 +2,7 @@
 //!
 //! Existing Tauri v2 projects describe themselves in `src-tauri/tauri.conf.json` and
 //! `src-tauri/capabilities/*.json`. This module reads those files **without modification** and maps
-//! them onto Z-Ts types, so porting an app is:
+//! them onto ziggurats types, so porting an app is:
 //!
 //! ```zig
 //! var imported = try tauri.config_import.load(testing.allocator, io, "src-tauri");
@@ -22,7 +22,7 @@
 //!    parsed slices stay valid for as long as the config does (they are handed straight to the
 //!    runtime).
 //!
-//! Only the subset Z-Ts can honour is mapped; the rest is kept as raw JSON (`plugins`, `csp`) so an
+//! Only the subset ziggurats can honour is mapped; the rest is kept as raw JSON (`plugins`, `csp`) so an
 //! app can still read it, and reported in `imported.warnings`.
 
 const std = @import("std");
@@ -45,7 +45,7 @@ pub const Error = error{
 // ============================================================================
 
 /// Non-fatal migration notes. Every entry is `path` + human-readable `message`, so a CLI can print
-/// `warning: app.windows[0].titleBarStyle: … not supported by Z-Ts` and keep going.
+/// `warning: app.windows[0].titleBarStyle: … not supported by ziggurats` and keep going.
 pub const Diagnostics = struct {
     /// Allocator that owns the recorded paths and messages.
     allocator: Allocator,
@@ -56,7 +56,7 @@ pub const Diagnostics = struct {
     pub const Item = struct {
         /// Dotted config path (`app.windows[0].width`) or file name the message refers to.
         path: []u8,
-        /// What is wrong and what Z-Ts does instead.
+        /// What is wrong and what ziggurats does instead.
         message: []u8,
     };
 
@@ -100,7 +100,7 @@ pub const Diagnostics = struct {
 // Model
 // ============================================================================
 
-/// `tauri.conf.json` — only the keys Z-Ts acts on, plus raw JSON escape hatches.
+/// `tauri.conf.json` — only the keys ziggurats acts on, plus raw JSON escape hatches.
 pub const Config = struct {
     /// `$schema` URL from the file, kept so a round-trip preserves it.
     schema: ?[]const u8 = null,
@@ -117,7 +117,7 @@ pub const Config = struct {
     build: Build = .{},
     /// Bundling settings (`bundle.active`, targets, icons).
     bundle: Bundle = .{},
-    /// `plugins` verbatim (JSON text) — Z-Ts plugin configuration is code, not JSON, so this is
+    /// `plugins` verbatim (JSON text) — ziggurats plugin configuration is code, not JSON, so this is
     /// informational only.
     plugins_json: ?[]const u8 = null,
 
@@ -131,7 +131,7 @@ pub const Config = struct {
         with_global_tauri: bool = false,
         /// Tray icon to create at launch, if any.
         tray_icon: ?TrayIcon = null,
-        /// `app.macOSPrivateApi` — always reported as unsupported (Z-Ts never links private APIs).
+        /// `app.macOSPrivateApi` — always reported as unsupported (ziggurats never links private APIs).
         macos_private_api: bool = false,
     };
 
@@ -224,7 +224,7 @@ pub const Config = struct {
         label: []const u8 = "main",
         title: ?[]const u8 = null,
         /// `url` — either a relative path (`"index.html"`), `{"url": "https://…"}` or
-        /// `{"app": …}` (Z-Ts only ever serves the embedded app, so `app` maps to `/`).
+        /// `{"app": …}` (ziggurats only ever serves the embedded app, so `app` maps to `/`).
         url: []const u8 = "",
         width: f64 = 800,
         height: f64 = 600,
@@ -253,7 +253,7 @@ pub const Config = struct {
         hidden_title: bool = false,
         user_agent: ?[]const u8 = null,
 
-        /// Maps onto `zts_core.WindowSpec` (Z-Ts owns the window lifecycle).
+        /// Maps onto `zts_core.WindowSpec` (ziggurats owns the window lifecycle).
         pub fn toWindowSpec(self: WindowConfig) core.WindowSpec {
             return .{
                 .label = self.label,
@@ -284,7 +284,7 @@ pub const Config = struct {
         }
 
         /// The app URL for this window: Tauri serves the frontend under `tauri://localhost/`
-        /// (Linux/macOS) and `http://tauri.localhost/` (Windows); Z-Ts keeps the generic form and
+        /// (Linux/macOS) and `http://tauri.localhost/` (Windows); ziggurats keeps the generic form and
         /// rewrites it per OS inside `js_bootstrap`, so the value stays portable.
         pub fn appUrl(self: WindowConfig) []const u8 {
             if (self.url.len == 0) return "tauri://localhost/";
@@ -546,7 +546,7 @@ fn parseWindow(parser: *Parser, path: []const u8, object: std.json.ObjectMap) Er
     if (try parser.optString(tryPath(parser, path, "titleBarStyle"), object.get("titleBarStyle"))) |v| window.title_bar_style = v;
     if (try parser.optString(tryPath(parser, path, "userAgent"), object.get("userAgent"))) |v| window.user_agent = v;
 
-    // Keys Z-Ts cannot honour yet: report them instead of silently dropping the intent.
+    // Keys ziggurats cannot honour yet: report them instead of silently dropping the intent.
     const unsupported = [_][]const u8{
         "windowEffects",
         "trafficLightPosition",
@@ -564,7 +564,7 @@ fn parseWindow(parser: *Parser, path: []const u8, object: std.json.ObjectMap) Er
     for (unsupported) |key| {
         if (object.get(key) == null) continue;
         const key_path = tryPath(parser, path, key);
-        parser.note(key_path, "not supported by Z-Ts yet (ignored)", .{});
+        parser.note(key_path, "not supported by ziggurats yet (ignored)", .{});
     }
     return window;
 }
@@ -651,7 +651,7 @@ fn parseSecurity(parser: *Parser, path: []const u8, value: std.json.Value) Error
     const unsupported = [_][]const u8{ "pattern", "dangerousDisableAssetCspModification" };
     for (unsupported) |key| {
         if (object.get(key) == null) continue;
-        parser.note(tryPath(parser, path, key), "not supported by Z-Ts yet (ignored)", .{});
+        parser.note(tryPath(parser, path, key), "not supported by ziggurats yet (ignored)", .{});
     }
     return security;
 }

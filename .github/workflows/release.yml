@@ -6,7 +6,7 @@ name: Release
 #
 # The order matters. The archive is built first, `zig fetch` hashes it, and only then are the
 # binaries compiled with `-Dzts-pkg-url` / `-Dzts-pkg-hash`. A binary from this workflow writes
-# `.url` + `.hash` into every project it scaffolds, so `zig build` fetches Z-Ts instead of reaching
+# `.url` + `.hash` into every project it scaffolds, so `zig build` fetches ziggurats instead of reaching
 # for a checkout that only the release machine ever had.
 
 on:
@@ -177,7 +177,7 @@ jobs:
           # A heredoc, not nested quotes: the notes contain backticks and double quotes, and both
           # are punctuation in this text rather than shell syntax.
           cat > notes.md <<EOF
-          Z-Ts \`$VERSION\`.
+          ziggurats \`$VERSION\`.
 
           Install: download \`zts-<version>-<os>-<arch>\`, make it executable, put it on \`PATH\`.
           Zig 0.17 is the only other requirement (\`zts\` runs it; it does not bundle it).
@@ -191,6 +191,6 @@ jobs:
           cat notes.md
           gh release create "$TAG" dist/* \
             --repo "$REPO" \
-            --title "Z-Ts $VERSION" \
+            --title "ziggurats $VERSION" \
             --notes-file notes.md \
             --verify-tag

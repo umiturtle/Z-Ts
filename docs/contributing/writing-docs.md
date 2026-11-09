@@ -1,6 +1,6 @@
 # ドキュメントの書き方（機械で守る規約）
 
-> **対象読者**: Z-Ts のドキュメントを書く・直す人（人間とエージェント）。
+> **対象読者**: ziggurats のドキュメントを書く・直す人（人間とエージェント）。
 > **アプリを作る人は読む必要がありません** → [`../learn/ja/guides/index.md`](../learn/ja/guides/index.md)。
 > なぜこの形なのか（調査と原則）は [`../architecture/docs-as-a-product.md`](../architecture/docs-as-a-product.md)。
 
@@ -76,7 +76,7 @@ CI も同じ 4 段を回します（[`.github/workflows/ci.yml`](../../.github/w
 
 | 置き場所 | ステップ | ページ上部のレール |
 |---|---|---|
-| `docs/learn/<lang>/start.md` | 1 はじめての Z-Ts | 出る |
+| `docs/learn/<lang>/start.md` | 1 はじめての ziggurats | 出る |
 | `docs/learn/<lang>/concepts/*` | 2 仕組みを知る | 出る |
 | `docs/learn/<lang>/tutorials/*` | 3 アプリを作る | 出る |
 | `docs/learn/<lang>/guides/*` | 4 目的から引く | 出る |
@@ -216,6 +216,47 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 `zigw` が 1 語でもあれば落とします（「`./zigw build` でビルドできます」は、いちばん最初に
 踏む壊れた手順になります）。
 
+読者向けのページを足したら、[`../INDEX.md`](../INDEX.md) と
+[`../INDEX.en.md`](../INDEX.en.md) の**両方**に 1 行足します。索引はサイドバーを手で写した
+ものなので、放っておくと「サイドバーにしか無いページ」ができます。規約 11 が、日本語版の
+全ページ（と用語集）が日本語の索引から、英語版の全ページが英語の索引からリンクされているかを
+検査します。**順番は検査しません** — 並びは `src/docsite/main.zig` の `GroupKey` が正本です。
+
+**左メニューは全ページ・両言語で同じ並び**です。`GroupKey.order()` は言語を引数に取らず、
+先頭 6 グループは「学習パスの入口 + 5 つの番号付きステップ」と決まっています。グループ内の
+順番は [`src/docsite/learn_path.zig`](../../src/docsite/learn_path.zig) の `page_order`
+（章の読み順）と `main.zig` の `navRank()`（索引・サンプルなど）が決めます。ファイル名の
+アルファベット順は**読み順ではありません**。新しいページを足したら `page_order` に 1 行足し、
+[`../INDEX.md`](../INDEX.md) にも 1 行足してください。未掲載のページは落とされず末尾に
+アルファベット順で出るので、まずは追加だけでも壊れません。
+
+`learn_path.steps` の `minutes` はランディングの合計・各ページ上部のレール・`<!-- learn-path -->`
+に展開されます。`README.md`・[`../INDEX.md`](../INDEX.md)・日英の学習ハブに書いた「およそ N 分」
+とステップ表の分は**手書き**なので、チュートリアルを 1 本足したら必ず更新します。
+規約 12 が `learn_path.zig` の合計と 4 か所の記述、4 つのステップ表を突き合わせ、
+`GroupKey.order()` が言語依存に戻っていないかも検査します。
+
+**「いつ最終書き換えか」「どのバージョンまで実装と無矛盾を確認したか」は台帳に記録します。**
+[`doc-sync.md`](doc-sync.md) と正本の `scripts/doc-sync.json` が、日英 1 組につき
+`last_rewritten`・確認バージョン（`build.zig.zon` の `.version` / `minimum_zig_version`）・
+確認コミット・確認コマンド・本文ふたつの sha256・実装ファイル群の sha256 を持ちます。
+規約 13 がこれらを検査するので、**本文を書き換えて日付を更新し忘れる**ことも、
+**実装が変わったのに再確認していない**ことも、片方の言語だけ直すことも CI で落ちます。
+更新は `python3 scripts/check-docs.py --sync`（日付は `--date YYYY-MM-DD` で明示可）。
+英語版の無いページも規約 13 が落とします。内部資料（ADR・設計メモ・タスク票）は
+日本語専用なので台帳の対象外です。
+
+**プロジェクトのフルネームは `ziggurats`**（常に小文字）です。旧称（ハイフン入りの大文字
+表記）は、**リポジトリ URL とチェックアウトのパス名にだけ**残せます。リポジトリ名は所有者が
+あとで変更するため、そこは書き換えません。規約 14 が読者向けの Markdown・サイトの UI
+文字列・`zts` のヘルプと生成テンプレート・CI・スクリプトを走査し、旧称が残っていたり
+頭文字を大文字にした表記で書かれていたりしたら落とします。
+**`zts` コマンド、`z_ts` パッケージ、`zts_*` モジュール、`ZTS_*` 環境変数は識別子なので
+改名の対象外**です（文字列としても旧称を含まないため、置換で壊れません）。
+ソースのテストデータ、ライブラリの既定ウィンドウタイトル、デモの画面内テキストも
+「関係ないものを巻き込まない」ため据え置いています。デモの可視テキストは 3 OS の画素一致
+ゲートの対象なので、リポジトリ名を変えるときに生成器と生成物をまとめて更新してください。
+
 ## 9. 2 言語で書く（英語と日本語）
 
 読者向けのページは **`docs/learn/ja/` と `docs/learn/en/` に同じファイル名で 1 本ずつ**置きます。
@@ -261,6 +302,12 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `duplicate glossary term` | 同じ用語を 2 回定義 | 1 つに統合し、片方からリンク |
 | `docs/learn/en/…: missing translation (exists in ja)` | 片方の言語にしか無い | 同じパスで翻訳を足す（規約 8） |
 | `docs/learn/…: mentions 'zigw'` | 読者向けページに開発用ラッパーを書いた | `zts` と `zig` の手順に直す（規約 10）。`zigw` は `docs/contributing/` だけ |
+| `docs/INDEX.md: does not link 'learn/ja/…'` | ページを足して索引を忘れた | [`../INDEX.md`](../INDEX.md) の該当グループに 1 行足す（規約 11） |
+| `does not say 'およそ 95 分'` / `step 3 says … minutes` | チュートリアルを足したが所要分を直していない | `learn_path.zig` の `minutes` を決め、README・索引・日英ハブの分を合わせる（規約 12） |
+| `GroupKey.order() takes a language` | 言語でメニューを分岐させた | `order()` を 1 本に戻す。未翻訳ページは日本語タイトルのまま両方に出す |
+| `missing English counterpart` | 英語版を書き忘れた | `*.en.md` を足し、両方の索引に 1 行（規約 11・13） |
+| `changed after verification` / `implementation changed since verification` | 本文か実装を変えたが台帳を更新していない | 差分を読み直し、`python3 scripts/check-docs.py --sync` で日付とハッシュを更新（規約 13） |
+| `legacy project name … in prose` | 旧称が本文に残っている／頭文字を大文字にした | `ziggurats`（小文字）に直す。URL とチェックアウトのパス名だけ例外（規約 14） |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

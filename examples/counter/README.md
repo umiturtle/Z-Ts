@@ -1,6 +1,6 @@
-# Z-Ts Counter — 1 プロジェクト → 3 成果物ショーケース
+# ziggurats Counter — 1 プロジェクト → 3 成果物ショーケース
 
-`Z-Ts` のリファレンス実装です。**同一の Zig アプリケーションコードと同一のフロントエンド
+`ziggurats` のリファレンス実装です。**同一の Zig アプリケーションコードと同一のフロントエンド
 バンドル**から、次の 3 つを生成します。
 
 | # | 成果物 | 生成コマンド | 出力 | 実行基盤 |
@@ -16,7 +16,7 @@ zig build test            # 単体 + 実 TCP E2E + 実 WebAssembly E2E
 zig build preview         # Live Preview を 0.0.0.0:8788 で起動
 ```
 
-> このパッケージはルート `Z-Ts` を **path dependency** として消費します
+> このパッケージはルート `ziggurats` を **path dependency** として消費します
 > （`build.zig.zon` の `z_ts = .{ .path = "../.." }`）。外部プロジェクトが
 > `b.dependency("z_ts").module("zts_*")` で standalone モジュール群をそのまま再利用できることの
 > 実証も兼ねています。
@@ -28,7 +28,7 @@ zig build preview         # Live Preview を 0.0.0.0:8788 で起動
 ```text
 examples/counter/
 ├── build.zig                 # 3 成果物のビルドグラフ（`embedFrontendDir` 同型ヘルパーを含む）
-├── build.zig.zon             # ルート Z-Ts への path dependency
+├── build.zig.zon             # ルート ziggurats への path dependency
 ├── src/
 │   ├── app.zig               # ★ 唯一のアプリ実装（`App(RuntimeMode)` + 単体テスト）
 │   ├── desktop.zig           # ① DesktopRuntime + ウィンドウ + `--selftest`

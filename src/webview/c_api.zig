@@ -102,7 +102,7 @@ pub const CBytesReleaseFn = *const fn (
 
 /// Flat, POD mirror of `WindowConfig` for C hosts. Zero-initialise it and set only the fields you
 /// care about — the defaults below are the same as `WindowConfig`'s, except that `title == null`
-/// means "use `Z-Ts Window`".
+/// means "use `ziggurats Window`".
 pub const CWindowDesc = extern struct {
     title: ?[*:0]const u8 = null,
     width: f64 = 800.0,

@@ -39,15 +39,22 @@ pub const Lang = enum {
         };
     }
 
-    /// `docs/learn/en/concepts/rpc.md` → `.en`. `null` for pages outside the translated tree
-    /// (the legacy Japanese guides, the API reference, the internals) — those render without a
-    /// language switcher because there is nothing to switch to.
+    /// `docs/learn/en/concepts/rpc.md` → `.en`. Japanese-only pages outside the learning tree
+    /// return `.ja`; their English counterpart, when there is one, is `… .en.md`.
+    ///
+    /// The `.en.md` suffix is the mirror of the learning tree's `ja/` ↔ `en/` pair for pages that
+    /// exist once (the index, the glossary, the reference, contributing, the examples). Keeping
+    /// the two conventions separate lets both kinds of page use the same switcher without
+    /// duplicating the whole tree.
     pub fn fromPath(path: []const u8) ?Lang {
-        if (!std.mem.startsWith(u8, path, learn_root)) return null;
-        const rest = path[learn_root.len..];
-        if (std.mem.startsWith(u8, rest, "ja/")) return .ja;
-        if (std.mem.startsWith(u8, rest, "en/")) return .en;
-        return null;
+        if (std.mem.endsWith(u8, path, ".en.md")) return .en;
+        if (std.mem.startsWith(u8, path, learn_root)) {
+            const rest = path[learn_root.len..];
+            if (std.mem.startsWith(u8, rest, "ja/")) return .ja;
+            if (std.mem.startsWith(u8, rest, "en/")) return .en;
+            return null;
+        }
+        return .ja;
     }
 };
 
@@ -57,11 +64,22 @@ pub const learn_root = "docs/learn/";
 /// The counterpart of `path` in `to`, or the root of `to` when the page has no translation.
 /// Returning a real page (not a 404) is deliberate: the switcher must never dead-end.
 pub fn alternateHref(allocator: std.mem.Allocator, path: []const u8, to: Lang) ![]const u8 {
-    if (Lang.fromPath(path)) |from| {
-        const rest = path[learn_root.len..];
-        const tail = rest[from.code().len + 1 ..]; // strip `ja/` / `en/`
-        return std.fmt.allocPrint(allocator, "{s}{s}/{s}", .{ learn_root, to.code(), tail });
+    // Learning tree: swap the `ja/` / `en/` segment. This is the contract behind the switcher.
+    if (std.mem.startsWith(u8, path, learn_root)) {
+        if (Lang.fromPath(path)) |from| {
+            const rest = path[learn_root.len..];
+            const tail = rest[from.code().len + 1 ..]; // strip `ja/` / `en/`
+            return std.fmt.allocPrint(allocator, "{s}{s}/{s}", .{ learn_root, to.code(), tail });
+        }
     }
+    // Pages outside the learning tree: `docs/glossary.md` ↔ `docs/glossary.en.md`.
+    if (std.mem.endsWith(u8, path, ".en.md")) {
+        return std.fmt.allocPrint(allocator, "{s}.md", .{path[0 .. path.len - ".en.md".len]});
+    }
+    if (std.mem.endsWith(u8, path, ".md")) {
+        return std.fmt.allocPrint(allocator, "{s}.en.md", .{path[0 .. path.len - ".md".len]});
+    }
+    // A path with no language at all still has to land somewhere real.
     return std.fmt.allocPrint(allocator, "{s}{s}/index.md", .{ learn_root, to.code() });
 }
 
@@ -166,20 +184,20 @@ pub fn strings(lang: Lang) Strings {
             .landing_eyebrow = "Zig 0.17 · Tauri v2 互換 · コアは C 依存ゼロ",
             .landing_title_a = "デスクトップも、WebAssembly も、",
             .landing_title_b = "静的サイトも。1 言語で。",
-            .landing_lede = "Z-Ts は Tauri v2 のプロトコルとプラグインを Zig で再実装したツールキットです。同じアプリコードからネイティブ WebView・ブラウザ Live Preview・静的 SSG の 3 つの成果物を生成し、3 OS で同じピクセルを描きます。",
+            .landing_lede = "ziggurats は Tauri v2 のプロトコルとプラグインを Zig で再実装したツールキットです。同じアプリコードからネイティブ WebView・ブラウザ Live Preview・静的 SSG の 3 つの成果物を生成し、3 OS で同じピクセルを描きます。",
             .landing_cta_start = "10 分ではじめる",
             .landing_cta_api = "API リファレンス",
             .landing_cta_download = "ダウンロード",
             .landing_cta_samples = "動くサンプル",
             .landing_cta_source = "ソース",
-            .landing_cta_tutorial = "アプリを作る",
+            .landing_cta_tutorial = "チュートリアル",
             .landing_path_title = "学習パス",
             .landing_path_lede = "未経験から最初のバイナリまで、道順は 1 本だけ。各ページの上に常に出ています（所要時間は下の合計）。",
             .landing_path_total = "全体 {d} 分",
             .landing_paths_title = "目的から選ぶ",
             .landing_all_pages = "すべてのページ",
             .landing_meta = "対応: Zig 0.17.0 / Tauri v2 / Linux・macOS・Windows",
-            .landing_feature_title = "なぜ Z-Ts か",
+            .landing_feature_title = "なぜ ziggurats か",
             .landing_feature_1_t = "6 つの直交パッケージ",
             .landing_feature_1_b = "使うものだけリンクできます。コアは libc すら要求しません。",
             .landing_feature_2_t = "3 つの成果物、1 つのコード",
@@ -220,20 +238,20 @@ pub fn strings(lang: Lang) Strings {
             .landing_eyebrow = "Zig 0.17 · Tauri v2 compatible · zero C dependencies in the core",
             .landing_title_a = "Desktop, WebAssembly,",
             .landing_title_b = "static sites. One language.",
-            .landing_lede = "Z-Ts reimplements the Tauri v2 protocol and its plugins in Zig. One application source produces three artifacts — a native WebView binary, a browser Live Preview, and a static site — and draws the same pixels on all three operating systems.",
+            .landing_lede = "ziggurats reimplements the Tauri v2 protocol and its plugins in Zig. One application source produces three artifacts — a native WebView binary, a browser Live Preview, and a static site — and draws the same pixels on all three operating systems.",
             .landing_cta_start = "Start in 10 minutes",
             .landing_cta_api = "API reference",
             .landing_cta_download = "Download",
             .landing_cta_samples = "Examples",
             .landing_cta_source = "Source",
-            .landing_cta_tutorial = "Build an app",
+            .landing_cta_tutorial = "Tutorials",
             .landing_path_title = "The learning path",
             .landing_path_lede = "From never having run it to your first binary, one order — always shown at the top of the page you are on (total below).",
             .landing_path_total = "{d} minutes in total",
             .landing_paths_title = "Choose by job",
             .landing_all_pages = "All pages",
             .landing_meta = "Requires: Zig 0.17.0 / Tauri v2 / Linux, macOS or Windows",
-            .landing_feature_title = "Why Z-Ts",
+            .landing_feature_title = "Why ziggurats",
             .landing_feature_1_t = "Six orthogonal packages",
             .landing_feature_1_b = "Link only what you use. The core does not even require libc.",
             .landing_feature_2_t = "Three artifacts, one source",
@@ -275,8 +293,10 @@ pub fn kindLabel(lang: Lang, kind: []const u8) []const u8 {
 test "paths map to a language and back" {
     try std.testing.expectEqual(@as(?Lang, .ja), Lang.fromPath("docs/learn/ja/concepts/rpc.md"));
     try std.testing.expectEqual(@as(?Lang, .en), Lang.fromPath("docs/learn/en/index.md"));
-    // Outside the translated tree there is no counterpart, by design.
-    try std.testing.expectEqual(@as(?Lang, null), Lang.fromPath("docs/guides/using-rpc.md"));
+    // Pages outside the learning tree are Japanese unless they carry the `.en.md` mirror suffix.
+    try std.testing.expectEqual(@as(?Lang, .ja), Lang.fromPath("docs/guides/using-rpc.md"));
+    try std.testing.expectEqual(@as(?Lang, .ja), Lang.fromPath("docs/INDEX.md"));
+    try std.testing.expectEqual(@as(?Lang, .en), Lang.fromPath("docs/INDEX.en.md"));
     try std.testing.expectEqual(@as(?Lang, null), Lang.fromPath("docs/learn/README.md"));
 }
 
@@ -290,9 +310,10 @@ test "the alternate of a translated page keeps its path" {
     const ja = try alternateHref(arena, "docs/learn/en/tutorials/counter.md", .ja);
     try std.testing.expectEqualStrings("docs/learn/ja/tutorials/counter.md", ja);
 
-    // A page with no translation falls back to the other language's hub, never to a 404.
-    const fallback = try alternateHref(arena, "docs/guides/using-rpc.md", .en);
-    try std.testing.expectEqualStrings("docs/learn/en/index.md", fallback);
+    // A Japanese-only page proposes its `.en.md` mirror. `main.altHref` probes the file and
+    // hides the switcher when it does not exist, so the reader never reaches a 404.
+    const mirror = try alternateHref(arena, "docs/guides/using-rpc.md", .en);
+    try std.testing.expectEqualStrings("docs/guides/using-rpc.en.md", mirror);
 }
 
 test "every kind has a label in both languages" {
@@ -301,4 +322,19 @@ test "every kind has a label in both languages" {
     try std.testing.expectEqualStrings("Tutorial", kindLabel(.en, "tutorial"));
     // An unknown kind is passed through rather than swallowed.
     try std.testing.expectEqualStrings("mystery", kindLabel(.en, "mystery"));
+}
+
+test "mirror pages use the .en.md convention and switch back" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const ja = try alternateHref(arena, "docs/glossary.md", .en);
+    try std.testing.expectEqualStrings("docs/glossary.en.md", ja);
+
+    const en = try alternateHref(arena, "docs/glossary.en.md", .ja);
+    try std.testing.expectEqualStrings("docs/glossary.md", en);
+
+    const root = try alternateHref(arena, "README.md", .en);
+    try std.testing.expectEqualStrings("README.en.md", root);
 }

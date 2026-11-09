@@ -4,7 +4,7 @@
 > **Time**: 3 minutes (Linux / macOS / Windows).
 > **Requirement**: Zig 0.17. `zts` does not bundle a compiler — it runs yours.
 
-`zts` is the CLI for building Z-Ts apps — roughly where Angular CLI sits. Learn four verbs
+`zts` is the CLI for building ziggurats apps — roughly where Angular CLI sits. Learn four verbs
 (`init`, `dev`, `build`, `doctor`) and you can go from an empty directory to a single binary.
 
 What we distribute is **one `zts` binary**. It carries no compiler, so put a 0.17-series `zig` on
@@ -73,21 +73,21 @@ zts build
 ./zig-out/bin/my_app    # .\zig-out\bin\my_app.exe on Windows
 ```
 
-The **first** `zts build` fetches the Z-Ts source archive, because the generated `build.zig.zon`
+The **first** `zts build` fetches the ziggurats source archive, because the generated `build.zig.zon`
 contains this line (baked into the binary — you never type it):
 
 ```zig
 .z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
 ```
 
-Zig caches what it fetched, so later builds work offline. **You do not need a checkout of Z-Ts.**
+Zig caches what it fetched, so later builds work offline. **You do not need a checkout of ziggurats.**
 
 > You can inspect the archive yourself:
 > `zig fetch https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz`
 
 ## 4. Building `zts` from a checkout
 
-If you are changing Z-Ts itself, or would rather not use a published binary, build from source.
+If you are changing ziggurats itself, or would rather not use a published binary, build from source.
 Bring your own `zig`.
 
 ```bash

@@ -22,7 +22,7 @@ follow. Turn that into **a button calling a Zig function** and there are exactly
 | the bridge | match names and types, carry JSON; nothing hand-written | `Schema`, assembled by `comptime` |
 | the command | a Zig function: take arguments, touch state, return a value | `src/` |
 
-**Part 2 is Z-Ts's job.** Routing, serialisation, type checks and the TypeScript declarations are
+**Part 2 is ziggurats's job.** Routing, serialisation, type checks and the TypeScript declarations are
 all generated from `Schema`, so you only ever write parts 1 and 3.
 
 ```zig check
@@ -68,7 +68,8 @@ These come up on every page below; come back here when one slips.
 | **Schema** | the table of command names, argument and return types, built at `comptime` |
 | **Capability** | a declaration that "this window may call this command" |
 
-The [glossary](../../../glossary.md) defines 31 terms in more detail.
+The [glossary](../../../glossary.md) defines them in more detail (it is linked from the prose as
+well).
 
 ## Reading order
 
@@ -81,6 +82,7 @@ Knowing **Pack** and **Host** first makes the rest read faster.
 
 ## Next
 
-- Hands on → [Tutorial: the counter](../tutorials/counter.md)
+- Hands on → [Tutorials](../tutorials/index.md) (counter, todo list, screen)
+- Started writing and unsure → [Patterns](../patterns/index.md)
 - Just write it → [Guide: commands](../guides/rpc.md)
 - Lost in terminology → [Glossary](../../../glossary.md)

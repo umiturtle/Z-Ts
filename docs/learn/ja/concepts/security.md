@@ -3,16 +3,16 @@
 > **対象読者**: アプリを配布する前に、何が守られて何が守られないかを知りたい人。
 > **所要時間**: 5 分。
 
-Tauri のセキュリティモデルの核は **capability（許可証）** です。Z-Ts はこれをそのまま
+Tauri のセキュリティモデルの核は **capability（許可証）** です。ziggurats はこれをそのまま
 実装しています。**capability に書かれていないコマンドは、フロントエンドから呼べません。**
 
 ## 1. 3 つの層
 
 ```text
   ① WebView のサンドボックス
-     OS が提供する境界。Z-Ts はここに手を出さない（素の WebView と同じ）
+     OS が提供する境界。ziggurats はここに手を出さない（素の WebView と同じ）
 
-  ② capability（ACL）      ← Z-Ts が実装
+  ② capability（ACL）      ← ziggurats が実装
      「ウィンドウ main は plugin:fs|read_text_file を呼んでよい」
      権限名 + scope（どのパスか）で決まる。既定は拒否
 

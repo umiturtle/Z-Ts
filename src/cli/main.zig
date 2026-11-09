@@ -25,7 +25,7 @@ const project = @import("project.zig");
 const devserver = @import("devserver.zig");
 const bundler = @import("zts_bundler");
 
-/// Absolute path of the Z-Ts checkout that built this binary, injected by `build.zig`. `zts init`
+/// Absolute path of the ziggurats checkout that built this binary, injected by `build.zig`. `zts init`
 /// writes it into the generated `build.zig.zon`, so a project created anywhere keeps working without
 /// the author having to work out a relative path.
 const build_options = @import("zts_cli_options");
@@ -109,7 +109,7 @@ fn runInit(
         return exit_usage;
     };
 
-    // Where the generated project gets Z-Ts from. A published build knows a release archive and
+    // Where the generated project gets ziggurats from. A published build knows a release archive and
     // emits `.url`/`.hash`, so the project builds on a machine that has never seen a checkout;
     // a source build falls back to a relative path to the tree that compiled this binary.
     //
@@ -211,7 +211,7 @@ fn patchFingerprintViaBuild(io: Io, gpa: Allocator, arena: Allocator, dir: []con
 
 fn runBuild(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Build) !u8 {
     const zon = readZon(io, arena, opts.dir) catch |err| {
-        printErr(io, "zts build: cannot read {s}/build.zig.zon ({t}) — is this a Z-Ts project?\n", .{ opts.dir, err });
+        printErr(io, "zts build: cannot read {s}/build.zig.zon ({t}) — is this a ziggurats project?\n", .{ opts.dir, err });
         return exit_failure;
     };
     const name = project.packageName(zon) orelse template.defaultName(opts.dir) orelse "app";
@@ -265,7 +265,7 @@ fn runBuild(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Build) !u8 
 
 fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     const zon = readZon(io, arena, opts.dir) catch |err| {
-        printErr(io, "zts dev: cannot read {s}/build.zig.zon ({t}) — is this a Z-Ts project?\n", .{ opts.dir, err });
+        printErr(io, "zts dev: cannot read {s}/build.zig.zon ({t}) — is this a ziggurats project?\n", .{ opts.dir, err });
         return exit_failure;
     };
     const name = project.packageName(zon) orelse template.defaultName(opts.dir) orelse "app";
@@ -371,7 +371,7 @@ fn openBrowser(io: Io, arena: Allocator, url: []const u8) !void {
 // zts package
 // ---------------------------------------------------------------------------------------------
 
-/// Upper bound on the executable `zts package` will read. A Z-Ts app is a few megabytes; 1 GiB
+/// Upper bound on the executable `zts package` will read. A ziggurats app is a few megabytes; 1 GiB
 /// means a mistyped `--binary` is a clean error instead of an out-of-memory.
 const max_binary_bytes = 1024 * 1024 * 1024;
 
@@ -411,7 +411,7 @@ fn packageAll(
 ) !void {
     const cwd = Io.Dir.cwd();
     const zon = readZon(io, arena, opts.dir) catch |err| {
-        printErr(io, "zts package: cannot read {s}/build.zig.zon ({t}) — is this a Z-Ts project?\n", .{ opts.dir, err });
+        printErr(io, "zts package: cannot read {s}/build.zig.zon ({t}) — is this a ziggurats project?\n", .{ opts.dir, err });
         return error.Reported;
     };
     const name = project.packageName(zon) orelse {
@@ -427,7 +427,7 @@ fn packageAll(
     const maintainer = opts.maintainer orelse blk: {
         if (env.get("ZTS_MAINTAINER")) |from_env| break :blk from_env;
         printErr(io, "zts package: no --maintainer (or ZTS_MAINTAINER) — using a placeholder\n", .{});
-        break :blk "Z-Ts <maintainer@example.com>";
+        break :blk "ziggurats <maintainer@example.com>";
     };
 
     var app = bundler.App.init(name, display, version, identifier, description, maintainer) catch |err| {
@@ -676,7 +676,7 @@ fn runDoctor(io: Io, arena: Allocator, dir: []const u8) !u8 {
     var problems: usize = 0;
 
     printOut(io, "zts {f}\n", .{args_mod.version});
-    // A release build has no checkout to report: the project fetches Z-Ts from the archive the
+    // A release build has no checkout to report: the project fetches ziggurats from the archive the
     // binary was built with. Saying "MISSING" there would be a lie.
     if (build_options.zts_root.len == 0) {
         printOut(io, "  checkout     (none — release build)\n", .{});
