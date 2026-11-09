@@ -653,7 +653,18 @@ pub fn build(b: *std.Build) void {
     // (which breaks the moment someone puts `zts` on PATH).
     const zts_root = b.pathResolve(&.{ b.root.root_dir.path orelse ".", b.root.sub_path });
     const cli_options = b.addOptions();
-    cli_options.addOption([]const u8, "zts_root", zts_root);
+    // A **release** build (`-Dzts-pkg-url` + `-Dzts-pkg-hash`) knows the published archive of this
+    // very version. `zts init` then writes `.url`/`.hash` into the user's `build.zig.zon`, so the
+    // project builds on a machine that never saw a checkout, and `zts doctor` stops reporting a
+    // checkout that is not there.
+    const pkg_url = b.option([]const u8, "zts-pkg-url", "Published Z-Ts archive URL baked into `zts init`") orelse "";
+    const pkg_hash = b.option([]const u8, "zts-pkg-hash", "`zig fetch` hash of --zts-pkg-url") orelse "";
+    if ((pkg_url.len == 0) != (pkg_hash.len == 0)) {
+        std.debug.panic("-Dzts-pkg-url and -Dzts-pkg-hash must be passed together", .{});
+    }
+    cli_options.addOption([]const u8, "zts_root", if (pkg_url.len > 0) "" else zts_root);
+    cli_options.addOption([]const u8, "zts_pkg_url", pkg_url);
+    cli_options.addOption([]const u8, "zts_pkg_hash", pkg_hash);
 
     // `M5-03`: the packager. A separate module so `src/cli` and `src/bundler` stay in disjoint
     // directories (every `.zig` file belongs to exactly one module) and the CLI's tests can import it.

@@ -2,78 +2,125 @@
 
 > **対象読者**: `zts` をまだ持っていない人。
 > **所要時間**: 3 分（Linux / macOS / Windows）。
-> **前提**: `git` と Python 3.8 以上。Zig は `./zigw` が導入します。
+> **前提**: Zig 0.17 系。`zts` は Zig を同梱せず、子プロセスとして呼びます。
 
 `zts` は Z-Ts でアプリを作るための CLI です（Angular CLI のような位置づけ）。
 `init` / `dev` / `build` / `doctor` の 4 つだけ覚えれば、プロジェクトの生成から
 単一バイナリのビルドまで完結します。
 
+配布物は **`zts` の単体バイナリ 1 個**です。Zig を入れてくれる `./zigw` は、このリポジトリを
+開発する人向けの道具で、配布物ではありません（[`../../contributing/README.md`](../../../contributing/README.md)）。
+アプリを作るだけなら、通常の `zig` がある環境に `zts` を置けば動きます。
+
 > [!TIP]
 > このページは**インストールだけ**を詳しく知りたい人向けです。とにかく動かしたいなら
 > [はじめての Z-Ts](../start.md)（10 分）の 1〜2 章が同じ内容を 4 分で終わらせます。
 
-> Z-Ts の**リポジトリ自体**をビルド・テストする手順は
-> [`docs/contributing/README.md`](../../../contributing/README.md) にあります。このページは
-> 「`zts` というコマンドを手に入れる」ところまでです。
-
 ---
 
-## 1. ビルド済みバイナリを用意する（現状の唯一の方法）
+## 1. `zts` を置く
 
-`zts` はまだ配布バイナリを公開していません。チェックアウトからビルドします。
-
-```bash
-git clone https://github.com/umiturtle/Z-Ts.git
-cd Z-Ts
-./zigw build            # Zig 0.17 を自動導入して zig-out/bin/zts を作る
-```
-
-できたものを `PATH` に置けば、以降はリポジトリの外から使えます。
+[GitHub Releases](https://github.com/umiturtle/Z-Ts/releases) から、使う OS のバイナリを
+1 つ落とします（`zts-0.1.0-linux-x86_64` のような名前）。約 300 KB、**libc に依存しない
+単体ファイル**で、隣に置くものはありません。
 
 ```bash
+# Linux / macOS（`linux-aarch64` など、実行環境に合う名前を選ぶ）
+curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
+chmod +x zts-0.1.0-linux-x86_64
 mkdir -p ~/.local/bin
-cp zig-out/bin/zts ~/.local/bin/
+mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
 export PATH="$HOME/.local/bin:$PATH"
 zts version             # → zts 0.1.0
 ```
 
-> `./zigw` は Python 3.8 以上だけを要求し、Zig 0.17.0 を `/tmp` に導入します
-> （コンテナをまたぐと再導入されます）。`zig` を既に持っているなら
-> `zig build` でも同じものが出来ます。
+```powershell
+# Windows（PowerShell）
+New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
+Invoke-WebRequest `
+  https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-windows-x86_64.exe `
+  -OutFile "$HOME\bin\zts.exe"
+$env:PATH = "$HOME\bin;$env:PATH"
+zts version
+```
 
-## 2. `zts` が使う Zig
-
-`zts` はビルド時に**自分をビルドしたチェックアウトの場所**を覚え、生成するプロジェクトの
-`build.zig.zon` にその相対パスを書きます。実行時には `zig` を子プロセスとして起動するため、
-**同じ 0.17 系の Zig が `PATH` に必要**です。
+各リリースには `SHA256SUMS` が付きます。確認したい場合だけ使ってください。
 
 ```bash
-export ZTS_ZIG="$(./zigw zig-path)"   # チェックアウト内で 1 回。PATH に無い場合の指定
-zts doctor                            # zig / z_ts / package / dependency / web を点検
+sha256sum -c SHA256SUMS --ignore-missing
 ```
 
-`zts doctor` が `all checks passed` と言えば準備完了です。
+## 2. `zig` を `PATH` に入れる
 
-## 3. チェックアウトを動かした / 別の場所を使いたい
+`zts` は `zig build` を子プロセスで起動するだけで、コンパイラを持ちません。0.17 系の `zig` を
+`PATH` に入れてください（[ziglang.org/download](https://ziglang.org/download/)）。
 
-`zts` を別のマシンへコピーした場合、覚えているチェックアウトのパスは存在しません。
-`zts doctor` が次のように教えます。
-
-```text
-  z_ts         MISSING at /home/you/Z-Ts — rebuild zts or pass --zts-path
+```bash
+zig version             # → 0.17.0
+zts doctor              # release の zts なら checkout 行は "(none — release build)"
 ```
 
-対処は 3 つです。
+Zig を `PATH` 以外の場所に置いている場合は `ZTS_ZIG` で指定します。
+
+```bash
+export ZTS_ZIG=/opt/zig/zig
+```
+
+## 3. 最初のプロジェクト
+
+```bash
+zts init my-app
+cd my-app
+zts build
+./zig-out/bin/my_app    # Windows は .\zig-out\bin\my_app.exe
+```
+
+`zts build` の初回だけ、生成されたプロジェクトが **Z-Ts のソースアーカイブを取得**します。
+`build.zig.zon` に次の 1 行が入っているためです（バイナリに焼き込まれた値で、あなたが書く
+必要はありません）。
+
+```zig
+.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+```
+
+取得物は Zig のキャッシュに入るので、2 回目以降はオフラインでもビルドできます。**チェックアウト
+を clone しておく必要はありません**。
+
+> `zig fetch` を自分で叩いて中身を確かめることもできます。
+> `zig fetch https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz`
+
+## 4. チェックアウトから自分でビルドする場合
+
+Z-Ts 本体を直したい人、公開バイナリを使わずに済ませたい人はソースから作れます。
+`zig` は自分で用意してください。
+
+```bash
+git clone https://github.com/umiturtle/Z-Ts.git
+cd Z-Ts
+zig build                # → zig-out/bin/zts（Zig 0.17 が PATH に必要）
+```
+
+このやり方で作った `zts` は、**そのチェックアウトを覚えます**。生成するプロジェクトの
+`build.zig.zon` には相対パスが入ります。
+
+```zig
+.z_ts = .{ .path = "../../../home/you/Z-Ts" },
+```
+
+チェックアウトを動かすと、生成済みのプロジェクトはそのパスを見失います。次のどれかで直します。
 
 | 方法 | コマンド |
 |---|---|
-| その場所にチェックアウトを置く | `cp -r Z-Ts /home/you/Z-Ts` |
-| 生成時にパスを指定する | `zts init my-app --zts-path /path/to/Z-Ts` |
-| 既存プロジェクトの依存を書き換える | `build.zig.zon` の `.z_ts = .{ .path = "…" }` |
+| プロジェクトを作り直す（公開URLを指定） | `zts init my-app --zts-url <url> --zts-hash <hash>` |
+| プロジェクトを作り直す（パスを指定） | `zts init my-app --zts-path /path/to/Z-Ts` |
+| 生成済みプロジェクトを書き換える | `build.zig.zon` の `.z_ts` を `.url`+`.hash` か新しい `.path` に |
+| `zts` を作り直す | 新しいチェックアウトで `zig build` |
 
-`zts` を新しいチェックアウトから作り直すのが一番確実です。
+> リポジトリ自体のビルド・テストには `./zigw`（Zig を `/tmp` に自動導入するラッパー）も使えます。
+> **配布物ではない**ので、`zts` を入れるだけの人は使う必要がありません。
+> [`../../contributing/README.md`](../../../contributing/README.md) を参照してください。
 
-## 4. プラットフォームごとの前提
+## 5. プラットフォームごとの前提
 
 | OS | 必要なもの | 備考 |
 |---|---|---|
@@ -81,13 +128,10 @@ zts doctor                            # zig / z_ts / package / dependency / web 
 | macOS | Xcode Command Line Tools | Cocoa バックエンドは macOS SDK を使います |
 | Windows | WebView2 Runtime（Windows 11 は標準搭載） | 単一 `.exe`、DLL の配布は不要 |
 
-Zig は `zts` が子プロセスとして呼びます。**0.17 系の `zig` が `PATH`（または `ZTS_ZIG`）に
-あることが前提**で、`zts` 自身は Zig を同梱していません。
-
 ---
 
 ## 次に読むもの
 
 - 最初のアプリ: [`counter.md`](../tutorials/counter.md)
-- 全コマンドと全オプション: [`../reference/cli.md`](../../../reference/cli.md)
+- 全コマンドと全オプション: [`reference/cli.md`](../../../reference/cli.md)
 - 動かないとき: [`troubleshooting.md`](troubleshooting.md)

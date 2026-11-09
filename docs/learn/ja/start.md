@@ -1,7 +1,7 @@
 # はじめての Z-Ts
 
 > **対象読者**: Z-Ts をまだ 1 度も動かしたことがない人。Zig と Web の予備知識は問いません。
-> **所要時間**: 10 分。**必要なもの**: ターミナルと `git`、Python 3.8 以上（Zig は自動で入ります）。
+> **所要時間**: 10 分。**必要なもの**: ターミナル、Zig 0.17 系、`zts` のバイナリ（1 個）。
 > **このページを終えると**: 自分のプロジェクトがブラウザで動き、`zig-out/bin/` に単一バイナリができます。
 
 このページだけを上から順に打てば、Z-Ts の「動く」までを最短で通り抜けられます。
@@ -9,41 +9,37 @@
 
 ```text
 ① 用意する ──► ② 作る ──► ③ 動かす ──► ④ 書き換える ──► ⑤ バイナリにする
-  ./zigw build    zts init    zts dev      web/index.html     zts build
+  zts を置く      zts init    zts dev      web/index.html     zts build
 ```
 
 ---
 
 ## 1. `zts` を用意する（3 分）
 
-`zts` は Z-Ts でアプリを作る CLI です。まだ配布バイナリは無いので、チェックアウトから作ります。
+`zts` は Z-Ts でアプリを作る CLI です。配布物は**バイナリ 1 個**（約 300 KB、libc 非依存）で、
+Zig だけは自分で用意します。
 
 ```bash
-git clone https://github.com/umiturtle/Z-Ts.git
-cd Z-Ts
-./zigw build            # Zig 0.17 を導入して zig-out/bin/zts を作る
-```
+# 1) Zig 0.17 系を PATH に入れる（まだ無い場合）
+zig version             # → 0.17.0
 
-`PATH` に通しておくと、以降はリポジトリの外からでも使えます。
-
-```bash
+# 2) GitHub Releases から自分の OS の zts を落として PATH に置く
+curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
+chmod +x zts-0.1.0-linux-x86_64
 mkdir -p ~/.local/bin
-cp zig-out/bin/zts ~/.local/bin/
+mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
 export PATH="$HOME/.local/bin:$PATH"
 zts version             # → zts 0.1.0
 ```
 
-`zts` はビルドのたびに **`zig` を子プロセスとして**起動します。`zig` が `PATH` に無い環境
-（`./zigw` が `/tmp` に入れただけの環境）では、次の 1 行を**チェックアウトの中**で打ってください。
-
-```bash
-export ZTS_ZIG="$(./zigw zig-path)"   # → /tmp/zts-toolchains/zig-0.17.0/ziglang/zig
-```
+**チェックアウトの clone も `./zigw` も要りません。** `zts` は Zig を子プロセスで起動するだけです。
+Windows の PowerShell 版や、Zig を `PATH` 以外に置いた場合の `ZTS_ZIG` は
+[`guides/install.md`](guides/install.md) にまとめてあります。
 
 > [!NOTE]
-> `./zigw` が要求するのは Python 3.8 以上だけです。Zig が既に手元にあるなら
-> `zig build` でも同じものができます。導入先や詳細は
-> [`guides/install.md`](guides/install.md) にまとめてあります。
+> Z-Ts 本体を直したい人・ソースから `zts` を作りたい人は `git clone` + `zig build` でも同じ
+> ものが作れます（`./zigw` はそのリポジトリ専用のブートストラップで、配布物ではありません）。
+> その場合、生成したプロジェクトはそのチェックアウトを `.path` 依存として指します。
 
 ## 2. 環境を点検する（1 分）
 
@@ -55,8 +51,8 @@ zts doctor
 
 | 表示 | 意味 | 対処 |
 |---|---|---|
-| `zig MISSING` | `zts` が Zig を起動できない | `export ZTS_ZIG="$(./zigw zig-path)"`（チェックアウト内） |
-| `z_ts MISSING at …` | `zts` を作ったチェックアウトが見つからない | そのパスに置くか `zts init --zts-path` |
+| `zig          MISSING` | `zts` が Zig を見つけられない | Zig 0.17 を `PATH` に入れる。既にあるなら `export ZTS_ZIG=<その zig>` |
+| `z_ts MISSING at …` | （ソースから作った `zts` だけ）チェックアウトが見つからない | そのパスに置くか `zts init --zts-path` |
 | `gtk` / `webkit` の警告 | Linux の GUI ライブラリが無い | 開発だけなら無視してよい（後述） |
 
 ## 3. プロジェクトを作る（1 分）

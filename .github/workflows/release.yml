@@ -1,0 +1,190 @@
+name: Release
+
+# `zigw` is a bootstrap wrapper for people working *on* this repository: it installs Zig into
+# `/tmp` and shells out to `zig`. It is not a distribution artifact. What users install is one
+# `zts` binary, and what their projects depend on is the source archive published here.
+#
+# The order matters. The archive is built first, `zig fetch` hashes it, and only then are the
+# binaries compiled with `-Dzts-pkg-url` / `-Dzts-pkg-hash`. A binary from this workflow writes
+# `.url` + `.hash` into every project it scaffolds, so `zig build` fetches Z-Ts instead of reaching
+# for a checkout that only the release machine ever had.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # 1. The archive users' projects depend on. Its hash has to exist before any binary is built.
+  # ---------------------------------------------------------------------------------------------
+  archive:
+    name: Source archive + fetch hash
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      hash: ${{ steps.meta.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `git archive` of the tagged commit, not of a merge of the branch.
+          fetch-depth: 0
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+
+      - name: Build the archive and ask Zig for its hash
+        id: meta
+        shell: bash
+        run: |
+          set -eo pipefail
+          version="$(sed -n 's/^    \.version = "\(.*\)",/\1/p' build.zig.zon | head -1)"
+          echo "version: $version"
+          # Tracked files only: no `.git`, no caches, nothing built. `--prefix` gives the archive
+          # the top-level directory `zig fetch` expects.
+          git archive --format=tar.gz --prefix="z_ts-$version/" \
+            -o "z_ts-$version.tar.gz" HEAD
+          ls -l "z_ts-$version.tar.gz"
+          hash="$(zig fetch "file://$PWD/z_ts-$version.tar.gz" 2>/dev/null)"
+          echo "hash: $hash"
+          case "$hash" in "z_ts-$version-"*) ;; *) echo "unexpected hash for version $version"; exit 1 ;; esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-archive
+          path: z_ts-*.tar.gz
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  # 2. One binary per OS. Each is built on its own runner (the webview backends need real SDKs).
+  # ---------------------------------------------------------------------------------------------
+  binary:
+    name: zts (${{ matrix.os }})
+    needs: archive
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+
+      - name: Build with the published archive baked in
+        shell: bash
+        env:
+          VERSION: ${{ needs.archive.outputs.version }}
+          HASH: ${{ needs.archive.outputs.hash }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eo pipefail
+          url="https://github.com/$REPO/releases/download/$TAG/z_ts-$VERSION.tar.gz"
+          echo "baking $url"
+          zig build -Doptimize=ReleaseSmall \
+            -Dzts-pkg-url="$url" \
+            -Dzts-pkg-hash="$HASH"
+
+      - name: Name the artifact after the runner it came from
+        shell: bash
+        run: |
+          set -eo pipefail
+          exe=zig-out/bin/zts
+          [ -f "$exe" ] || exe="$exe.exe"
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m)"
+          case "$os" in
+            mingw*|msys*|cygwin*) os=windows ;;
+            darwin) os=macos ;;
+          esac
+          out="zts-${{ needs.archive.outputs.version }}-$os-$arch"
+          cp "$exe" "$out"
+          ls -l "$out"
+          echo "ASSET=$out" >> "$GITHUB_ENV"
+
+      # Proof, on every runner, that the shipped binary does not need the checkout: a fresh
+      # project must depend on the release URL, and must resolve it from the network.
+      - name: The shipped binary scaffolds a checkout-free project
+        shell: bash
+        run: |
+          set -eo pipefail
+          work="$(mktemp -d)"
+          cd "$work"
+          "$GITHUB_WORKSPACE/$ASSET" init demo
+          grep -q '\.url = "https://github.com/' demo/build.zig.zon
+          if grep -q '\.path = ' demo/build.zig.zon; then
+            echo "release binary wrote a checkout path"; exit 1
+          fi
+          cd demo
+          "$GITHUB_WORKSPACE/$ASSET" doctor | tee doctor.log
+          grep -q 'release build' doctor.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}
+          path: |
+            zts-*-linux-*
+            zts-*-macos-*
+            zts-*-windows-*.exe
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  # 3. Publish. Assets: the source archive plus one binary per OS.
+  # ---------------------------------------------------------------------------------------------
+  publish:
+    name: Publish the release
+    needs: [archive, binary]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd dist
+          ls -l
+          sha256sum * > SHA256SUMS
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.archive.outputs.version }}
+          HASH: ${{ needs.archive.outputs.hash }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -eo pipefail
+          notes="$(printf '%s\n' \
+            "Z-Ts \`$VERSION\`." \
+            "" \
+            "Install: download \`zts-<version>-<os>-<arch>\`, make it executable, put it on \`PATH\`." \
+            "Zig 0.17 is the only other requirement (\`zts\` runs it; it does not bundle it)." \
+            "" \
+            "Projects scaffolded by this binary depend on the archive below:" \
+            "" \
+            '```' \
+            ".z_ts = .{ .url = \"https://github.com/$REPO/releases/download/$TAG/z_ts-$VERSION.tar.gz\", .hash = \"$HASH\" }," \
+            '```')"
+          gh release create "$TAG" dist/* \
+            --repo "$REPO" \
+            --title "Z-Ts $VERSION" \
+            --notes "$notes" \
+            --verify-tag

@@ -38,7 +38,9 @@ zts <command> [options]
 | `[dir]`（位置引数） | `.` | 生成先。無ければ作成する |
 | `--dir <path>` | — | 位置引数の代わり |
 | `--name <name>` | ディレクトリ名 | Zig のパッケージ名（`[a-z][a-z0-9_]*`、最大 31 文字） |
-| `--zts-path <path>` | `zts` をビルドしたチェックアウト | 生成する `build.zig.zon` の `.z_ts.path` に入れる値 |
+| `--zts-path <path>` | 下記の「依存の書き方」 | 生成する `build.zig.zon` の `.z_ts.path` に入れる値。チェックアウトを持っている場合用 |
+| `--zts-url <url>` | release ビルドが焼き込んだ公開アーカイブ | `.z_ts.url`。`--zts-hash` と**必ず**対で指定する |
+| `--zts-hash <hash>` | — | `.z_ts.hash`（`zig fetch` が返す値） |
 | `--force` | 無効 | 既にファイルがあるディレクトリにも書く |
 
 生成物:
@@ -60,6 +62,33 @@ zts init my-app --force           # 既存ファイルがあっても書く
 | ディレクトリが空でなく `--force` 無し | `already has files — pass --force to write into it anyway` |
 | ディレクトリ名がパッケージ名にできない | `cannot derive a package name from '…' — pass --name <name>` |
 | パッケージ名が規約外 | `'…' is not a usable package name (…` |
+
+### 依存の書き方（`.z_ts`）
+
+`zts init` は、生成したプロジェクトが Z-Ts をどこから取るかを `build.zig.zon` に 1 行で書きます。
+**release としてビルドされた `zts`**（GitHub Releases のバイナリ）は公開アーカイブを指します。
+
+```zig
+.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+```
+
+チェックアウトから `zig build` した `zts` は、そのチェックアウトへの相対パスを書きます。
+
+```zig
+.z_ts = .{ .path = "../../../home/you/Z-Ts" },
+```
+
+| 状況 | 何が書かれるか |
+|---|---|
+| 公開バイナリ | `.url` + `.hash`（バイナリに焼き込み済み。ネットワークが要る、チェックアウトは不要） |
+| `--zts-url` と `--zts-hash` | 指定した `.url` + `.hash`（焼き込みより優先） |
+| `--zts-path`、またはソースからビルドした `zts` | `.path`（ローカルのチェックアウト） |
+
+`--zts-url` だけ、`--zts-hash` だけの指定は `IncompleteZtsRelease` で失敗します。片方だけでは
+Zig が読めない `build.zig.zon` になるためです。
+
+> `.url` 依存のプロジェクトは、初回の `zig build` でアーカイブを取得して Zig のキャッシュに
+> 入れます。以降はオフラインでもビルドできます。
 
 生成される `build.zig` は共通エンベッダを依存パッケージのソースから起動し、
 `web/` を `embedded_frontend` モジュールとして埋め込みます。ステップは `run` と `frontend`
@@ -180,14 +209,15 @@ tar -xzf zig-out/package/my-app-0.1.0-amd64.tar.gz    # どこでも
 
 ## `zts doctor`
 
-環境とプロジェクトを 6 項目で点検し、問題があれば `1` で終了します。
+環境とプロジェクトを点検し、問題があれば `1` で終了します。**release の `zts` はチェックアウトを
+持たない**ので、`checkout` / `z_ts` の 2 行が消え、代わりに `(none — release build)` と出ます。
 
 ```text
-$ zts doctor
+$ zts doctor                     # ソースからビルドした zts
 zts 0.1.0
   checkout     /home/you/Z-Ts
   z_ts         present
-  zig          /tmp/zts-toolchains/zig/zig
+  zig          /tmp/zts-toolchains/zig-0.17.0/ziglang/zig
   package      my_app
   dependency   ../../home/you/Z-Ts
   web/         present
@@ -195,13 +225,25 @@ zts 0.1.0
 all checks passed
 ```
 
+```text
+$ zts doctor                     # release の zts（チェックアウトを持たない）
+zts 0.1.0
+  checkout     (none — release build)
+  zig          /usr/local/bin/zig
+  package      my_app
+  dependency   https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz (fetched by zig)
+  web/         present
+
+all checks passed
+```
+
 | 行 | 検査内容 | 失敗時 |
 |---|---|---|
-| `checkout` | `zts` をビルドしたチェックアウト | — |
-| `z_ts` | そのパスが実在するか | `MISSING at … — rebuild zts or pass --zts-path` |
-| `zig` | 使用する Zig のパス（`ZTS_ZIG` → `PATH` → チェックアウト内） | — |
-| `package` | `build.zig.zon` の `.name` | `MISSING \`.name\` in build.zig.zon` |
-| `dependency` | `.z_ts.path` が解決できるか | `… does not exist (resolved from …)` |
+| `checkout` | `zts` をビルドしたチェックアウト。release ビルドでは `(none — release build)` | — |
+| `z_ts` | そのパスが実在するか（release ビルドでは行ごと出ない） | `MISSING at … — rebuild zts or pass --zts-path` |
+| `zig` | 使用する Zig のパス（`ZTS_ZIG` → `PATH` → チェックアウト内） | `MISSING — install Zig 0.17 on PATH or set ZTS_ZIG` |
+| `package` | `build.zig.zon` の `.name` | `MISSING .name in build.zig.zon` |
+| `dependency` | `.z_ts.path` が実在するか。`.z_ts.url` なら URL を出すだけで、取得は初回ビルド時 | `… does not exist (resolved from …)` |
 | `web/` | フロントエンドのディレクトリ | `missing — the embedder needs a front end` |
 
 `--dir <path>` で対象プロジェクトを指定できます。**それ以外のフラグは受け付けません** —
@@ -222,7 +264,7 @@ zts help          # 同上
 
 | 変数 | 内容 |
 |---|---|
-| `ZTS_ZIG` | 使用する `zig` のパス。未設定なら `PATH` → チェックアウト内の `zig` |
+| `ZTS_ZIG` | 使用する `zig` のパス。未設定なら `PATH` → チェックアウト内の `zig`（release ビルドは `PATH` まで） |
 | `ZTS_MAINTAINER` | `zts package` の `--maintainer` の既定値 |
 
 ---

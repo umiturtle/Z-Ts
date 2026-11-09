@@ -2,83 +2,129 @@
 
 > **Audience**: readers who do not have `zts` yet.
 > **Time**: 3 minutes (Linux / macOS / Windows).
+> **Requirement**: Zig 0.17. `zts` does not bundle a compiler — it runs yours.
 
 `zts` is the CLI for building Z-Ts apps — roughly where Angular CLI sits. Learn four verbs
 (`init`, `dev`, `build`, `doctor`) and you can go from an empty directory to a single binary.
+
+What we distribute is **one `zts` binary**. `./zigw` — the wrapper that installs Zig for you — is a
+tool for people working *on* this repository, not a distribution artifact (see
+[`../../contributing/README.md`](../../../contributing/README.md)). If you only build apps, put `zts`
+next to the `zig` you already have.
 
 > [!TIP]
 > This page is for the install in detail. If you would rather have something running, see
 > [Your first ten minutes](../start.md) — its steps 1–2 cover the same ground in four minutes.
 
-> Building and testing the **Z-Ts repository itself** is documented in
-> [`docs/contributing/README.md`](../../../contributing/README.md). This page stops at "I have a
-> `zts` command".
-
 ---
 
-## 1. Build it from a checkout (currently the only way)
+## 1. Install the binary
 
-There are no published binaries yet, so build from source.
-
-```bash
-git clone https://github.com/umiturtle/Z-Ts.git
-cd Z-Ts
-./zigw build            # installs Zig 0.17 and produces zig-out/bin/zts
-```
-
-Put the result on `PATH` and it works outside the repository.
+Download one file for your OS from [GitHub Releases](https://github.com/umiturtle/Z-Ts/releases)
+(named like `zts-0.1.0-linux-x86_64`). About 300 KB, **a single binary with no libc dependency** —
+nothing to put beside it.
 
 ```bash
+# Linux / macOS (pick the name that matches your machine, e.g. `linux-aarch64`)
+curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
+chmod +x zts-0.1.0-linux-x86_64
 mkdir -p ~/.local/bin
-cp zig-out/bin/zts ~/.local/bin/
+mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
 export PATH="$HOME/.local/bin:$PATH"
 zts version             # → zts 0.1.0
 ```
 
-> `./zigw` needs only Python 3.8+ and installs Zig 0.17.0 into `/tmp` (a fresh container installs
-> it again). If you already have `zig`, plain `zig build` produces the same binary.
+```powershell
+# Windows (PowerShell)
+New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
+Invoke-WebRequest `
+  https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-windows-x86_64.exe `
+  -OutFile "$HOME\bin\zts.exe"
+$env:PATH = "$HOME\bin;$env:PATH"
+zts version
+```
 
-## 2. The Zig that `zts` uses
-
-At build time `zts` remembers **the checkout it was built from** and writes that relative path
-into the `build.zig.zon` of every project it generates. At run time it spawns `zig` as a child
-process, so **a 0.17-series `zig` must be on `PATH`**.
+Every release ships `SHA256SUMS`; use it only if you want to check the download.
 
 ```bash
-export ZTS_ZIG="$(./zigw zig-path)"   # once, inside the checkout: the Zig this repo uses
-zts doctor                            # checks zig / z_ts / package / dependency / web
+sha256sum -c SHA256SUMS --ignore-missing
 ```
 
-`all checks passed` means you are done.
+## 2. Put `zig` on `PATH`
 
-## 3. You moved the checkout (or want a different one)
+`zts` only spawns `zig build` — it carries no compiler. Install a 0.17-series `zig` and make sure it
+is on `PATH` ([ziglang.org/download](https://ziglang.org/download/)).
 
-Copy `zts` to another machine and the remembered path no longer exists. `zts doctor` says so:
-
-```text
-  z_ts         MISSING at /home/you/Z-Ts — rebuild zts or pass --zts-path
+```bash
+zig version             # → 0.17.0
+zts doctor              # with a release binary the checkout line reads "(none — release build)"
 ```
 
-Three fixes.
+If Zig lives somewhere else, point at it once:
 
-| Approach | Command |
+```bash
+export ZTS_ZIG=/opt/zig/zig
+```
+
+## 3. Your first project
+
+```bash
+zts init my-app
+cd my-app
+zts build
+./zig-out/bin/my_app    # .\zig-out\bin\my_app.exe on Windows
+```
+
+The **first** `zts build` fetches the Z-Ts source archive, because the generated `build.zig.zon`
+contains this line (baked into the binary — you never type it):
+
+```zig
+.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+```
+
+Zig caches what it fetched, so later builds work offline. **You do not need a checkout of Z-Ts.**
+
+> You can inspect the archive yourself:
+> `zig fetch https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz`
+
+## 4. Building `zts` from a checkout
+
+If you are changing Z-Ts itself, or would rather not use a published binary, build from source.
+Bring your own `zig`.
+
+```bash
+git clone https://github.com/umiturtle/Z-Ts.git
+cd Z-Ts
+zig build                # → zig-out/bin/zts (needs Zig 0.17 on PATH)
+```
+
+A `zts` built this way **remembers its checkout**: every project it scaffolds gets a relative path
+in `build.zig.zon`.
+
+```zig
+.z_ts = .{ .path = "../../../home/you/Z-Ts" },
+```
+
+Move the checkout and existing projects lose that path. Pick one fix:
+
+| Fix | Command |
 |---|---|
-| put a checkout at that path | `cp -r Z-Ts /home/you/Z-Ts` |
-| pass the path while generating | `zts init my-app --zts-path /path/to/Z-Ts` |
-| rewrite an existing project | `.z_ts = .{ .path = "…" }` in `build.zig.zon` |
+| scaffold again, pointing at the release | `zts init my-app --zts-url <url> --zts-hash <hash>` |
+| scaffold again, pointing at a checkout | `zts init my-app --zts-path /path/to/Z-Ts` |
+| repair a project in place | change `.z_ts` in `build.zig.zon` to `.url`+`.hash` or a new `.path` |
+| rebuild `zts` | `zig build` in the new checkout |
 
-Rebuilding `zts` from the new checkout is the most reliable option.
+> `./zigw` (which installs Zig into `/tmp`) is still handy for building and testing the repository.
+> It is **not a distribution artifact**; installing `zts` does not involve it. See
+> [`../../contributing/README.md`](../../../contributing/README.md).
 
-## 4. Per-platform prerequisites
+## 5. Per-platform prerequisites
 
 | OS | Needed | Note |
 |---|---|---|
 | Linux | GTK3 + WebKit2GTK 4.1 (`libgtk-3-dev libwebkit2gtk-4.1-dev`) | without them `zts build` drops the GTK backend |
 | macOS | Xcode Command Line Tools | the Cocoa backend uses the macOS SDK |
 | Windows | WebView2 Runtime (bundled with Windows 11) | a single `.exe`, no DLLs to ship |
-
-Zig is a child process: **0.17 on `PATH` (or in `ZTS_ZIG`) is assumed**, and `zts` never bundles
-its own compiler.
 
 ---
 

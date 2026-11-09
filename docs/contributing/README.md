@@ -144,19 +144,43 @@ cd examples/counter
    `docs/architecture/` `docs/decisions/` `docs/tasks/`。迷ったら
    [`../learn/ja/guides/index.md`](../learn/ja/guides/index.md) §2 の表に従ってください。
 
-## 6. CI
+## 6. CI と配布
 
 `.github/workflows/ci.yml` は **Linux / macOS / Windows の 3 ジョブ + 3 OS の画素比較ジョブ +
 `ci-cli`（`zts` のスモーク）**を回します。`ci-cli` はチェックアウトの**外**にプロジェクトを
 作り、`zts init` → `doctor` → `build` → 実行 → `zts package --format tar.gz` まで通すので、
 「利用者がリポジトリを知らなくても使える」ことが常時検証されます（[`../tasks/M5-08-docs-audience-split.md`](../tasks/M5-08-docs-audience-split.md)）。
+Linux では加えて、**公開アーカイブを焼き込んだ release ビルド**が `.url` 依存のプロジェクトを
+生成し、空の Zig キャッシュから取得してビルドできることまで確認します。
 
 `pages.yml` は `main` への push でドキュメントサイトを GitHub Pages に公開します。
 
-* 失敗した Run のログは `gh run view --log` が `EOF` で落ちることがあります。
-  `bash scripts/ci-logs.sh <run_id>` を使ってください。
-* スクリーンショットの比較だけが落ちる場合は
-  [`troubleshooting.md`](troubleshooting.md) §CI を参照。
+### 6.1 何を配るか
+
+| 配るもの | 何か | 誰が使うか |
+|---|---|---|
+| `zts-<version>-<os>-<arch>[.exe]` | **`zts` の単体バイナリ**（約 300 KB、`link_libc = false`） | アプリを作る人 |
+| `z_ts-<version>.tar.gz` | Z-Ts のソースアーカイブ（`git archive`） | 生成したプロジェクトの `build.zig.zon` が `.url` で参照する |
+| `SHA256SUMS` | 上記のチェックサム | 検証したい人 |
+
+`./zigw` は**配りません**。Zig を `/tmp` に導入して `zig build` を呼ぶだけのリポジトリ専用
+ラッパーで、`zts` を入れる人には不要です（`zts` は `PATH` の `zig` を使う）。
+
+### 6.2 release ビルドの作り方
+
+`zts` は既定で「自分をビルドしたチェックアウト」を生成プロジェクトに書き込みます。配布用には、
+公開アーカイブの URL と `zig fetch` の hash を**焼き込んで**ビルドします。
+
+```bash
+./zigw build -Doptimize=ReleaseSmall \
+  -Dzts-pkg-url="https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz" \
+  -Dzts-pkg-hash="z_ts-0.1.0-…"      # zig fetch <そのアーカイブ> が返す値
+```
+
+こうしてできた `zts` は `.url` + `.hash` を書くので、利用者は clone を持たずに `zig build` できます。
+片方だけ指定すると `build.zig` が `panic` します（Zig が読めない `build.zig.zon` を作らないため）。
+`v*` タグを push すると `.github/workflows/release.yml` がこの手順を 3 OS で回し、
+アーカイブ・バイナリ・`SHA256SUMS` を GitHub Releases に公開します。
 
 ## 7. うまくいかないとき
 

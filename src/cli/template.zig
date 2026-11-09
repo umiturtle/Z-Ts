@@ -26,10 +26,20 @@ pub const max_name_len = 64;
 pub const Options = struct {
     /// Package name: `[a-z][a-z0-9_]*`, at most [`max_name_len`] characters.
     name: []const u8,
-    /// Path to the Z-Ts checkout that `build.zig.zon` depends on.
+    /// Path to the Z-Ts checkout that `build.zig.zon` depends on. Ignored when [`zts_url`] is set.
     zts_path: []const u8 = "../Z-Ts",
+    /// Published Z-Ts archive (`https://…/z_ts-0.1.0.tar.gz`). When both this and [`zts_hash`]
+    /// are set, the generated project depends on the *release* and needs no checkout on disk —
+    /// which is what a `zts` installed from a release archive emits.
+    zts_url: ?[]const u8 = null,
+    /// `zig fetch` hash of [`zts_url`] (`z_ts-0.1.0-…`).
+    zts_hash: ?[]const u8 = null,
     /// Value written for `.fingerprint`; `0` means "patch it after the first build".
     fingerprint: u64 = 0,
+
+    pub fn usesRelease(self: Options) bool {
+        return self.zts_url != null and self.zts_hash != null;
+    }
 };
 
 pub const File = struct {
@@ -103,7 +113,20 @@ pub fn scaffold(alloc: Allocator, options: Options) Allocator.Error![]File {
     return files;
 }
 
-/// Replaces the three `{{…}}` placeholders. Written as a manual scan (not `std.fmt`) because the
+/// The `.z_ts = …` expression: a release archive when the binary knows one, a checkout path
+/// otherwise. A published `zts` must never write a path into the user's project — that path is
+/// on the machine that built the binary, not on the reader's.
+fn writeDependency(w: *std.Io.Writer, options: Options) std.Io.Writer.Error!void {
+    if (options.zts_url) |url| {
+        if (options.zts_hash) |hash| {
+            try w.print(".{{ .url = \"{s}\", .hash = \"{s}\" }}", .{ url, hash });
+            return;
+        }
+    }
+    try w.print(".{{ .path = \"{s}\" }}", .{options.zts_path});
+}
+
+/// Replaces the `{{…}}` placeholders. Written as a manual scan (not `std.fmt`) because the
 /// payload is Zig source full of braces — `{{` means something completely different to `std.fmt`.
 pub fn render(alloc: Allocator, body: []const u8, options: Options) Allocator.Error![]u8 {
     var out: std.Io.Writer.Allocating = .init(alloc);
@@ -118,6 +141,8 @@ pub fn render(alloc: Allocator, body: []const u8, options: Options) Allocator.Er
             out.writer.writeAll(options.name) catch return error.OutOfMemory;
         } else if (std.mem.eql(u8, token, "ZTS_PATH")) {
             out.writer.writeAll(options.zts_path) catch return error.OutOfMemory;
+        } else if (std.mem.eql(u8, token, "Z_TS_DEP")) {
+            writeDependency(&out.writer, options) catch return error.OutOfMemory;
         } else if (std.mem.eql(u8, token, "FINGERPRINT")) {
             out.writer.print("0x{x:0>16}", .{options.fingerprint}) catch return error.OutOfMemory;
         } else {
@@ -272,7 +297,7 @@ const build_zon =
     \\    .fingerprint = {{FINGERPRINT}},
     \\    .minimum_zig_version = "0.17.0",
     \\    .dependencies = .{
-    \\        .z_ts = .{ .path = "{{ZTS_PATH}}" },
+    \\        .z_ts = {{Z_TS_DEP}},
     \\    },
     \\    .paths = .{
     \\        "build.zig",
@@ -405,6 +430,35 @@ test "scaffold is deterministic and every placeholder is substituted" {
     try testing.expect(std.mem.indexOf(u8, build_zig_source, ".name = \"demo_app_embed\"") != null);
 
     try testing.expect(std.mem.indexOf(u8, files[5].contents, "demo_app booted") != null);
+}
+
+test "a release dependency replaces the checkout path" {
+    // What a `zts` built for a release emits: the project can be built on a machine that has
+    // never seen the Z-Ts checkout.
+    const files = try scaffold(testing.allocator, .{
+        .name = "demo_app",
+        .zts_url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz",
+        .zts_hash = "z_ts-0.1.0-AAAA",
+    });
+    // One defer, contents before the array: two separate defers would free the array first and
+    // then read its (freed) elements.
+    defer {
+        for (files) |file| testing.allocator.free(file.contents);
+        testing.allocator.free(files);
+    }
+
+    const zon = files[3].contents;
+    try testing.expect(std.mem.indexOf(u8, zon, ".z_ts = .{ .url = \"https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz\", .hash = \"z_ts-0.1.0-AAAA\" }") != null);
+    try testing.expect(std.mem.indexOf(u8, zon, ".path =") == null);
+
+    // A half-specified release (url without hash) falls back to the path form rather than emitting
+    // a `build.zig.zon` Zig cannot load.
+    const partial = try scaffold(testing.allocator, .{ .name = "demo_app", .zts_url = "https://example.invalid/z_ts.tar.gz" });
+    defer {
+        for (partial) |file| testing.allocator.free(file.contents);
+        testing.allocator.free(partial);
+    }
+    try testing.expect(std.mem.indexOf(u8, partial[3].contents, ".path = \"../Z-Ts\"") != null);
 }
 
 test "scaffold output is byte-identical across runs" {

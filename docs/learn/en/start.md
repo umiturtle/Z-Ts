@@ -1,7 +1,7 @@
 # Your first ten minutes with Z-Ts
 
 > **Audience**: anyone who has not run Z-Ts yet. No Zig or Web knowledge assumed.
-> **Time**: 10 minutes. **What you need**: a terminal, `git`, and Python 3.8+ (Zig installs itself).
+> **Time**: 10 minutes. **What you need**: a terminal, Zig 0.17, and the `zts` binary (one file).
 > **What you get**: your own project running in a browser, plus a single binary in `zig-out/bin/`.
 
 Work through this page top to bottom and you will have Z-Ts running. There is no architecture
@@ -9,42 +9,36 @@ talk here: **run it first, understand it second**, which is how the rest of thes
 
 ```text
 ① get zts ──► ② scaffold ──► ③ serve ──► ④ edit ──► ⑤ build a binary
-  ./zigw build    zts init     zts dev    web/index.html     zts build
+  install zts     zts init     zts dev    web/index.html     zts build
 ```
 
 ---
 
 ## 1. Get `zts` (3 minutes)
 
-`zts` is the CLI that drives a Z-Ts project. There are no release binaries yet, so you build it
-from a checkout.
+`zts` is the CLI that drives a Z-Ts project. What you install is **one binary** (about 300 KB, no
+libc dependency); you bring Zig.
 
 ```bash
-git clone https://github.com/umiturtle/Z-Ts.git
-cd Z-Ts
-./zigw build            # installs Zig 0.17, then writes zig-out/bin/zts
-```
+# 1) Zig 0.17 on PATH (skip if you already have it)
+zig version             # → 0.17.0
 
-Put it on your `PATH` so the rest of the commands work outside the checkout.
-
-```bash
+# 2) download the zts binary for your OS and put it on PATH
+curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
+chmod +x zts-0.1.0-linux-x86_64
 mkdir -p ~/.local/bin
-cp zig-out/bin/zts ~/.local/bin/
+mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
 export PATH="$HOME/.local/bin:$PATH"
 zts version             # → zts 0.1.0
 ```
 
-`zts` runs **`zig` as a child process** on every build. If `zig` is not on your `PATH` (the
-`./zigw` case: it installs into `/tmp`), run this line **inside the checkout** once.
-
-```bash
-export ZTS_ZIG="$(./zigw zig-path)"   # → /tmp/zts-toolchains/zig-0.17.0/ziglang/zig
-```
+**No clone, no `./zigw`.** `zts` only spawns `zig`. The PowerShell command, `ZTS_ZIG`, and platform
+packages are in [`guides/install.md`](guides/install.md).
 
 > [!NOTE]
-> `./zigw` needs Python 3.8+ and nothing else; `zig build` produces the same binary if you already
-> have Zig 0.17. Platform packages and the `ZTS_ZIG` override are in
-> [`guides/install.md`](guides/install.md).
+> Working on Z-Ts itself, or prefer source builds? `git clone` + `zig build` produces the same
+> binary (`./zigw` is that repository's bootstrap wrapper, not a distributed artifact). A `zts`
+> built that way makes generated projects depend on the checkout via `.path`.
 
 ## 2. Check the environment (1 minute)
 
@@ -56,8 +50,8 @@ zts doctor
 
 | Output | Meaning | Fix |
 |---|---|---|
-| `zig MISSING` | `zts` cannot start the Zig compiler | `export ZTS_ZIG="$(./zigw zig-path)"` (inside the checkout) |
-| `z_ts MISSING at …` | the checkout that built `zts` is gone | move the checkout there, or pass `zts init --zts-path` |
+| `zig          MISSING` | `zts` cannot find the Zig compiler | install Zig 0.17 on `PATH`, or `export ZTS_ZIG=<path to zig>` |
+| `z_ts MISSING at …` | (source builds only) the checkout that built `zts` is gone | move the checkout there, or pass `zts init --zts-path` |
 | a `gtk` / `webkit` warning | Linux GUI libraries are absent | ignore it while you are only serving the front end |
 
 ## 3. Create a project (1 minute)

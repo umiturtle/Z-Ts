@@ -33,6 +33,11 @@ pub const Init = struct {
     /// Path to the Z-Ts checkout the generated `build.zig.zon` depends on. `null` means "the
     /// checkout that built this `zts` binary" — correct no matter where the project is created.
     zts_path: ?[]const u8 = null,
+    /// Published Z-Ts archive to depend on instead of a checkout (`--zts-url`). Must come with
+    /// `zts_hash`; the pair is what a release build bakes in by default.
+    zts_url: ?[]const u8 = null,
+    /// `zig fetch` hash of `zts_url` (`--zts-hash`).
+    zts_hash: ?[]const u8 = null,
     /// Write even when the target directory already has files.
     force: bool = false,
 };
@@ -98,6 +103,9 @@ pub const ParseError = error{
     MissingValue,
     InvalidPort,
     UnexpectedArgument,
+    /// `--zts-url` and `--zts-hash` are a pair; one without the other cannot be written into a
+    /// loadable `build.zig.zon`.
+    IncompleteZtsRelease,
 };
 
 /// Parses `argv[1..]`.
@@ -143,6 +151,10 @@ fn parseInit(rest: []const []const u8) ParseError!Init {
             out.name = value;
         } else if (try flagValue(rest, &i, arg, "--zts-path")) |value| {
             out.zts_path = value;
+        } else if (try flagValue(rest, &i, arg, "--zts-url")) |value| {
+            out.zts_url = value;
+        } else if (try flagValue(rest, &i, arg, "--zts-hash")) |value| {
+            out.zts_hash = value;
         } else if (std.mem.startsWith(u8, arg, "--")) {
             return error.UnknownFlag;
         } else {
@@ -152,6 +164,9 @@ fn parseInit(rest: []const []const u8) ParseError!Init {
     }
 
     if (positional) |dir| out.dir = dir;
+    // A URL without its hash produces a `build.zig.zon` Zig refuses to load, so reject it here
+    // rather than writing a project that fails on the first build.
+    if ((out.zts_url == null) != (out.zts_hash == null)) return error.IncompleteZtsRelease;
     return out;
 }
 
@@ -274,6 +289,8 @@ pub const usage_text =
     \\  --dir <path>        Target directory                  (default ".")
     \\  --name <name>       Package name                      (default: directory base name)
     \\  --zts-path <path>   Path to the Z-Ts checkout         (default: the one that built `zts`)
+    \\  --zts-url <url>     Published Z-Ts archive            (with --zts-hash: no checkout needed)
+    \\  --zts-hash <hash>   `zig fetch` hash of --zts-url
     \\  --force             Allow scaffolding into a non-empty directory
     \\
     \\dev options:
@@ -348,6 +365,15 @@ test "`init --dir` and `--zts-path` are independent of the positional form" {
     const cmd = try parse(&.{ "init", "--dir", "/tmp/x", "--zts-path", "/src/Z-Ts" });
     try testing.expectEqualStrings("/tmp/x", cmd.init.dir);
     try testing.expectEqualStrings("/src/Z-Ts", cmd.init.zts_path.?);
+}
+
+test "`init --zts-url` requires the matching hash" {
+    const cmd = try parse(&.{ "init", "app", "--zts-url", "https://example.invalid/z_ts.tar.gz", "--zts-hash", "z_ts-0.1.0-AAAA" });
+    try testing.expectEqualStrings("https://example.invalid/z_ts.tar.gz", cmd.init.zts_url.?);
+    try testing.expectEqualStrings("z_ts-0.1.0-AAAA", cmd.init.zts_hash.?);
+
+    try testing.expectError(error.IncompleteZtsRelease, parse(&.{ "init", "app", "--zts-url", "https://example.invalid/z_ts.tar.gz" }));
+    try testing.expectError(error.IncompleteZtsRelease, parse(&.{ "init", "app", "--zts-hash", "z_ts-0.1.0-AAAA" }));
 }
 
 test "`init` rejects two positional directories" {
