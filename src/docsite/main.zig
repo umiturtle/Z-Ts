@@ -1850,7 +1850,11 @@ fn renderLlmsTxt(arena: Allocator, groups_ja: []const site.Group, groups_en: []c
     try w.writeAll("- 対応: Zig 0.17.0 / Tauri v2（`@tauri-apps/api` を無改変で利用）\n");
     try w.writeAll("- パッケージ: zts_foundation, zts_web, zts_core, zts_rpc, zts_bridge, zts_webview, zts_tauri, zts_wasm, zts_ssg, z_ts\n");
     try w.writeAll("- 全文 / full text: llms-full.txt / エラー索引: docs/reference/errors.html\n");
-    try w.writeAll("- 英語の学習パス / English learning path: docs/learn/en/index.html\n\n");
+    try w.writeAll(
+        // The first thing a model should be told is where a human starts, in both languages.
+        "- はじめかた / start here: docs/learn/ja/start.html (10 分) · docs/learn/en/start.html (10 min)\n" ++
+            "- 学習パス / learning path: docs/learn/ja/index.html · docs/learn/en/index.html\n\n",
+    );
 
     for ([_][2][]const u8{ .{ "日本語", "ja" }, .{ "English", "en" } }, 0..) |lang, lang_index| {
         try w.print("# {s}\n\n", .{lang[0]});
@@ -1916,16 +1920,20 @@ fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang) ![]const u8 {
     // The four entry points, in the same order as the landing page: a lost reader should not have
     // to guess where to go next.
     const Link = struct { href: []const u8, label: []const u8 };
+    // `start.html` is first: a reader who mistyped a URL is a beginner more often than not, and a
+    // 404 is the worst place to hand them a five-way menu.
     const links: []const Link = if (lang == .en) &.{
         .{ .href = "en/index.html", .label = "Home" },
-        .{ .href = "docs/learn/en/index.html", .label = "Learn (5 minutes)" },
+        .{ .href = "docs/learn/en/start.html", .label = "Your first ten minutes" },
+        .{ .href = "docs/learn/en/index.html", .label = "The learning path" },
         .{ .href = "docs/learn/en/tutorials/counter.html", .label = "Tutorial: counter" },
         .{ .href = "docs/learn/en/concepts/index.html", .label = "Concepts" },
         .{ .href = "docs/learn/en/guides/rpc.html", .label = "Guides: commands" },
         .{ .href = "docs/api/index.html", .label = "API reference (A–Z)" },
     } else &.{
         .{ .href = "index.html", .label = "ホーム" },
-        .{ .href = "docs/learn/ja/index.html", .label = "学ぶ（5 分）" },
+        .{ .href = "docs/learn/ja/start.html", .label = "はじめての Z-Ts（10 分）" },
+        .{ .href = "docs/learn/ja/index.html", .label = "学習パス" },
         .{ .href = "docs/learn/ja/tutorials/counter.html", .label = "チュートリアル: カウンター" },
         .{ .href = "docs/learn/ja/concepts/index.html", .label = "概念" },
         .{ .href = "docs/learn/ja/guides/rpc.html", .label = "ガイド: コマンド" },
