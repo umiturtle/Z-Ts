@@ -216,6 +216,12 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 `zigw` が 1 語でもあれば落とします（「`./zigw build` でビルドできます」は、いちばん最初に
 踏む壊れた手順になります）。
 
+読者向けのページを足したら、[`../INDEX.md`](../INDEX.md) にも 1 行足します。索引は
+サイドバーを手で写したものなので、放っておくと「サイドバーにしか無いページ」ができます。
+規約 11 が、`docs/learn/ja/`・`docs/reference/`・`docs/contributing/`・`examples/*/README.md`
+の全ページ（と用語集）が索引からリンクされているかを検査します。**順番は検査しません** —
+並びは `src/docsite/main.zig` の `GroupKey` が正本です。
+
 ## 9. 2 言語で書く（英語と日本語）
 
 読者向けのページは **`docs/learn/ja/` と `docs/learn/en/` に同じファイル名で 1 本ずつ**置きます。
@@ -261,6 +267,7 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `duplicate glossary term` | 同じ用語を 2 回定義 | 1 つに統合し、片方からリンク |
 | `docs/learn/en/…: missing translation (exists in ja)` | 片方の言語にしか無い | 同じパスで翻訳を足す（規約 8） |
 | `docs/learn/…: mentions 'zigw'` | 読者向けページに開発用ラッパーを書いた | `zts` と `zig` の手順に直す（規約 10）。`zigw` は `docs/contributing/` だけ |
+| `docs/INDEX.md: does not link 'learn/ja/…'` | ページを足して索引を忘れた | [`../INDEX.md`](../INDEX.md) の該当グループに 1 行足す（規約 11） |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

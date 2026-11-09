@@ -1,80 +1,169 @@
-# Z-Ts ドキュメント索引（Documentation Hub）
+# ドキュメント索引
 
-`Z-Ts` では、**エージェントの定期的な記憶リセット（Context Compaction）への耐性** と **複数エージェントの同時並列開発（Git コンフリクトゼロ）** を両立するため、用途ごとに Markdown ファイルを厳格に分離しています。
+> **対象読者**: 次にどのページを読むか決めたい人。名前から引きたい人。
+> **所要時間**: 目次として 30 秒。
 
----
+公開サイト（<https://umiturtle.github.io/Z-Ts/>）の**サイドバーと同じ並び**で並べた索引です。
+サイトでは `/` キーで全文検索、右上の `日本語 / English` で言語を切り替えられます。
 
-## まず「どちらの読者か」を決める
+**10 分だけあるなら** → [はじめての Z-Ts](learn/ja/start.md)。
+読み物として全体像から入るなら → [Z-Ts を学ぶ（学習パス）](learn/ja/index.md)。
 
-Z-Ts には**2 つの読者**がいて、コマンドもページも別です。混ぜると、アプリを作りたい人に
-リポジトリ運用の手順が、リポジトリを直したい人にアプリの使い方が見えてしまいます。
+## 3 つの入口
+
+Z-Ts には読者が 3 種類いて、使うコマンドもページも別です。混ぜると、アプリを作りたい人に
+リポジトリ運用の手順が、本体を直したい人にアプリの使い方が見えてしまいます。
 
 | あなたは | 入口 | 使うコマンド |
 |---|---|---|
-| **Z-Ts でアプリを作りたい** | [`learn/ja/start.md`](learn/ja/start.md)（英語は [`learn/en/start.md`](learn/en/start.md)） → [`learn/ja/index.md`](learn/ja/index.md)（5 ステップの学習パス） | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
-| **Z-Ts 本体を開発・公開したい** | [`contributing/README.md`](contributing/README.md) | `zig build` / `scripts/*` |
+| **アプリを作りたい** | [はじめての Z-Ts](learn/ja/start.md) → [学習パス](learn/ja/index.md)（英語は [`learn/en/`](learn/en/index.md)） | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
+| **名前から引きたい** | [API リファレンス](api/index.html) / [用語集](glossary.md) / [エラー索引](reference/errors.html) | — |
+| **Z-Ts 本体を開発したい** | [コントリビュータ向け](contributing/README.md) → [リポジトリの地図](contributing/repository-map.md) | `zig build` / `scripts/*` |
 
-## 読み手ごとの 3 層（+ 内部資料）
+## 学習パス（5 ステップ・およそ 60 分）
 
-| 層 | 正本 | 読むもの |
+サイトのランディングと各ページ上部のレールに出ている道順と同じです。順番を飛ばすのも自由ですが、
+飛ばした分だけ後のページで用語を引き直すことになります。
+
+| # | ステップ | 分 | 終わったとき | 入口 |
+|---|---|---|---|---|
+| 1 | はじめての Z-Ts | 10 | 自分のアプリがブラウザで動き、`zig-out/bin/` に単一バイナリがある | [start.md](learn/ja/start.md) |
+| 2 | 仕組みを知る | 15 | 「ボタン → Zig の関数」がどこを通るか説明できる | [concepts/](learn/ja/concepts/index.md) |
+| 3 | アプリを作る | 15 | 自作コマンドを書き、テストし、配れる形にできる | [tutorials/](learn/ja/tutorials/index.md) |
+| 4 | 実用パターン | 20 | コマンド・状態・エラーの設計を、練習問題で自分の言葉にできる | [patterns/](learn/ja/patterns/index.md) |
+| 5 | 目的から引く | — | やりたいことから必要なページに 1 ホップで行ける | [guides/](learn/ja/guides/index.md) |
+
+**英語版は `learn/en/` に同じファイル名であります**（言語切替がパス置換だけで済むため）。
+`learn/ja/` と `learn/en/` のファイル名は `check-docs.py` が突き合わせているので、片方だけ
+足すと CI が落ちます。
+
+---
+
+## サイトの並び
+
+### 学習パス
+
+| ページ | 1 文でいうと |
+|---|---|
+| [Z-Ts を学ぶ](learn/ja/index.md) | 道順・30 秒の全体像・前提知識・目的別の入口。まずここから |
+| [はじめての Z-Ts](learn/ja/start.md) | バイナリを置く → `doctor` → `init` → `dev` → `build` を 1 ページで（10 分） |
+
+### 2 · 仕組みを知る
+
+| ページ | 1 文でいうと |
+|---|---|
+| [概念](learn/ja/concepts/index.md) | 3 つの登場人物（ページ / ブリッジ / コマンド）で全体を言い直す |
+| [パッケージ構成](learn/ja/concepts/architecture.md) | 6 つの層が 1 方向にだけ依存する。どこに何を書くか |
+| [コマンドが届くまで](learn/ja/concepts/commands.md) | `invoke` が Zig の関数になるまで。`Schema` の役割と型検査 |
+| [プラグイン](learn/ja/concepts/plugins.md) | Tauri 標準の 7 プラグインと `withCorePlugins` |
+| [セキュリティ](learn/ja/concepts/security.md) | 既定は拒否。capability・scope・CSP と、守らないこと |
+
+### 3 · アプリを作る
+
+| ページ | 1 文でいうと |
+|---|---|
+| [チュートリアル](learn/ja/tutorials/index.md) | 手を動かす章の入口。進め方と前提 |
+| [カウンターを作る](learn/ja/tutorials/counter.md) | `zts init` → コマンド → 画面 → `dev` → `build` → `doctor`（15 分） |
+
+### 4 · 実用パターン
+
+| ページ | 1 文でいうと | 練習 |
 |---|---|---|
-| ① 学ぶ | 手順と最小例 | [`learn/`](learn/ja/index.md) — **はじめての Z-Ts → 仕組み → アプリ → 引く**の 1 本道（日英 2 言語・同名ファイル） |
-| ② 引く | **Zig のソース**（`///`） | API リファレンス（生成物・非コミット。`zig build docs`） |
-| ③ 確かめる | 振る舞いの約束 | [`reference/cli.md`](reference/cli.md)（`zts` の仕様）/ [`reference/tauri-usage.md`](reference/tauri-usage.md) |
-| ④ 中を読む | ADR・設計メモ・タスク | 下の `architecture/` `decisions/` `roadmap/` `tasks/` `environment/`（任意） |
+| [実用パターン](learn/ja/patterns/index.md) | 動くコードを、壊れにくい形にする。章の早見表 | — |
+| [コマンドの設計](learn/ja/patterns/commands.md) | 粒度・引数・戻り値・命名。動詞 1 つ = コマンド 1 つ | 3 問 |
+| [状態の置き場所](learn/ja/patterns/state.md) | 正しさが要るなら Zig、見た目だけならフロント | 2 問 |
+| [エラーの設計](learn/ja/patterns/errors.md) | `error{}` の粒度、境界での検証、UI に出す翻訳 | 3 問 |
+| [画面とロジックの境界](learn/ja/patterns/boundaries.md) | `$try` と throw の使い分け、楽観更新、二重送信 | 2 問 |
 
-**①〜③ だけでライブラリは使えます。** ④ は実装の意図と経緯の記録で、公開サイトでは
-`内部資料` 1 エントリに畳み、検索索引からも外しています
-（[`learn/ja/index.md`](learn/ja/index.md) と [`learn/en/index.md`](learn/en/index.md)）。
+### 5 · 目的から引く
 
-リポジトリの操作（`zig build` のステップ・CI・ドキュメントサイト）は ①〜④ の**外**にあり、
-[`contributing/`](contributing/README.md) に隔離しています。公開サイトのサイドバーでも
-`開発` という独立したグループになります。
+| ページ | 1 文でいうと |
+|---|---|
+| [ガイド](learn/ja/guides/index.md) | やりたいことから引く索引。全部読む必要はない |
+| [`zts` を手元に用意する](learn/ja/guides/install.md) | 配布バイナリ・`PATH`・`ZTS_ZIG`・ソースからのビルド |
+| [コマンドを書く](learn/ja/guides/rpc.md) | `zts_rpc`: コマンド定義 → `Schema` → `bind` → `dispatch` → TypeScript 生成 |
+| [Tauri 標準プラグイン](learn/ja/guides/plugins.md) | window / event / path / fs / dialog / clipboard / menu / tray と capability |
+| [静的サイトを書き出す](learn/ja/guides/static-site.md) | `exportStaticSite` と WASM。サーバ不要の `dist/` |
+| [配布物を作る](learn/ja/guides/package.md) | `zts package`: `.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz` |
+| [Tauri v2 からの移行](learn/ja/guides/migrate-from-tauri.md) | `tauri.conf.json`・ACL・コマンド・プラグインの対応表 |
+| [トラブルシューティング](learn/ja/guides/troubleshooting.md) | `zts` のエラーと、その直し方 |
 
-## ディレクトリマップ
+### リファレンス
 
-| パス | 役割 | 更新頻度・競合リスク |
-|---|---|---|
-| [`../AGENTS.md`](../AGENTS.md) | 全エージェント必読のエントリーポイント・運用ルール | 低頻度（進捗追記禁止） |
-| [`architecture/00-overview.md`](architecture/00-overview.md) | Z-Ts 6 パッケージ直交アーキテクチャ・依存 DAG・モジュール境界契約 | 中頻度（全体方針変更時） |
-| [`architecture/web-zig-boundary.md`](architecture/web-zig-boundary.md) | HTML / CSS / TS ⇔ Zig `0.17.0` 言語仕様ギャップ 10 項目の解決規約 | 境界仕様（全パッケージ必読） |
-| [`architecture/ssg-and-wasm.md`](architecture/ssg-and-wasm.md) | 双方向 SSG（`embedFrontendDir` / `dist/` 出力）と `zts_wasm` 4 モード同型アーキテクチャ | サブシステム設計（静的 Web 出力時） |
-| [`architecture/zts-webview-backends.md`](architecture/zts-webview-backends.md) | `zts_webview` 4 バックエンドの共通契約・Overlay 埋め込み・C ABI・スクリーンショット取得・テスト戦略 | サブシステム設計（WebView 全般） |
-| [`architecture/build-tools.md`](architecture/build-tools.md) | `build.zig` 統合ヘルパー（`embedFrontend` の gzip/CSP マニフェスト生成・`tsgen` の生成/検証 2 モード・3 層構造）（`M5-01`） | サブシステム設計（ビルド統合時） |
-| [`architecture/documentation-site.md`](architecture/documentation-site.md) | ドキュメントサイト生成（Markdown → 静的 HTML・リンク検査・検索インデックス・サンプル公開）（`M5-06`） | サブシステム設計（ドキュメント公開時） |
-| [`architecture/screenshot-parity.md`](architecture/screenshot-parity.md) | 3 OS で「同じ表示」を保証する仕組み（同梱フォント・レイアウト指紋・画素許容差・9 フレームワーク） | サブシステム設計（CI 回帰） |
-| [`architecture/tauri-fs-plugin.md`](architecture/tauri-fs-plugin.md) | スコープ付きファイルシステム `plugin:fs`（正規化 → リンク解決 → 包含判定・全コマンド表・エラーコード） | サブシステム設計（FS 利用時） |
-| [`architecture/tauri-config-import-acl.md`](architecture/tauri-config-import-acl.md) | `tauri.conf.json` のインポートと `capabilities/*.json` の ACL（未知は警告・型違いはエラー・fail-closed） | Tauri プロジェクトを移行するとき |
-| [`architecture/tauri-menu-tray.md`](architecture/tauri-menu-tray.md) | ネイティブメニュー & システムトレイ `plugin:menu` / `plugin:tray`（平板スナップショット・22+12 コマンド・アクセラレータ） | サブシステム設計（メニュー/トレイ利用時） |
-| [`architecture/packaging-and-bench.md`](architecture/packaging-and-bench.md) | パッケージャ設計（PE `.rsrc` 追記・アーキ検出・`Depends` 生成・再現性）と対 Rust ベンチの設計（`M5-03`） | サブシステム設計（配布物・ベンチ） |
-| [`architecture/tauri-dialog-clipboard.md`](architecture/tauri-dialog-clipboard.md) | OS ダイアログ & クリップボード `plugin:dialog` / `plugin:clipboard-manager`（vtable + ネイティブ分離・untagged 戻り値・3 OS 対応表） | サブシステム設計（ダイアログ/クリップボード利用時） |
-| `architecture/<module>.md` | 各サブシステム詳細設計（例: `config.md`, `ipc.md`, `acl.md`, `window-linux.md`） | モジュール単位で完全独立 |
-| [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
-| [`roadmap/m1-foundation-packages.md`](roadmap/m1-foundation-packages.md) | M1 詳細仕様（コア 5 パッケージのファイル境界・公開型・DoD） | 実装仕様リファレンス |
-| [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
-| [`learn/ja/start.md`](learn/ja/start.md) | **はじめての Z-Ts**（10 分）: `zts` バイナリを置く → `zts doctor` → `init` → `dev` → `build` を 1 ページで。英語版は `learn/en/start.md` | 入門（最初に読む） |
-| [`learn/ja/index.md`](learn/ja/index.md) | **学習パス**: 5 ステップの道順・30 秒の全体像・前提知識・目的別の入口。英語版は `learn/en/index.md` | 入門（最初に読む） |
-| [`learn/ja/guides/install.md`](learn/ja/guides/install.md) | `zts` コマンドの入手（配布バイナリ・`PATH`・`ZTS_ZIG`・ソースからのビルド） | 入門（最初に読む） |
-| [`learn/ja/tutorials/counter.md`](learn/ja/tutorials/counter.md) | チュートリアル（15 分）: `zts init` → コマンド → `dev` → `build` → `doctor` | 入門（最初に読む） |
-| [`learn/ja/guides/package.md`](learn/ja/guides/package.md) | 配布物の作り方: `zts package`（`.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`）・アイコン・クロスビルド・CI | アプリが 1 つ動いたら |
-| [`learn/ja/guides/rpc.md`](learn/ja/guides/rpc.md) | RPC 層の使い方: コマンド定義 → `Schema` → `bind` → `dispatch` → TypeScript 生成 | 入門（コマンドを書く前に） |
-| [`learn/ja/guides/plugins.md`](learn/ja/guides/plugins.md) | Tauri 標準プラグイン（window/event/path/fs/dialog/clipboard/menu/tray）と capability | 入門（プラグイン利用時） |
-| [`learn/ja/guides/static-site.md`](learn/ja/guides/static-site.md) | 静的サイト書き出し（`exportStaticSite` / `ExportOptions` / WASM） | 入門（`dist/` を出すとき） |
-| [`learn/ja/guides/migrate-from-tauri.md`](learn/ja/guides/migrate-from-tauri.md) | Tauri v2 からの移行（`tauri.conf.json` / ACL / コマンド / プラグイン対応表） | 移行時 |
-| [`learn/ja/guides/troubleshooting.md`](learn/ja/guides/troubleshooting.md) | アプリ開発のトラブルシューティング（`zts` のエラーとその直し方） | 困ったとき |
-| [`contributing/README.md`](contributing/README.md) | **リポジトリ開発の入口**: `zig build` のステップ・スクリプト・変更の作法・CI | 本体を直すとき |
-| [`contributing/writing-docs.md`](contributing/writing-docs.md) | **ドキュメントの書き方**: 4 層・ページ骨格・xref・`zig check`・注記・用語集・内部 ID 禁止・生成物 | ページを書くとき |
-| [`contributing/troubleshooting.md`](contributing/troubleshooting.md) | リポジトリ開発のトラブルシューティング（ツールチェーン・コールドビルド・0.17 API 差分・Pages） | 本体で困ったとき |
-| [`tasks/TEMPLATE.md`](tasks/TEMPLATE.md) | 1タスク＝1ファイルの作業計画＆記憶チェックポイント標準テンプレート | テンプレート |
-| `tasks/<ID>-<slug>.md` | 個別タスクの進捗・設計メモ・次の1手（例: [`tasks/M0-01-bootstrap.md`](tasks/M0-01-bootstrap.md)） | **担当ブランチ専有（競合ゼロ）** |
-| `decisions/<NNNN>-<slug>.md` | アーキテクチャ意思決定記録（ADR）（[`0001`](decisions/0001-zig-017-and-sharded-agent-workflow.md), [`0002`](decisions/0002-hybrid-architecture-proposal.md), … , [`0009`](decisions/0009-screenshot-capture-and-ci-gallery.md), [`0010`](decisions/0010-cross-os-pixel-parity.md), [`0011`](decisions/0011-scoped-fs-plugin.md), [`0012`](decisions/0012-dialog-and-clipboard-backends.md), [`0013`](decisions/0013-menu-and-tray-backends.md), [`0014`](decisions/0014-config-import-and-acl.md), [`0015`](decisions/0015-native-menu-cocoa-win32.md), [`0016`](decisions/0016-native-tray-cocoa-win32.md), [`0017`](decisions/0017-build-tools.md), [`0018`](decisions/0018-documentation-site.md)） | **新規ファイル追加のみ（競合ゼロ）** |
-| [`../examples/counter/README.md`](../examples/counter/README.md) | ショーケースサンプル（1 プロジェクト → デスクトップ / Live Preview / 静的 SSG の 3 成果物） | 実装サンプル（追記のみ） |
-| [`../examples/c_embed/README.md`](../examples/c_embed/README.md) | 純粋な C99 ホストから既存ウィンドウへ Overlay 埋め込み（`M3-03`） | 実装サンプル（追記のみ） |
-| [`../examples/gallery/README.md`](../examples/gallery/README.md) | スクリーンショット回帰ギャラリー（17 パターン → PNG + `manifest.json`、CI が 3 OS で実行し相互比較）（`M5-04`/`M5-05`） | 実装サンプル（追記のみ） |
-| [`../examples/frameworks/README.md`](../examples/frameworks/README.md) | 9 フレームワーク（Angular/Solid/Svelte/SolidStart/Next/Nuxt/Astro/SvelteKit/React）の同一画面デモと再生成手順（`M5-05`） | 実装サンプル（追記のみ） |
-| [`environment/arena-and-caching.md`](environment/arena-and-caching.md) | 毎チャットキャッシュ揮発対策・LLVM 同梱検証・高速ビルド規約 | 環境変更時のみ |
-| [`environment/github-actions.md`](environment/github-actions.md) | GitHub Actions 3 OS マトリクス・キャッシュ自動配信・ベンチ/差分テスト運用 | CI 変更時のみ |
-| `api/**`（生成物・非コミット） | **API リファレンス** — `src/**.zig` の公開宣言から自動生成（`zig build docs`）。`docs/api/index.html` が入口 | 自動生成（手で編集しない） |
-| [`reference/cli.md`](reference/cli.md) | `zts` コマンドリファレンス（アプリ作者向け。リポジトリのコマンドは `contributing/README.md`） | リファレンス（追記のみ） |
-| [`reference/tauri-usage.md`](reference/tauri-usage.md) | Tauri v2 の使い方リファレンス（Rust/JS API・設定・Capabilities） | リファレンス（追記のみ） |
-| [`reference/tauri-internals.md`](reference/tauri-internals.md) | Tauri v2 内部実装の完全解剖（IPC プロトコル・マクロ・10個の内蔵 Plugin・OS 層） | リファレンス（追記のみ） |
+| ページ | 1 文でいうと |
+|---|---|
+| [`zts` コマンドリファレンス](reference/cli.md) | アプリ作者が使う CLI の全コマンドと全フラグ |
+| [用語集](glossary.md) | Pack・Host・Capability など、本文に出てくる言葉の定義 |
+| [エラー索引](reference/errors.html) | `error{…}` の名前から定義元へ（自動生成） |
+| [Tauri v2 の使い方](reference/tauri-usage.md) | 上流 Rust/JS API・設定・Capabilities の対応 |
+| [Tauri v2 の内部実装](reference/tauri-internals.md) | IPC プロトコル・マクロ・内蔵プラグインの解剖（移植の参考） |
+
+### API
+
+`///` から自動生成される API リファレンスです（**手で編集しない**。`zig build docs` が出力）。
+サイトでは全パッケージの公開宣言を、パッケージ別と名前順の両方から引けます。
+
+| 入口 | 中身 |
+|---|---|
+| [全体索引（A–Z）](api/index.html) | すべての公開宣言を名前順に |
+| [`zts_foundation`](api/zts_foundation/index.html) | 依存ゼロのデータ構造（`OwnedBytes` / `HandlePool` / geometry / glob） |
+| [`zts_web`](api/zts_web/index.html) | 静的資産配信（206 Range / MIME / URL / CSP） |
+| [`zts_core`](api/zts_core/index.html) | 基盤型・世代プール・Host 契約 |
+| [`zts_rpc`](api/zts_rpc/index.html) | comptime JSON/Binary RPC ルータと TypeScript 生成 |
+| [`zts_bridge`](api/zts_bridge/index.html) | HTTP/1.1 + SSE のライブサーバ |
+| [`zts_webview`](api/zts_webview/index.html) | GTK3+WebKit2GTK / Cocoa / Win32 / HeadlessMock |
+| [`zts_tauri`](api/zts_tauri/index.html) | Tauri v2 プロトコルと標準プラグイン |
+| [`zts_wasm`](api/zts_wasm/index.html) | wasm32-freestanding ランタイム |
+| [`zts_ssg`](api/zts_ssg/index.html) | `dist/` の書き出しと `dist/ → Zig` の埋め込み |
+| [`z_ts`](api/z_ts/index.html) | 全パッケージを束ねる入口（`@import("z_ts")`） |
+
+### サンプル
+
+どれも CI が 3 OS でビルドし、スクリーンショットを相互比較しています。
+
+| ページ | 1 文でいうと |
+|---|---|
+| [Counter](../examples/counter/README.md) | 1 プロジェクト → デスクトップ / Live Preview / 静的 SSG の 3 成果物 |
+| [フレームワーク 9 種](../examples/frameworks/README.md) | Angular / Solid / Svelte / SolidStart / Next / Nuxt / Astro / SvelteKit / React が同じ画面 |
+| [ギャラリー](../examples/gallery/README.md) | 17 パターンのスクリーンショット回帰（PNG + `manifest.json`） |
+| [C 埋め込み](../examples/c_embed/README.md) | 純粋な C99 ホストへ Overlay 埋め込み（Zig のコードは 0 行） |
+
+### リポジトリ開発
+
+| ページ | 1 文でいうと |
+|---|---|
+| [Z-Ts 自体を開発する](contributing/README.md) | ツールチェーン・`zig build` のステップ・変更の作法・CI |
+| [リポジトリの地図](contributing/repository-map.md) | どのファイルが何で、どのくらい触るか（並列開発の分割単位） |
+| [トラブルシューティング（リポジトリ開発）](contributing/troubleshooting.md) | ツールチェーン・コールドビルド・0.17 API 差分・Pages |
+| [ドキュメントの書き方](contributing/writing-docs.md) | 4 層・ページ骨格・`zig check`・注記・用語集・内部 ID 禁止・生成物 |
+
+### 内部資料
+
+サイトのサイドバーでは **[設計メモ・ADR・タスク](architecture/00-overview.md)** の 1 エントリに
+畳んであります（読者が順に読むものではないため）。実装の意図と経緯を調べるときだけ開いてください。
+
+| 置き場所 | 中身 |
+|---|---|
+| [`architecture/`](architecture/00-overview.md) | なぜこの構成なのか（依存 DAG・境界契約・各サブシステム設計） |
+| [`decisions/`](decisions/0001-zig-017-and-sharded-agent-workflow.md) | アーキテクチャ意思決定記録（ADR）。新しいファイルを足すだけ |
+| [`roadmap/milestones.md`](roadmap/milestones.md) | M0〜M5 のマイルストーンと並列 Wave の依存マップ |
+| [`tasks/`](tasks/TEMPLATE.md) | 1 タスク = 1 ファイルの作業計画と記憶チェックポイント |
+| [`environment/`](environment/arena-and-caching.md) | Arena のキャッシュ・GitHub Actions の運用 |
+| [`decisions/0018-documentation-site.md`](decisions/0018-documentation-site.md) | このサイト自体の設計（4 層・リンク検査・検索・`llms.txt`） |
+
+## 名前から引く
+
+| 探したいもの | どこで |
+|---|---|
+| 言葉の意味 | [用語集](glossary.md)（本文から随時リンクしている） |
+| エラー名 | [エラー索引](reference/errors.html)（`src/**` の `error{…}` から自動生成） |
+| 関数・型・定数 | [API 全体索引](api/index.html)（`///` から自動生成） |
+| コマンドとフラグ | [`zts` コマンドリファレンス](reference/cli.md) |
+| ページ全体 | サイトの検索（`/` キー）。索引データは `assets/search-index.js` |
+| 機械可読な目次 | サイト直下の `llms.txt`（全文は `llms-full.txt`） |
+
+> **この索引の保守**: サイドバーの並びは [`src/docsite/main.zig`](../src/docsite/main.zig) の
+> `GroupKey`、学習パスの番号と所要分は [`src/docsite/learn_path.zig`](../src/docsite/learn_path.zig)
+> が正本です。ページを足したら、このページにも 1 行足してください。**足し忘れは
+> `check-docs.py` の規約 11 が落とします**（全ページがこの索引からリンクされているかを検査）。
+> リンク切れと「`learn/ja` と `learn/en` のファイル名の不一致」も同じスクリプトが見ています。

@@ -1,13 +1,16 @@
-//! The first-run path — the four pages a new reader is walked through, in order.
+//! The first-run path — the five steps a new reader is walked through, in order.
 //!
-//! This lives in code rather than in prose because three different surfaces render it: the step
-//! rail at the top of every path page, the "what next" card at the bottom, and the landing page.
-//! If the order lived in three hand-written copies, the first edit would desynchronise them.
+//! This lives in code rather than in prose because several surfaces render it: the step rail at the
+//! top of every path page, the "what next" card at the bottom, the landing page, the numbered
+//! sidebar headings, and the `<!-- learn-path -->` list in the learning hub. If the order lived in
+//! hand-written copies, the first edit would desynchronise them.
 //!
 //! Two properties are deliberate:
 //! * **Membership is derived from the directory layout.** Anything under
 //!   `docs/learn/<lang>/concepts/` is step 2, whatever its filename. Adding a concept page cannot
-//!   forget to register it, and the rail can never claim a page is outside the path.
+//!   forget to register it, and the rail can never claim a page is outside the path. The sidebar
+//!   heading for each section is numbered from this same table, so inserting a chapter renumbers
+//!   the navigation by itself.
 //! * **Every step's landing page is verified at build time.** `main.zig` stats each source before
 //!   rendering, so renaming `start.md` fails `zig build docs` instead of shipping a dead first step.
 
@@ -43,9 +46,10 @@ pub const Step = struct {
     blurb: Text,
 };
 
-/// The order is pedagogical: touch it, then understand it, then build with it, then look things up.
-/// Putting the concepts first (the original order) asked the reader to learn a mental model for a
-/// system they had not seen yet.
+/// The order is pedagogical: touch it, then understand it, then build with it, then choose a
+/// shape for it, then look things up. Putting the concepts first (the original order) asked the
+/// reader to learn a mental model for a system they had not seen yet; the patterns chapter exists
+/// because the tutorial produces code that works but has no room to grow.
 pub const steps = [_]Step{
     .{
         .id = "start",

@@ -68,7 +68,8 @@ These come up on every page below; come back here when one slips.
 | **Schema** | the table of command names, argument and return types, built at `comptime` |
 | **Capability** | a declaration that "this window may call this command" |
 
-The [glossary](../../../glossary.md) defines 31 terms in more detail.
+The [glossary](../../../glossary.md) defines them in more detail (it is linked from the prose as
+well).
 
 ## Reading order
 
@@ -82,5 +83,6 @@ Knowing **Pack** and **Host** first makes the rest read faster.
 ## Next
 
 - Hands on → [Tutorial: the counter](../tutorials/counter.md)
+- Started writing and unsure → [Patterns](../patterns/index.md)
 - Just write it → [Guide: commands](../guides/rpc.md)
 - Lost in terminology → [Glossary](../../../glossary.md)

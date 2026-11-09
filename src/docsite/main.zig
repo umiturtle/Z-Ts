@@ -1084,14 +1084,19 @@ fn buildGroups(arena: Allocator, lang: i18n.Lang, rendered: anytype, packages: [
     return groups.toOwnedSlice(arena);
 }
 
-/// Sidebar heading. The three sections that are also steps of the beginner path carry that step's
-/// number and its name from `learn_path.zig`, so the sidebar reads as a numbered path instead of
-/// three parallel folders. Everything else keeps its plain name.
+/// Sidebar heading. The sections that are also steps of the beginner path carry that step's number
+/// and its name from `learn_path.zig`, so the sidebar reads as a numbered path instead of parallel
+/// folders. Everything else keeps its plain name.
 fn groupHeading(arena: Allocator, key: GroupKey, lang: i18n.Lang) ![]const u8 {
+    // The index into `learn_path.steps` — the numbers themselves come from the table, so inserting
+    // a chapter renumbers the sidebar by editing one line. `patterns` sits between the tutorial and
+    // the guides, which makes the guides step 5. A literal "4 ·" in `GroupKey.heading` is how the
+    // guides ended up labelled "4 · 実用パターン" the day the patterns chapter landed.
     const step: ?usize = switch (key) {
         .concepts => 1,
         .tutorials => 2,
-        .guides => 3,
+        .patterns => 3,
+        .guides => 4,
         else => null,
     };
     if (step) |i| {
@@ -1742,7 +1747,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         .{
             .icon = "M4 5h16v12H4zM8 21h8M12 17v4",
             .title = "名前から引く",
-            .blurb = "全公開宣言（`///` から自動生成）、31 語の用語集、そしてエラー名の索引。",
+            .blurb = "全公開宣言（`///` から自動生成）、用語集、そしてエラー名の索引。",
             .cta_label = "API リファレンス",
             .cta_href = "docs/api/index.html",
             .links = &.{ "docs/api/zts_tauri/index.html", "docs/glossary.html", "docs/reference/errors.html" },
@@ -1927,26 +1932,21 @@ fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang) ![]const u8 {
     const w = &out.writer;
     try w.print("<h1>{s}</h1>\n<p>{s}</p>\n", .{ s.not_found_title, s.not_found_body });
     try w.writeAll("<ul class=\"notfound\">");
-    // The four entry points, in the same order as the landing page: a lost reader should not have
-    // to guess where to go next.
+    // Five links, not a menu: two ways back into the path (the first step and its hub), the map of
+    // every page, and the dictionary. The 404 used to list six section pages, which asked a lost
+    // reader to pick a section before knowing where they were.
     const Link = struct { href: []const u8, label: []const u8 };
-    // `start.html` is first: a reader who mistyped a URL is a beginner more often than not, and a
-    // 404 is the worst place to hand them a five-way menu.
     const links: []const Link = if (lang == .en) &.{
         .{ .href = "en/index.html", .label = "Home" },
         .{ .href = "docs/learn/en/start.html", .label = "Your first ten minutes" },
         .{ .href = "docs/learn/en/index.html", .label = "The learning path" },
-        .{ .href = "docs/learn/en/tutorials/counter.html", .label = "Tutorial: counter" },
-        .{ .href = "docs/learn/en/concepts/index.html", .label = "Concepts" },
-        .{ .href = "docs/learn/en/guides/rpc.html", .label = "Guides: commands" },
+        .{ .href = "docs/INDEX.html", .label = "Documentation index" },
         .{ .href = "docs/api/index.html", .label = "API reference (A–Z)" },
     } else &.{
         .{ .href = "index.html", .label = "ホーム" },
         .{ .href = "docs/learn/ja/start.html", .label = "はじめての Z-Ts（10 分）" },
         .{ .href = "docs/learn/ja/index.html", .label = "学習パス" },
-        .{ .href = "docs/learn/ja/tutorials/counter.html", .label = "チュートリアル: カウンター" },
-        .{ .href = "docs/learn/ja/concepts/index.html", .label = "概念" },
-        .{ .href = "docs/learn/ja/guides/rpc.html", .label = "ガイド: コマンド" },
+        .{ .href = "docs/INDEX.html", .label = "ドキュメント索引" },
         .{ .href = "docs/api/index.html", .label = "API リファレンス（A–Z）" },
     };
     for (links) |link| {
@@ -2107,6 +2107,10 @@ test "the sidebar heading of a path section carries its step number" {
 
     try std.testing.expectEqualStrings("2 · 仕組みを知る", try groupHeading(arena, .concepts, .ja));
     try std.testing.expectEqualStrings("3 · Build an app", try groupHeading(arena, .tutorials, .en));
+    // Every path group is numbered from the same table the rail uses, so the numbers cannot
+    // drift when a chapter is inserted. `patterns` is step 4, which makes the guides step 5.
+    try std.testing.expectEqualStrings("4 · 実用パターン", try groupHeading(arena, .patterns, .ja));
+    try std.testing.expectEqualStrings("5 · Look things up", try groupHeading(arena, .guides, .en));
     try std.testing.expectEqualStrings("学習パス", try groupHeading(arena, .learn, .ja));
     // Lookup groups keep their plain names: they are not steps of the path.
     try std.testing.expectEqualStrings("API", try groupHeading(arena, .api, .ja));

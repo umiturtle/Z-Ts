@@ -30,6 +30,10 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       `docs/reference/`, example READMEs) must not mention `zigw` at all. It is
                       a bootstrap for *this* checkout, not a distributed artifact, so an app
                       author cannot run it. The toolchain those pages may name is `zts` + `zig`.
+11. Index coverage   — every page a reader can reach must be linked from `docs/INDEX.md`. The
+                      index is a hand-written mirror of the sidebar, and a page added without a
+                      row is a page only the sidebar knows about. The rule checks coverage, not
+                      order: the order lives in `src/docsite/main.zig`.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -363,6 +367,32 @@ for md in sorted(set(reader_files)):
             f"{md}: mentions `zigw`; reader-facing pages must only use `zts` and `zig` "
             f"(`zigw` is a checkout bootstrap, not a distributed artifact)"
         )
+
+# ---------------------------------------------------------------------------
+# 11. `docs/INDEX.md` links every page a reader can reach
+# ---------------------------------------------------------------------------
+
+# The index mirrors the sidebar by hand. Coverage is the part a human forgets: adding
+# `patterns/boundaries.md` and not adding a row leaves the page discoverable only through
+# navigation. Order is not checked here — it is generated from `GroupKey` in main.zig.
+INDEX_MD = "docs/INDEX.md"
+index_text = open(INDEX_MD, encoding="utf-8").read() if os.path.isfile(INDEX_MD) else ""
+if not index_text:
+    errors.append(f"{INDEX_MD}: missing (the site's footer links it on every page)")
+else:
+    indexed = (
+        sorted(glob.glob("docs/learn/ja/**/*.md", recursive=True))
+        + sorted(glob.glob("docs/reference/*.md"))
+        + sorted(glob.glob("docs/contributing/*.md"))
+        + sorted(glob.glob("examples/*/README.md"))
+        + ["docs/glossary.md"]
+    )
+    for path in indexed:
+        rel = os.path.relpath(path, "docs")
+        if rel not in index_text:
+            errors.append(
+                f"{INDEX_MD}: does not link '{rel}' (add a row under the group it belongs to)"
+            )
 
 if warnings:
     for w in warnings:
