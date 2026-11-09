@@ -768,6 +768,41 @@ jobs:
             echo "cli-smoke: OK"
           } 2>&1 | tee "$GITHUB_WORKSPACE/cli-smoke.log"
 
+      # `M5-03` slice C / distribution: a **release** `zts` must not depend on the checkout it was
+      # built from. Baking a published archive (`.url` + `.hash`) into the binary makes `zts init`
+      # emit a fetchable dependency, so a machine that only has the archive can build. Linux only:
+      # `file://` URLs and `mktemp -d` paths do not translate to the Windows runners.
+      - name: Release build resolves Z-Ts from an archive, not the checkout
+        if: matrix.os == 'ubuntu-24.04'
+        shell: bash
+        run: |
+          set -eo pipefail
+          work="$(mktemp -d "$GITHUB_WORKSPACE/../zts-release.XXXXXX")"
+          # The same archive a published release would ship: the tracked files, nothing built.
+          git archive --format=tar.gz --prefix=z_ts-0.1.0/ -o "$work/z_ts-0.1.0.tar.gz" HEAD
+          hash="$(zig fetch "file://$work/z_ts-0.1.0.tar.gz" 2>/dev/null)"
+          echo "archive hash: $hash"
+          case "$hash" in z_ts-0.1.0-*) ;; *) echo "unexpected hash: $hash"; exit 1 ;; esac
+          zig build -Doptimize=ReleaseSmall \
+            -Dzts-pkg-url="file://$work/z_ts-0.1.0.tar.gz" \
+            -Dzts-pkg-hash="$hash" \
+            --prefix "$work/release"
+          cd "$work"
+          ./release/bin/zts init app
+          grep -q '\.url = "file://' app/build.zig.zon
+          if grep -q '\.path = ' app/build.zig.zon; then echo "release build still writes a path"; exit 1; fi
+          cd app
+          ../release/bin/zts doctor | tee doctor.log
+          grep -q '(none — release build)' doctor.log
+          grep -q '(fetched by zig)' doctor.log
+          # A cold global cache proves Zig really fetched the archive instead of reusing this
+          # checkout's build cache.
+          ZIG_GLOBAL_CACHE_DIR="$work/zig-cache" ../release/bin/zts build
+          out=./zig-out/bin/app
+          [ -f "$out" ] || out="$out.exe"
+          "$out" | tee run.log
+          grep -q "1 embedded assets" run.log
+          echo "cli-release: OK"
       # `gh run view --log` cannot reach the URL the raw logs redirect to from the Arena sandbox,
       # but the Check Run summary is served by api.github.com, so mirror the log there.
       - name: Mirror the smoke log into the Check Run summary

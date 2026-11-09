@@ -34,6 +34,7 @@ const apidoc = @import("apidoc.zig");
 const xref_index = @import("links.zig");
 const paths = @import("paths.zig");
 const i18n = @import("i18n.zig");
+const learn_path = @import("learn_path.zig");
 
 /// Where a page sits in the sidebar. The enum (rather than a label string) is what lets the same
 /// corpus produce a Japanese and an English sidebar without duplicating the file walk.
@@ -42,6 +43,8 @@ pub const GroupKey = enum {
     learn,
     concepts,
     tutorials,
+    /// After the tutorial and before the examples: how to shape commands, state and errors.
+    patterns,
     guides,
     /// Hand-written lookup pages (`docs/reference/`, the glossary, the error index).
     reference,
@@ -57,9 +60,11 @@ pub const GroupKey = enum {
 
     pub fn heading(self: GroupKey, lang: i18n.Lang) []const u8 {
         return switch (self) {
+            // `buildGroups` overrides this with `path_label`; the fallback keeps `heading()`
+            // total for callers that have no allocator (the `llms.txt` writer).
             .learn => switch (lang) {
-                .ja => "学ぶ",
-                .en => "Learn",
+                .ja => "学習パス",
+                .en => "Learning path",
             },
             .concepts => switch (lang) {
                 .ja => "概念",
@@ -68,6 +73,10 @@ pub const GroupKey = enum {
             .tutorials => switch (lang) {
                 .ja => "チュートリアル",
                 .en => "Tutorials",
+            },
+            .patterns => switch (lang) {
+                .ja => "実用パターン",
+                .en => "Patterns",
             },
             .guides => switch (lang) {
                 .ja => "ガイド",
@@ -102,8 +111,8 @@ pub const GroupKey = enum {
     /// Japanese-only content that would be noise for an English reader.
     fn order(lang: i18n.Lang) []const GroupKey {
         return switch (lang) {
-            .ja => &.{ .learn, .concepts, .tutorials, .guides, .reference, .api, .samples, .deep, .dev, .internals },
-            .en => &.{ .learn, .concepts, .tutorials, .guides, .api },
+            .ja => &.{ .learn, .concepts, .tutorials, .patterns, .guides, .reference, .api, .samples, .deep, .dev, .internals },
+            .en => &.{ .learn, .concepts, .tutorials, .patterns, .guides, .api },
         };
     }
 };
@@ -337,7 +346,7 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
 
     for (rendered) |page| {
         const sidebar = if (page.lang == .en) groups_en else groups_ja;
-        const related = if (page.key == .internals) "" else try renderRelatedApi(arena, page.href, page.xrefs);
+        const related = if (page.key == .internals) "" else try renderRelatedApi(arena, page.href, page.lang, page.xrefs);
         const body = if (page.key == .internals)
             try std.fmt.allocPrint(arena, "{s}{s}", .{ try internalsBanner(arena, page.href), page.document.html })
         else
@@ -562,6 +571,45 @@ fn repoPathKind(io: Io, path: []const u8) RepoPath {
 }
 
 /// Renders one source file into `out` (no link rewrites).
+/// Expands the `<!-- learn-path -->` directive. A line that is *only* the marker is replaced by
+/// the step list; the marker mentioned inline (inside backticks, in prose) is left alone, so
+/// the docs that describe this mechanism do not expand it. Pages without a marker line are
+/// returned untouched (no copy), so the hot path is unchanged.
+fn expandDirectives(arena: Allocator, bytes: []const u8, lang: i18n.Lang) ![]const u8 {
+    const marker = "<!-- learn-path -->";
+    var found = false;
+    var probe = std.mem.splitScalar(u8, bytes, '\n');
+    while (probe.next()) |line| {
+        if (std.mem.eql(u8, std.mem.trim(u8, line, " \t\r"), marker)) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) return bytes;
+
+    const list = try learn_path.markdownList(arena, switch (lang) {
+        .ja => .ja,
+        .en => .en,
+    });
+
+    var out: std.Io.Writer.Allocating = .init(arena);
+    defer out.deinit();
+    var lines = std.mem.splitScalar(u8, bytes, '\n');
+    var first = true;
+    while (lines.next()) |line| {
+        if (!first) try out.writer.writeAll("\n");
+        first = false;
+        if (std.mem.eql(u8, std.mem.trim(u8, line, " \t\r"), marker)) {
+            // `markdownList` ends each item with a newline; keep the blank line that preceded the
+            // marker so the list stays a separate block.
+            try out.writer.writeAll(list);
+        } else {
+            try out.writer.writeAll(line);
+        }
+    }
+    return out.toOwnedSlice();
+}
+
 fn renderInto(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype, index: *const xref_index.Index) !void {
     try renderIntoWithRewrites(arena, cwd, io, out, &.{}, index);
 }
@@ -572,9 +620,15 @@ fn renderIntoWithRewrites(arena: Allocator, cwd: Io.Dir, io: Io, out: anytype, r
         return err;
     };
 
+    // `<!-- learn-path -->` is the one directive a page may contain: the four beginner steps are
+    // expanded from `learn_path.zig`, the same table the step rail renders. One edit to that table
+    // moves both, and the links stay relative so the link checker verifies them like any other.
+    const content = try expandDirectives(arena, bytes, out.lang);
+
     var xrefs: std.ArrayListUnmanaged(markdown.Xref) = .empty;
-    const document = try markdown.render(arena, bytes, .{
+    const document = try markdown.render(arena, content, .{
         .page = out.href,
+        .lang = out.lang,
         .rewrites = rewrites,
         .linker = index,
         .xrefs = &xrefs,
@@ -721,7 +775,11 @@ fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
     while (try walker.next(io)) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.path, ".html")) continue;
-        try pages.append(arena, try arena.dupe(u8, entry.path));
+        // The walker joins with the platform separator (`docs\page.html` on Windows) while the
+        // `href`s in the HTML — and therefore `resolveRelative`'s output — always use `/`. Without
+        // this normalisation every cross-page fragment lookup missed on Windows and the anchor
+        // check silently passed. Caught by enabling the test at the bottom of this file.
+        try pages.append(arena, try normalizeSlashes(arena, entry.path));
     }
 
     // Pass 1: every `id="…"` of every page, id_list as `\x00id\x00id\x00`, so a fragment lookup is
@@ -800,6 +858,27 @@ fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
         return error.DanglingAnchors;
     }
     return checked;
+}
+
+test "normalizeSlashes turns the Windows walker's separators into href separators" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    try std.testing.expectEqualStrings("docs/page.html", try normalizeSlashes(arena, "docs\\page.html"));
+    // POSIX paths are copied, not aliased: the caller owns the result either way.
+    const posix = try normalizeSlashes(arena, "docs/page.html");
+    try std.testing.expectEqualStrings("docs/page.html", posix);
+}
+
+/// `docs\page.html` → `docs/page.html`. Site-relative paths are always `/`-separated.
+fn normalizeSlashes(arena: Allocator, path: []const u8) Allocator.Error![]const u8 {
+    if (std.mem.indexOfScalar(u8, path, '\\') == null) return arena.dupe(u8, path);
+    const out = try arena.dupe(u8, path);
+    for (out) |*ch| {
+        if (ch.* == '\\') ch.* = '/';
+    }
+    return out;
 }
 
 /// `id_list` is `\x00id\x00id\x00`; a fragment matches only as a whole id (`abc` must not match
@@ -908,6 +987,7 @@ fn groupFor(path: []const u8) GroupKey {
         const rest = path[i18n.learn_root.len..];
         if (std.mem.startsWith(u8, rest, "ja/concepts/") or std.mem.startsWith(u8, rest, "en/concepts/")) return .concepts;
         if (std.mem.startsWith(u8, rest, "ja/tutorials/") or std.mem.startsWith(u8, rest, "en/tutorials/")) return .tutorials;
+        if (std.mem.startsWith(u8, rest, "ja/patterns/") or std.mem.startsWith(u8, rest, "en/patterns/")) return .patterns;
         if (std.mem.startsWith(u8, rest, "ja/guides/") or std.mem.startsWith(u8, rest, "en/guides/")) return .guides;
         return .learn;
     }
@@ -940,6 +1020,7 @@ fn pageKind(path: []const u8) []const u8 {
     if (std.mem.startsWith(u8, path, "docs/learn/")) {
         if (std.mem.indexOf(u8, path, "/concepts/") != null) return "concept";
         if (std.mem.indexOf(u8, path, "/tutorials/") != null) return "tutorial";
+        if (std.mem.indexOf(u8, path, "/patterns/") != null) return "pattern";
         if (std.mem.indexOf(u8, path, "/guides/") != null) return "guide";
         return "home";
     }
@@ -991,12 +1072,74 @@ fn buildGroups(arena: Allocator, lang: i18n.Lang, rendered: anytype, packages: [
             if (key == .reference) {
                 try entries.append(arena, .{ .href = errors_href, .title = if (lang == .en) "Error index (generated)" else "エラー索引（自動生成）", .source = "src/" });
             }
+            switch (key) {
+                .learn, .concepts, .tutorials, .guides => try orderLearnEntries(arena, lang, &entries),
+                else => {},
+            }
         }
 
         if (entries.items.len == 0) continue;
-        try groups.append(arena, .{ .heading = key.heading(lang), .entries = try entries.toOwnedSlice(arena) });
+        try groups.append(arena, .{ .heading = try groupHeading(arena, key, lang), .entries = try entries.toOwnedSlice(arena) });
     }
     return groups.toOwnedSlice(arena);
+}
+
+/// Sidebar heading. The three sections that are also steps of the beginner path carry that step's
+/// number and its name from `learn_path.zig`, so the sidebar reads as a numbered path instead of
+/// three parallel folders. Everything else keeps its plain name.
+fn groupHeading(arena: Allocator, key: GroupKey, lang: i18n.Lang) ![]const u8 {
+    const step: ?usize = switch (key) {
+        .concepts => 1,
+        .tutorials => 2,
+        .guides => 3,
+        else => null,
+    };
+    if (step) |i| {
+        const s = learn_path.steps[i];
+        const text = s.title.get(switch (lang) {
+            .ja => .ja,
+            .en => .en,
+        });
+        return std.fmt.allocPrint(arena, "{d} · {s}", .{ i + 1, text });
+    }
+    return key.heading(lang);
+}
+
+/// Within the first group, the ordered steps come before the alphabetical rest, and each step
+/// landing page is numbered — `1 · はじめての Z-Ts` sits right under the hub. Without this the
+/// sidebar sorted `concepts/` above `start.md` and a beginner opened the concepts first.
+fn orderLearnEntries(arena: Allocator, lang: i18n.Lang, entries: *std.ArrayListUnmanaged(site.NavEntry)) !void {
+    const path_lang: learn_path.Lang = switch (lang) {
+        .ja => .ja,
+        .en => .en,
+    };
+    const Sort = struct {
+        fn rank(source: []const u8) usize {
+            // A section index opens its own group: `concepts/index.md` before `concepts/*.md`,
+            // and the hub before everything.
+            if (std.mem.endsWith(u8, source, "/index.md")) return 0;
+            // The numbered path steps follow, in path order …
+            if (learn_path.indexOf(source)) |i| return i + 1;
+            // … and the rest of a section keeps its alphabetical order.
+            return 100;
+        }
+        fn lessThan(_: void, a: site.NavEntry, b: site.NavEntry) bool {
+            const ra = rank(a.source);
+            const rb = rank(b.source);
+            if (ra != rb) return ra < rb;
+            return std.mem.order(u8, a.href, b.href) == .lt;
+        }
+    };
+    std.mem.sort(site.NavEntry, entries.items, {}, Sort.lessThan);
+
+    for (entries.items) |*entry| {
+        const idx = learn_path.indexOf(entry.source) orelse continue;
+        if (idx != 0) continue;
+        // Only the step's own landing page gets the number, not every page inside the section.
+        const landing = try learn_path.sourcePath(arena, path_lang, learn_path.steps[idx]);
+        if (!std.mem.eql(u8, landing, entry.source)) continue;
+        entry.title = try std.fmt.allocPrint(arena, "{d} · {s}", .{ idx + 1, entry.title });
+    }
 }
 
 fn neighbors(groups: []const site.Group, href: []const u8) struct { prev: ?site.NavLink, next: ?site.NavLink } {
@@ -1066,12 +1209,16 @@ fn altHref(arena: Allocator, io: Io, source_path: []const u8, lang: i18n.Lang) !
     return try htmlPath(arena, md);
 }
 
-fn renderRelatedApi(arena: Allocator, page_href: []const u8, xrefs: []const markdown.Xref) ![]const u8 {
+fn renderRelatedApi(arena: Allocator, page_href: []const u8, lang: i18n.Lang, xrefs: []const markdown.Xref) ![]const u8 {
     if (xrefs.len == 0) return "";
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
     const w = &out.writer;
-    try w.writeAll("<aside class=\"related\"><h2>このページに出てくる API</h2><ul>");
+    const title = switch (lang) {
+        .ja => "このページに出てくる API",
+        .en => "API mentioned on this page",
+    };
+    try w.print("<aside class=\"related\"><h2>{s}</h2><ul>", .{title});
     var seen: usize = 0;
     outer: for (xrefs) |xref| {
         for (xrefs[0..seen]) |earlier| {
@@ -1468,20 +1615,22 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\    <h1>{s}<br /><span class="accent">{s}</span></h1>
         \\    <p class="lede">{s}</p>
         \\    <div class="cta">
-        \\      <a class="button primary" href="{s}{s}/tutorials/counter.html">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
-        \\      <a class="button" href="{s}{s}/index.html">{s}</a>
+        \\      <a class="button primary" href="{s}{s}/start.html">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+        \\      <a class="button" href="{s}{s}/tutorials/counter.html">{s}</a>
         \\      <a class="button ghost" href="{s}docs/api/index.html">{s}</a>
+        \\      <a class="button ghost" href="https://github.com/umiturtle/Z-Ts/releases/latest" target="_blank" rel="noopener">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" /></svg></a>
         \\    </div>
         \\    <p class="hero-meta">{s}</p>
         \\  </section>
         \\  <section class="terminal-card" aria-label="zts">
         \\    <div class="terminal-bar"><span class="t-dot r"></span><span class="t-dot y"></span><span class="t-dot g"></span><span class="terminal-title">zts</span></div>
         \\    <pre class="code"><code><span class="c-cmd">$ zts init my-app</span>
-        \\<span class="c-out">created 6 files in my-app/</span>
+        \\<span class="c-out">zts: created my-app (6 files)</span>
         \\<span class="c-cmd">$ cd my-app &amp;&amp; zts dev</span>
-        \\<span class="c-out">serving web/ at http://127.0.0.1:5173</span>
+        \\<span class="c-out">zts: my_app — serving web/ at http://127.0.0.1:5173/</span>
         \\<span class="c-cmd">$ zts build</span>
-        \\<span class="c-out">zig-out/bin/my_app   (web/ embedded, gzip + CSP)</span></code></pre>
+        \\<span class="c-out">zts: building my_app (ReleaseSmall)
+        \\zts: built zig-out/bin/my_app</span></code></pre>
         \\  </section>
         \\
     , .{
@@ -1498,10 +1647,39 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         str.landing_lede,                                                   prefix,
         learn,                                                              str.landing_cta_start,
         prefix,                                                             learn,
-        if (lang == .en) "All guides" else "ガイド一覧",
-        prefix,                                                             str.landing_cta_api,
+        str.landing_cta_tutorial,                                           prefix,
+        str.landing_cta_api,                                                str.landing_cta_download,
         str.landing_meta,
     });
+
+    // ---- the path, before any other choice ------------------------------------
+    // Four numbered steps, generated from the same table the per-page rail uses. A newcomer should
+    // never have to choose between "concepts" and "tutorial" before seeing what either is.
+    try w.print("<section class=\"landing-path\" aria-labelledby=\"path-title\"><div class=\"landing-path-head\"><h2 class=\"section-title\" id=\"path-title\">{s}</h2><p class=\"landing-path-lede\">{s}</p><span class=\"landing-path-total\">{s}</span></div><ol>", .{
+        str.landing_path_title,
+        str.landing_path_lede,
+        // Runtime string (`{d} 分` / `{d} minutes`): substitute rather than `allocPrint`.
+        try std.mem.replaceOwned(u8, arena, str.landing_path_total, "{d}", try std.fmt.allocPrint(arena, "{d}", .{learn_path.totalMinutes()})),
+    });
+    for (learn_path.steps, 0..) |step, step_index| {
+        const step_lang: learn_path.Lang = switch (lang) {
+            .ja => .ja,
+            .en => .en,
+        };
+        const target = try learn_path.pageHref(arena, step_lang, step);
+        try w.print("<li class=\"landing-step\"><a href=\"{s}{s}\"><span class=\"step-num\" aria-hidden=\"true\">{d}</span><span class=\"step-body\"><strong>{s}</strong><span class=\"step-blurb\">{s}</span>", .{
+            prefix,
+            target,
+            step_index + 1,
+            step.title.get(step_lang),
+            step.blurb.get(step_lang),
+        });
+        if (step.minutes > 0) {
+            try w.print("<span class=\"step-min\">{d} {s}</span>", .{ step.minutes, if (lang == .ja) "分" else "min" });
+        }
+        try w.writeAll("</span></a></li>");
+    }
+    try w.writeAll("</ol></section>");
 
     // ---- four ways in ---------------------------------------------------------
     const Path = struct {
@@ -1512,37 +1690,14 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         cta_href: []const u8,
         links: []const []const u8,
     };
-    const concepts = try std.fmt.allocPrint(arena, "{s}/concepts/index.html", .{learn});
-    const tutorials = try std.fmt.allocPrint(arena, "{s}/tutorials/index.html", .{learn});
     const guides = try std.fmt.allocPrint(arena, "{s}/guides/index.html", .{learn});
-    const tutorial_counter = try std.fmt.allocPrint(arena, "{s}/tutorials/counter.html", .{learn});
     const guide_rpc = try std.fmt.allocPrint(arena, "{s}/guides/rpc.html", .{learn});
     const guide_plugins = try std.fmt.allocPrint(arena, "{s}/guides/plugins.html", .{learn});
     const guide_static = try std.fmt.allocPrint(arena, "{s}/guides/static-site.html", .{learn});
     const guide_package = try std.fmt.allocPrint(arena, "{s}/guides/package.html", .{learn});
-    const guide_install = try std.fmt.allocPrint(arena, "{s}/guides/install.html", .{learn});
-    const concept_arch = try std.fmt.allocPrint(arena, "{s}/concepts/architecture.html", .{learn});
-    const concept_rpc = try std.fmt.allocPrint(arena, "{s}/concepts/commands.html", .{learn});
-    const concept_plugins = try std.fmt.allocPrint(arena, "{s}/concepts/plugins.html", .{learn});
     const concept_security = try std.fmt.allocPrint(arena, "{s}/concepts/security.html", .{learn});
 
     const entry_points = if (lang == .en) [_]Path{
-        .{
-            .icon = "M4 5h16v12H4zM8 21h8M12 17v4",
-            .title = "Read the concepts",
-            .blurb = "What the six packages are, how a command travels from TypeScript to Zig, and where your code stops being trusted.",
-            .cta_label = "Concepts",
-            .cta_href = concepts,
-            .links = &.{ concept_arch, concept_rpc, concept_plugins, concept_security },
-        },
-        .{
-            .icon = "M6 3v12a3 3 0 0 0 3 3h6M12 3v12M4 21h6M14 21h6",
-            .title = "Build something",
-            .blurb = "A complete counter in about ten minutes: backend, frontend, live reload, single binary.",
-            .cta_label = "Tutorial",
-            .cta_href = tutorial_counter,
-            .links = &.{ tutorial_counter, tutorials, guide_install },
-        },
         .{
             .icon = "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
             .title = "Solve a specific problem",
@@ -1550,6 +1705,22 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
             .cta_label = "All guides",
             .cta_href = guides,
             .links = &.{ guide_rpc, guide_plugins, guide_static, guide_package },
+        },
+        .{
+            .icon = "M4 5h16v12H4zM8 21h8M12 17v4",
+            .title = "Look a name up",
+            .blurb = "Every public declaration, generated from the /// comments, plus a glossary and an index of every error name.",
+            .cta_label = "API reference",
+            .cta_href = "docs/api/index.html",
+            .links = &.{ "docs/api/zts_tauri/index.html", "docs/glossary.html", "docs/reference/errors.html" },
+        },
+        .{
+            .icon = "M6 3v12a3 3 0 0 0 3 3h6M12 3v12M4 21h6M14 21h6",
+            .title = "See a working example",
+            .blurb = "Nine frameworks drawing the same screen, a three-artefact counter, and a C99 embed — all built in CI.",
+            .cta_label = "Examples",
+            .cta_href = "examples/frameworks/README.html",
+            .links = &.{ "examples/counter/README.html", "examples/c_embed/README.html", "examples/gallery/README.html" },
         },
         .{
             .icon = "M9 12l2 2 4-4M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z",
@@ -1561,28 +1732,28 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         },
     } else [_]Path{
         .{
-            .icon = "M4 5h16v12H4zM8 21h8M12 17v4",
-            .title = "概念を読む",
-            .blurb = "6 つのパッケージの役割、TypeScript から Zig までコマンドがどう届くか、どこから先が信頼されないかを先に押さえます。",
-            .cta_label = "概念",
-            .cta_href = concepts,
-            .links = &.{ concept_arch, concept_rpc, concept_plugins, concept_security },
-        },
-        .{
-            .icon = "M6 3v12a3 3 0 0 0 3 3h6M12 3v12M4 21h6M14 21h6",
-            .title = "手を動かす",
-            .blurb = "15 分でカウンターを完成させます。バックエンド、フロントエンド、ライブリロード、単一バイナリまで。",
-            .cta_label = "チュートリアル",
-            .cta_href = tutorial_counter,
-            .links = &.{ tutorial_counter, tutorials, guide_install },
-        },
-        .{
             .icon = "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
             .title = "困ったことを解決する",
             .blurb = "コマンドと型、7 つのプラグイン、静的サイト、配布物、そして今出ているエラー。",
             .cta_label = "ガイド一覧",
             .cta_href = guides,
             .links = &.{ guide_rpc, guide_plugins, guide_static, guide_package },
+        },
+        .{
+            .icon = "M4 5h16v12H4zM8 21h8M12 17v4",
+            .title = "名前から引く",
+            .blurb = "全公開宣言（`///` から自動生成）、31 語の用語集、そしてエラー名の索引。",
+            .cta_label = "API リファレンス",
+            .cta_href = "docs/api/index.html",
+            .links = &.{ "docs/api/zts_tauri/index.html", "docs/glossary.html", "docs/reference/errors.html" },
+        },
+        .{
+            .icon = "M6 3v12a3 3 0 0 0 3 3h6M12 3v12M4 21h6M14 21h6",
+            .title = "動くサンプルを見る",
+            .blurb = "9 フレームワークが同じ画面を描くデモ、3 成果物のカウンター、C99 への埋め込み。すべて CI がビルドしています。",
+            .cta_label = "サンプル",
+            .cta_href = "examples/frameworks/README.html",
+            .links = &.{ "examples/counter/README.html", "examples/c_embed/README.html", "examples/gallery/README.html" },
         },
         .{
             .icon = "M9 12l2 2 4-4M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z",
@@ -1689,7 +1860,11 @@ fn renderLlmsTxt(arena: Allocator, groups_ja: []const site.Group, groups_en: []c
     try w.writeAll("- 対応: Zig 0.17.0 / Tauri v2（`@tauri-apps/api` を無改変で利用）\n");
     try w.writeAll("- パッケージ: zts_foundation, zts_web, zts_core, zts_rpc, zts_bridge, zts_webview, zts_tauri, zts_wasm, zts_ssg, z_ts\n");
     try w.writeAll("- 全文 / full text: llms-full.txt / エラー索引: docs/reference/errors.html\n");
-    try w.writeAll("- 英語の学習パス / English learning path: docs/learn/en/index.html\n\n");
+    try w.writeAll(
+        // The first thing a model should be told is where a human starts, in both languages.
+        "- はじめかた / start here: docs/learn/ja/start.html (10 分) · docs/learn/en/start.html (10 min)\n" ++
+            "- 学習パス / learning path: docs/learn/ja/index.html · docs/learn/en/index.html\n\n",
+    );
 
     for ([_][2][]const u8{ .{ "日本語", "ja" }, .{ "English", "en" } }, 0..) |lang, lang_index| {
         try w.print("# {s}\n\n", .{lang[0]});
@@ -1755,16 +1930,20 @@ fn renderNotFoundBody(arena: Allocator, lang: i18n.Lang) ![]const u8 {
     // The four entry points, in the same order as the landing page: a lost reader should not have
     // to guess where to go next.
     const Link = struct { href: []const u8, label: []const u8 };
+    // `start.html` is first: a reader who mistyped a URL is a beginner more often than not, and a
+    // 404 is the worst place to hand them a five-way menu.
     const links: []const Link = if (lang == .en) &.{
         .{ .href = "en/index.html", .label = "Home" },
-        .{ .href = "docs/learn/en/index.html", .label = "Learn (5 minutes)" },
+        .{ .href = "docs/learn/en/start.html", .label = "Your first ten minutes" },
+        .{ .href = "docs/learn/en/index.html", .label = "The learning path" },
         .{ .href = "docs/learn/en/tutorials/counter.html", .label = "Tutorial: counter" },
         .{ .href = "docs/learn/en/concepts/index.html", .label = "Concepts" },
         .{ .href = "docs/learn/en/guides/rpc.html", .label = "Guides: commands" },
         .{ .href = "docs/api/index.html", .label = "API reference (A–Z)" },
     } else &.{
         .{ .href = "index.html", .label = "ホーム" },
-        .{ .href = "docs/learn/ja/index.html", .label = "学ぶ（5 分）" },
+        .{ .href = "docs/learn/ja/start.html", .label = "はじめての Z-Ts（10 分）" },
+        .{ .href = "docs/learn/ja/index.html", .label = "学習パス" },
         .{ .href = "docs/learn/ja/tutorials/counter.html", .label = "チュートリアル: カウンター" },
         .{ .href = "docs/learn/ja/concepts/index.html", .label = "概念" },
         .{ .href = "docs/learn/ja/guides/rpc.html", .label = "ガイド: コマンド" },
@@ -1868,6 +2047,7 @@ test "groupFor keeps the reader-facing sidebar reader-facing" {
     try std.testing.expectEqual(GroupKey.learn, groupFor("docs/learn/ja/index.md"));
     try std.testing.expectEqual(GroupKey.concepts, groupFor("docs/learn/ja/concepts/rpc.md"));
     try std.testing.expectEqual(GroupKey.tutorials, groupFor("docs/learn/en/tutorials/counter.md"));
+    try std.testing.expectEqual(GroupKey.patterns, groupFor("docs/learn/en/patterns/commands.md"));
     try std.testing.expectEqual(GroupKey.guides, groupFor("docs/learn/en/guides/install.md"));
     // Lookups, samples, and the pre-rewrite guides kept as deep dives.
     try std.testing.expectEqual(GroupKey.reference, groupFor("docs/reference/cli.md"));
@@ -1890,7 +2070,7 @@ test "groupFor keeps the reader-facing sidebar reader-facing" {
     }
 
     // English sidebars stop after the guides: the Japanese deep dives are not translated.
-    try std.testing.expectEqualSlices(GroupKey, &.{ .learn, .concepts, .tutorials, .guides, .api }, GroupKey.order(.en));
+    try std.testing.expectEqualSlices(GroupKey, &.{ .learn, .concepts, .tutorials, .patterns, .guides, .api }, GroupKey.order(.en));
     try std.testing.expect(std.mem.indexOfScalar(GroupKey, GroupKey.order(.ja), .deep) != null);
 }
 
@@ -1898,4 +2078,67 @@ test "languages are detected from the path, and only there" {
     try std.testing.expectEqual(@as(?i18n.Lang, .ja), i18n.Lang.fromPath("docs/learn/ja/index.md"));
     try std.testing.expectEqual(@as(?i18n.Lang, .en), i18n.Lang.fromPath("docs/learn/en/guides/install.md"));
     try std.testing.expectEqual(@as(?i18n.Lang, null), i18n.Lang.fromPath("docs/guides/using-rpc.md"));
+}
+
+test "the learn-path directive expands only on its own line" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    // A marker alone on a line becomes the step list.
+    const expanded = try expandDirectives(arena, "# Hub\n\n<!-- learn-path -->\n\nDone.\n", .ja);
+    try std.testing.expect(std.mem.indexOf(u8, expanded, "1. **[はじめての Z-Ts](start.html)**") != null);
+    try std.testing.expect(std.mem.indexOf(u8, expanded, "<!-- learn-path -->") == null);
+
+    // A marker quoted inline (as the writing guide does) is left verbatim.
+    const quoted = "Write `<!-- learn-path -->` on its own line.\n";
+    try std.testing.expectEqualStrings(quoted, try expandDirectives(arena, quoted, .en));
+
+    // No marker at all: the input slice is returned as-is, not copied.
+    const plain = "# No marker\n";
+    const same = try expandDirectives(arena, plain, .ja);
+    try std.testing.expect(same.ptr == plain.ptr);
+}
+
+test "the sidebar heading of a path section carries its step number" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    try std.testing.expectEqualStrings("2 · 仕組みを知る", try groupHeading(arena, .concepts, .ja));
+    try std.testing.expectEqualStrings("3 · Build an app", try groupHeading(arena, .tutorials, .en));
+    try std.testing.expectEqualStrings("学習パス", try groupHeading(arena, .learn, .ja));
+    // Lookup groups keep their plain names: they are not steps of the path.
+    try std.testing.expectEqualStrings("API", try groupHeading(arena, .api, .ja));
+}
+
+test "the first sidebar group opens with the hub, then step 1" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var entries: std.ArrayListUnmanaged(site.NavEntry) = .empty;
+    // Deliberately out of order, and with a page that sorts before `index.md` alphabetically.
+    try entries.append(arena, .{ .href = "docs/learn/ja/zzz.html", .title = "zzz", .source = "docs/learn/ja/zzz.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/start.html", .title = "はじめての Z-Ts", .source = "docs/learn/ja/start.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/index.html", .title = "Z-Ts を学ぶ", .source = "docs/learn/ja/index.md" });
+    try orderLearnEntries(arena, .ja, &entries);
+
+    try std.testing.expectEqualStrings("docs/learn/ja/index.html", entries.items[0].href);
+    try std.testing.expectEqualStrings("1 · はじめての Z-Ts", entries.items[1].title);
+    try std.testing.expectEqualStrings("docs/learn/ja/zzz.html", entries.items[2].href);
+}
+
+test "a section index opens its own group" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var entries: std.ArrayListUnmanaged(site.NavEntry) = .empty;
+    try entries.append(arena, .{ .href = "docs/learn/ja/concepts/security.html", .title = "Security", .source = "docs/learn/ja/concepts/security.md" });
+    try entries.append(arena, .{ .href = "docs/learn/ja/concepts/index.html", .title = "概念", .source = "docs/learn/ja/concepts/index.md" });
+    try orderLearnEntries(arena, .ja, &entries);
+
+    try std.testing.expectEqualStrings("docs/learn/ja/concepts/index.html", entries.items[0].href);
+    try std.testing.expectEqualStrings("docs/learn/ja/concepts/security.html", entries.items[1].href);
 }

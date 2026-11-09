@@ -3,8 +3,9 @@
 > **Audience**: readers with one specific job (with a working `zts`).
 > **Time**: read exactly one page (5–10 minutes each).
 
-Guides are **task-first**. You do not have to read the concepts in order. That said, a first-time
-reader is faster if they finish the [tutorial](../tutorials/counter.md) first.
+Guides are **task-first**. You do not have to read the concepts in order. If you have not run
+anything yet, do [Your first ten minutes](../start.md) first — this page is an index for people who
+already have something working.
 
 ## By what you want to do
 

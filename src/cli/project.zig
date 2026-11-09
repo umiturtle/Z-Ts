@@ -68,6 +68,19 @@ pub fn dependencyPath(zon: []const u8, dep: []const u8) ?[]const u8 {
     return null;
 }
 
+/// The `.url` of a dependency entry, or `null`. A project depending on a published archive has no
+/// path to check on disk; `zts doctor` reports the URL instead.
+pub fn dependencyUrl(zon: []const u8, dep: []const u8) ?[]const u8 {
+    var cursor: usize = 0;
+    while (std.mem.find(u8, zon[cursor..], dep)) |offset| {
+        const at = cursor + offset;
+        cursor = at + dep.len;
+        if (at > 0 and (std.ascii.isAlphanumeric(zon[at - 1]) or zon[at - 1] == '_')) continue;
+        if (fieldValue(zon[at..], ".url")) |url| return url;
+    }
+    return null;
+}
+
 /// Where `zts build` puts the executable: `zig-out/bin/<name>` (plus `.exe` for Windows targets,
 /// because a cross-compiled PE without the extension still runs but looks broken in a file manager).
 pub fn executablePath(alloc: Allocator, name: []const u8, windows: bool) Allocator.Error![]u8 {
@@ -181,11 +194,27 @@ pub fn assetPath(alloc: Allocator, target: []const u8) Allocator.Error!?[]const 
 /// A polling `fetch` (not `EventSource`) keeps the dev server single-threaded and stateless: any
 /// `GET` answers with the current build number, so no connection has to stay open while a rebuild
 /// is running.
+///
+/// The state carries `hot`: `"css"` means the only files that changed were stylesheets, so the
+/// page replaces its `<link rel="stylesheet">` elements and keeps its state (scroll position, form
+/// inputs, an open devtools console). Anything else reloads. If a swap fails to load, the script
+/// falls back to a reload rather than leaving the page half-styled.
 pub fn reloadScript(alloc: Allocator, build: u64) Allocator.Error![]u8 {
     return std.fmt.allocPrint(
         alloc,
-        "<script data-zts-dev>(function(){{var v={d};var poll=function(){{fetch('/__zts_dev__/state',{{cache:'no-store'}})" ++
-            ".then(function(r){{return r.json()}}).then(function(s){{if(s.v!==v)location.reload()}})" ++
+        "<script data-zts-dev>(function(){{var v={d};" ++
+            "var swap=function(n){{var links=document.querySelectorAll('link[rel~=\"stylesheet\"]');" ++
+            "if(!links.length)return false;var done=0,failed=false;" ++
+            "Array.prototype.forEach.call(links,function(old){{" ++
+            "var href=old.href.replace(/[?&]zts=\\d+/,'');" ++
+            "var next=document.createElement('link');next.rel='stylesheet';" ++
+            "next.href=href+(href.indexOf('?')<0?'?':'&')+'zts='+n;" ++
+            "next.onload=function(){{if(!failed&&++done===links.length)old.parentNode.removeChild(old)}};" ++
+            "next.onerror=function(){{failed=true;location.reload()}};" ++
+            "old.parentNode.insertBefore(next,old.nextSibling)}});return true}};" ++
+            "var poll=function(){{fetch('/__zts_dev__/state',{{cache:'no-store'}})" ++
+            ".then(function(r){{return r.json()}})" ++
+            ".then(function(s){{if(s.v===v)return;if(s.hot==='css'&&swap(s.v)){{v=s.v;return}}location.reload()}})" ++
             ".catch(function(){{}})}};setInterval(poll,700)}})()</script>",
         .{build},
     );
@@ -273,6 +302,22 @@ test "packageName ignores look-alike fields instead of returning the wrong name"
     ;
     try testing.expectEqualStrings("real_name", packageName(zon).?);
     try testing.expect(packageName(".version = \"1.0.0\",") == null);
+}
+
+test "dependencyUrl reads the published-archive form" {
+    const zon =
+        \\.{
+        \\    .dependencies = .{
+        \\        .z_ts = .{ .url = "https://example.invalid/z_ts.tar.gz", .hash = "z_ts-0.1.0-AAAA" },
+        \\    },
+        \\}
+        \\
+    ;
+    try testing.expectEqualStrings("https://example.invalid/z_ts.tar.gz", dependencyUrl(zon, ".z_ts").?);
+    // A path dependency has no URL, and vice versa.
+    const path_zon = ".{ .dependencies = .{ .z_ts = .{ .path = \"../Z-Ts\" } } }";
+    try testing.expectEqual(@as(?[]const u8, null), dependencyUrl(path_zon, ".z_ts"));
+    try testing.expectEqual(@as(?[]const u8, null), dependencyPath(zon, ".z_ts"));
 }
 
 test "dependencyPath finds the z_ts entry and not some other path" {

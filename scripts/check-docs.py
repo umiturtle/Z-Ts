@@ -22,6 +22,14 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
 8. Parity           — `docs/learn/ja/` and `docs/learn/en/` hold the same file names. A page
                       added to one language and forgotten in the other is how a bilingual site
                       rots; the switcher would send the reader to a 404.
+9. Tool wrapper      — every `./zigw <verb>` in the docs must be a verb `zigw` actually
+                      implements, or a real `zig` subcommand it forwards. The wrapper is the
+                      easiest thing in the repository to document from memory, and "run
+                      `./zigw quick-tests`" reads plausibly right up until someone types it.
+10. Reader toolchain — reader-facing docs (README, `docs/INDEX.md`, `docs/learn/`,
+                      `docs/reference/`, example READMEs) must not mention `zigw` at all. It is
+                      a bootstrap for *this* checkout, not a distributed artifact, so an app
+                      author cannot run it. The toolchain those pages may name is `zts` + `zig`.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -296,6 +304,65 @@ for missing in sorted(ja_files - en_files):
 for missing in sorted(en_files - ja_files):
     errors.append(f"{LEARN_ROOT}/ja/{missing}: missing translation (exists in en)")
     parity_errors += 1
+
+# ---------------------------------------------------------------------------
+# 9. `./zigw` invocations in the docs must be real
+# ---------------------------------------------------------------------------
+
+# Keep the two sets in sync with `zigw` itself: the `if [[ ... == ... ]]` branches near the top
+# and the fall-through `exec "$ZIG_BIN" "$@"`.
+ZIGW_SUBCOMMANDS = {
+    "zig-path",   # prints the Zig this checkout uses
+    "quick-test", # direct `zig test` over the module graph
+    "docs-check", # renderer tests + the python gates + `zig build docs`
+    "doctest",    # only the ```zig check fences
+    "full-test",  # `zig build test`
+}
+ZIG_SUBCOMMANDS = {
+    "build", "build-exe", "build-lib", "build-obj", "test", "fmt", "version", "cc", "c++",
+    "ar", "run", "fetch", "env", "ast-check", "reduce", "objcopy", "rc", "dlltool", "lib",
+    "translate-c", "std", "init", "targets", "help", "zen",
+}
+zigw_ref = open("zigw", encoding="utf-8").read() if os.path.exists("zigw") else ""
+if not zigw_ref:
+    errors.append("zigw: the wrapper is missing but the docs tell readers to run it")
+else:
+    for name in sorted(ZIGW_SUBCOMMANDS):
+        if f'== "{name}"' not in zigw_ref:
+            errors.append(f"scripts/check-docs.py: '{name}' is listed as a zigw subcommand but zigw does not implement it")
+
+zigw_uses: set[str] = set()
+for md in md_files:
+    text = open(md, encoding="utf-8").read()
+    for match in re.finditer(r"(?<![\w./-])\./zigw\s+([a-z][a-z0-9+-]*)", text):
+        zigw_uses.add(match.group(1))
+for verb in sorted(zigw_uses - ZIGW_SUBCOMMANDS - ZIG_SUBCOMMANDS):
+    errors.append(f"docs: './zigw {verb}' is not something zigw (or the zig it forwards to) accepts")
+
+# ---------------------------------------------------------------------------
+# 10. Reader-facing docs must not name the repository's bootstrap wrapper
+# ---------------------------------------------------------------------------
+
+# `zigw` downloads Zig into /tmp and then runs `zig build` in this checkout. It is not in
+# Releases, so an app author who follows a page that says `./zigw build` hits a missing file
+# before they have a project. The toolchain those pages may use is `zts` plus a normal `zig`;
+# what `zigw` does is still documented where repository contributors read it
+# (docs/contributing/README.md), and this rule keeps the two audiences from bleeding.
+READER_DOCS = ["README.md", "docs/INDEX.md", "docs/learn", "docs/reference"]
+reader_files = [
+    md for md in md_files
+    if any(md == root or md.startswith(root + "/") for root in READER_DOCS)
+]
+reader_files += sorted(glob.glob("examples/*/README.md")) + sorted(glob.glob("examples/*/*/README.md"))
+for md in sorted(set(reader_files)):
+    if not os.path.isfile(md):
+        continue
+    text = open(md, encoding="utf-8").read()
+    if re.search(r"\bzigw\b", text):
+        errors.append(
+            f"{md}: mentions `zigw`; reader-facing pages must only use `zts` and `zig` "
+            f"(`zigw` is a checkout bootstrap, not a distributed artifact)"
+        )
 
 if warnings:
     for w in warnings:

@@ -33,6 +33,52 @@ src/cli/main.zig             bundler を呼ぶだけ（文字列整形と `hdiut
 
 ---
 
+## 1.1 `zts` 自体の配布（2026-10-21 追加）
+
+`zts package` が包むのは**利用者のアプリ**です。その `zts` 自体をどう配るかは別の問題で、
+ここで決めました。
+
+| 案 | 結果 |
+|---|---|
+| `zigw` も配る | **却下**。`zigw` は Zig を `/tmp` に導入して `zig build` を呼ぶだけのラッパーで、対象はリポジトリを開発する人。利用者に Python と `/tmp` の寿命を持ち込む理由がない |
+| チェックアウトを clone させる | **却下**。アプリを作るためにツールキットの git 履歴は要らない |
+| `zts` 単体バイナリ + `.url` 依存 | **採用** |
+
+`zts` は ReleaseSmall で **約 300 KB**、`link_libc = false` の単体ファイルです。`PATH` の `zig` を
+子プロセスで起動するだけなので、Zig を同梱する必要もありません（`ZTS_ZIG` で差し替え可）。
+
+### 焼き込む値（`-Dzts-pkg-url` / `-Dzts-pkg-hash`）
+
+生成する `build.zig.zon` の `.z_ts` を、チェックアウトの `.path` ではなく公開アーカイブの
+`.url` + `.hash` にするためのビルドオプションです（`build.zig` の `cli_options`）。
+
+```text
+zig build -Doptimize=ReleaseSmall -Dzts-pkg-url=<release asset> -Dzts-pkg-hash=<zig fetch の戻り値>
+```
+
+* URL と hash は**対**で扱う。片方だけなら `build.zig` が `panic` する（Zig が読めない zon を
+  生成しないため）。`zts init --zts-url` / `--zts-hash` も同じ規則で `IncompleteZtsRelease` になる。
+* 焼き込むと `zts_root` は空文字になり、`zts doctor` は `checkout (none — release build)` と表示する
+  （存在しないパスを `MISSING` と言わないため）。
+* `.url` 依存のプロジェクトは初回ビルドで取得し、Zig のキャッシュに入る。2 回目以降はオフラインでよい。
+
+### 公開の順序
+
+`release.yml` は「アーカイブを作る → `zig fetch` で hash を得る → その URL/hash を焼き込んで
+3 OS のバイナリをビルド → GitHub Releases に載せる」の順で動きます。hash が先に決まらないと
+バイナリを作れないためです。公開物は次の 4 種類です。
+
+| アセット | 中身 |
+|---|---|
+| `z_ts-<version>.tar.gz` | `git archive` のソース（追跡ファイルのみ） |
+| `zts-<version>-linux-x86_64` / `-macos-<arch>` / `-windows-x86_64.exe` | 単体バイナリ |
+| `SHA256SUMS` | 上記のチェックサム |
+
+CI の `ci-cli`（Linux）は、この release モードのバイナリを実際に作って `zts init` させ、
+`.url` 依存が書かれること・空の Zig キャッシュからビルドできることを毎回確認します。
+
+---
+
 ## 2. 判断と、却下した案
 
 ### 2.1 Windows のリソースは PE を後から書き換える
@@ -139,3 +185,4 @@ Rust ツールチェーンは `scripts/setup-toolchains.sh --rust` でしか入�
 | MSI / MSIX | 未対応。`.exe` まで |
 | ベンチ 6 指標 | スライス C。上記 §4 の設計のみ |
 | `zts package` の `--arch` | 意図的に作らない（§2.2） |
+| Linux aarch64 / macOS x86_64 のバイナリ | 未対応。`release.yml` は runner のアーキテクチャで名付ける（`uname -m`）。arm ランナーが用意できたら matrix に足すだけ |

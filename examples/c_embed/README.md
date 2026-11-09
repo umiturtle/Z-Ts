@@ -29,14 +29,17 @@ OK c-embed host=gtk3|win32|cocoa checks=9 structural=1 child=520x380 pong=42 fra
 
 ## 実行
 
+このサンプルは独立した `build.zig` を持たないので、**リポジトリのルート**で実行します
+（`zig build` はルートのビルドを使い、`zig-out/bin/zts_c_embed` を作ります）。
+
 ```bash
 # Linux（GTK3 + WebKit2GTK、仮想ディスプレイでも可）
 bash scripts/setup-toolchains.sh --sysroot
-./zigw build                                  # zig-out/bin/zts_c_embed
+zig build                                     # zig-out/bin/zts_c_embed
 xvfb-run -a ./zig-out/bin/zts_c_embed
 
 # macOS（Cocoa / WKWebView）
-./zigw build && ./zig-out/bin/zts_c_embed
+zig build && ./zig-out/bin/zts_c_embed
 
 # Windows（Win32 + WebView2、Evergreen ランタイム必須）
 zig build && .\zig-out\bin\zts_c_embed.exe

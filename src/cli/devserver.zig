@@ -20,6 +20,118 @@ const project = @import("project.zig");
 /// Path the injected script polls. It answers `{"v":<build>,"ok":<bool>}` and never touches disk.
 pub const state_path = "/__zts_dev__/state";
 
+/// What a rescan found. `zts dev` uses this to do the least work that shows the edit:
+/// a stylesheet can be swapped in place, any other `web/` file needs a reload, and only `src/`
+/// needs a compile.
+pub const Change = enum {
+    none,
+    /// Only `web/` changed, and not just stylesheets: reload the page, but **do not** run
+    /// `zig build` — the preview is served from disk, so a compile would only repeat the last one.
+    assets,
+    /// Only `web/**/*.css` changed: replace the `<link>` in place. No reload, no compile, so the
+    /// page keeps its scroll position and the devtools console keeps its history.
+    css,
+    /// Something under `src/` changed: the Zig side has to compile before the page can be trusted.
+    source,
+
+    /// Classifies the paths a [`Snapshot`] diff produced. A change anywhere in `src/` wins over a
+    /// stylesheet edit, because the page cannot run without a successful build.
+    pub fn classify(changed: []const []const u8) Change {
+        var kind: Change = .none;
+        for (changed) |path| {
+            if (std.mem.startsWith(u8, path, "src/")) return .source;
+            // One non-stylesheet is enough to force a reload; a page whose only edits are
+            // stylesheets keeps its state.
+            if (!std.mem.endsWith(u8, path, ".css")) {
+                kind = .assets;
+            } else if (kind == .none) {
+                kind = .css;
+            }
+        }
+        return kind;
+    }
+
+    /// `"css"` when the browser can hot-swap, `"full"` when it has to reload.
+    pub fn hot(self: Change) []const u8 {
+        return if (self == .css) "css" else "full";
+    }
+};
+
+/// `"web"` + `"style.css"` → `"web/style.css"` on every OS.
+///
+/// `Dir.walk` returns native separators, so on Windows the same edit would arrive as
+/// `web\\style.css` and [`Change.classify`] would not see the stylesheet — the dev loop would fall
+/// back to a reload there and nowhere else. Normalising once, here, keeps the classifier a pure
+/// function over forward slashes.
+fn watchKey(gpa: Allocator, dir: []const u8, path: []const u8) ![]u8 {
+    const key = try std.fmt.allocPrint(gpa, "{s}/{s}", .{ dir, path });
+    for (key) |*ch| {
+        if (ch.* == '\\') ch.* = '/';
+    }
+    return key;
+}
+
+/// Every file below the watched directories, stamped with `mtime ^ size`. A diff against the
+/// previous scan names the files that changed, which [`Change.classify`] turns into a decision.
+pub const Snapshot = struct {
+    stamps: std.StringHashMapUnmanaged(u64) = .empty,
+
+    pub fn deinit(self: *Snapshot, gpa: Allocator) void {
+        var it = self.stamps.iterator();
+        while (it.next()) |entry| gpa.free(entry.key_ptr.*);
+        self.stamps.deinit(gpa);
+    }
+
+    /// `project_dir` is where `build.zig` lives and `subs` are the directories watched inside it
+    /// (`"src"`, `"web"`). Keys are recorded as `"src/main.zig"`, `"web/index.html"` — relative to
+    /// the project, so [`Change.classify`] does not have to care where the project is. A missing
+    /// directory is skipped: a project without `src/` still previews.
+    pub fn scan(gpa: Allocator, io: Io, project_dir: []const u8, subs: []const []const u8) !Snapshot {
+        var self: Snapshot = .{};
+        errdefer self.deinit(gpa);
+        const cwd = Io.Dir.cwd();
+        for (subs) |dir_path| {
+            const full = try std.fmt.allocPrint(gpa, "{s}/{s}", .{ project_dir, dir_path });
+            defer gpa.free(full);
+            const handle = cwd.openDir(io, full, .{ .iterate = true }) catch continue;
+            defer handle.close(io);
+            var walker = try handle.walk(gpa);
+            defer walker.deinit();
+            while (try walker.next(io)) |entry| {
+                if (entry.kind != .file) continue;
+                const stat = handle.statFile(io, entry.path, .{}) catch continue;
+                const key = try watchKey(gpa, dir_path, entry.path);
+                errdefer gpa.free(key);
+                // Nanoseconds from the epoch fit in 64 bits until 2554; multiplied and xored with
+                // the size so that an editor that keeps mtime (rsync, some formatters) still shows
+                // up when the content length moves.
+                const nanos: u64 = @bitCast(@as(i64, @truncate(stat.mtime.nanoseconds)));
+                try self.stamps.put(gpa, key, nanos ^ (stat.size *% 0x9e37_79b9_7f4a_7c15));
+            }
+        }
+        return self;
+    }
+
+    /// Paths that are new, changed, or gone. Allocated from `arena`; there is nothing to free.
+    pub fn changed(self: *const Snapshot, arena: Allocator, next: *const Snapshot) ![]const []const u8 {
+        var out: std.ArrayListUnmanaged([]const u8) = .empty;
+        var it = next.stamps.iterator();
+        while (it.next()) |entry| {
+            const previous = self.stamps.get(entry.key_ptr.*);
+            if (previous == null or previous.? != entry.value_ptr.*) {
+                try out.append(arena, try arena.dupe(u8, entry.key_ptr.*));
+            }
+        }
+        var old = self.stamps.iterator();
+        while (old.next()) |entry| {
+            if (!next.stamps.contains(entry.key_ptr.*)) {
+                try out.append(arena, try arena.dupe(u8, entry.key_ptr.*));
+            }
+        }
+        return out.items;
+    }
+};
+
 /// Largest file the preview will serve. Bigger than any sane front-end asset and small enough that a
 /// stray `@embedFile`-dumped binary cannot exhaust memory.
 const max_asset_bytes = 64 * 1024 * 1024;
@@ -40,6 +152,8 @@ pub const DevServer = struct {
     build: std.atomic.Value(u64) = .init(0),
     /// Whether the last rebuild succeeded, so the page can say why it will not reload.
     ok: std.atomic.Value(bool) = .init(true),
+    /// How the page should pick up the last successful change: swap a stylesheet or reload.
+    hot: std.atomic.Value(u8) = .init(@backingInt(Change.assets)),
 
     /// Binds `host:port` and starts the accept thread. `port = 0` lets the OS pick (tests use it).
     pub fn start(gpa: Allocator, io: Io, root_path: []const u8, host: []const u8, bind_port: u16) !*DevServer {
@@ -116,11 +230,17 @@ pub const DevServer = struct {
         wake.close(self.io);
     }
 
-    /// Records the outcome of a rebuild. The counter only advances on success: a failing build must
+    /// Records the outcome of a change. The counter only advances on success: a failing build must
     /// not make every open tab reload into the same error page.
-    pub fn recordBuild(self: *DevServer, ok: bool) void {
+    pub fn recordChange(self: *DevServer, change: Change, ok: bool) void {
         self.ok.store(ok, .release);
+        self.hot.store(@backingInt(change), .release);
         if (ok) _ = self.build.fetchAdd(1, .monotonic);
+    }
+
+    /// Records the outcome of a `zig build` (a `src/` change, or the first build).
+    pub fn recordBuild(self: *DevServer, ok: bool) void {
+        self.recordChange(.source, ok);
     }
 
     fn acceptLoop(self: *DevServer) void {
@@ -166,9 +286,10 @@ pub const DevServer = struct {
         const target = req.head.target;
         if (std.mem.startsWith(u8, target, state_path)) {
             var body: [64]u8 = undefined;
-            const json = try std.fmt.bufPrint(&body, "{{\"v\":{d},\"ok\":{s}}}", .{
+            const json = try std.fmt.bufPrint(&body, "{{\"v\":{d},\"ok\":{s},\"hot\":\"{s}\"}}", .{
                 self.build.load(.acquire),
                 if (self.ok.load(.acquire)) "true" else "false",
+                (@as(Change, @fromBackingInt(@intCast(self.hot.load(.acquire))))).hot(),
             });
             try req.respond(json, .{
                 .status = .ok,
@@ -228,63 +349,87 @@ pub const DevServer = struct {
     }
 };
 
-/// Fingerprint of every file under `dir` (path + mtime + size). Comparing two fingerprints is the
-/// whole change detector: no inotify / FSEvents / ReadDirectoryChangesW, so it behaves identically
-/// on Linux, macOS and Windows and cannot miss an event that happened while a build was running.
-/// Returns 0 for a directory that does not exist (the caller watches `src/` and `web/` and either
-/// may be absent in a hand-written project).
-pub fn fingerprint(io: Io, gpa: Allocator, dir: Io.Dir) !u64 {
-    var hasher = std.hash.Wyhash.init(0x5a2d_5453);
-    var walker = try dir.walk(gpa);
-    defer walker.deinit();
-
-    var count: usize = 0;
-    while (try walker.next(io)) |entry| {
-        if (entry.kind != .file) continue;
-        const stat = dir.statFile(io, entry.path, .{}) catch continue;
-        hasher.update(entry.path);
-        // Truncated to 64 bits: nanoseconds since the epoch fit until the year 2554, and the
-        // fingerprint only has to change when a file changes.
-        var mtime: [8]u8 = undefined;
-        std.mem.writeInt(u64, &mtime, @bitCast(@as(i64, @truncate(stat.mtime.nanoseconds))), .little);
-        hasher.update(&mtime);
-        var size: [8]u8 = undefined;
-        std.mem.writeInt(u64, &size, stat.size, .little);
-        hasher.update(&size);
-        count += 1;
-    }
-    // An empty or missing tree still has to be distinguishable from "not walked yet".
-    hasher.update(std.mem.asBytes(&count));
-    return hasher.final();
-}
-
 // ---------------------------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------------------------
 
 const testing = std.testing;
 
-test "fingerprint notices an edit, a new file and a deletion" {
+test "Snapshot names the files that changed, and Change classifies them" {
     var tmp = std.testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
-
     const io = testing.io;
-    try tmp.dir.writeFile(io, .{ .sub_path = "index.html", .data = "one" });
-    const first = try fingerprint(io, testing.allocator, tmp.dir);
 
-    // Same contents, same mtimes: a second walk must agree, or `zts dev` would rebuild forever.
-    try testing.expectEqual(first, try fingerprint(io, testing.allocator, tmp.dir));
+    try tmp.dir.createDirPath(io, "web/assets");
+    try tmp.dir.createDirPath(io, "src");
+    try tmp.dir.writeFile(io, .{ .sub_path = "web/index.html", .data = "<h1>hi</h1>" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "web/assets/site.css", .data = "h1{color:red}" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "src/main.zig", .data = "pub fn main() void {}" });
 
-    try tmp.dir.writeFile(io, .{ .sub_path = "index.html", .data = "one and a half" });
-    const edited = try fingerprint(io, testing.allocator, tmp.dir);
-    try testing.expect(first != edited);
+    // `scan` resolves against the process CWD and `tmpDir` lives under `.zig-cache/tmp/<name>`.
+    const root_dir = try std.fmt.allocPrint(testing.allocator, ".zig-cache/tmp/{s}", .{tmp.sub_path});
+    defer testing.allocator.free(root_dir);
+    const subs = [_][]const u8{ "src", "web" };
 
-    try tmp.dir.writeFile(io, .{ .sub_path = "app.js", .data = "export {}" });
-    const added = try fingerprint(io, testing.allocator, tmp.dir);
-    try testing.expect(edited != added);
+    var before = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer before.deinit(testing.allocator);
+    // The same tree twice must agree, or `zts dev` would redraw forever.
+    {
+        var same = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+        defer same.deinit(testing.allocator);
+        var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena_state.deinit();
+        try testing.expectEqual(@as(usize, 0), (try before.changed(arena_state.allocator(), &same)).len);
+    }
 
-    try tmp.dir.deleteFile(io, "app.js");
-    try testing.expect(added != try fingerprint(io, testing.allocator, tmp.dir));
+    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_state.deinit();
+
+    // A stylesheet edit is the hot-swappable case.
+    try tmp.dir.writeFile(io, .{ .sub_path = "web/assets/site.css", .data = "h1{color:blue}" });
+    var after = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer after.deinit(testing.allocator);
+    var changed = try before.changed(arena_state.allocator(), &after);
+    try testing.expectEqual(@as(usize, 1), changed.len);
+    try testing.expectEqualStrings("web/assets/site.css", changed[0]);
+    try testing.expectEqual(Change.css, Change.classify(changed));
+
+    // Any other web file: reload, no compile.
+    try tmp.dir.writeFile(io, .{ .sub_path = "web/index.html", .data = "<h1>bye</h1>" });
+    var after_page = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer after_page.deinit(testing.allocator);
+    changed = try after.changed(arena_state.allocator(), &after_page);
+    try testing.expectEqual(Change.assets, Change.classify(changed));
+
+    // A Zig edit outranks both: the page cannot be trusted until the build passes.
+    try tmp.dir.writeFile(io, .{ .sub_path = "src/main.zig", .data = "pub fn main() void { }" });
+    var after_src = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer after_src.deinit(testing.allocator);
+    changed = try after_page.changed(arena_state.allocator(), &after_src);
+    try testing.expectEqual(Change.source, Change.classify(changed));
+
+    // A deletion is a change too (deleting a stylesheet must not leave the old one on screen).
+    try tmp.dir.deleteFile(io, "web/assets/site.css");
+    var after_delete = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer after_delete.deinit(testing.allocator);
+    changed = try after_src.changed(arena_state.allocator(), &after_delete);
+    try testing.expectEqual(@as(usize, 1), changed.len);
+    try testing.expectEqual(Change.css, Change.classify(changed));
+}
+
+test "watchKey normalises the Windows walker's separators" {
+    const gpa = testing.allocator;
+    const key = try watchKey(gpa, "web", "assets\\site.css");
+    defer gpa.free(key);
+    try testing.expectEqualStrings("web/assets/site.css", key);
+    try testing.expectEqual(Change.css, Change.classify(&.{key}));
+}
+
+test "classify ignores an empty diff and reports nothing to do" {
+    try testing.expectEqual(Change.none, Change.classify(&.{}));
+    try testing.expectEqualStrings("css", Change.css.hot());
+    try testing.expectEqualStrings("full", Change.source.hot());
+    try testing.expectEqualStrings("full", Change.assets.hot());
 }
 
 test "the dev server serves web/, injects the reload script and refuses traversal" {
@@ -318,7 +463,7 @@ test "the dev server serves web/, injects the reload script and refuses traversa
 
     const state = try getBody(testing.allocator, port, state_path);
     defer testing.allocator.free(state);
-    try testing.expectEqualStrings("{\"v\":1,\"ok\":true}", state);
+    try testing.expectEqualStrings("{\"v\":1,\"ok\":true,\"hot\":\"full\"}", state);
 
     const missing = try getBody(testing.allocator, port, "/nope.js");
     defer testing.allocator.free(missing);

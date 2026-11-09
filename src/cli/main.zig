@@ -81,6 +81,7 @@ fn describeParseError(err: args_mod.ParseError) []const u8 {
         error.MissingValue => "a flag is missing its value",
         error.InvalidPort => "`--port` must be a number between 0 and 65535",
         error.UnexpectedArgument => "too many arguments",
+        error.IncompleteZtsRelease => "`--zts-url` and `--zts-hash` must be given together",
     };
 }
 
@@ -108,9 +109,23 @@ fn runInit(
         return exit_usage;
     };
 
-    // `build.zig.zon` refuses absolute local paths (`expected path relative to build root`), so
-    // the checkout is written the way a human would: `../Z-Ts`, `../../Z-Ts`, ….
-    const zts_path = if (opts.zts_path) |explicit|
+    // Where the generated project gets Z-Ts from. A published build knows a release archive and
+    // emits `.url`/`.hash`, so the project builds on a machine that has never seen a checkout;
+    // a source build falls back to a relative path to the tree that compiled this binary.
+    //
+    // `build.zig.zon` refuses absolute local paths (`expected path relative to build root`), so the
+    // checkout is written the way a human would: `../Z-Ts`, `../../Z-Ts`, ….
+    const release: ?struct { url: []const u8, hash: []const u8 } =
+        if (opts.zts_url) |url|
+            .{ .url = url, .hash = opts.zts_hash.? }
+        else if (opts.zts_path == null and build_options.zts_pkg_url.len > 0 and build_options.zts_pkg_hash.len > 0)
+            .{ .url = build_options.zts_pkg_url, .hash = build_options.zts_pkg_hash }
+        else
+            null;
+
+    const zts_path = if (release != null)
+        ""
+    else if (opts.zts_path) |explicit|
         try relativePath(io, arena, env, opts.dir, explicit)
     else
         try relativePath(io, arena, env, opts.dir, build_options.zts_root);
@@ -123,7 +138,12 @@ fn runInit(
         }
     } else |_| {}
 
-    const files = try template.scaffold(arena, .{ .name = name, .zts_path = zts_path });
+    const files = try template.scaffold(arena, .{
+        .name = name,
+        .zts_path = zts_path,
+        .zts_url = if (release) |r| r.url else null,
+        .zts_hash = if (release) |r| r.hash else null,
+    });
     for (files) |file| {
         const full = try std.fmt.allocPrint(arena, "{s}/{s}", .{ opts.dir, file.path });
         if (std.fs.path.dirname(full)) |parent| {
@@ -269,18 +289,42 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     // Build once so the first page load matches what `zts build` would produce.
     server.recordBuild(try rebuild(io, gpa, arena, opts.dir, true));
 
-    var previous = try watchFingerprint(io, gpa, opts.dir);
-    while (true) {
-        io.sleep(.fromMilliseconds(400), .awake) catch return 0;
-        const current = try watchFingerprint(io, gpa, opts.dir);
-        if (current == previous) continue;
-        previous = current;
-        // A save often arrives as several writes (editor temp rename, formatter, fsync); waiting a
-        // beat turns three rebuilds into one.
-        io.sleep(.fromMilliseconds(200), .awake) catch return 0;
-        previous = try watchFingerprint(io, gpa, opts.dir);
+    const watched = [_][]const u8{ "src", "web" };
+    var previous = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
+    defer previous.deinit(gpa);
 
-        server.recordBuild(try rebuild(io, gpa, arena, opts.dir, false));
+    while (true) {
+        io.sleep(.fromMilliseconds(250), .awake) catch return 0;
+        var current = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
+        const changed = try previous.changed(arena, &current);
+        // A save often arrives as several writes (editor temp rename, formatter, fsync); waiting a
+        // beat turns three scans into one, and the second scan is the one we compare against.
+        io.sleep(.fromMilliseconds(120), .awake) catch return 0;
+        current.deinit(gpa);
+        current = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
+
+        switch (devserver.Change.classify(changed)) {
+            .none => {
+                current.deinit(gpa);
+                continue;
+            },
+            .css => {
+                // The preview is served from `web/` on disk, so the bytes the browser asks for are
+                // already new. Nothing to compile, nothing to reload — the injected script swaps
+                // the stylesheet when it sees `"hot":"css"`.
+                server.recordChange(.css, true);
+                printOut(io, "zts: stylesheet updated in place\n", .{});
+            },
+            .assets => {
+                server.recordChange(.assets, true);
+                printOut(io, "zts: web/ changed — reloading (no rebuild needed)\n", .{});
+            },
+            .source => {
+                server.recordChange(.source, try rebuild(io, gpa, arena, opts.dir, false));
+            },
+        }
+        previous.deinit(gpa);
+        previous = current;
     }
 }
 
@@ -289,19 +333,6 @@ fn displayHost(host: []const u8) []const u8 {
     // container. The URL line is meant to be clicked, so print loopback in that case.
     if (std.mem.eql(u8, host, "0.0.0.0")) return "127.0.0.1";
     return host;
-}
-
-fn watchFingerprint(io: Io, gpa: Allocator, dir: []const u8) !u64 {
-    const cwd = Io.Dir.cwd();
-    var hash: u64 = 0;
-    for ([_][]const u8{ "src", "web" }) |sub| {
-        const full = try std.fmt.allocPrint(gpa, "{s}/{s}", .{ dir, sub });
-        defer gpa.free(full);
-        const handle = cwd.openDir(io, full, .{ .iterate = true }) catch continue;
-        defer handle.close(io);
-        hash ^= try devserver.fingerprint(io, gpa, handle);
-    }
-    return hash;
 }
 
 fn rebuild(io: Io, gpa: Allocator, arena: Allocator, dir: []const u8, first: bool) !bool {
@@ -645,16 +676,30 @@ fn runDoctor(io: Io, arena: Allocator, dir: []const u8) !u8 {
     var problems: usize = 0;
 
     printOut(io, "zts {f}\n", .{args_mod.version});
-    printOut(io, "  checkout     {s}\n", .{build_options.zts_root});
-    if (cwd.access(io, build_options.zts_root, .{})) |_| {
-        printOut(io, "  z_ts         present\n", .{});
-    } else |_| {
-        printErr(io, "  z_ts         MISSING at {s} — rebuild zts or pass --zts-path\n", .{build_options.zts_root});
-        problems += 1;
+    // A release build has no checkout to report: the project fetches Z-Ts from the archive the
+    // binary was built with. Saying "MISSING" there would be a lie.
+    if (build_options.zts_root.len == 0) {
+        printOut(io, "  checkout     (none — release build)\n", .{});
+    } else {
+        printOut(io, "  checkout     {s}\n", .{build_options.zts_root});
+        if (cwd.access(io, build_options.zts_root, .{})) |_| {
+            printOut(io, "  z_ts         present\n", .{});
+        } else |_| {
+            printErr(io, "  z_ts         MISSING at {s} — rebuild zts or pass --zts-path\n", .{build_options.zts_root});
+            problems += 1;
+        }
     }
 
     const zig = resolveZig(io, arena, build_options.zts_root);
-    printOut(io, "  zig          {s}\n", .{zig});
+    // `resolveZig` falls back to the bare name `zig` when it found nothing, so an unresolved bare
+    // name is the missing-toolchain case. Saying so here is the difference between "install Zig"
+    // and a `FileNotFound` from the first build.
+    if (std.mem.eql(u8, zig, "zig") and findOnPath(io, arena, "zig") == null) {
+        printErr(io, "  zig          MISSING — install Zig 0.17 on PATH or set ZTS_ZIG\n", .{});
+        problems += 1;
+    } else {
+        printOut(io, "  zig          {s}\n", .{zig});
+    }
 
     const zon = readZon(io, arena, dir) catch |err| {
         printErr(io, "\n{s}/build.zig.zon: {t}\n", .{ dir, err });
@@ -670,7 +715,10 @@ fn runDoctor(io: Io, arena: Allocator, dir: []const u8) !u8 {
     printOut(io, "  package      {s}\n", .{name});
 
     const dep = project.dependencyPath(zon, ".z_ts");
-    if (dep) |path| {
+    if (project.dependencyUrl(zon, ".z_ts")) |url| {
+        // Nothing local to check: Zig fetches (and caches) the archive on the first build.
+        printOut(io, "  dependency   {s} (fetched by zig)\n", .{url});
+    } else if (dep) |path| {
         const full = try std.fmt.allocPrint(arena, "{s}/{s}", .{ dir, path });
         if (cwd.access(io, full, .{})) |_| {
             printOut(io, "  dependency   {s}\n", .{path});
@@ -718,14 +766,16 @@ fn resolveZig(io: Io, arena: Allocator, zts_root: []const u8) []const u8 {
     // last resort for a POSIX checkout where nothing else bootstrapped the toolchain.
     if (findOnPath(io, arena, "zig")) |found| return found;
 
-    const checkout_zig = std.fmt.allocPrint(arena, "{s}/zig", .{zts_root}) catch null;
-    if (checkout_zig) |path| {
-        if (Io.Dir.cwd().access(io, path, .{})) |_| return path else |_| {}
-    }
+    if (zts_root.len > 0) {
+        const checkout_zig = std.fmt.allocPrint(arena, "{s}/zig", .{zts_root}) catch null;
+        if (checkout_zig) |path| {
+            if (Io.Dir.cwd().access(io, path, .{})) |_| return path else |_| {}
+        }
 
-    if (builtin.os.tag != .windows) {
-        const wrapper = std.fmt.allocPrint(arena, "{s}/zigw", .{zts_root}) catch return "zig";
-        if (Io.Dir.cwd().access(io, wrapper, .{})) |_| return wrapper else |_| {}
+        if (builtin.os.tag != .windows) {
+            const wrapper = std.fmt.allocPrint(arena, "{s}/zigw", .{zts_root}) catch return "zig";
+            if (Io.Dir.cwd().access(io, wrapper, .{})) |_| return wrapper else |_| {}
+        }
     }
     return "zig";
 }

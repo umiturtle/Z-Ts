@@ -11,15 +11,15 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 
 | あなたは | 入口 | 使うコマンド |
 |---|---|---|
-| **Z-Ts でアプリを作りたい** | [`learn/ja/index.md`](learn/ja/index.md)（英語は [`learn/en/index.md`](learn/en/index.md)） → [`learn/ja/tutorials/counter.md`](learn/ja/tutorials/counter.md) | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
-| **Z-Ts 本体を開発・公開したい** | [`contributing/README.md`](contributing/README.md) | `./zigw` / `zig build` / `scripts/*` |
+| **Z-Ts でアプリを作りたい** | [`learn/ja/start.md`](learn/ja/start.md)（英語は [`learn/en/start.md`](learn/en/start.md)） → [`learn/ja/index.md`](learn/ja/index.md)（5 ステップの学習パス） | `zts`（`init` / `dev` / `build` / `package` / `doctor`） |
+| **Z-Ts 本体を開発・公開したい** | [`contributing/README.md`](contributing/README.md) | `zig build` / `scripts/*` |
 
 ## 読み手ごとの 3 層（+ 内部資料）
 
 | 層 | 正本 | 読むもの |
 |---|---|---|
-| ① 学ぶ | 手順と最小例 | [`learn/`](learn/ja/index.md) — 概念 → チュートリアル → ガイド（日英 2 言語・同名ファイル） |
-| ② 引く | **Zig のソース**（`///`） | API リファレンス（生成物・非コミット。`./zigw build docs`） |
+| ① 学ぶ | 手順と最小例 | [`learn/`](learn/ja/index.md) — **はじめての Z-Ts → 仕組み → アプリ → 引く**の 1 本道（日英 2 言語・同名ファイル） |
+| ② 引く | **Zig のソース**（`///`） | API リファレンス（生成物・非コミット。`zig build docs`） |
 | ③ 確かめる | 振る舞いの約束 | [`reference/cli.md`](reference/cli.md)（`zts` の仕様）/ [`reference/tauri-usage.md`](reference/tauri-usage.md) |
 | ④ 中を読む | ADR・設計メモ・タスク | 下の `architecture/` `decisions/` `roadmap/` `tasks/` `environment/`（任意） |
 
@@ -27,7 +27,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 `内部資料` 1 エントリに畳み、検索索引からも外しています
 （[`learn/ja/index.md`](learn/ja/index.md) と [`learn/en/index.md`](learn/en/index.md)）。
 
-リポジトリの操作（`./zigw` のステップ・CI・ドキュメントサイト）は ①〜④ の**外**にあり、
+リポジトリの操作（`zig build` のステップ・CI・ドキュメントサイト）は ①〜④ の**外**にあり、
 [`contributing/`](contributing/README.md) に隔離しています。公開サイトのサイドバーでも
 `開発` という独立したグループになります。
 
@@ -52,8 +52,9 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`roadmap/milestones.md`](roadmap/milestones.md) | 全体マイルストーン（M0〜M5・全 20 タスク）と並列 Wave 依存マップ | 低頻度（進捗は `tasks/` で管理） |
 | [`roadmap/m1-foundation-packages.md`](roadmap/m1-foundation-packages.md) | M1 詳細仕様（コア 5 パッケージのファイル境界・公開型・DoD） | 実装仕様リファレンス |
 | [`roadmap/m2-m5-platform-and-ecosystem.md`](roadmap/m2-m5-platform-and-ecosystem.md) | M2〜M5 詳細仕様（E2E・macOS/Windows・OS 統合・CLI・比較ベンチ） | 実装仕様リファレンス |
-| [`learn/ja/index.md`](learn/ja/index.md) | **学習の道筋**: 4 つの入口（概念 / チュートリアル / ガイド / API）と前提知識。英語版は `learn/en/index.md` | 入門（最初に読む） |
-| [`learn/ja/guides/install.md`](learn/ja/guides/install.md) | `zts` コマンドの入手（チェックアウトからビルド・`PATH`・`ZTS_ZIG`） | 入門（最初に読む） |
+| [`learn/ja/start.md`](learn/ja/start.md) | **はじめての Z-Ts**（10 分）: `zts` バイナリを置く → `zts doctor` → `init` → `dev` → `build` を 1 ページで。英語版は `learn/en/start.md` | 入門（最初に読む） |
+| [`learn/ja/index.md`](learn/ja/index.md) | **学習パス**: 5 ステップの道順・30 秒の全体像・前提知識・目的別の入口。英語版は `learn/en/index.md` | 入門（最初に読む） |
+| [`learn/ja/guides/install.md`](learn/ja/guides/install.md) | `zts` コマンドの入手（配布バイナリ・`PATH`・`ZTS_ZIG`・ソースからのビルド） | 入門（最初に読む） |
 | [`learn/ja/tutorials/counter.md`](learn/ja/tutorials/counter.md) | チュートリアル（15 分）: `zts init` → コマンド → `dev` → `build` → `doctor` | 入門（最初に読む） |
 | [`learn/ja/guides/package.md`](learn/ja/guides/package.md) | 配布物の作り方: `zts package`（`.deb` / AppDir / `.app` / `.dmg` / `.exe` / `.tar.gz`）・アイコン・クロスビルド・CI | アプリが 1 つ動いたら |
 | [`learn/ja/guides/rpc.md`](learn/ja/guides/rpc.md) | RPC 層の使い方: コマンド定義 → `Schema` → `bind` → `dispatch` → TypeScript 生成 | 入門（コマンドを書く前に） |
@@ -61,7 +62,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`learn/ja/guides/static-site.md`](learn/ja/guides/static-site.md) | 静的サイト書き出し（`exportStaticSite` / `ExportOptions` / WASM） | 入門（`dist/` を出すとき） |
 | [`learn/ja/guides/migrate-from-tauri.md`](learn/ja/guides/migrate-from-tauri.md) | Tauri v2 からの移行（`tauri.conf.json` / ACL / コマンド / プラグイン対応表） | 移行時 |
 | [`learn/ja/guides/troubleshooting.md`](learn/ja/guides/troubleshooting.md) | アプリ開発のトラブルシューティング（`zts` のエラーとその直し方） | 困ったとき |
-| [`contributing/README.md`](contributing/README.md) | **リポジトリ開発の入口**: `./zigw`・`zig build` のステップ・スクリプト・変更の作法・CI | 本体を直すとき |
+| [`contributing/README.md`](contributing/README.md) | **リポジトリ開発の入口**: `zig build` のステップ・スクリプト・変更の作法・CI | 本体を直すとき |
 | [`contributing/writing-docs.md`](contributing/writing-docs.md) | **ドキュメントの書き方**: 4 層・ページ骨格・xref・`zig check`・注記・用語集・内部 ID 禁止・生成物 | ページを書くとき |
 | [`contributing/troubleshooting.md`](contributing/troubleshooting.md) | リポジトリ開発のトラブルシューティング（ツールチェーン・コールドビルド・0.17 API 差分・Pages） | 本体で困ったとき |
 | [`tasks/TEMPLATE.md`](tasks/TEMPLATE.md) | 1タスク＝1ファイルの作業計画＆記憶チェックポイント標準テンプレート | テンプレート |
@@ -73,7 +74,7 @@ Z-Ts には**2 つの読者**がいて、コマンドもページも別です。
 | [`../examples/frameworks/README.md`](../examples/frameworks/README.md) | 9 フレームワーク（Angular/Solid/Svelte/SolidStart/Next/Nuxt/Astro/SvelteKit/React）の同一画面デモと再生成手順（`M5-05`） | 実装サンプル（追記のみ） |
 | [`environment/arena-and-caching.md`](environment/arena-and-caching.md) | 毎チャットキャッシュ揮発対策・LLVM 同梱検証・高速ビルド規約 | 環境変更時のみ |
 | [`environment/github-actions.md`](environment/github-actions.md) | GitHub Actions 3 OS マトリクス・キャッシュ自動配信・ベンチ/差分テスト運用 | CI 変更時のみ |
-| `api/**`（生成物・非コミット） | **API リファレンス** — `src/**.zig` の公開宣言から自動生成（`./zigw build docs`）。`docs/api/index.html` が入口 | 自動生成（手で編集しない） |
+| `api/**`（生成物・非コミット） | **API リファレンス** — `src/**.zig` の公開宣言から自動生成（`zig build docs`）。`docs/api/index.html` が入口 | 自動生成（手で編集しない） |
 | [`reference/cli.md`](reference/cli.md) | `zts` コマンドリファレンス（アプリ作者向け。リポジトリのコマンドは `contributing/README.md`） | リファレンス（追記のみ） |
 | [`reference/tauri-usage.md`](reference/tauri-usage.md) | Tauri v2 の使い方リファレンス（Rust/JS API・設定・Capabilities） | リファレンス（追記のみ） |
 | [`reference/tauri-internals.md`](reference/tauri-internals.md) | Tauri v2 内部実装の完全解剖（IPC プロトコル・マクロ・10個の内蔵 Plugin・OS 層） | リファレンス（追記のみ） |

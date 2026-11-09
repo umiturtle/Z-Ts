@@ -69,6 +69,25 @@ CI も同じ 4 段を回します（[`.github/workflows/ci.yml`](../../.github/w
 アンカーも変わる**ので、リンク元も一緒に直します。
 直し忘れは段 4 が落とします。
 
+### 学習パスに乗る・降りる
+
+読者向けページは、**`src/docsite/learn_path.zig` の表**で決まる 5 ステップのどれかに属するのが
+既定です。属し方はパスだけで決まります。
+
+| 置き場所 | ステップ | ページ上部のレール |
+|---|---|---|
+| `docs/learn/<lang>/start.md` | 1 はじめての Z-Ts | 出る |
+| `docs/learn/<lang>/concepts/*` | 2 仕組みを知る | 出る |
+| `docs/learn/<lang>/tutorials/*` | 3 アプリを作る | 出る |
+| `docs/learn/<lang>/guides/*` | 4 目的から引く | 出る |
+| `docs/learn/<lang>/index.md`（入口） | — | 出ない（5 ステップを本文に列挙） |
+| `docs/reference/`・`docs/api/`・用語集・内部資料 | — | 出ない（引く専用） |
+
+**新しい概念ページは `concepts/` に置けば、それだけで道順に入ります**（表の編集は不要）。逆に
+`docs/learn/<lang>/` の直下に置けるのは `index.md` と `start.md` だけです。学習入口の 5 ステップ
+一覧は `<!-- learn-path -->` と書くと `learn_path.zig` から展開されるので、**手で書き写さない**で
+ください（同じ表がページ・サイドバー・レール・ランディングの 4 か所を駆動しています）。
+
 ## 3. 相互参照（xref）— バッククォートで書くだけ
 
 本文中の `` `Engine` `` のようなコード表記は、**そのまま API リファレンスへのリンクになります**。
@@ -189,6 +208,14 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 `src/docsite/` `src/cli/` `src/bundler/` `src/build_tools/` はツールなので対象外です
 （公開 API ではない）。
 
+同じ理由で、読者向けページには**リポジトリ専用の道具**も出しません。`zigw` は Releases に
+含めていない（チェックアウト専用のブートストラップ）ので、読者が `./zigw build` を打つと
+ファイルが無いところで止まります。読者向けページに書いてよいのは **`zts` と通常の `zig`**
+だけで、`zigw` の手順は `docs/contributing/` に隔離します。`check-docs.py` の規約 10 が
+`README.md`・`docs/INDEX.md`・`docs/learn/`・`docs/reference/`・`examples/*/README.md` を走査し、
+`zigw` が 1 語でもあれば落とします（「`./zigw build` でビルドできます」は、いちばん最初に
+踏む壊れた手順になります）。
+
 ## 9. 2 言語で書く（英語と日本語）
 
 読者向けのページは **`docs/learn/ja/` と `docs/learn/en/` に同じファイル名で 1 本ずつ**置きます。
@@ -233,6 +260,7 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `internal reference 'M4-03' in a doc comment` | 層の混線 | 理由を `docs/decisions/` へ、用法を `///` に |
 | `duplicate glossary term` | 同じ用語を 2 回定義 | 1 つに統合し、片方からリンク |
 | `docs/learn/en/…: missing translation (exists in ja)` | 片方の言語にしか無い | 同じパスで翻訳を足す（規約 8） |
+| `docs/learn/…: mentions 'zigw'` | 読者向けページに開発用ラッパーを書いた | `zts` と `zig` の手順に直す（規約 10）。`zigw` は `docs/contributing/` だけ |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

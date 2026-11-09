@@ -5,7 +5,7 @@
 
 アプリ作者が使う CLI の仕様です。`zts` は **自分のプロジェクト**を操作します。
 
-> **Z-Ts リポジトリ自体の操作**（`./zigw`、`zig build` のステップ、CI スクリプト）は
+> **Z-Ts リポジトリ自体の操作**（`zig build` のステップ、CI スクリプト）は
 > [`../contributing/README.md`](../contributing/README.md) にまとめてあります。このページには
 > 出てきません。
 
@@ -38,7 +38,9 @@ zts <command> [options]
 | `[dir]`（位置引数） | `.` | 生成先。無ければ作成する |
 | `--dir <path>` | — | 位置引数の代わり |
 | `--name <name>` | ディレクトリ名 | Zig のパッケージ名（`[a-z][a-z0-9_]*`、最大 31 文字） |
-| `--zts-path <path>` | `zts` をビルドしたチェックアウト | 生成する `build.zig.zon` の `.z_ts.path` に入れる値 |
+| `--zts-path <path>` | 下記の「依存の書き方」 | 生成する `build.zig.zon` の `.z_ts.path` に入れる値。チェックアウトを持っている場合用 |
+| `--zts-url <url>` | release ビルドが焼き込んだ公開アーカイブ | `.z_ts.url`。`--zts-hash` と**必ず**対で指定する |
+| `--zts-hash <hash>` | — | `.z_ts.hash`（`zig fetch` が返す値） |
 | `--force` | 無効 | 既にファイルがあるディレクトリにも書く |
 
 生成物:
@@ -61,13 +63,40 @@ zts init my-app --force           # 既存ファイルがあっても書く
 | ディレクトリ名がパッケージ名にできない | `cannot derive a package name from '…' — pass --name <name>` |
 | パッケージ名が規約外 | `'…' is not a usable package name (…` |
 
+### 依存の書き方（`.z_ts`）
+
+`zts init` は、生成したプロジェクトが Z-Ts をどこから取るかを `build.zig.zon` に 1 行で書きます。
+**release としてビルドされた `zts`**（GitHub Releases のバイナリ）は公開アーカイブを指します。
+
+```zig
+.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+```
+
+チェックアウトから `zig build` した `zts` は、そのチェックアウトへの相対パスを書きます。
+
+```zig
+.z_ts = .{ .path = "../../../home/you/Z-Ts" },
+```
+
+| 状況 | 何が書かれるか |
+|---|---|
+| 公開バイナリ | `.url` + `.hash`（バイナリに焼き込み済み。ネットワークが要る、チェックアウトは不要） |
+| `--zts-url` と `--zts-hash` | 指定した `.url` + `.hash`（焼き込みより優先） |
+| `--zts-path`、またはソースからビルドした `zts` | `.path`（ローカルのチェックアウト） |
+
+`--zts-url` だけ、`--zts-hash` だけの指定は `IncompleteZtsRelease` で失敗します。片方だけでは
+Zig が読めない `build.zig.zon` になるためです。
+
+> `.url` 依存のプロジェクトは、初回の `zig build` でアーカイブを取得して Zig のキャッシュに
+> 入れます。以降はオフラインでもビルドできます。
+
 生成される `build.zig` は共通エンベッダを依存パッケージのソースから起動し、
 `web/` を `embedded_frontend` モジュールとして埋め込みます。ステップは `run` と `frontend`
 の 2 つです。
 
 ## `zts dev`
 
-`web/` を HTTP で配信し、変更を検知してビルドし直し、ブラウザを自動リロードします。
+`web/` を HTTP で配信し、変更を検知して**必要な最小の更新だけ**を行います。
 
 | オプション | 既定 | 内容 |
 |---|---|---|
@@ -76,21 +105,43 @@ zts init my-app --force           # 既存ファイルがあっても書く
 | `--port <n>` | `5173` | 1〜65535 |
 | `--browser` / `--open` | 無効 | 起動後に既定ブラウザを開く（`--open` は別名） |
 
-仕様:
+### 何を更新するか
+
+`zts dev` は `src/` と `web/` を 250 ms 間隔で走査し、**変わったファイル**から 1 つを選びます。
+
+| 変わったもの | `zts dev` がすること | ブラウザ側 | 実測（この環境） |
+|---|---|---|---|
+| `web/**/*.css` だけ | **ビルドしない**。ブラウザに「css」と伝えるだけ | `<link rel="stylesheet">` を差し替え。**リロードしない**のでスクロール位置・入力中の値・コンソールが残る | 約 0.4 秒 |
+| `web/` のその他（HTML / JS / 画像…） | **ビルドしない**（配信元はディスクなので、次に要求された時点で新しい） | ページをリロード | 約 0.4 秒 |
+| `src/` のいずれか | `zig build` を実行（型エラーの検出） | 成功したらリロード、失敗したら直前の成功物のまま | 1〜2 秒（ウォーム時） |
+
+> **なぜ `web/` の変更でビルドしないのか。** `zts dev` は `web/` をディスクから配信します。
+> 埋め込み済みのコピーを作り直しても、プレビューには 1 バイトも影響しません。ビルドが要るのは
+> Zig 側（`src/`）だけです。
+
+> **`zts dev` はネイティブウィンドウを開きません。** プレビューはブラウザで `web/` を見るだけで、
+> Zig のアプリプロセスは動いていません。`invoke` の往復まで確認するときは `zts build` して
+> `zig-out/bin/<name>` を直接起動してください（[概念: コマンド](../learn/ja/concepts/commands.md)）。
+
+### 仕様
 
 | 項目 | 振る舞い |
 |---|---|
 | 配信 | `web/` 配下の静的ファイル。`/` は `index.html`。`Cache-Control: no-store` |
+| 監視 | `web/` と `src/` の **path + mtime + サイズ**を 250 ms 間隔で比較（inotify / FSEvents は使わない。3 OS で同じ挙動） |
+| まとめ | 変更を検知したら 120 ms 待って再走査し、保存中の連続書き込みを 1 回に畳む |
 | リロード | `</body>` の直前に 700 ms 間隔で `/__zts_dev__/state` を問い合わせるスクリプトを注入 |
-| 監視 | `web/` と `src/` の **path + mtime + サイズ**のハッシュを 400 ms 間隔で比較（inotify / FSEvents は使わない） |
-| 再ビルド | 変更検知で `zig build`。成功したときだけ `v` を進める |
+| CSS 差し替え | 既存の `<link>` の隣に `?zts=<v>` 付きの新しい `<link>` を作り、読み込み完了後に古い方を外す。失敗したら通常のリロードに落ちる |
 | ビルド失敗 | 直前の成功物を配信し続け、`ok:false` を返す。`v` は据え置き |
 
 ```bash
 zts dev
 zts dev --port 5199 --host 0.0.0.0 --browser
-curl http://127.0.0.1:5173/__zts_dev__/state    # {"v":3,"ok":true}
+curl http://127.0.0.1:5173/__zts_dev__/state    # {"v":3,"ok":true,"hot":"css"}
 ```
+
+`v` は**成功した更新**のたびに増えます。`hot` は `"css"`（その場で差し替え）か `"full"`（リロード）
+です。`ok` が `false` のままなら、ターミナルに出ている Zig のエラーを直してください。
 
 ## `zts build`
 
@@ -180,14 +231,15 @@ tar -xzf zig-out/package/my-app-0.1.0-amd64.tar.gz    # どこでも
 
 ## `zts doctor`
 
-環境とプロジェクトを 6 項目で点検し、問題があれば `1` で終了します。
+環境とプロジェクトを点検し、問題があれば `1` で終了します。**release の `zts` はチェックアウトを
+持たない**ので、`checkout` / `z_ts` の 2 行が消え、代わりに `(none — release build)` と出ます。
 
 ```text
-$ zts doctor
+$ zts doctor                     # ソースからビルドした zts
 zts 0.1.0
   checkout     /home/you/Z-Ts
   z_ts         present
-  zig          /tmp/zts-toolchains/zig/zig
+  zig          /tmp/zts-toolchains/zig-0.17.0/ziglang/zig
   package      my_app
   dependency   ../../home/you/Z-Ts
   web/         present
@@ -195,13 +247,25 @@ zts 0.1.0
 all checks passed
 ```
 
+```text
+$ zts doctor                     # release の zts（チェックアウトを持たない）
+zts 0.1.0
+  checkout     (none — release build)
+  zig          /usr/local/bin/zig
+  package      my_app
+  dependency   https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz (fetched by zig)
+  web/         present
+
+all checks passed
+```
+
 | 行 | 検査内容 | 失敗時 |
 |---|---|---|
-| `checkout` | `zts` をビルドしたチェックアウト | — |
-| `z_ts` | そのパスが実在するか | `MISSING at … — rebuild zts or pass --zts-path` |
-| `zig` | 使用する Zig のパス（`ZTS_ZIG` → `PATH` → チェックアウト内） | — |
-| `package` | `build.zig.zon` の `.name` | `MISSING \`.name\` in build.zig.zon` |
-| `dependency` | `.z_ts.path` が解決できるか | `… does not exist (resolved from …)` |
+| `checkout` | `zts` をビルドしたチェックアウト。release ビルドでは `(none — release build)` | — |
+| `z_ts` | そのパスが実在するか（release ビルドでは行ごと出ない） | `MISSING at … — rebuild zts or pass --zts-path` |
+| `zig` | 使用する Zig のパス（`ZTS_ZIG` → `PATH` → チェックアウト内） | `MISSING — install Zig 0.17 on PATH or set ZTS_ZIG` |
+| `package` | `build.zig.zon` の `.name` | `MISSING .name in build.zig.zon` |
+| `dependency` | `.z_ts.path` が実在するか。`.z_ts.url` なら URL を出すだけで、取得は初回ビルド時 | `… does not exist (resolved from …)` |
 | `web/` | フロントエンドのディレクトリ | `missing — the embedder needs a front end` |
 
 `--dir <path>` で対象プロジェクトを指定できます。**それ以外のフラグは受け付けません** —
@@ -222,7 +286,7 @@ zts help          # 同上
 
 | 変数 | 内容 |
 |---|---|
-| `ZTS_ZIG` | 使用する `zig` のパス。未設定なら `PATH` → チェックアウト内の `zig` |
+| `ZTS_ZIG` | 使用する `zig` のパス。未設定なら `PATH` → チェックアウト内の `zig`（release ビルドは `PATH` まで） |
 | `ZTS_MAINTAINER` | `zts package` の `--maintainer` の既定値 |
 
 ---

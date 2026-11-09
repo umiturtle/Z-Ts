@@ -20,6 +20,7 @@ const Allocator = std.mem.Allocator;
 const Error = Allocator.Error || error{WriteFailed};
 const paths = @import("paths.zig");
 const links = @import("links.zig");
+const i18n = @import("i18n.zig");
 
 pub const RenderOptions = struct {
     /// `[x](../tasks/M5-01-build-tools.md)` → `…html` so the rendered site has no dead links.
@@ -39,6 +40,9 @@ pub const RenderOptions = struct {
     /// 「このページに出てくる API」box, which is how every guide gets a table of contents into the
     /// API without anyone maintaining a second list by hand.
     xrefs: ?*std.ArrayListUnmanaged(Xref) = null,
+    /// Language of the chrome this renderer emits (admonition titles). The prose comes from the
+    /// source file; these labels are ours, so they must follow the page's language.
+    lang: i18n.Lang = .ja,
     /// Links the same name only once per page: a paragraph that says `Schema` five times keeps one
     /// destination instead of five. The API pages relax it (`repeat_xrefs`), because a declaration
     /// page is read as a reference, not as prose.
@@ -271,7 +275,7 @@ const Parser = struct {
             try out.writeAll("<blockquote class=\"admonition\" data-kind=\"");
             try writeEscaped(out, k);
             try out.writeAll("\">\n");
-            try out.print("<p class=\"admonition-title\">{s}</p>\n", .{admonitionLabel(k)});
+            try out.print("<p class=\"admonition-title\">{s}</p>\n", .{admonitionLabel(k, self.options.lang)});
         } else {
             try out.writeAll("<blockquote>\n");
         }
@@ -399,10 +403,7 @@ const Parser = struct {
 
         if (simple) {
             try out.writeAll("<span class=\"li-text\">");
-            for (body, 0..) |line, index| {
-                if (index > 0) try out.writeAll(" ");
-                try self.renderInline(out, std.mem.trim(u8, line, " \t"));
-            }
+            try self.renderInline(out, try joinInline(self.arena, body));
             try out.writeAll("</span>");
             return;
         }
@@ -418,6 +419,31 @@ const Parser = struct {
             try out.writeAll("\n");
         }
         return i;
+    }
+
+    /// Joins the source lines of one paragraph (or one tight list item) into the single string that
+    /// inline parsing needs. CommonMark lets emphasis, code spans and links span a line break, so
+    /// hard-wrapping the prose must not leak literal `**` into the page. A trailing `\\` is the
+    /// author's hard break: it becomes `hard_break` and `renderInline` turns that into `<br />`.
+    const hard_break = '\x01';
+
+    fn joinInline(arena: Allocator, lines: []const []const u8) Error![]const u8 {
+        var out: std.Io.Writer.Allocating = .init(arena);
+        defer out.deinit();
+        var after_break = false;
+        for (lines, 0..) |raw, index| {
+            const line = std.mem.trim(u8, raw, " \t");
+            if (index > 0 and !after_break) try out.writer.writeAll(" ");
+            after_break = false;
+            if (std.mem.endsWith(u8, line, "\\")) {
+                try out.writer.writeAll(line[0 .. line.len - 1]);
+                try out.writer.writeAll(&.{hard_break});
+                after_break = true;
+            } else {
+                try out.writer.writeAll(line);
+            }
+        }
+        return out.toOwnedSlice();
     }
 
     fn renderParagraph(self: *Parser, out: *std.Io.Writer, lines: []const []const u8, start: usize) Error!usize {
@@ -437,19 +463,7 @@ const Parser = struct {
         }
 
         try out.writeAll("<p>");
-        var previous_broke = false;
-        for (out_lines.items, 0..) |line, index| {
-            // A trailing `\` forces a hard break; everything else joins with a space.
-            if (index > 0 and !previous_broke) try out.writeAll(" ");
-            if (std.mem.endsWith(u8, line, "\\")) {
-                try self.renderInline(out, line[0 .. line.len - 1]);
-                try out.writeAll("<br />");
-                previous_broke = true;
-            } else {
-                try self.renderInline(out, line);
-                previous_broke = false;
-            }
-        }
+        try self.renderInline(out, try joinInline(self.arena, out_lines.items));
         try out.writeAll("</p>\n");
         return i;
     }
@@ -460,6 +474,12 @@ const Parser = struct {
         var i: usize = 0;
         while (i < text.len) {
             const ch = text[i];
+
+            if (ch == hard_break) {
+                try out.writeAll("<br />");
+                i += 1;
+                continue;
+            }
 
             if (ch == '\\' and i + 1 < text.len) {
                 try writeEscaped(out, text[i + 1 .. i + 2]);
@@ -911,11 +931,25 @@ fn isRawHtmlBlock(line: []const u8) bool {
     return false;
 }
 
-fn admonitionLabel(kind: []const u8) []const u8 {
-    if (std.mem.eql(u8, kind, "NOTE")) return "注記";
-    if (std.mem.eql(u8, kind, "TIP")) return "ヒント";
-    if (std.mem.eql(u8, kind, "WARNING")) return "注意";
-    return "重要";
+fn admonitionLabel(kind: []const u8, lang: i18n.Lang) []const u8 {
+    return switch (lang) {
+        .ja => if (std.mem.eql(u8, kind, "NOTE"))
+            "注記"
+        else if (std.mem.eql(u8, kind, "TIP"))
+            "ヒント"
+        else if (std.mem.eql(u8, kind, "WARNING"))
+            "注意"
+        else
+            "重要",
+        .en => if (std.mem.eql(u8, kind, "NOTE"))
+            "Note"
+        else if (std.mem.eql(u8, kind, "TIP"))
+            "Tip"
+        else if (std.mem.eql(u8, kind, "WARNING"))
+            "Warning"
+        else
+            "Important",
+    };
 }
 
 fn isSafeInlineHtml(inner: []const u8) bool {
@@ -1267,6 +1301,19 @@ test "images, autolinks and inline HTML pass through" {
     );
 }
 
+test "emphasis may span a line break" {
+    // Hard-wrapped prose is the normal case in this repository; GitHub lets `**` close on the next
+    // line, and so must the site.
+    try expectRender("<p><strong>bold text</strong></p>\n", "**bold\ntext**");
+    try expectRender("<p>a <strong>bold span</strong></p>\n", "a **bold\nspan**");
+    try expectRender("<p>a <code>x y</code> span</p>\n", "a `x\ny` span");
+    // A bullet that wraps keeps its emphasis too.
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const doc = try render(arena_state.allocator(), "- one **two\n  three** four\n", .{});
+    try std.testing.expect(std.mem.indexOf(u8, doc.html, "<strong>two three</strong>") != null);
+}
+
 test "hard breaks with a trailing backslash" {
     try expectRender("<p>line one<br />line two</p>\n", "line one\\\nline two");
 }
@@ -1315,6 +1362,9 @@ test "blockquote admonitions keep the marker out of the text" {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     const doc = try render(arena, "> [!NOTE]\n> ここに注意。\n", .{});
+    // The label is chrome, not prose: it follows the page's language, not the source text's.
+    const en = try render(arena, "> [!TIP]\n> Read this.\n", .{ .lang = .en });
+    try testing.expect(std.mem.indexOf(u8, en.html, ">Tip<") != null);
     try std.testing.expect(std.mem.indexOf(u8, doc.html, "class=\"admonition\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, doc.html, "[!NOTE]") == null);
     try std.testing.expect(std.mem.indexOf(u8, doc.html, "ここに注意。") != null);

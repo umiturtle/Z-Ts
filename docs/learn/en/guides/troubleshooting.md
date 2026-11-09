@@ -5,7 +5,7 @@
 
 One page for "my app will not build". If you are stuck **building the Z-Ts repository itself**,
 go to [`docs/contributing/troubleshooting.md`](../../../contributing/troubleshooting.md) instead —
-that page is about `./zigw` and CI, which app authors never need.
+that page is about repository development and CI, which app authors never need.
 
 ---
 
@@ -142,8 +142,11 @@ zts dev --port 5199
 
 * The watcher compares **mtime + size** of `web/` and `src/` (no inotify / FSEvents). Atomic-save
   editors that preserve mtime can be missed — touch the file.
-* Poll state at `curl http://127.0.0.1:5173/__zts_dev__/state`. If `v` in `{"v":3,"ok":true}`
-  rises, the change was seen.
+* Poll state at `curl http://127.0.0.1:5173/__zts_dev__/state`. If `v` in
+  `{"v":3,"ok":true,"hot":"full"}` rises, the change was seen.
+* **Editing CSS does not reload the page** — the `<link>` is swapped in place. If nothing appears
+  to change, check whether the rule is in an inline `<style>` block instead: embedded styles are
+  part of the HTML, so they go through a normal reload.
 * If `ok` stays `false`, **the build is failing**. `zts dev` keeps serving the last good output
   and does not bump `v` (so it never shows a broken app). Fix the Zig error in the terminal.
 

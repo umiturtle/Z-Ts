@@ -1,4 +1,4 @@
-# `examples/gallery` — スクリーンショット回帰ギャラリー（`M5-04` / `M5-05`）
+# `examples/gallery` — スクリーンショット回帰ギャラリー
 
 1 つの実行ファイルが **17 パターンのウィンドウを順に作り、それぞれを PNG に落として
 `manifest.json` を書く** 検証用ギャラリーです（8 つの手書きパターン + 9 フレームワーク）。CI（Linux / macOS / Windows）がこれを実行し、
@@ -9,9 +9,9 @@
 
 ```bash
 cd examples/gallery
-../../zigw build test --summary all      # 3 本の単体テスト
-../../zigw build screenshots             # zig-out/screenshots/ に 17 枚 + manifest.json
-../../zigw build install
+zig build test --summary all             # 3 本の単体テスト
+zig build screenshots                    # zig-out/screenshots/ に 17 枚 + manifest.json
+zig build install
 ./zig-out/bin/zts_gallery --out /tmp/shots --require-native
 ./zig-out/bin/zts_gallery --out /tmp/shots --only js-roundtrip
 cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --require-counts 17

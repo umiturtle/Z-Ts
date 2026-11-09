@@ -448,6 +448,60 @@ html[data-theme="dark"] .kind-badge[data-kind] {
   color: var(--fg-muted);
 }
 
+/* --------------------------------------------------------- learning path rail */
+/* The four beginner steps, repeated at the top of every page that belongs to the path. The hub
+   page carries the same steps as prose, so the two must stay in sync: both are generated from
+   `learn_path.steps`, never hand-written twice. */
+.path-rail {
+  margin: 0 0 1.7rem;
+  padding: .45rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.path-rail ol {
+  display: grid;
+  /* One column per step in `learn_path.zig`; the responsive block below halves it. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.path-rail a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: .55rem;
+  row-gap: .1rem;
+  padding: .5rem .6rem;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+}
+.path-rail a:hover { background: var(--surface-2); color: var(--fg); }
+.path-num {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: .74rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.path-title { font-size: .82rem; font-weight: 600; color: var(--fg); }
+.path-min { grid-column: 2; font-size: .7rem; color: var(--fg-faint); }
+/* Finished steps read as history, not as current: accent-tinted number, checkmark on the title. */
+.path-rail .done .path-num { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.path-rail .done .path-title::after { content: " ✓"; color: var(--accent); font-weight: 700; }
+.path-rail .current a { background: var(--accent-soft); }
+.path-rail .current .path-title { color: var(--accent); }
+.path-rail .current .path-num { color: var(--accent-fg); background: var(--accent); border-color: transparent; }
+
 /* Two-column reading layout: prose + sticky "on this page" rail. */
 .doc {
   display: grid;
@@ -877,6 +931,74 @@ body.landing { background:
   text-transform: uppercase;
 }
 
+/* The step path on the landing page. Bigger and earlier than the job cards below it: a
+   newcomer needs one obvious route, not a menu. Numbers are the *same* ones the per-page rail
+   shows, and both come from `learn_path.zig`. */
+.landing-path { margin-top: -.2rem; }
+.landing-path-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .2rem 1rem;
+  margin: 3.4rem 0 1.1rem;
+}
+.landing-path-head .section-title { margin: 0; }
+.landing-path-lede { flex: 1 1 22rem; margin: 0; color: var(--fg-muted); font-size: .88rem; line-height: 1.7; }
+.landing-path-total {
+  padding: .12rem .55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: .72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.landing-path ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+.landing-step a {
+  display: flex;
+  gap: .7rem;
+  height: 100%;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--shadow-sm);
+  transition: transform .16s, box-shadow .16s, border-color .16s;
+}
+.landing-step a:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.landing-step .step-num {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: .8rem;
+  font-weight: 800;
+}
+/* First step reads as the entry point, not as one of four equal options. */
+.landing-step:first-child .step-num { background: linear-gradient(135deg, var(--brand-a), var(--brand-b)); color: #fff; }
+.landing-step .step-body { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.landing-step strong { font-size: .92rem; letter-spacing: -.01em; }
+.landing-step .step-blurb { color: var(--fg-muted); font-size: .82rem; line-height: 1.6; }
+.landing-step .step-min { margin-top: .25rem; color: var(--fg-faint); font-size: .72rem; font-family: var(--mono); }
+
 .path-grid { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
 .path {
   display: flex;
@@ -921,7 +1043,7 @@ body.landing { background:
 .feature-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 1.4rem;
 }
 .feature { padding: 1rem 1.1rem; border-left: 2px solid var(--border); }
@@ -983,7 +1105,10 @@ body.landing { background:
     z-index: 44;
   }
   .content { padding: 1.4rem 1.15rem 3rem; }
+  .path-rail ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .landing-path ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero { padding-top: 2.6rem; }
+  .landing-path-head { margin-top: 2.6rem; }
   .pager { grid-template-columns: 1fr; }
   .pager-next { grid-column: 1; text-align: left; }
   .footer { padding: 1.4rem 1.15rem; }
@@ -994,12 +1119,14 @@ body.landing { background:
   .search-kbd { display: none; }
   .topbar { gap: .35rem; padding: 0 .7rem; }
   .brand-name { display: none; }
+  .path-rail ol { grid-template-columns: minmax(0, 1fr); }
+  .landing-path ol { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ------------------------------------------------------------------ print */
 
 @media print {
-  .topbar, .sidebar, .rail, .pager, .edit-link, .scroll-progress, .search { display: none !important; }
+  .topbar, .sidebar, .rail, .pager, .edit-link, .scroll-progress, .search, .path-rail { display: none !important; }
   .layout { display: block; }
   .content { padding: 0; }
   .prose { max-width: none; font-size: 11pt; }

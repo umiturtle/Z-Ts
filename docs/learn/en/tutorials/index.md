@@ -24,7 +24,8 @@ the [glossary](../../../glossary.md) — you do not have to stop and read a chap
 - Zig 0.17 on `PATH` or in `ZTS_ZIG`
 - a terminal
 
-## Next
+Never run `zts` before? [Your first ten minutes](../start.md) (10 minutes) covers steps 0–1 and
+gets you a page in a browser.
 
 - Design first → [Concepts](../concepts/index.md)
 - One specific job → [Guides](../guides/index.md)

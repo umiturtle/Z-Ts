@@ -2,10 +2,11 @@
 
 > **Audience**: first contact with Z-Ts. You are expected to know basic Zig.
 > **Time**: 15 minutes, typing included.
+> **Never run Z-Ts?** [Your first ten minutes](../start.md) comes first; it makes chapter 0 shorter.
 
 Create a project with `zts init`, **call a Zig function from a button**, grow it with reload on
 save, and finish with a single binary. **Every command on this page is `zts`**. Repository work
-(`./zigw`, CI) lives in [`docs/contributing/README.md`](../../../contributing/README.md).
+(build steps, CI) lives in [`docs/contributing/README.md`](../../../contributing/README.md).
 
 | Step | You do | You end up with |
 |---|---|---|
@@ -20,7 +21,7 @@ save, and finish with a single binary. **Every command on this page is `zts`**. 
 
 | Item | Requirement |
 |---|---|
-| `zts` | built from a checkout, see [Install](../guides/install.md) |
+| `zts` | one binary from the [releases](https://github.com/umiturtle/Z-Ts/releases), see [Install](../guides/install.md) |
 | Zig | 0.17 on `PATH` or in `ZTS_ZIG` (`zts` spawns it) |
 | OS | Linux (GTK3 + WebKit2GTK 4.1), macOS, Windows |
 
@@ -63,8 +64,17 @@ my-app/
 zts dev               # http://127.0.0.1:5173
 ```
 
-`web/` is served, and a fingerprint of `web/` and `src/` is polled every 400 ms; when it changes,
-`zts dev` runs `zig build` and **reloads the browser**.
+`web/` is served, and the files in `web/` and `src/` are rescanned every 250 ms. What happens next
+depends on **what** changed:
+
+| Changed | What `zts dev` does | Latency |
+|---|---|---|
+| `web/**/*.css` | nothing is rebuilt; the page swaps its stylesheet in place — no reload, so scroll position and console survive | ~0.4 s |
+| any other file in `web/` | nothing is rebuilt (it is served from disk); the page reloads | ~0.4 s |
+| anything in `src/` | runs `zig build` to type-check the Zig side, then reloads on success | 1–2 s warm |
+
+`zts dev` previews `web/` in a browser only — it does not run the Zig app, so `invoke()` has no
+counterpart there yet. To exercise a command end to end, `zts build` and run the binary.
 
 * `--browser` opens your default browser on start
 * `--host 0.0.0.0` makes it reachable from a container or the LAN (Arena live preview)
@@ -74,10 +84,11 @@ zts dev               # http://127.0.0.1:5173
 
 ```bash
 curl http://127.0.0.1:5173/__zts_dev__/state
-{"v":3,"ok":true}
+{"v":3,"ok":true,"hot":"css"}
 ```
 
-`v` increments on every successful build; `ok` is the result of the last attempt. While `ok` is
+`v` increments on every successful update; `hot` is `"css"` (swapped in place) or `"full"`
+(reload); `ok` is the result of the last attempt. While `ok` is
 `false`, fix the Zig error printed in the terminal.
 
 ## 3. Write the counting command
@@ -117,7 +128,7 @@ test "increment adds one" {
 }
 ```
 
-CI compiles this block (`./zigw doctest`), so **writing a stale API turns CI red** — what you read
+CI compiles this block in its doctest pass, so **writing a stale API turns CI red** — what you read
 here builds today.
 
 The frontend is plain Tauri. `@tauri-apps/api` works unchanged.
