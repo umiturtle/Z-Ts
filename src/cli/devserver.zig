@@ -57,6 +57,20 @@ pub const Change = enum {
     }
 };
 
+/// `"web"` + `"style.css"` → `"web/style.css"` on every OS.
+///
+/// `Dir.walk` returns native separators, so on Windows the same edit would arrive as
+/// `web\\style.css` and [`Change.classify`] would not see the stylesheet — the dev loop would fall
+/// back to a reload there and nowhere else. Normalising once, here, keeps the classifier a pure
+/// function over forward slashes.
+fn watchKey(gpa: Allocator, dir: []const u8, path: []const u8) ![]u8 {
+    const key = try std.fmt.allocPrint(gpa, "{s}/{s}", .{ dir, path });
+    for (key) |*ch| {
+        if (ch.* == '\\') ch.* = '/';
+    }
+    return key;
+}
+
 /// Every file below the watched directories, stamped with `mtime ^ size`. A diff against the
 /// previous scan names the files that changed, which [`Change.classify`] turns into a decision.
 pub const Snapshot = struct {
@@ -86,7 +100,7 @@ pub const Snapshot = struct {
             while (try walker.next(io)) |entry| {
                 if (entry.kind != .file) continue;
                 const stat = handle.statFile(io, entry.path, .{}) catch continue;
-                const key = try std.fmt.allocPrint(gpa, "{s}/{s}", .{ dir_path, entry.path });
+                const key = try watchKey(gpa, dir_path, entry.path);
                 errdefer gpa.free(key);
                 // Nanoseconds from the epoch fit in 64 bits until 2554; multiplied and xored with
                 // the size so that an editor that keeps mtime (rsync, some formatters) still shows
@@ -401,6 +415,14 @@ test "Snapshot names the files that changed, and Change classifies them" {
     changed = try after_src.changed(arena_state.allocator(), &after_delete);
     try testing.expectEqual(@as(usize, 1), changed.len);
     try testing.expectEqual(Change.css, Change.classify(changed));
+}
+
+test "watchKey normalises the Windows walker's separators" {
+    const gpa = testing.allocator;
+    const key = try watchKey(gpa, "web", "assets\\site.css");
+    defer gpa.free(key);
+    try testing.expectEqualStrings("web/assets/site.css", key);
+    try testing.expectEqual(Change.css, Change.classify(&.{key}));
 }
 
 test "classify ignores an empty diff and reports nothing to do" {
