@@ -769,7 +769,11 @@ fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
     while (try walker.next(io)) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.path, ".html")) continue;
-        try pages.append(arena, try arena.dupe(u8, entry.path));
+        // The walker joins with the platform separator (`docs\page.html` on Windows) while the
+        // `href`s in the HTML — and therefore `resolveRelative`'s output — always use `/`. Without
+        // this normalisation every cross-page fragment lookup missed on Windows and the anchor
+        // check silently passed. Caught by enabling the test at the bottom of this file.
+        try pages.append(arena, try normalizeSlashes(arena, entry.path));
     }
 
     // Pass 1: every `id="…"` of every page, id_list as `\x00id\x00id\x00`, so a fragment lookup is
@@ -848,6 +852,27 @@ fn verifyAssets(arena: Allocator, io: Io, out_dir: Io.Dir) !usize {
         return error.DanglingAnchors;
     }
     return checked;
+}
+
+test "normalizeSlashes turns the Windows walker's separators into href separators" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    try std.testing.expectEqualStrings("docs/page.html", try normalizeSlashes(arena, "docs\\page.html"));
+    // POSIX paths are copied, not aliased: the caller owns the result either way.
+    const posix = try normalizeSlashes(arena, "docs/page.html");
+    try std.testing.expectEqualStrings("docs/page.html", posix);
+}
+
+/// `docs\page.html` → `docs/page.html`. Site-relative paths are always `/`-separated.
+fn normalizeSlashes(arena: Allocator, path: []const u8) Allocator.Error![]const u8 {
+    if (std.mem.indexOfScalar(u8, path, '\\') == null) return arena.dupe(u8, path);
+    const out = try arena.dupe(u8, path);
+    for (out) |*ch| {
+        if (ch.* == '\\') ch.* = '/';
+    }
+    return out;
 }
 
 /// `id_list` is `\x00id\x00id\x00`; a fragment matches only as a whole id (`abc` must not match
