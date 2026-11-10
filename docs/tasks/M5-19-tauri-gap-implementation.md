@@ -23,7 +23,7 @@
 - [x] **P0-3** `app.security.pattern: "isolation"`（暗号化 iframe）
 - [x] **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）
 - [x] **P0-4** 生成済み `gzip_entries` を実際に配信する
-- [ ] **P0-5** `zts migrate`
+- [x] **P0-5** `zts migrate`
 - [ ] **P1** webview コマンド / ウィンドウイベント / 残り setter / Monitor・DPI / 未適用 config フィールド / `once` / `asset://` scope の実行時更新
 - [ ] **P2** 公式プラグイン群・配布形式のうち理念に反しないもの
 - [ ] 各項目に単体テスト（`std.testing.allocator`、正常系・異常系・境界値）
@@ -122,5 +122,18 @@
   - テスト: `zts_web` 2 本、`zts_tauri` 1 本、`embedded_consumer` 1 本、
     manifest 検査 1  assertions 追加。`build test` 210/210 緑
   - 日英 `guides/static-site.md` に交渉表、`decisions/0017` の残課題を解消済みに更新
-- **作業中**: **P0-5** `zts migrate`。
-- **未着手**: P1 / P2。
+- **完了**: **P0-5** `zts migrate`。
+  - `src/cli/migrate.zig` 新規（pure、`zts_*` import 無し）: `tauri.conf.json` の必要項目を
+    `std.json.Value` で読み、決定論的な `Plan`（生成ファイル・警告・日英 `MIGRATION.md`）を返す
+  - `src/cli/args.zig` に `migrate` コマンド（`--dir` / `--name` / `--zts-path` / `--force` /
+    `--dry-run`）、`src/cli/main.zig` に IO だけの `runMigrate()`
+  - コピー: `tauri.conf.json` → `src-tauri/`、frontendDist → `web/`、capabilities、icons、
+    `zts init` テンプレート。`web/index.html` は upsert で移行物が優先。unsafe path は拒否
+  - Rust `#[tauri::command]` は翻訳せず `MIGRATION.md` に列挙（安全な自動変換が無いため）
+  - 元プロジェクトは変更せず隣に新規生成。`--dry-run` は 1 ファイルも書かない
+  - テスト: CLI 62 件（+5: 引数・config 正常/異常・パス安全性・plan 決定性）。
+    fixture で `zts migrate --dry-run` / 実生成・fingerprint patch まで E2E 確認
+  - 日英 `guides/migrate-from-tauri.md` に §0、`reference/cli{,.en}.md` にコマンド節を追加
+- **作業中**: **P1** webview コマンド群・ウィンドウイベント・残り setter・Monitor/DPI・
+  未適用 config フィールド・`once`・`asset://` scope の実行時更新。
+- **未着手**: P2。

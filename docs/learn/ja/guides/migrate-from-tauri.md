@@ -11,6 +11,35 @@ JavaScript 側は原則そのまま動きます。
 
 ---
 
+## 0. まず `zts migrate`
+
+手作業を始める前に、 Mechanical な部分だけ自動で移せます。元の Rust プロジェクトは
+**書き換えず**、隣に新しい ziggurats プロジェクトを作ります。
+
+```bash
+zts migrate path/to/src-tauri --dry-run   # まず計画を確認
+zts migrate path/to/src-tauri             # <parent>/<productName>-zts に生成
+cd <productName>-zts
+zts dev
+```
+
+| コピーされるもの | 行き先 |
+|---|---|
+| `tauri.conf.json` | `src-tauri/tauri.conf.json`（[`config_import`](../../../api/zts_tauri/config_import.html#load) がそのまま読む） |
+| `build.frontendDist/**` | `web/**`（`embedFrontend` がバイナリに埋め込む） |
+| `capabilities/*.json` | `capabilities/*.json`（ACL は既定拒否） |
+| `icons/**` | `icons/**` |
+| — | `zts init` と同じ `build.zig` / `build.zig.zon` / `src/main.zig` |
+| — | 日英併記の `MIGRATION.md`（検出値・警告・残作業） |
+
+`#[tauri::command]` の Rust 関数は**翻訳しません**（安全な自動変換が存在しないため）。
+`MIGRATION.md` がファイル名と残作業を列挙するので、以下の §3 に従って
+`zts_rpc.Schema` に書き換えてください。`--dry-run` は 1 ファイルも書かずに計画と警告だけを
+表示します。出力先を変えるには `--dir`、既存ディレクトリへ上書きするには `--force`、
+パッケージ名を変えるには `--name` を使います（[CLI リファレンス](../../../reference/cli.md)）。
+
+---
+
 ## 1. 対応表
 
 | Tauri（Rust） | ziggurats（Zig） | 状態 |

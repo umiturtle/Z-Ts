@@ -19,6 +19,8 @@ pub const Command = union(enum) {
     doctor: Doctor,
     /// `zts package` — turn the built executable into an installable artifact.
     package: Package,
+    /// `zts migrate` — convert an existing Tauri v2 `src-tauri/` project into a ziggurats project.
+    migrate: Migrate,
     /// `zts help` / `--help` / no arguments.
     help,
     /// `zts version` / `--version`.
@@ -85,6 +87,25 @@ pub const Package = struct {
     manifest: ?[]const u8 = null,
 };
 
+/// `zts migrate` options. The source is an existing Tauri v2 project (either its root or the
+/// `src-tauri/` directory); the result is a NEW ziggurats project, never an in-place rewrite of
+/// the Rust sources.
+pub const Migrate = struct {
+    /// Existing Tauri project. `tauri.conf.json` is looked for here and one level down
+    /// (`<src>/src-tauri/tauri.conf.json`).
+    src: []const u8 = "src-tauri",
+    /// Output directory for the generated project. `null` = `<parent-of-src>/<name>-zts`.
+    dir: ?[]const u8 = null,
+    /// Package name override; default: `productName` from `tauri.conf.json`.
+    name: ?[]const u8 = null,
+    /// Path to the ziggurats checkout written into `build.zig.zon`.
+    zts_path: ?[]const u8 = null,
+    /// Allow writing into a non-empty output directory.
+    force: bool = false,
+    /// Print the plan (files, detected config, warnings) without writing anything.
+    dry_run: bool = false,
+};
+
 pub const Optimize = enum {
     debug,
     release_small,
@@ -124,6 +145,7 @@ pub fn parse(args: []const []const u8) ParseError!Command {
     if (std.mem.eql(u8, head, "build")) return .{ .build = try parseBuild(args[1..]) };
     if (std.mem.eql(u8, head, "doctor")) return .{ .doctor = try parseDoctor(args[1..]) };
     if (std.mem.eql(u8, head, "package")) return .{ .package = try parsePackage(args[1..]) };
+    if (std.mem.eql(u8, head, "migrate")) return .{ .migrate = try parseMigrate(args[1..]) };
 
     return error.UnknownCommand;
 }
@@ -262,6 +284,34 @@ fn parsePackage(rest: []const []const u8) ParseError!Package {
     return out;
 }
 
+fn parseMigrate(rest: []const []const u8) ParseError!Migrate {
+    var out: Migrate = .{};
+    var positional: ?[]const u8 = null;
+
+    var i: usize = 0;
+    while (i < rest.len) : (i += 1) {
+        const arg = rest[i];
+        if (std.mem.eql(u8, arg, "--force")) {
+            out.force = true;
+        } else if (std.mem.eql(u8, arg, "--dry-run")) {
+            out.dry_run = true;
+        } else if (try flagValue(rest, &i, arg, "--dir")) |value| {
+            out.dir = value;
+        } else if (try flagValue(rest, &i, arg, "--name")) |value| {
+            out.name = value;
+        } else if (try flagValue(rest, &i, arg, "--zts-path")) |value| {
+            out.zts_path = value;
+        } else if (std.mem.startsWith(u8, arg, "--")) {
+            return error.UnknownFlag;
+        } else {
+            if (positional != null) return error.UnexpectedArgument;
+            positional = arg;
+        }
+    }
+    if (positional) |src| out.src = src;
+    return out;
+}
+
 /// Matches `--flag value` **only** when the flag name is exactly `name`; returns `null` otherwise so
 /// the caller can fall through to the next flag (or to the unknown-flag error). A flag at the very
 /// end of the command line is `error.MissingValue` — never an empty string that silently becomes a
@@ -281,6 +331,7 @@ pub const usage_text =
     \\  dev                 Serve `web/` with rebuild-on-change (`--browser` for Live Preview)
     \\  build               Bundle the front end and produce a single executable
     \\  package             Wrap the executable into .deb / AppDir / .app / .exe / .tar.gz
+    \\  migrate [src]       Convert an existing Tauri v2 project into a ziggurats project
     \\  doctor              Check the toolchain, the project layout and the z_ts dependency
     \\  help                Show this help
     \\  version             Print the CLI version
@@ -317,6 +368,14 @@ pub const usage_text =
     \\  --icon <png>        Icon for .deb / AppDir / .app
     \\  --icon-ico <ico>    Icon for the Windows .exe
     \\  --manifest <xml>    Application manifest for the Windows .exe
+    \\
+    \\migrate options:
+    \\  [src-tauri]         Existing Tauri project            (default "src-tauri")
+    \\  --dir <path>        Output directory                  (default <parent>/<name>-zts)
+    \\  --name <name>       Package name                      (default: productName)
+    \\  --zts-path <path>   Path to the ziggurats checkout
+    \\  --force             Allow writing into a non-empty output directory
+    \\  --dry-run           Print the plan without writing files
     \\
     \\doctor options:
     \\  --dir <path>        Project directory                 (default ".")
@@ -473,4 +532,30 @@ test "`doctor` only accepts `--dir`" {
     try testing.expectEqualStrings("apps/demo", cmd.doctor.dir);
     try testing.expectEqualStrings(".", (try parse(&.{"doctor"})).doctor.dir);
     try testing.expectError(error.UnknownFlag, parse(&.{ "doctor", "--fix" }));
+}
+
+test "P0-5: `migrate` defaults, positional source, flags and error paths" {
+    const cmd = try parse(&.{"migrate"});
+    try testing.expectEqualStrings("src-tauri", cmd.migrate.src);
+    try testing.expect(cmd.migrate.dir == null);
+    try testing.expect(cmd.migrate.name == null);
+    try testing.expect(cmd.migrate.zts_path == null);
+    try testing.expect(!cmd.migrate.force);
+    try testing.expect(!cmd.migrate.dry_run);
+
+    const full = try parse(&.{
+        "migrate",    "apps/legacy/src-tauri", "--dir",   "apps/new-app", "--name", "new_app",
+        "--zts-path", "../Z-Ts",               "--force", "--dry-run",
+    });
+    try testing.expectEqualStrings("apps/legacy/src-tauri", full.migrate.src);
+    try testing.expectEqualStrings("apps/new-app", full.migrate.dir.?);
+    try testing.expectEqualStrings("new_app", full.migrate.name.?);
+    try testing.expectEqualStrings("../Z-Ts", full.migrate.zts_path.?);
+    try testing.expect(full.migrate.force);
+    try testing.expect(full.migrate.dry_run);
+
+    try testing.expectError(error.MissingValue, parse(&.{ "migrate", "--name" }));
+    try testing.expectError(error.UnknownFlag, parse(&.{ "migrate", "--nope" }));
+    try testing.expectError(error.UnexpectedArgument, parse(&.{ "migrate", "a", "b" }));
+    try testing.expect(std.mem.indexOf(u8, usage(), "migrate") != null);
 }

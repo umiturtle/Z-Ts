@@ -9,6 +9,35 @@ frontend edits.** ziggurats implements Tauri's IPC protocol (`tauri://` internal
 
 ---
 
+## 0. Start with `zts migrate`
+
+Before doing anything by hand, let the CLI move the mechanical parts for you. The original Rust
+project is **never modified**; a new ziggurats project is created next to it.
+
+```bash
+zts migrate path/to/src-tauri --dry-run   # inspect the plan first
+zts migrate path/to/src-tauri             # generates <parent>/<productName>-zts
+cd <productName>-zts
+zts dev
+```
+
+| Copied | Destination |
+|---|---|
+| `tauri.conf.json` | `src-tauri/tauri.conf.json` (read as-is by [`config_import`](../../../api/zts_tauri/config_import.html#load)) |
+| `build.frontendDist/**` | `web/**` (embedded into the binary by `embedFrontend`) |
+| `capabilities/*.json` | `capabilities/*.json` (the ACL is deny-by-default) |
+| `icons/**` | `icons/**` |
+| — | the same `build.zig` / `build.zig.zon` / `src/main.zig` as `zts init` |
+| — | a bilingual `MIGRATION.md` (detected values, warnings, remaining work) |
+
+Rust `#[tauri::command]` functions are **not translated** — there is no safe automatic Rust → Zig
+conversion. `MIGRATION.md` lists the source files and the remaining work; follow §3 below to port
+them to `zts_rpc.Schema`. `--dry-run` prints the plan and warnings without writing a single file.
+Use `--dir` to choose the output directory, `--force` to write into a non-empty one and `--name`
+to override the package name ([CLI reference](../../../reference/cli.en.md)).
+
+---
+
 ## 1. The mapping
 
 | Tauri (Rust) | ziggurats (Zig) | Status |

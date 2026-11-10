@@ -16,6 +16,7 @@ zts <command> [options]
   dev      Serve `web/` with rebuild-on-change
   build    Build the app into a single executable
   package  Wrap the executable into .deb / AppDir / .app / .exe / .tar.gz
+  migrate  Convert an existing Tauri v2 project into a ziggurats project
   doctor   Check the toolchain and the project
   help     Show this help
   version  Print the version
@@ -251,6 +252,37 @@ tar -xzf zig-out/package/my-app-0.1.0-amd64.tar.gz    # どこでも
 ```
 
 形式ごとの前提は [`../learn/ja/guides/package.md`](../learn/ja/guides/package.md) にまとめてあります。
+
+## `zts migrate [src-tauri]`
+
+既存の Tauri v2 プロジェクトを、**元の Rust ツリーは残したまま**新しい ziggurats
+プロジェクトに変換します。`tauri.conf.json` / `frontendDist/**` / `capabilities/*.json` /
+`icons/**` をコピーし、日英併記の `MIGRATION.md` を生成します。
+
+| オプション | 既定 | 内容 |
+|---|---|---|
+| `[src-tauri]`（位置引数） | `src-tauri` | 既存プロジェクト。`tauri.conf.json` を直下と `src-tauri/` の両方から探す |
+| `--dir <path>` | `<親>/<productName>-zts` | 生成先（元のプロジェクトは変更しない） |
+| `--name <name>` | `productName` を正規化 | Zig のパッケージ名 |
+| `--zts-path <path>` | `zts init` と同じ | `build.zig.zon` の `.z_ts.path` |
+| `--force` | 無効 | 既にファイルのあるディレクトリにも書く |
+| `--dry-run` | 無効 | 計画・検出値・警告を表示し、1 ファイルも書かない |
+
+```bash
+$ zts migrate apps/legacy/src-tauri --dry-run
+zts migrate: apps/legacy/src-tauri -> apps/legacy_notes-zts
+  productName   Legacy Notes
+  frontendDist  ../dist (2 files)
+  capabilities  1 files / icons 1 files / rust 1 files
+  files to write 11
+  warning: Rust commands are NOT translated. Port 1 `src/*.rs` file(s) to a `zts_rpc.Schema` by hand.
+zts migrate: --dry-run, nothing written (MIGRATION.md would explain the manual steps)
+```
+
+`#[tauri::command]` は翻訳されません。[移行ガイド](../learn/ja/guides/migrate-from-tauri.md) の
+§3 でコマンドを写してください。生成された `MIGRATION.md` に検出値と残作業の全リストが入ります。
+
+---
 
 ## `zts doctor`
 

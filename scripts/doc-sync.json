@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "7198b31",
+    "commit": "6729e9a",
     "zts_version": "0.1.0",
     "zig_version": "0.17.0",
     "checks": [
@@ -24,7 +24,7 @@
       "src/docsite/site.zig",
       "scripts/check-docs.py"
     ],
-    "implementation_sha256": "93c738526c2b3274bf2493d2967cbb6e87ca9dfa7a167faf4d5eba899c34d5e0"
+    "implementation_sha256": "d3e4d4b7613987a7b79179d11b87fa1dea09370c9593ee214ad7b89433270cdd"
   },
   "pages": [
     {
@@ -52,8 +52,8 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "4517cde42a00275ef9189c38965a085f25c400587d4e7aec19f260c0d84d8a82",
-      "en_sha256": "eed2527f42304d6207cc0a938d9d1da6eb865b2c52ec424022192fe4e81e2cc4"
+      "ja_sha256": "fd47d78e73de2f54930b8fea223cbacfe812b56d45f77666ac2197bce088d3c3",
+      "en_sha256": "5a32a2c1468299b2beae6782f279c859f9d70ee0459672788e1bd7b55d3fedba"
     },
     {
       "ja": "docs/contributing/repository-map.md",
@@ -136,8 +136,8 @@
       "ja": "docs/learn/ja/guides/migrate-from-tauri.md",
       "en": "docs/learn/en/guides/migrate-from-tauri.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "77dee20c43a7dd33cc6902af447715e7ab9ec73653d70be7d5552b69c59c1ba0",
-      "en_sha256": "513feb6822003809daf7ffca72ff5469e024aea1019a5b9cbe54025ebcfd5bfd"
+      "ja_sha256": "758f5ec5e0e3e9f0a5800a2ba2d4a261141b5b2c750a897bf73f1df7e9475723",
+      "en_sha256": "83ef886e9ee378960823a37812f0315a60d3e41a59fe904c97f5744471e0f1e6"
     },
     {
       "ja": "docs/learn/ja/guides/package.md",
@@ -255,8 +255,8 @@
       "ja": "docs/reference/cli.md",
       "en": "docs/reference/cli.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "dc33ed65e4d17dbccaac5948870be9cff97a17d970b09ff3823d362e0b11b186",
-      "en_sha256": "b470c5c39b70085a1793231040992e9086a5fb1b4904833e63a5ba1e365eebce"
+      "ja_sha256": "99efa95d1f410e2239ece5108e29497dd7ec6e817ad5914c41b7127b1f63c679",
+      "en_sha256": "223ecdbfc53f211f810f0277811208d3d61bcc59127862b6b0f1b471d852b75d"
     },
     {
       "ja": "docs/reference/tauri-internals.md",

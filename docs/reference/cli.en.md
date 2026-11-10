@@ -15,6 +15,7 @@ zts <command> [options]
   dev      Serve `web/` with rebuild-on-change
   build    Build the app into a single executable
   package  Wrap the executable into .deb / AppDir / .app / .exe / .tar.gz
+  migrate  Convert an existing Tauri v2 project into a ziggurats project
   doctor   Check the toolchain and the project
   help     Show this help
   version  Print the version
@@ -238,6 +239,38 @@ tar -xzf zig-out/package/my-app-0.1.0-amd64.tar.gz    # anywhere
 ```
 
 Per-format prerequisites are in [`../learn/en/guides/package.md`](../learn/en/guides/package.md).
+
+## `zts migrate [src-tauri]`
+
+Converts an existing Tauri v2 project into a **new** ziggurats project while leaving the original
+Rust tree untouched. It copies `tauri.conf.json`, `frontendDist/**`, `capabilities/*.json` and
+`icons/**`, and writes a bilingual `MIGRATION.md`.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `[src-tauri]` (positional) | `src-tauri` | existing project; `tauri.conf.json` is looked for here and one level down |
+| `--dir <path>` | `<parent>/<productName>-zts` | output directory (the source project is never modified) |
+| `--name <name>` | normalised `productName` | Zig package name |
+| `--zts-path <path>` | same as `zts init` | `.z_ts.path` in `build.zig.zon` |
+| `--force` | off | write into a non-empty output directory |
+| `--dry-run` | off | print the plan, detected values and warnings without writing any file |
+
+```bash
+$ zts migrate apps/legacy/src-tauri --dry-run
+zts migrate: apps/legacy/src-tauri -> apps/legacy_notes-zts
+  productName   Legacy Notes
+  frontendDist  ../dist (2 files)
+  capabilities  1 files / icons 1 files / rust 1 files
+  files to write 11
+  warning: Rust commands are NOT translated. Port 1 `src/*.rs` file(s) to a `zts_rpc.Schema` by hand.
+zts migrate: --dry-run, nothing written (MIGRATION.md would explain the manual steps)
+```
+
+`#[tauri::command]` functions are not translated. Port them with §3 of the
+[migration guide](../learn/en/guides/migrate-from-tauri.md); the generated `MIGRATION.md` lists the
+detected values and every remaining step.
+
+---
 
 ## `zts doctor`
 
