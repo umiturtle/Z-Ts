@@ -423,13 +423,118 @@ pub const Policy = struct {
         return @ptrCast(self);
     }
 
-    /// The `AuthorizeFn` body: resolves the calling window from `core.CallContext`.
-    pub fn authorizeCtx(userdata: ?*anyopaque, ctx: *const rpc.Ctx, command: []const u8) bool {
+    /// The `AuthorizeFn` body: resolves the calling window from `core.CallContext`, and — when
+    /// the call is allowed — attaches the **scopes of the permissions that granted it** to the
+    /// request context. Commands consult those scopes through [`scopeAllowsPath`] /
+    /// [`scopeAllowsUrl`]. Without this step a capability like
+    /// `{"identifier":"fs:allow-read","allow":[{"path":"$APPDATA/**"}]}` would grant *every* path.
+    pub fn authorizeCtx(userdata: ?*anyopaque, ctx: *rpc.Ctx, command: []const u8) bool {
         const self: *Policy = @ptrCast(@alignCast(userdata orelse return false));
         const window = windowLabelOf(ctx);
-        return self.allows(command, window, ctx.origin);
+        if (!self.allows(command, window, ctx.origin)) return false;
+        ctx.acl_scope_json = self.scopeJsonFor(ctx.scratch, command, window, ctx.origin) catch return false;
+        return true;
+    }
+
+    /// Collects the `scope_json` blobs of every permission that resolved to `command`.
+    /// An **unscoped** grant wins (Tauri semantics: `CommandScope` is empty → no restriction).
+    fn scopeJsonFor(
+        self: *const Policy,
+        scratch: Allocator,
+        command: []const u8,
+        window: []const u8,
+        origin: []const u8,
+    ) ![]const u8 {
+        var parts: std.ArrayListUnmanaged([]const u8) = .empty;
+        for (self.capabilities) |capability| {
+            if (!capability.matchesPlatform(self.platform)) continue;
+            if (capability.denies(command, window, origin)) continue;
+            if (!capability.allows(command, window, origin)) continue;
+            for (capability.permissions) |permission| {
+                if (!permissionResolves(permission.identifier, command, false)) continue;
+                if (permission.scope_json == null) return "";
+                try parts.append(scratch, permission.scope_json.?);
+            }
+        }
+        if (parts.items.len == 0) return "";
+        var out: std.Io.Writer.Allocating = .init(scratch);
+        try out.writer.writeByte('[');
+        for (parts.items, 0..) |part, i| {
+            if (i > 0) try out.writer.writeByte(',');
+            try out.writer.writeAll(part);
+        }
+        try out.writer.writeByte(']');
+        return out.toOwnedSlice();
     }
 };
+
+// ---------------------------------------------------------------------------
+// Scope enforcement (called by the owning plugins)
+// ---------------------------------------------------------------------------
+
+/// One element of `allow` / `deny` is a string glob (`"$APPDATA/**"`) or an object carrying a
+/// `path` / `url` string. Returns `null` for shapes this module cannot interpret; unknown shapes are
+/// ignored rather than silently widening access (see `scopeVerdict`).
+fn patternOf(value: std.json.Value) ?[]const u8 {
+    return switch (value) {
+        .string => |s| s,
+        .object => |object| blk: {
+            for ([_][]const u8{ "path", "url" }) |key| {
+                if (object.get(key)) |inner| {
+                    if (inner == .string) break :blk inner.string;
+                }
+            }
+            break :blk null;
+        },
+        else => null,
+    };
+}
+
+/// Runs the allow/deny arrays attached to this call's granting permissions against `target`.
+/// `null` means "no decision" (no scopes attached); `true` means allowed; `false` means blocked.
+pub fn scopeVerdict(ctx: *const rpc.Ctx, target: []const u8, is_url: bool) ?bool {
+    if (ctx.acl_scope_json.len == 0) return null;
+    const parsed = std.json.parseFromSliceLeaky(std.json.Value, ctx.scratch, ctx.acl_scope_json, .{}) catch return false;
+    if (parsed != .array) return false;
+
+    var saw_allow = false;
+    var matched = false;
+    for (parsed.array.items) |entry| {
+        if (entry != .object) continue;
+        const object = entry.object;
+        if (object.get("deny")) |deny| {
+            if (deny == .array) {
+                for (deny.array.items) |item| {
+                    const pattern = patternOf(item) orelse continue;
+                    const hit = if (is_url) urlPatternMatch(pattern, target) else globMatch(pattern, target);
+                    if (hit) return false;
+                }
+            }
+        }
+        if (object.get("allow")) |allow| {
+            if (allow == .array) {
+                for (allow.array.items) |item| {
+                    const pattern = patternOf(item) orelse continue;
+                    saw_allow = true;
+                    const hit = if (is_url) urlPatternMatch(pattern, target) else globMatch(pattern, target);
+                    if (hit) matched = true;
+                }
+            }
+        }
+    }
+    if (!saw_allow) return true; // a grant with no allow list imposes no path restriction
+    return matched;
+}
+
+/// Whether the ACL scopes attached to `ctx` permit this filesystem path.
+pub fn scopeAllowsPath(ctx: *const rpc.Ctx, path_text: []const u8) bool {
+    return scopeVerdict(ctx, path_text, false) orelse true;
+}
+
+/// Whether the ACL scopes attached to `ctx` permit this URL.
+pub fn scopeAllowsUrl(ctx: *const rpc.Ctx, url: []const u8) bool {
+    return scopeVerdict(ctx, url, true) orelse true;
+}
 
 /// The window label of the current call (`core.CallContext.window_id` → label registry), or `""`
 /// when the caller is not a desktop window (CLI / bridge without a window).
@@ -676,7 +781,7 @@ test "authorizeCtx maps a CallContext to the policy decision" {
 
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const ctx = rpc.Ctx.init(testing.io, arena.allocator());
+    var ctx = rpc.Ctx.init(testing.io, arena.allocator());
     try testing.expect(Policy.authorizeCtx(policy.context(), &ctx, "plugin:fs|read_text_file"));
     try testing.expect(!Policy.authorizeCtx(policy.context(), &ctx, "plugin:fs|write_file"));
 }
@@ -743,4 +848,80 @@ test "end to end: an imported tauri project yields a working policy" {
     try testing.expect(policy.allows("plugin:window|set_title", "main", "tauri://localhost"));
     try testing.expect(!policy.allows("plugin:fs|read_text_file", "settings", "tauri://localhost"));
     try testing.expect(!policy.allows("plugin:fs|write_file", "main", "tauri://localhost"));
+}
+
+test "P0-2: a scoped capability grants only its own paths" {
+    const resolver = struct {
+        fn main(_: *const rpc.Ctx) ?[]const u8 {
+            return "main";
+        }
+    }.main;
+    withWindowLabel(resolver);
+    defer withWindowLabel(struct {
+        fn none(_: *const rpc.Ctx) ?[]const u8 {
+            return null;
+        }
+    }.none);
+
+    var policy = try Policy.init(testing.allocator, .{
+        .files = &.{.{ .file_name = "scoped.json", .json =
+        \\{"identifier":"files","windows":["main"],"permissions":[
+        \\  {"identifier":"fs:allow-read-text-file","allow":[{"path":"/app/data/**"}]}
+        \\]}
+        }},
+    });
+    defer policy.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var ctx = rpc.Ctx.init(testing.io, arena.allocator());
+    try testing.expect(Policy.authorizeCtx(policy.context(), &ctx, "plugin:fs|read_text_file"));
+    try testing.expect(ctx.acl_scope_json.len > 0);
+    try testing.expect(scopeAllowsPath(&ctx, "/app/data/notes.txt"));
+    try testing.expect(!scopeAllowsPath(&ctx, "/etc/passwd"));
+    try testing.expect(!scopeAllowsUrl(&ctx, "https://example.com/data/notes.txt"));
+}
+
+test "P0-2: deny wins over allow, and an unscoped grant removes the restriction" {
+    const resolver = struct {
+        fn main(_: *const rpc.Ctx) ?[]const u8 {
+            return "main";
+        }
+    }.main;
+    withWindowLabel(resolver);
+    defer withWindowLabel(struct {
+        fn none(_: *const rpc.Ctx) ?[]const u8 {
+            return null;
+        }
+    }.none);
+
+    var policy = try Policy.init(testing.allocator, .{
+        .files = &.{.{ .file_name = "deny.json", .json =
+        \\{"identifier":"files","windows":["main"],"permissions":[
+        \\  {"identifier":"fs:allow-read-text-file","allow":["/app/**"],"deny":["/app/secret/**"]}
+        \\]}
+        }},
+    });
+    defer policy.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var ctx = rpc.Ctx.init(testing.io, arena.allocator());
+    try testing.expect(Policy.authorizeCtx(policy.context(), &ctx, "plugin:fs|read_text_file"));
+    try testing.expect(scopeAllowsPath(&ctx, "/app/public.txt"));
+    try testing.expect(!scopeAllowsPath(&ctx, "/app/secret/key.txt"));
+
+    var open_policy = try Policy.init(testing.allocator, .{
+        .files = &.{.{ .file_name = "open.json", .json =
+        \\{"identifier":"files","windows":["main"],"permissions":[
+        \\  {"identifier":"fs:allow-read-text-file","allow":["/app/**"]},
+        \\  "fs:allow-read-text-file"
+        \\]}
+        }},
+    });
+    defer open_policy.deinit();
+    var ctx2 = rpc.Ctx.init(testing.io, arena.allocator());
+    try testing.expect(Policy.authorizeCtx(open_policy.context(), &ctx2, "plugin:fs|read_text_file"));
+    try testing.expectEqualStrings("", ctx2.acl_scope_json);
+    try testing.expect(scopeAllowsPath(&ctx2, "/etc/passwd"));
 }

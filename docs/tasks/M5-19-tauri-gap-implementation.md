@@ -19,7 +19,7 @@
 
 > 「**P0-2 → P0-3 → P0-1 → P0-4 → P0-5 → P1 → P2** を順に実装して」
 
-- [ ] **P0-2** capability の scope を `Policy.allows()` で実適用する
+- [x] **P0-2** capability の scope を `Policy` → `rpc.Ctx` → `plugin:fs` で実適用する
 - [ ] **P0-3** `app.security.pattern: "isolation"`（暗号化 iframe）
 - [ ] **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）
 - [ ] **P0-4** 生成済み `gzip_entries` を実際に配信する
@@ -68,6 +68,14 @@
 
 ## 4. 進捗チェックポイント
 
-- **完了**: 現状復元・このタスク票の作成と push（分散ロック）。
-- **作業中**: P0-2 の設計調査。
-- **未着手**: P0-2 以降の実装、ドキュメント、同期台帳、PR。
+- **完了**: 現状復元・タスク票／分散ロック、**P0-2**。
+  - `rpc.Ctx.acl_scope_json`（opaque JSON、`zts_rpc` は型を知らない）
+  - `Policy.scopeJsonFor()` が「そのコマンドを許可した権限」の scope だけを収集。
+    scope 無しの権限が 1 つでもあれば制限なし（Tauri `CommandScope` と同じ）
+  - `Policy.authorizeCtx()` が `authorize_ctx_fn` の `*Ctx`（mutable）で付与
+  - `scopeAllowsPath` / `scopeAllowsUrl`: `deny` 優先、`allow` は union、`globMatch` を再利用
+  - `plugin:fs|*` の全 19 経路を `resolveScoped()` に集約（既存 `FsScope` と併用）
+  - テスト: `quick-test` の tauri モジュール 67 件（+3: scope allow / deny / unscoped と
+    fs の E2E）。日英 `concepts/security.md` にルール表を追加
+- **作業中**: **P0-3** `app.security.pattern: "isolation"`。
+- **未着手**: P0-1 / P0-4 / P0-5 / P1 / P2。

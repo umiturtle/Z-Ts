@@ -28,6 +28,10 @@ pub const Ctx = struct {
     origin: []const u8 = "",
     /// Raw unparsed request payload bytes.
     raw_body: []const u8 = "",
+    /// JSON array of the ACL scope objects that granted this call. This is opaque bytes to
+    /// `zts_rpc`; the owning plugin (`zts_tauri/acl.zig`) interprets it, keeping the RPC package
+    /// independent of the desktop security model. `""` means "no scope restriction".
+    acl_scope_json: []const u8 = "",
     /// Optional zero-allocation type-erased pointer to host/engine-specific per-call environment.
     env_ptr: ?*anyopaque = null,
     /// Compile-time `@typeName(T).ptr` identity tag guarding `env(T)` against wrong-type casts.

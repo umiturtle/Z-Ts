@@ -51,12 +51,40 @@ var policy = try tauri.acl.Policy.init(allocator, .{
 });
 defer policy.deinit();
 
-if (!policy.allows("main", "plugin:fs|read_text_file")) return error.Forbidden;
+if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) return error.Forbidden;
 ```
 
 > [!WARNING]
 > **scope を空にすると `fs` は常に失敗します。** 「動かない」のではなく「拒否されている」ので、
 > エラーは `forbidden path` になります。`$APPDATA/**` のような glob を必ず書いてください。
+
+### 権限ごとの scope（`@tauri-apps/plugin-fs` 互換）
+
+`permissions[]` の各要素に `allow` / `deny` を付けられます。ziggurats は
+**その呼び出しを許可した capability の scope だけ**を `rpc.Ctx` に載せ、
+`plugin:fs|*` がパスを解決するときに評価します。
+
+```json
+{
+  "identifier": "main-capability",
+  "windows": ["main"],
+  "permissions": [
+    { "identifier": "fs:allow-read-text-file", "allow": [{ "path": "$APPDATA/**" }] },
+    { "identifier": "fs:allow-write-text-file", "allow": ["$APPDATA/**"],
+      "deny": ["$APPDATA/private/**"] }
+  ]
+}
+```
+
+| ルール | 挙動 |
+|---|---|
+| `deny` の glob に一致 | 常に拒否（`allow` より優先） |
+| `allow` が 1 つ以上あり、どれにも一致しない | 拒否（`OutOfScope`） |
+| scope を持たない権限が同じコマンドを許可 | 制限なし（Tauri の `CommandScope` と同じ） |
+| capability 自体がマッチしない | そもそも `Policy.allows()` が `false` |
+
+評価は `src/tauri/acl.zig` の `scopeAllowsPath` / `scopeAllowsUrl`。
+`FsScope`（設定ファイル由来のルート）と**併用**され、片方でも外れれば拒否です。
 
 ## 3. 何を守り、何を守らないか
 

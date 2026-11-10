@@ -51,12 +51,40 @@ var policy = try tauri.acl.Policy.init(allocator, .{
 });
 defer policy.deinit();
 
-if (!policy.allows("main", "plugin:fs|read_text_file")) return error.Forbidden;
+if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) return error.Forbidden;
 ```
 
 > [!WARNING]
 > **An empty scope makes `fs` fail every time.** It is not "broken", it is denied, and the error
 > reads `forbidden path`. Always write a glob such as `$APPDATA/**`.
+
+### Per-permission scopes (`@tauri-apps/plugin-fs` compatible)
+
+Each `permissions[]` entry may carry `allow` / `deny`. ziggurats attaches **only the scopes of the
+capabilities that granted this call** to `rpc.Ctx`, and `plugin:fs|*` evaluates them when resolving
+a path.
+
+```json
+{
+  "identifier": "main-capability",
+  "windows": ["main"],
+  "permissions": [
+    { "identifier": "fs:allow-read-text-file", "allow": [{ "path": "$APPDATA/**" }] },
+    { "identifier": "fs:allow-write-text-file", "allow": ["$APPDATA/**"],
+      "deny": ["$APPDATA/private/**"] }
+  ]
+}
+```
+
+| Rule | Behaviour |
+|---|---|
+| matches a `deny` glob | always rejected (`deny` wins over `allow`) |
+| has one or more `allow` patterns, none match | rejected (`OutOfScope`) |
+| an unscoped permission also grants the command | no restriction (same as Tauri's `CommandScope`) |
+| no capability matches | `Policy.allows()` is already `false` |
+
+Evaluation lives in `src/tauri/acl.zig` (`scopeAllowsPath` / `scopeAllowsUrl`). It is **combined
+with** the config-derived `FsScope` roots: failing either check denies the call.
 
 ## 3. What is protected, what is not
 

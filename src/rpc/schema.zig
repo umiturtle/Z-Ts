@@ -326,7 +326,9 @@ pub fn Schema(comptime specs: anytype) type {
             /// Stateful authorizer: takes the caller's opaque pointer, so an app can
             /// hand its policy to `withAuthCtx` without a global variable.
             authorize_ctx: ?*anyopaque = null,
-            authorize_ctx_fn: ?*const fn (userdata: ?*anyopaque, ctx: *const Ctx, command: []const u8) bool = null,
+            /// The stateful authorizer receives a mutable `Ctx` so it can attach the granted
+            /// ACL scopes (and any other per-call security context) before the command runs.
+            authorize_ctx_fn: ?*const fn (userdata: ?*anyopaque, ctx: *Ctx, command: []const u8) bool = null,
             encode_options: codec.EncodeOptions = .{},
 
             /// Returns a lightweight 2-word `Handler` fat pointer pointing to `self`.
@@ -348,7 +350,7 @@ pub fn Schema(comptime specs: anytype) type {
             pub fn withAuthCtx(
                 self: Router,
                 userdata: ?*anyopaque,
-                auth_fn: *const fn (userdata: ?*anyopaque, ctx: *const Ctx, command: []const u8) bool,
+                auth_fn: *const fn (userdata: ?*anyopaque, ctx: *Ctx, command: []const u8) bool,
             ) Router {
                 var copy = self;
                 copy.authorize_ctx = userdata;
