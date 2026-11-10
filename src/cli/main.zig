@@ -330,11 +330,12 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     var fast: ?*check_server.Server = null;
     defer if (fast) |srv| srv.close();
     if (!force_full and check_step and !native_linkage) {
-        fast = check_server.Server.start(gpa, io, arena, opts.dir, zig_path) catch null;
+        fast = check_server.Server.start(gpa, io, arena, opts.dir, zig_path) catch |err| blk: {
+            printOut(io, "     compiler server unavailable ({s}) — using zig build check\n", .{@errorName(err)});
+            break :blk null;
+        };
         if (fast != null) {
             printOut(io, "     incremental compiler server ready (Zig edits re-check in ms)\n", .{});
-        } else {
-            printOut(io, "     compiler server unavailable — using zig build check\n", .{});
         }
     }
 

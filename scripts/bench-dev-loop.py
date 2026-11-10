@@ -309,14 +309,14 @@ def run_verify(args, zts, zig, root):
             assert state["ok"], state
             # Correctness first: an environment where the persistent compiler cannot start
             # (different Zig build, sandbox restrictions) must still work via the fallback. The
-            # speed assertion is only meaningful when the server actually reported a timing.
+            # fallback prints the SAME timing line format, so only assert speed when the server
+            # actually announced itself; otherwise a slow-but-correct runner must still pass.
             body = session.log_text()
-            checks = [int(x) for x in re.findall(r"zts: type-check ok \((\d+) ms\)", body)]
-            if not checks:
-                assert "incremental compiler server ready" not in body, \
-                    "server reported ready but no timing line was emitted"
+            if "incremental compiler server ready" not in body:
                 print("      note: compiler server unavailable here; fallback path verified")
                 return
+            checks = [int(x) for x in re.findall(r"zts: type-check ok \((\d+) ms\)", body)]
+            assert checks, "server announced ready but emitted no timing line"
             assert checks[-1] < 80, f"incremental check took {checks[-1]} ms (slow path?)"
 
         def css_hot_swap():
