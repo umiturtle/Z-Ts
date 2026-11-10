@@ -1,0 +1,816 @@
+//! P2 — optional official-plugin namespaces, as **standalone** `rpc.Schema` modules.
+//!
+//! Design rule (unused modules must link 0 bytes): an app merges only the namespaces it uses, so an app that never
+//! calls `store` links 0 bytes of it. Nothing here is added to `CorePluginsSchema`, and nothing
+//! here imports an OS GUI toolkit. Every command name matches the upstream
+//! `@tauri-apps/plugin-*` package, so an unmodified frontend keeps working.
+//!
+//! ```zig
+//! const S = rpc.Schema(.{
+//!     .store = plugins.StoreCommands,
+//!     .log = plugins.LogCommands,
+//!     .os = plugins.OsCommands,
+//! });
+//! var state = try plugins.PluginState.init(allocator, io, .{});
+//! defer state.deinit();
+//! var bound = S.bind(.{ .store = &state, .log = &state, .os = &state });
+//! ```
+//!
+//! What is deliberately NOT here (see `docs/architecture/tauri-feature-gap.md` §4):
+//! * `plugin-http` / `websocket` / `upload` / `updater` — need a TLS stack (external dependency).
+//! * `sql` / `stronghold` / mobile-only plugins — external engines or wrong targets.
+//! * `global-shortcut`, native notifications, `deep-link`, `autostart` — need OS hooks / registry /
+//!   plist / `.desktop` writes. `notification` below is the **in-app event + ring buffer** form;
+//!   the OS notification center is intentionally not faked.
+//! * signing / notarytool / MSI / NSIS / AppImage — external tools, already deferred in the
+//!   packaging design. `.icns` is the one Pure-Zig artefact added (see `src/bundler/icns.zig`).
+
+const std = @import("std");
+const builtin = @import("builtin");
+const Io = std.Io;
+const Allocator = std.mem.Allocator;
+const testing = std.testing;
+
+const core = @import("zts_core");
+const rpc = @import("zts_rpc");
+const monitor = @import("monitor.zig");
+
+pub const PluginError = error{
+    OutOfMemory,
+    /// A provider (opener) or an OS facility is not installed on this host.
+    Unsupported,
+    /// An enum / numeric argument was outside the documented range.
+    InvalidValue,
+    /// The store / lock file could not be written.
+    PersistFailed,
+};
+
+/// Maximum number of log lines / notifications retained, so a long-running app cannot grow
+/// without bound. Deterministic on all three OSes.
+pub const max_log_lines = 256;
+pub const max_notifications = 64;
+
+pub const LogLine = struct {
+    level: []const u8,
+    message: []const u8,
+};
+
+pub const Notification = struct {
+    id: u32,
+    title: []const u8,
+    body: []const u8,
+};
+
+/// Provider for `opener` / `shell`. Installing one is optional; without it the commands return
+/// `error.Unsupported` instead of silently spawning a process. Native backends can supply it
+/// without any `if (windows)` branch in application code.
+pub const OpenerProvider = struct {
+    ctx: ?*anyopaque = null,
+    open: ?*const fn (?*anyopaque, []const u8) void = null,
+};
+
+pub const Options = struct {
+    /// Snapshot of `argv[1..]` for `plugin:cli`.
+    argv: []const []const u8 = &.{},
+    /// JSON file the store is persisted to. `null` = in-memory only.
+    store_path: ?[]const u8 = null,
+    /// Advisory lock file for `single-instance`. `null` = in-memory only.
+    lock_path: ?[]const u8 = null,
+    opener: OpenerProvider = .{},
+};
+
+/// One state object can back every P2 namespace. All owned strings live in `allocator`; a HashMap
+/// entry owns both its key and its (raw JSON) value.
+pub const PluginState = struct {
+    allocator: Allocator,
+    io: Io,
+    store: std.StringHashMapUnmanaged([]u8) = .empty,
+    store_path: ?[]const u8 = null,
+    logs: std.ArrayList(LogLine) = .empty,
+    notifications: std.ArrayList(Notification) = .empty,
+    next_notification_id: u32 = 1,
+    argv: []const []const u8 = &.{},
+    opener: OpenerProvider = .{},
+    lock_path: ?[]const u8 = null,
+    lock_held: bool = false,
+    requested_exit_code: ?i32 = null,
+
+    pub fn init(allocator: Allocator, io: Io, options: Options) PluginError!PluginState {
+        var self: PluginState = .{
+            .allocator = allocator,
+            .io = io,
+            .store_path = options.store_path,
+            .argv = options.argv,
+            .opener = options.opener,
+            .lock_path = options.lock_path,
+        };
+        errdefer self.deinit();
+        if (options.store_path) |_| self.restore() catch {};
+        return self;
+    }
+
+    pub fn deinit(self: *PluginState) void {
+        var it = self.store.iterator();
+        while (it.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.store.deinit(self.allocator);
+        for (self.logs.items) |line| {
+            self.allocator.free(line.level);
+            self.allocator.free(line.message);
+        }
+        self.logs.deinit(self.allocator);
+        for (self.notifications.items) |n| {
+            self.allocator.free(n.title);
+            self.allocator.free(n.body);
+        }
+        self.notifications.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn setRaw(self: *PluginState, key: []const u8, raw: []const u8) PluginError!void {
+        const key_copy = try self.allocator.dupe(u8, key);
+        errdefer self.allocator.free(key_copy);
+        const value_copy = try self.allocator.dupe(u8, raw);
+        errdefer self.allocator.free(value_copy);
+        const old = try self.store.fetchPut(self.allocator, key_copy, value_copy);
+        if (old) |entry| {
+            self.allocator.free(entry.key);
+            self.allocator.free(entry.value);
+        }
+    }
+
+    fn appendLog(self: *PluginState, level: []const u8, message: []const u8) PluginError!void {
+        if (self.logs.items.len >= max_log_lines) {
+            const dropped = self.logs.orderedRemove(0);
+            self.allocator.free(dropped.level);
+            self.allocator.free(dropped.message);
+        }
+        try self.logs.append(self.allocator, .{
+            .level = try self.allocator.dupe(u8, level),
+            .message = try self.allocator.dupe(u8, message),
+        });
+    }
+
+    /// Writes the store as a JSON object whose values are raw (never re-encoded) JSON.
+    pub fn save(self: *PluginState) PluginError!void {
+        const path = self.store_path orelse return;
+        var aw: std.Io.Writer.Allocating = .init(self.allocator);
+        defer aw.deinit();
+        const w = &aw.writer;
+        w.writeAll("{") catch return error.OutOfMemory;
+        var it = self.store.iterator();
+        var first = true;
+        while (it.next()) |entry| {
+            if (!first) w.writeAll(",") catch return error.OutOfMemory;
+            first = false;
+            const k = std.json.Stringify.valueAlloc(self.allocator, entry.key_ptr.*, .{}) catch return error.OutOfMemory;
+            defer self.allocator.free(k);
+            w.writeAll(k) catch return error.OutOfMemory;
+            w.writeAll(":") catch return error.OutOfMemory;
+            w.writeAll(entry.value_ptr.*) catch return error.OutOfMemory;
+        }
+        w.writeAll("}\n") catch return error.OutOfMemory;
+        const bytes = try aw.toOwnedSlice();
+        defer self.allocator.free(bytes);
+        Io.Dir.cwd().writeFile(self.io, .{ .sub_path = path, .data = bytes }) catch return error.PersistFailed;
+    }
+
+    pub fn restore(self: *PluginState) PluginError!void {
+        const path = self.store_path orelse return;
+        const bytes = Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(8 * 1024 * 1024)) catch
+            return error.PersistFailed;
+        defer self.allocator.free(bytes);
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const parsed = std.json.parseFromSliceLeaky(std.json.Value, arena.allocator(), bytes, .{}) catch
+            return error.PersistFailed;
+        if (parsed != .object) return error.PersistFailed;
+        var it = parsed.object.iterator();
+        while (it.next()) |entry| {
+            const raw = std.json.Stringify.valueAlloc(arena.allocator(), entry.value_ptr.*, .{}) catch continue;
+            try self.setRaw(entry.key_ptr.*, raw);
+        }
+    }
+
+    /// Tries an exclusive lock file. `true` means this process is the primary instance.
+    pub fn requestLock(self: *PluginState) PluginError!bool {
+        if (self.lock_held) return true;
+        const path = self.lock_path orelse {
+            if (self.lock_held) return true;
+            self.lock_held = true;
+            return true;
+        };
+        const file = Io.Dir.cwd().createFile(self.io, path, .{ .exclusive = true }) catch |err| switch (err) {
+            error.PathAlreadyExists => return false,
+            else => return error.PersistFailed,
+        };
+        file.close(self.io);
+        self.lock_held = true;
+        return true;
+    }
+
+    pub fn releaseLock(self: *PluginState) PluginError!void {
+        if (!self.lock_held) return;
+        if (self.lock_path) |path| {
+            Io.Dir.cwd().deleteFile(self.io, path) catch {};
+        }
+        self.lock_held = false;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:store|* — JSON key/value store
+// ---------------------------------------------------------------------------
+
+pub const StoreCommands = struct {
+    pub const rpc_prefix = "plugin:store|";
+    pub const RpcState = PluginState;
+
+    pub fn get(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8 }) ?rpc.RawJson {
+        if (state.store.get(args.key)) |raw| return .{ .raw = raw };
+        return null;
+    }
+
+    pub fn set(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8, value: rpc.RawJson }) PluginError!void {
+        try state.setRaw(args.key, args.value.raw);
+    }
+
+    pub fn delete(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8 }) bool {
+        if (state.store.fetchRemove(args.key)) |entry| {
+            state.allocator.free(entry.key);
+            state.allocator.free(entry.value);
+            return true;
+        }
+        return false;
+    }
+
+    pub fn clear(_: *rpc.Ctx, state: *PluginState) void {
+        var it = state.store.iterator();
+        while (it.next()) |entry| {
+            state.allocator.free(entry.key_ptr.*);
+            state.allocator.free(entry.value_ptr.*);
+        }
+        state.store.clearRetainingCapacity();
+    }
+
+    pub fn has(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8 }) bool {
+        return state.store.contains(args.key);
+    }
+
+    pub fn length(_: *rpc.Ctx, state: *PluginState) u32 {
+        return @intCast(state.store.count());
+    }
+
+    pub fn keys(ctx: *rpc.Ctx, state: *PluginState) PluginError![]const []const u8 {
+        const out = try ctx.scratch.alloc([]const u8, state.store.count());
+        var it = state.store.keyIterator();
+        var i: usize = 0;
+        while (it.next()) |key| : (i += 1) out[i] = key.*;
+        std.mem.sort([]const u8, out, {}, struct {
+            fn less(_: void, a: []const u8, b: []const u8) bool {
+                return std.mem.lessThan(u8, a, b);
+            }
+        }.less);
+        return out;
+    }
+
+    pub fn save(_: *rpc.Ctx, state: *PluginState) PluginError!void {
+        try state.save();
+    }
+
+    pub fn load(_: *rpc.Ctx, state: *PluginState) PluginError!void {
+        try state.restore();
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:log|* — bounded in-memory log
+// ---------------------------------------------------------------------------
+
+pub const LogCommands = struct {
+    pub const rpc_prefix = "plugin:log|";
+    pub const RpcState = PluginState;
+
+    pub fn log(_: *rpc.Ctx, state: *PluginState, args: struct {
+        level: []const u8 = "info",
+        message: []const u8,
+    }) PluginError!void {
+        try state.appendLog(args.level, args.message);
+    }
+
+    pub fn logs(_: *rpc.Ctx, state: *PluginState) []const LogLine {
+        return state.logs.items;
+    }
+
+    pub fn clear(_: *rpc.Ctx, state: *PluginState) void {
+        for (state.logs.items) |line| {
+            state.allocator.free(line.level);
+            state.allocator.free(line.message);
+        }
+        state.logs.clearRetainingCapacity();
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:os|* — compile-time target facts (no runtime OS calls)
+// ---------------------------------------------------------------------------
+
+pub const OsCommands = struct {
+    pub const rpc_prefix = "plugin:os|";
+    pub const RpcState = PluginState;
+
+    pub fn platform(_: *rpc.Ctx, _: *PluginState) []const u8 {
+        return switch (builtin.os.tag) {
+            .windows => "windows",
+            .macos => "macos",
+            else => "linux",
+        };
+    }
+
+    pub fn arch(_: *rpc.Ctx, _: *PluginState) []const u8 {
+        return @tagName(builtin.cpu.arch);
+    }
+
+    pub fn family(_: *rpc.Ctx, _: *PluginState) []const u8 {
+        return switch (builtin.os.tag) {
+            .windows => "windows",
+            else => "unix",
+        };
+    }
+
+    pub fn exe_extension(_: *rpc.Ctx, _: *PluginState) []const u8 {
+        return if (builtin.os.tag == .windows) "exe" else "";
+    }
+
+    /// ziggurats does not read the host kernel version: doing so would break bit-for-bit parity
+    /// across OSes and CI runners. Upstream callers get a stable string instead.
+    pub fn version(_: *rpc.Ctx, _: *PluginState) []const u8 {
+        return "ziggurats";
+    }
+
+    /// `locale` is intentionally `null`: reading it needs an OS locale API.
+    pub fn locale(_: *rpc.Ctx, _: *PluginState) ?[]const u8 {
+        return null;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:process|* — exit is recorded and delegated to Host.requestQuit
+// ---------------------------------------------------------------------------
+
+pub const ProcessCommands = struct {
+    pub const rpc_prefix = "plugin:process|";
+    pub const RpcState = PluginState;
+
+    /// Records the exit code and asks the host loop to stop. Never calls `std.process.exit`:
+    /// a test / Live Preview must be able to observe the request without killing the process.
+    pub fn exit(ctx: *rpc.Ctx, state: *PluginState, args: struct { code: i32 = 0 }) void {
+        state.requested_exit_code = args.code;
+        if (ctx.getEnv(core.CallContext)) |call| call.host.requestQuit();
+    }
+
+    /// Deterministic placeholder. A real PID would differ on every run and break reproducibility.
+    pub fn pid(_: *rpc.Ctx, _: *PluginState) u32 {
+        return 0;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:cli|* — argv snapshot and simple flag matching
+// ---------------------------------------------------------------------------
+
+pub const CliCommands = struct {
+    pub const rpc_prefix = "plugin:cli|";
+    pub const RpcState = PluginState;
+
+    pub fn args(_: *rpc.Ctx, state: *PluginState) []const []const u8 {
+        return state.argv;
+    }
+
+    pub fn matches(_: *rpc.Ctx, state: *PluginState, request: struct { flag: []const u8 }) bool {
+        for (state.argv) |arg| {
+            if (std.mem.eql(u8, arg, request.flag)) return true;
+            if (std.mem.startsWith(u8, arg, request.flag) and arg.len > request.flag.len and arg[request.flag.len] == '=') return true;
+        }
+        return false;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:window-state|* — geometry persisted in the store under a reserved key
+// ---------------------------------------------------------------------------
+
+pub const WindowStateCommands = struct {
+    pub const rpc_prefix = "plugin:window-state|";
+    pub const RpcState = PluginState;
+
+    pub const StateDto = struct {
+        label: []const u8,
+        width: f64,
+        height: f64,
+        x: f64,
+        y: f64,
+    };
+
+    fn keyFor(allocator: Allocator, label: []const u8) PluginError![]u8 {
+        return std.fmt.allocPrint(allocator, "__zts_window_state__{s}", .{label}) catch error.OutOfMemory;
+    }
+
+    pub fn save(ctx: *rpc.Ctx, state: *PluginState, args: struct { value: StateDto }) PluginError!void {
+        const key = try keyFor(ctx.scratch, args.value.label);
+        const raw = rpc.encodeAlloc(ctx.scratch, args.value) catch return error.OutOfMemory;
+        try state.setRaw(key, raw);
+        try state.save();
+    }
+
+    pub fn restore(ctx: *rpc.Ctx, state: *PluginState, args: struct { label: []const u8 }) ?StateDto {
+        const key = keyFor(ctx.scratch, args.label) catch return null;
+        const raw = state.store.get(key) orelse return null;
+        return rpc.decodeLeaky(StateDto, ctx.scratch, raw) catch null;
+    }
+
+    pub fn clear(ctx: *rpc.Ctx, state: *PluginState, args: struct { label: []const u8 }) bool {
+        const key = keyFor(ctx.scratch, args.label) catch return false;
+        if (state.store.fetchRemove(key)) |entry| {
+            state.allocator.free(entry.key);
+            state.allocator.free(entry.value);
+            return true;
+        }
+        return false;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:opener|* — capability-gated external open, behind a provider
+// ---------------------------------------------------------------------------
+
+pub const OpenerCommands = struct {
+    pub const rpc_prefix = "plugin:opener|";
+    pub const RpcState = PluginState;
+
+    fn open(state: *PluginState, target: []const u8) PluginError!void {
+        const fn_ptr = state.opener.open orelse return error.Unsupported;
+        fn_ptr(state.opener.ctx, target);
+    }
+
+    pub fn open_url(_: *rpc.Ctx, state: *PluginState, args: struct { url: []const u8 }) PluginError!void {
+        if (!std.mem.startsWith(u8, args.url, "https://") and !std.mem.startsWith(u8, args.url, "http://") and !std.mem.startsWith(u8, args.url, "mailto:")) {
+            return error.InvalidValue;
+        }
+        try open(state, args.url);
+    }
+
+    pub fn open_path(_: *rpc.Ctx, state: *PluginState, args: struct { path: []const u8 }) PluginError!void {
+        try open(state, args.path);
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:single-instance|* — advisory lock file, identical on all 3 OSes
+// ---------------------------------------------------------------------------
+
+pub const SingleInstanceCommands = struct {
+    pub const rpc_prefix = "plugin:single-instance|";
+    pub const RpcState = PluginState;
+
+    pub fn request_lock(_: *rpc.Ctx, state: *PluginState) PluginError!bool {
+        return state.requestLock();
+    }
+
+    pub fn is_primary(_: *rpc.Ctx, state: *PluginState) bool {
+        return state.lock_held;
+    }
+
+    pub fn release(_: *rpc.Ctx, state: *PluginState) PluginError!void {
+        try state.releaseLock();
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:notification|* — in-app event + ring buffer (not the OS notification center)
+// ---------------------------------------------------------------------------
+
+pub const NotificationCommands = struct {
+    pub const rpc_prefix = "plugin:notification|";
+    pub const RpcState = PluginState;
+
+    pub fn notify(ctx: *rpc.Ctx, state: *PluginState, args: struct {
+        title: []const u8,
+        body: []const u8 = "",
+    }) PluginError!u32 {
+        if (state.notifications.items.len >= max_notifications) {
+            const dropped = state.notifications.orderedRemove(0);
+            state.allocator.free(dropped.title);
+            state.allocator.free(dropped.body);
+        }
+        const id = state.next_notification_id;
+        state.next_notification_id += 1;
+        try state.notifications.append(state.allocator, .{
+            .id = id,
+            .title = try state.allocator.dupe(u8, args.title),
+            .body = try state.allocator.dupe(u8, args.body),
+        });
+        // Deliver through the same `zts:event` CustomEvent path the bootstrap installs.
+        if (ctx.getEnv(core.CallContext)) |call| {
+            const t = std.json.Stringify.valueAlloc(ctx.scratch, args.title, .{}) catch return error.OutOfMemory;
+            const b = std.json.Stringify.valueAlloc(ctx.scratch, args.body, .{}) catch return error.OutOfMemory;
+            var aw: std.Io.Writer.Allocating = .init(ctx.scratch);
+            defer aw.deinit();
+            const w = &aw.writer;
+            w.writeAll("window.dispatchEvent(new CustomEvent(\"zts:event\",{detail:{event:\"notification\",payload:{id:") catch return error.OutOfMemory;
+            w.print("{d},title:", .{id}) catch return error.OutOfMemory;
+            w.writeAll(t) catch return error.OutOfMemory;
+            w.writeAll(",body:") catch return error.OutOfMemory;
+            w.writeAll(b) catch return error.OutOfMemory;
+            w.writeAll("}}}));") catch return error.OutOfMemory;
+            const script = aw.toOwnedSlice() catch return error.OutOfMemory;
+            call.host.evalJs(call.window_id, script) catch {};
+        }
+        return id;
+    }
+
+    pub fn pending(_: *rpc.Ctx, state: *PluginState) []const Notification {
+        return state.notifications.items;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// plugin:positioner|* — pure geometry, no OS call
+// ---------------------------------------------------------------------------
+
+pub const Position = enum {
+    top_left,
+    top_center,
+    top_right,
+    center,
+    bottom_left,
+    bottom_center,
+    bottom_right,
+    left_center,
+    right_center,
+};
+
+pub const PositionerCommands = struct {
+    pub const rpc_prefix = "plugin:positioner|";
+    pub const RpcState = PluginState;
+
+    /// Computes a window origin from a monitor rectangle and a window size. Same arithmetic on
+    /// every OS; the caller supplies the monitor rectangle from `MonitorRegistry`.
+    pub fn move_window(_: *rpc.Ctx, _: *PluginState, args: struct {
+        position: Position,
+        monitor_x: i32,
+        monitor_y: i32,
+        monitor_width: u32,
+        monitor_height: u32,
+        window_width: f64,
+        window_height: f64,
+    }) monitor.Point {
+        const mw: f64 = @floatFromInt(args.monitor_width);
+        const mh: f64 = @floatFromInt(args.monitor_height);
+        const half_x = (mw - args.window_width) / 2;
+        const half_y = (mh - args.window_height) / 2;
+        const right = mw - args.window_width;
+        const bottom = mh - args.window_height;
+        const dx: f64 = switch (args.position) {
+            .top_left, .left_center, .bottom_left, .center, .top_center, .bottom_center => if (args.position == .center or args.position == .top_center or args.position == .bottom_center) half_x else 0,
+            .top_right, .right_center, .bottom_right => right,
+        };
+        const dy: f64 = switch (args.position) {
+            .top_left, .top_center, .top_right, .center, .left_center, .right_center => if (args.position == .center or args.position == .left_center or args.position == .right_center) half_y else 0,
+            .bottom_left, .bottom_center, .bottom_right => bottom,
+        };
+        return .{
+            .x = args.monitor_x + @as(i32, @intFromFloat(@round(dx))),
+            .y = args.monitor_y + @as(i32, @intFromFloat(@round(dy))),
+        };
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+const P2Schema = rpc.Schema(.{
+    .store = StoreCommands,
+    .log = LogCommands,
+    .os = OsCommands,
+    .process = ProcessCommands,
+    .cli = CliCommands,
+    .window_state = WindowStateCommands,
+    .opener = OpenerCommands,
+    .single_instance = SingleInstanceCommands,
+    .notification = NotificationCommands,
+    .positioner = PositionerCommands,
+});
+
+fn bindAll(state: *PluginState) P2Schema.Router {
+    return P2Schema.bind(.{
+        .store = state,
+        .log = state,
+        .os = state,
+        .process = state,
+        .cli = state,
+        .window_state = state,
+        .opener = state,
+        .single_instance = state,
+        .notification = state,
+        .positioner = state,
+    });
+}
+
+test "P2: store, log, os, cli, process, window-state, opener, single-instance, notification, positioner" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+
+    var host = core.RecordingHost.init(testing.allocator);
+    defer host.deinit();
+    const win = try host.host().createWindow(.{ .label = "main" });
+    var state = try PluginState.init(testing.allocator, testing.io, .{
+        .argv = &.{ "--theme=dark", "--verbose" },
+    });
+    defer state.deinit();
+    var bound = bindAll(&state);
+    var handler = bound.handler();
+    var ctx = rpc.Ctx.init(testing.io, scratch);
+    var call = core.CallContext{ .host = host.host(), .window_id = win };
+    ctx = ctx.withEnv(&call);
+    const invoke = struct {
+        fn go(h: *rpc.Handler, c: *rpc.Ctx, cmd: []const u8, body: []const u8) core.OutgoingResponse {
+            return h.dispatch(testing.allocator, c, cmd, body);
+        }
+    }.go;
+
+    // store: set / get / has / keys / length / delete / clear
+    {
+        var r = invoke(&handler, &ctx, "plugin:store|set", "{\"key\":\"a\",\"value\":{\"n\":1}}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:store|get", "{\"key\":\"a\"}");
+        defer r.deinit();
+        try testing.expectEqualStrings("{\"n\":1}", r.body.slice());
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:store|keys", "{}");
+        defer r.deinit();
+        try testing.expectEqualStrings("[\"a\"]", r.body.slice());
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:store|length", "{}");
+        defer r.deinit();
+        try testing.expectEqualStrings("1", r.body.slice());
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:store|delete", "{\"key\":\"a\"}");
+        defer r.deinit();
+        try testing.expectEqualStrings("true", r.body.slice());
+    }
+
+    // log: bounded ring + clear
+    {
+        var r = invoke(&handler, &ctx, "plugin:log|log", "{\"level\":\"warn\",\"message\":\"hi\"}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:log|logs", "{}");
+        defer r.deinit();
+        try testing.expect(std.mem.indexOf(u8, r.body.slice(), "\"hi\"") != null);
+    }
+
+    // os / cli / process
+    {
+        var r = invoke(&handler, &ctx, "plugin:os|platform", "{}");
+        defer r.deinit();
+        try testing.expect(r.body.slice().len >= 5);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:cli|args", "{}");
+        defer r.deinit();
+        try testing.expect(std.mem.indexOf(u8, r.body.slice(), "--theme=dark") != null);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:cli|matches", "{\"flag\":\"--theme\"}");
+        defer r.deinit();
+        try testing.expectEqualStrings("true", r.body.slice());
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:process|exit", "{\"code\":3}");
+        defer r.deinit();
+        try testing.expectEqual(@as(i32, 3), state.requested_exit_code.?);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:process|pid", "{}");
+        defer r.deinit();
+        try testing.expectEqualStrings("0", r.body.slice());
+    }
+
+    // window-state round-trip through the store
+    {
+        var r = invoke(&handler, &ctx, "plugin:window-state|save", "{\"value\":{\"label\":\"main\",\"width\":800,\"height\":600,\"x\":10,\"y\":20}}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:window-state|restore", "{\"label\":\"main\"}");
+        defer r.deinit();
+        try testing.expect(std.mem.indexOf(u8, r.body.slice(), "\"width\":800") != null);
+    }
+
+    // opener fails closed when no provider is installed; an invalid URL is rejected
+    {
+        var r = invoke(&handler, &ctx, "plugin:opener|open_url", "{\"url\":\"https://example.com\"}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:opener|open_url", "{\"url\":\"javascript:alert(1)\"}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
+    }
+
+    // single-instance (in-memory lock)
+    {
+        var r = invoke(&handler, &ctx, "plugin:single-instance|request_lock", "{}");
+        defer r.deinit();
+        try testing.expectEqualStrings("true", r.body.slice());
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:single-instance|is_primary", "{}");
+        defer r.deinit();
+        try testing.expectEqualStrings("true", r.body.slice());
+    }
+
+    // notification emits a zts:event CustomEvent and keeps a bounded ring
+    {
+        var r = invoke(&handler, &ctx, "plugin:notification|notify", "{\"title\":\"Hi\",\"body\":\"there\"}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+        try testing.expect(std.mem.indexOf(u8, host.eval_log.items[host.eval_log.items.len - 1], "notification") != null);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:notification|pending", "{}");
+        defer r.deinit();
+        try testing.expect(std.mem.indexOf(u8, r.body.slice(), "\"Hi\"") != null);
+    }
+
+    // positioner: pure geometry
+    {
+        var r = invoke(&handler, &ctx, "plugin:positioner|move_window", "{\"position\":\"center\",\"monitorX\":0,\"monitorY\":0,\"monitorWidth\":1920,\"monitorHeight\":1080,\"windowWidth\":800,\"windowHeight\":600}");
+        defer r.deinit();
+        try testing.expectEqualStrings("{\"x\":560,\"y\":240}", r.body.slice());
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:positioner|move_window", "{\"position\":\"bottom_right\",\"monitorX\":100,\"monitorY\":50,\"monitorWidth\":1920,\"monitorHeight\":1080,\"windowWidth\":800,\"windowHeight\":600}");
+        defer r.deinit();
+        try testing.expectEqualStrings("{\"x\":1220,\"y\":530}", r.body.slice());
+    }
+}
+
+test "P2: store persistence and single-instance lock file are deterministic across restarts" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var buf: [std.fs.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(testing.io, &buf);
+    const root = buf[0..len];
+    const store_path = try std.fmt.allocPrint(testing.allocator, "{s}/store.json", .{root});
+    defer testing.allocator.free(store_path);
+    const lock_path = try std.fmt.allocPrint(testing.allocator, "{s}/app.lock", .{root});
+    defer testing.allocator.free(lock_path);
+
+    {
+        var state = try PluginState.init(testing.allocator, testing.io, .{
+            .store_path = store_path,
+            .lock_path = lock_path,
+            .opener = .{ .open = struct {
+                fn go(_: ?*anyopaque, target: []const u8) void {
+                    _ = target;
+                }
+            }.go },
+        });
+        defer state.deinit();
+        try state.setRaw("theme", "\"dark\"");
+        try state.save();
+        try testing.expect(try state.requestLock());
+        try state.releaseLock();
+    }
+    {
+        var state = try PluginState.init(testing.allocator, testing.io, .{
+            .store_path = store_path,
+            .lock_path = lock_path,
+        });
+        defer state.deinit();
+        try testing.expectEqualStrings("\"dark\"", state.store.get("theme").?);
+        try testing.expect(try state.requestLock());
+        var second = try PluginState.init(testing.allocator, testing.io, .{ .lock_path = lock_path });
+        defer second.deinit();
+        try testing.expect(!try second.requestLock()); // exclusive file blocks the second instance
+        try state.releaseLock();
+        try testing.expect(try second.requestLock());
+        try second.releaseLock();
+    }
+}

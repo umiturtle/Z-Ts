@@ -271,6 +271,50 @@ calls. Every one is a `pub fn` on
 > They can execute arbitrary JS, forge events or widen the asset scope; add
 > `core:webview:allow-eval` and friends explicitly (see [Security concepts](../concepts/security.md)).
 
+
+## 7. P2 — optional plugins and the macOS icon
+
+P2 namespaces are **not** part of `CorePluginsSchema`. An app merges only what it uses, so an app
+that never calls `store` links zero bytes of it (the same unused-module / zero-byte rule).
+
+```zig
+const S = rpc.Schema(.{
+    .store = tauri.plugins.StoreCommands,
+    .log = tauri.plugins.LogCommands,
+    .os = tauri.plugins.OsCommands,
+});
+var state = try tauri.plugins.PluginState.init(allocator, io, .{ .argv = argv[1..] });
+defer state.deinit();
+var bound = S.bind(.{ .store = &state, .log = &state, .os = &state });
+```
+
+| Namespace | Main commands | What it does |
+|---|---|---|
+| `plugin:store\|*` | `get` / `set` / `delete` / `clear` / `keys` / `has` / `length` / `save` / `load` | JSON KV; pass `store_path` to persist under `$APPDATA` |
+| `plugin:log\|*` | `log` / `logs` / `clear` | bounded 256-line ring buffer |
+| `plugin:os\|*` | `platform` / `arch` / `family` / `exe_extension` / `version` / `locale` | from `builtin`; **never reads kernel version or locale** (would break 3-OS parity) |
+| `plugin:process\|*` | `exit` / `pid` | `exit` delegates to `Host.requestQuit()` instead of killing the process |
+| `plugin:cli\|*` | `args` / `matches` | startup argv snapshot |
+| `plugin:window-state\|*` | `save` / `restore` / `clear` | window geometry in a reserved `store` key |
+| `plugin:opener\|*` | `open_url` / `open_path` | **provider based**; returns `Unsupported` when none is installed, rejects non-`http(s)`/`mailto` URLs |
+| `plugin:single-instance\|*` | `request_lock` / `is_primary` / `release` | exclusive lock file, identical on all 3 OSes |
+| `plugin:notification\|*` | `notify` / `pending` | in-app `zts:event` + bounded 64-item ring; does **not** fake the OS notification center |
+| `plugin:positioner\|*` | `move_window` | pure geometry from a monitor rect and a window size |
+| `.icns` | `icns.buildAlloc`（`src/bundler/icns.zig` / in `src/bundler/icns.zig`） | Pure-Zig macOS icon container; no `iconutil`, byte-identical on all 3 OSes |
+
+> [!WARNING]
+> Side-effecting commands (`open_*`, `process|exit`, `request_lock`, `*_clear`, `notify`) are
+> **NOT granted by any `*_default` set**. Add `opener:allow-open-url` and friends explicitly.
+
+### Deliberately not implemented (with reasons)
+
+| Feature | Reason |
+|---|---|
+| `plugin-http` / `websocket` / `upload` / `updater` | needs a TLS stack; Pure Zig `std` has no TLS client |
+| `sql` / `stronghold` / mobile-only plugins | external DB/crypto engine, or outside the 3 desktop OS targets |
+| `global-shortcut` / OS notifications / `deep-link` / `autostart` | needs OS hooks, registry, plist or `.desktop` writes; breaks `link_libc = false` and 3-OS parity |
+| signing / notarytool / MSI / NSIS / AppImage | only external tool calls; no value in rewriting them in Zig ([`packaging-and-bench.md`](../../../architecture/packaging-and-bench.md) §5) |
+
 ## Next
 
 - API: [`zts_tauri`](../../../api/zts_tauri/index.html) /

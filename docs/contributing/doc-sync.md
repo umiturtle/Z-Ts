@@ -17,7 +17,7 @@
 
 - **確認バージョン**: `ziggurats 0.1.0` / Zig `0.17.0`
 - **確認日**: `2026-10-21`
-- **基準コミット**: `63e9073`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）
+- **基準コミット**: `9171fa2`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）
 - **確認コマンド**: `python3 scripts/check-docs.py` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
 - **実装ハッシュ**: `d3e4d4b7613987a7b79179d11b87fa1dea09370c9593ee214ad7b89433270cdd`
 

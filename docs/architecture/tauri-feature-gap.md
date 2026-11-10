@@ -64,10 +64,10 @@
 | 5 | `zts migrate`（既存 `src-tauri/` を ziggurats プロジェクトへ変換） | [`migrate-from-tauri.md`](../learn/ja/guides/migrate-from-tauri.md) は**手作業の手順書** only。CLI コマンドが無い | `config_import` が既に `tauri.conf.json` を読める。ファイル生成は `src/cli/template.zig` の延長。外部依存 0 | `src/cli/{args,migrate}.zig` | 上流 helloworld の `src-tauri/` を食わせて `zts build` が通る |
 
 
-> **進捗（M5-19 / 2026-10-21）**: P0-2 / P0-3 / P0-1 / P0-4 / P0-5 / **P1** は実装済み。残りは
-> [タスク票](../tasks/M5-19-tauri-gap-implementation.md) のチェックポイントを参照してください。
-> P0-2 は [権限ごとの scope](../learn/ja/concepts/security.md)、P0-3 は
-> [isolation パターン](../learn/ja/concepts/security.md) に使い方があります。
+> **進捗（M5-19 / 2026-10-21）**: P0 / P1 / P2 の**採用範囲すべて実装済み**。
+> [タスク票](../tasks/M5-19-tauri-gap-implementation.md) と
+> [標準プラグインの手引き](../learn/ja/guides/plugins.md)（§6 / §7）を参照してください。
+> TLS・OS フック・外部ツールが必要な機能は §4 のとおり理由付きで除外しています。
 
 ### P1 — アプリ作者が「Tauri と同じ書き方」をするときに効く
 

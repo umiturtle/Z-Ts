@@ -293,6 +293,15 @@ fn requiresExplicitPermission(command: []const u8) bool {
         "plugin:fs|asset_scope_add",
         "plugin:fs|asset_scope_remove",
         "plugin:fs|asset_scope_clear",
+        // P2: spawning an external process, stopping the app, claiming a single-instance lock,
+        // clearing persisted data or pushing notifications must all be explicit grants.
+        "plugin:opener|open_url",
+        "plugin:opener|open_path",
+        "plugin:process|exit",
+        "plugin:single-instance|request_lock",
+        "plugin:store|clear",
+        "plugin:log|clear",
+        "plugin:notification|notify",
     };
     for (explicit) |c| {
         if (std.mem.eql(u8, command, c)) return true;
@@ -1002,4 +1011,24 @@ test "P1: eval, browsing-data, forged events and asset-scope changes need explic
     try testing.expect(permissionResolves("core:default", "plugin:webview|get_all_webviews", false));
     try testing.expect(permissionResolves("core:default", "plugin:window|set_title", false));
     try testing.expect(permissionResolves("core:default", "plugin:window|available_monitors", false));
+}
+
+test "P2: side-effecting optional plugins are not granted by any default set" {
+    const dangerous = [_][]const u8{
+        "plugin:opener|open_url",
+        "plugin:opener|open_path",
+        "plugin:process|exit",
+        "plugin:single-instance|request_lock",
+        "plugin:store|clear",
+        "plugin:log|clear",
+        "plugin:notification|notify",
+    };
+    for (dangerous) |cmd| {
+        try testing.expect(!permissionResolves("core:default", cmd, false));
+        try testing.expect(!permissionResolves("store:default", cmd, false));
+        try testing.expect(!permissionResolves("opener:default", cmd, false));
+    }
+    try testing.expect(permissionResolves("opener:allow-open-url", "plugin:opener|open_url", false));
+    try testing.expect(permissionResolves("store:allow-get", "plugin:store|get", false));
+    try testing.expect(permissionResolves("core:default", "plugin:window|set_title", false));
 }

@@ -25,10 +25,10 @@
 - [x] **P0-4** 生成済み `gzip_entries` を実際に配信する
 - [x] **P0-5** `zts migrate`
 - [x] **P1** webview コマンド / ウィンドウイベント / 残り setter / Monitor・DPI / 未適用 config フィールド / `once` / `asset://` scope の実行時更新
-- [ ] **P2** 公式プラグイン群・配布形式のうち理念に反しないもの
-- [ ] 各項目に単体テスト（`std.testing.allocator`、正常系・異常系・境界値）
-- [ ] 日英の読者向け Doc を更新、ルール 11（索引網羅）と規約 13（同期台帳）を維持
-- [ ] `./zigw quick-test` / `build test` / `doctest` / `fmt --check` / `docs-check` / 3 OS CI が緑
+- [x] **P2** 公式プラグイン群・配布形式のうち理念に反しないもの
+- [x] 各項目に単体テスト（`std.testing.allocator`、正常系・異常系・境界値）
+- [x] 日英の読者向け Doc を更新、ルール 11（索引網羅）と規約 13（同期台帳）を維持
+- [x] `./zigw quick-test` / `build test` / `doctest` / `fmt --check` / `docs-check` / 3 OS CI が緑
 - [ ] PR は 1 本だけ
 
 ## 2. 実装順序の理由（再掲）
@@ -155,5 +155,18 @@
   - `acl.zig`: `eval` / browsing data / イベント偽装 / scope 変更は `*_default` から除外し
     明示 permission を要求
   - テスト: tauri 86 件（+9）、`build test` 緑。日英 `guides/plugins.md` に §6 を追加
-- **作業中**: **P2** 公式プラグイン群・配布形式のうち理念に反しないもの。
-- **未着手**: なし（PR 作成のみ残る）。
+- **完了**: **P2**。
+  - `src/tauri/plugins.zig` 新規（**`CorePluginsSchema` に入れない**独立モジュール群）:
+    `store` / `log` / `os` / `process` / `cli` / `window-state` / `opener` /
+    `single-instance` / `notification` / `positioner` の 10 名前空間を 1 つの `PluginState` で共有
+  - `opener` は provider 方式（未設定なら `Unsupported`）、`notification` はアプリ内
+    `zts:event`＋リング、`single-instance` は排他ロックファイル、いずれも 3 OS 同一挙動
+  - `os` は `builtin` のみ。カーネル版数・ロケールは読まない（パリティ維持）。
+    `process|exit` は `Host.requestQuit()` に委譲しプロセスを殺さない
+  - `src/bundler/icns.zig`: Pure Zig の `.icns` 生成＋パーサ。`iconutil` 不要、決定論的。
+    `packaging-and-bench.md` の「未対応」を解消済みに更新
+  - TLS / DB / OS フック / 外部ツールが必要な機能は **理由付きで除外**（日英ガイド §7 / gap §4）
+  - `acl.zig`: 副作用のある P2 コマンドを `*_default` から除外
+  - テスト: tauri 89 件、bundler 37 件（+2）。正常・異常・境界・永続化・再起動を検証
+- **作業中**: なし。
+- **未着手**: なし。**PR 1 本を作成して CI を確認するのみ**。

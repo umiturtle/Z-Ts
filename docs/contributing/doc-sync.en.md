@@ -19,7 +19,7 @@ version was verified consistent with the implementation. The source of truth is
 
 - **Verified version**: `ziggurats 0.1.0` / Zig `0.17.0`
 - **Verified on**: `2026-10-21`
-- **Base commit**: `63e9073` (HEAD when verification began; the sha256 below identifies the implementation)
+- **Base commit**: `9171fa2` (HEAD when verification began; the sha256 below identifies the implementation)
 - **Verified with**: `python3 scripts/check-docs.py` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
 - **Implementation hash**: `d3e4d4b7613987a7b79179d11b87fa1dea09370c9593ee214ad7b89433270cdd`
 

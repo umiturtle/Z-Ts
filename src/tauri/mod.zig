@@ -28,6 +28,7 @@ pub const isolation = @import("isolation.zig");
 pub const js_bootstrap = @import("js_bootstrap.zig");
 pub const menu = @import("menu/mod.zig");
 pub const path = @import("path.zig");
+pub const plugins = @import("plugins.zig");
 pub const protocol = @import("protocol.zig");
 pub const resources = @import("resources.zig");
 pub const tray = @import("tray/mod.zig");
@@ -200,6 +201,7 @@ test {
     _ = menu;
     _ = path;
     _ = protocol;
+    _ = plugins;
     _ = resources;
     _ = tray;
     _ = window;

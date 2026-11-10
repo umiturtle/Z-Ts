@@ -266,6 +266,50 @@ if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) ret
 > 任意コード実行・イベント偽装・scope 拡大につながるため、capability に
 > `core:webview:allow-eval` などを明示してください（[権限の考え方](../concepts/security.md)）。
 
+
+## 7. P2 — 任意プラグインと macOS アイコン
+
+P2 は **`CorePluginsSchema` に入れません**。使う名前空間だけを `rpc.Schema` に合成するので、
+`store` を使わないアプリには 0 バイトしかリンクされません（未使用モジュールは 0 バイトになる方針）。
+
+```zig
+const S = rpc.Schema(.{
+    .store = tauri.plugins.StoreCommands,
+    .log = tauri.plugins.LogCommands,
+    .os = tauri.plugins.OsCommands,
+});
+var state = try tauri.plugins.PluginState.init(allocator, io, .{ .argv = argv[1..] });
+defer state.deinit();
+var bound = S.bind(.{ .store = &state, .log = &state, .os = &state });
+```
+
+| 名前空間 | 主なコマンド | 中身 |
+|---|---|---|
+| `plugin:store\|*` | `get` / `set` / `delete` / `clear` / `keys` / `has` / `length` / `save` / `load` | JSON KV。`store_path` を渡すと `$APPDATA` の JSON に永続化 |
+| `plugin:log\|*` | `log` / `logs` / `clear` | 上限 256 行のリングバッファ |
+| `plugin:os\|*` | `platform` / `arch` / `family` / `exe_extension` / `version` / `locale` | `builtin` から。**カーネル版数やロケールは読まない**（3 OS パリティを壊すため） |
+| `plugin:process\|*` | `exit` / `pid` | `exit` は `Host.requestQuit()` に委譲。プロセスを実際に殺さない |
+| `plugin:cli\|*` | `args` / `matches` | 起動時 argv のスナップショット |
+| `plugin:window-state\|*` | `save` / `restore` / `clear` | 位置・サイズを `store` の予約キーに保存 |
+| `plugin:opener\|*` | `open_url` / `open_path` | **provider 方式**。未設定なら `Unsupported`。`http(s)` / `mailto` 以外の URL は拒否 |
+| `plugin:single-instance\|*` | `request_lock` / `is_primary` / `release` | 排他ロックファイル（3 OS 同一） |
+| `plugin:notification\|*` | `notify` / `pending` | アプリ内 `zts:event` と上限 64 件のリング。OS 通知センターは**偽らない** |
+| `plugin:positioner\|*` | `move_window` | モニタ矩形とウィンドウサイズからの純粋な座標計算 |
+| `.icns` | `icns.buildAlloc`（`src/bundler/icns.zig` / in `src/bundler/icns.zig`） | Pure Zig の macOS アイコンコンテナ。`iconutil` 不要・3 OS 同一バイト列 |
+
+> [!WARNING]
+> 副作用のあるコマンド（`open_*` / `process|exit` / `request_lock` / `*_clear` / `notify`）は
+> **`*_default` では許可されません**。capability に `opener:allow-open-url` などを明示してください。
+
+### 実装しないもの（理由つき）
+
+| 機能 | 理由 |
+|---|---|
+| `plugin-http` / `websocket` / `upload` / `updater` | TLS スタックの外部依存が必要。Pure Zig `std` には TLS クライアントが無い |
+| `sql` / `stronghold` / モバイル専用プラグイン | DB / 暗号ライブラリの外部依存、または 3 デスクトップ OS 対象外 |
+| `global-shortcut` / OS 通知 / `deep-link` / `autostart` | OS フック・レジストリ・plist・`.desktop` 書き込みが必要。`link_libc = false` と 3 OS 同一挙動を壊す |
+| コード署名 / notarytool / MSI / NSIS / AppImage | 外部ツール呼び出しに留まり、純 Zig で書く価値が無い（[`packaging-and-bench.md`](../../../architecture/packaging-and-bench.md) §5） |
+
 ## 次に読むもの
 
 - API: [`zts_tauri`](../../../api/zts_tauri/index.html) / [`withCorePlugins`](../../../api/zts_tauri/mod.html#withCorePlugins) /
