@@ -118,6 +118,31 @@ export async function runSuite(opts: SuiteOptions): Promise<SuiteSummary> {
     await win.setAlwaysOnTop(true);
     check((await win.isAlwaysOnTop()) === true, "window.isAlwaysOnTop()");
 
+    // 4b. M5-22 ④ — window-state round trips. The unmodified upstream API must observe the
+    // SAME state on webkit (GTK/Cocoa/Win32), bridge and wasm: no OS-specific JS branch.
+    check((await win.isMinimized()) === false, "initial isMinimized() must be false");
+    await win.minimize();
+    check((await win.isMinimized()) === true, "minimize() -> isMinimized() === true");
+    await win.unminimize();
+    check((await win.isMinimized()) === false, "unminimize() -> isMinimized() === false");
+
+    check((await win.isMaximized()) === false, "initial isMaximized() must be false");
+    await win.maximize();
+    check((await win.isMaximized()) === true, "maximize() -> isMaximized() === true");
+    await win.unmaximize();
+    check((await win.isMaximized()) === false, "unmaximize() -> isMaximized() === false");
+
+    check((await win.isFullscreen()) === false, "initial isFullscreen() must be false");
+    await win.setFullscreen(true);
+    check((await win.isFullscreen()) === true, "setFullscreen(true) -> isFullscreen() === true");
+    await win.setFullscreen(false);
+    check((await win.isFullscreen()) === false, "setFullscreen(false) -> isFullscreen() === false");
+
+    check(typeof (await win.isFocused()) === "boolean", "isFocused() returns a boolean");
+    check((await win.isVisible()) === true, "isVisible() must be true for the mapped window");
+    check((await win.isDecorated()) === true, "isDecorated() must be true by default");
+    check((await win.isResizable()) === true, "isResizable() must be true by default");
+
     // 5. `zts_rpc.tsgen` Typed Client + Upstream `Channel<T>` Ordered Streaming + XSS Escape Integrity
     const frames: Array<{ seq: number; ptsMs: number; tag: string }> = [];
     const onTick = new Channel<{ readonly seq: number; readonly ptsMs: number; readonly tag: string }>();
