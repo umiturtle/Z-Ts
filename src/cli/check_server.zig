@@ -138,21 +138,21 @@ pub fn parseArgv(
     dir: []const u8,
 ) ![]const []const u8 {
     const line = findLine(stdout) orelse findLine(stderr) orelse return error.NoVerboseLine;
-    const colon = std.mem.indexOf(u8, line, ": ") orelse return error.NoVerboseLine;
+    const colon = std.mem.indexOf(u8, line, ": ") orelse return error.NoVerbosePrefix;
     const command = std.mem.trimStart(u8, line[colon + 2 ..], " \t");
 
     var tokens: std.ArrayListUnmanaged([]const u8) = .empty;
     var it = std.mem.tokenizeAny(u8, command, " \t\r\n");
     while (it.next()) |tok| try tokens.append(arena, try arena.dupe(u8, tok));
 
-    if (tokens.items.len < 8) return error.BadArgv;
-    if (!std.mem.eql(u8, tokens.items[1], "build-exe")) return error.BadArgv;
+    if (tokens.items.len < 8) return error.TooFewArgvTokens;
+    if (!std.mem.eql(u8, tokens.items[1], "build-exe")) return error.NotBuildExe;
     for (required_tokens) |want| {
         var found = false;
         for (tokens.items) |tok| {
             if (std.mem.eql(u8, tok, want)) found = true;
         }
-        if (!found) return error.BadArgv;
+        if (!found) return error.MissingArgvToken;
     }
     // Every `-M…=<path>` must point at a real file relative to the project. This catches a broken
     // whitespace split (a path containing a space) instead of spawning a bogus compiler.
@@ -162,7 +162,7 @@ pub fn parseArgv(
         const path = tok[eq + 1 ..];
         if (path.len == 0) continue;
         const full = try std.fmt.allocPrint(arena, "{s}/{s}", .{ dir, path });
-        Io.Dir.cwd().access(io, full, .{}) catch return error.BadArgv;
+        Io.Dir.cwd().access(io, full, .{}) catch return error.ModulePathMissing;
     }
 
     // `-fno-llvm` (the Debug default) plus `-fincremental` is the combination that keeps the

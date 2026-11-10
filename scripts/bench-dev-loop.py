@@ -315,7 +315,7 @@ def run_verify(args, zts, zig, root):
             if "incremental compiler server ready" not in body:
                 print("      note: compiler server unavailable here; fallback path verified")
                 for line in body.splitlines():
-                    if "compiler server" in line:
+                    if "compiler server" in line or "argv capture" in line:
                         print("      dev:", line.strip())
                 return
             checks = [int(x) for x in re.findall(r"zts: type-check ok \((\d+) ms\)", body)]
