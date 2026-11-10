@@ -174,6 +174,7 @@ pub const Spec = struct {
         return Full.bind(.{
             .app = user_state,
             .tauri_window = &plugins.windows,
+            .tauri_webview = &plugins.webviews,
             .tauri_event = &plugins.events,
             .tauri_path = &plugins.paths,
             .tauri_app = &plugins.app_state,

@@ -188,6 +188,7 @@ pub fn App(comptime runtime: RuntimeMode) type {
                 return Full.bind(.{
                     .app = state,
                     .tauri_window = &plugins.windows,
+                    .tauri_webview = &plugins.webviews,
                     .tauri_event = &plugins.events,
                     .tauri_path = &plugins.paths,
                     .tauri_app = &plugins.app_state,

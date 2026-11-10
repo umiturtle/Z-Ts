@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "3cbcb9c",
+    "commit": "91b29cb",
     "zts_version": "0.1.0",
     "zig_version": "0.17.0",
     "checks": [
@@ -52,8 +52,8 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "6c431d049d367c84f859643eed7a294c3425510bb9c114348daf6ce3b6b2e981",
-      "en_sha256": "e7534e50f7ccae3730b0c7a30c9238334740ac6c11934b0c87f9e761551d7139"
+      "ja_sha256": "ee18c181b878b96f267baeec6ed7e8ed0b0d3e7cd97505d5449b57e9d8e31bb2",
+      "en_sha256": "d0c359cace288f8e964c9e33f3e1fb1136341ab046b68cfa5540c52b50b2acf4"
     },
     {
       "ja": "docs/contributing/repository-map.md",
@@ -150,8 +150,8 @@
       "ja": "docs/learn/ja/guides/plugins.md",
       "en": "docs/learn/en/guides/plugins.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "f40c195e38936e99318cf87cf26f10bf7cc4365bbd7d721cf0ad30a8d207a311",
-      "en_sha256": "9a83fa5c633939debec71faeeceb08e54514894456f8cd0b0422873a746d54a9"
+      "ja_sha256": "1069f49fbe4de1bc3319c5638c8a4c6e23694abc8b8421000d80948f440e45bf",
+      "en_sha256": "5317a939664896fde6ed90ed5d0fa207e295e6abfd11d6ce162df90f81178fd2"
     },
     {
       "ja": "docs/learn/ja/guides/rpc.md",

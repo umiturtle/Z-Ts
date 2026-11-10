@@ -21,7 +21,7 @@
 
 - [x] **P0-2** capability の scope を `Policy` → `rpc.Ctx` → `plugin:fs` で実適用する
 - [x] **P0-3** `app.security.pattern: "isolation"`（暗号化 iframe）
-- [ ] **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）
+- [x] **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）
 - [ ] **P0-4** 生成済み `gzip_entries` を実際に配信する
 - [ ] **P0-5** `zts migrate`
 - [ ] **P1** webview コマンド / ウィンドウイベント / 残り setter / Monitor・DPI / 未適用 config フィールド / `once` / `asset://` scope の実行時更新
@@ -93,5 +93,21 @@
   - テスト: tauri 73 件（+6: 暗号ラウンドトリップ / 改ざん / 鍵決定性、config、
     protocol E2E、bootstrap）。`fmt --check` / `check-docs` / `docs-check` / `build test` 緑
   - 日英 `concepts/security.md` に設定例・ルール表・限界を追加、gap レポートに進捗注記
-- **作業中**: **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）。
-- **未着手**: P0-4 / P0-5 / P1 / P2。
+- **完了**: **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）。
+  - 上流 `@tauri-apps/api@2.9.0` の実コマンドを確認:
+    `plugin:webview|create_webview_window` / `plugin:window|create` /
+    `plugin:webview|create_webview` / `plugin:webview|get_all_webviews`（`[{label,windowLabel}]`）
+  - `src/tauri/webview.zig` 新規。`WebviewRegistry` は「1 ウィンドウ = 1 主 WebView」を
+    `WindowRegistry` から導出し、子 WebView だけを保持。`new Webview()` は既存の
+    `Host.evalJs` で親ウィンドウに `<iframe>` を生成（OS 分岐 0 行・3 OS 同一挙動）
+  - `window.zig` に `RawJson` ベースの `specFromOptions()`（未実装オプションは無視）、
+    `isValidLabel()` / `normalizeUrl()`、`openWindow()` ファクトリ、
+    `plugin:window|create` を追加。`DesktopRuntime` がファクトリを配線し、
+    JS 生成ウィンドウにも label 専用ブートストラップを注入
+  - `acl.zig`: `webview` を core plugin に追加、作成コマンドは `core:default` を
+    **除外**して明示 permission を要求（上流 `core:webview:allow-create-webview-window` 準拠）
+  - テスト: tauri 77 件（+4）、root 8 件（+1）。正常／異常／境界（label 長・重複・
+    `javascript:` URL・Host 無し・Runtime 経由の E2E）
+  - 日英 `guides/plugins.md` にコマンド表・設定例・capability 注意を追加、gap レポート更新
+- **作業中**: **P0-4** 生成済み `gzip_entries` を実際に配信する。
+- **未着手**: P0-5 / P1 / P2。

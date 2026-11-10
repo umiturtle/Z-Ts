@@ -30,6 +30,7 @@ pub const path = @import("path.zig");
 pub const protocol = @import("protocol.zig");
 pub const resources = @import("resources.zig");
 pub const tray = @import("tray/mod.zig");
+pub const webview = @import("webview.zig");
 pub const window = @import("window.zig");
 
 pub const AppConfig = app.AppConfig;
@@ -54,13 +55,15 @@ pub const ProtocolRouter = protocol.ProtocolRouter;
 pub const ResourceTable = resources.ResourceTable;
 pub const RoutedResponse = protocol.RoutedResponse;
 pub const WindowRegistry = window.WindowRegistry;
+pub const WebviewRegistry = webview.WebviewRegistry;
 pub const WirePosition = window.WirePosition;
 pub const WireSize = window.WireSize;
 
-/// Pre-built schema combining all 5 official `@tauri-apps/api` v2 core plugin namespaces.
+/// Pre-built schema combining all 8 official `@tauri-apps/api` v2 core plugin namespaces.
 /// Prefixed with `tauri_*` so user schemas can freely declare `.app`, `.window`, `.event`, or `.path`!
 pub const CorePluginsSchema = rpc.Schema(.{
     .tauri_window = window.Commands,
+    .tauri_webview = webview.Commands,
     .tauri_event = event.Commands,
     .tauri_path = path.Commands,
     .tauri_app = app.Commands,
@@ -72,7 +75,7 @@ pub const CorePluginsSchema = rpc.Schema(.{
 });
 
 /// Merges a user's application `rpc.Schema(...)` (or `.{ .ns = Cmds }` struct literal)
-/// with all 7 Tauri v2 core plugins (`window`, `event`, `path`, `app`, `resources`, `menu`, `tray`)
+/// with all 8 Tauri v2 core plugins (`window`, `webview`, `event`, `path`, `app`, `resources`, `menu`, `tray`)
 /// in one line.
 pub fn withCorePlugins(comptime app_schema_or_specs: anytype) type {
     if (@TypeOf(app_schema_or_specs) == type) {
@@ -85,6 +88,8 @@ pub fn withCorePlugins(comptime app_schema_or_specs: anytype) type {
 pub const CorePluginStates = struct {
     /// `plugin:window` state: the live windows and their labels.
     windows: WindowRegistry,
+    /// `plugin:webview` state: child webviews beyond the one each window owns.
+    webviews: WebviewRegistry,
     /// `plugin:event` state: JS and native listeners.
     events: EventBus,
     /// `plugin:path` state: base directories.
@@ -114,6 +119,7 @@ pub const CorePluginStates = struct {
         }
         self.* = .{
             .windows = WindowRegistry.init(allocator, io),
+            .webviews = WebviewRegistry.init(allocator, io, &self.windows),
             .events = EventBus.init(allocator, io),
             .paths = effective_paths,
             .app_state = AppState.init(io, app_cfg),
@@ -150,6 +156,7 @@ pub const CorePluginStates = struct {
         self.menu_state.deinit();
         self.tray_state.deinit();
         self.events.deinit();
+        self.webviews.deinit();
         self.windows.deinit();
         alloc.destroy(self);
     }
@@ -177,4 +184,5 @@ test {
     _ = resources;
     _ = tray;
     _ = window;
+    _ = webview;
 }

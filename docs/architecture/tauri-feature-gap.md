@@ -64,7 +64,7 @@
 | 5 | `zts migrate`（既存 `src-tauri/` を ziggurats プロジェクトへ変換） | [`migrate-from-tauri.md`](../learn/ja/guides/migrate-from-tauri.md) は**手作業の手順書** only。CLI コマンドが無い | `config_import` が既に `tauri.conf.json` を読める。ファイル生成は `src/cli/template.zig` の延長。外部依存 0 | `src/cli/{args,migrate}.zig` | 上流 helloworld の `src-tauri/` を食わせて `zts build` が通る |
 
 
-> **進捗（M5-19 / 2026-10-21）**: P0-2 と P0-3 は実装済み。残りは
+> **進捗（M5-19 / 2026-10-21）**: P0-2 / P0-3 / P0-1 は実装済み。残りは
 > [タスク票](../tasks/M5-19-tauri-gap-implementation.md) のチェックポイントを参照してください。
 > P0-2 は [権限ごとの scope](../learn/ja/concepts/security.md)、P0-3 は
 > [isolation パターン](../learn/ja/concepts/security.md) に使い方があります。

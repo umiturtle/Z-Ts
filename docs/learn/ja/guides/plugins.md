@@ -99,6 +99,40 @@ try plugins.windows.setTitle(&win, "Renamed");
 サイズ・位置は **論理 / 物理**の両方を受け付けます（[`WireSize`](../../../api/zts_tauri/window.html#WireSize)）。
 `Xvfb` のようなヘッドレス CI でも同じ値が返るよう、`HeadlessMock` でも同じ経路を通ります。
 
+
+### webview / 複数ウィンドウ — [`Commands`](../../../api/zts_tauri/webview.html#Commands)
+
+`@tauri-apps/api` を**改造せずに** JS から 2 枚目のウィンドウを作れます。上流と同じ
+`plugin:webview|create_webview_window` / `plugin:window|create` がそのまま届きます。
+
+```ts
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { Window } from "@tauri-apps/api/window";
+import { getAllWebviews } from "@tauri-apps/api/webview";
+
+const settings = new WebviewWindow("settings", {
+  url: "settings.html", width: 640, height: 480,
+});
+settings.once("tauri://created", () => console.log("ready"));
+
+const bare = new Window("docs", { title: "Docs" });
+console.log(await getAllWebviews()); // [{ label, windowLabel }, …]
+```
+
+| JS | コマンド | ziggurats の挙動 |
+|---|---|---|
+| `new WebviewWindow(label, opts)` | `plugin:webview\|create_webview_window` | `Host.createWindow()` でネイティブウィンドウを生成。label 専用のブートストラップも注入 |
+| `new Window(label, opts)` | `plugin:window\|create` | 同上（Webview を 1 枚持つウィンドウ） |
+| `new Webview(win, label, opts)` | `plugin:webview\|create_webview` | 親ウィンドウ内に子 `<iframe>` を生成（上流の unstable 機能に相当） |
+| `getAllWebviews()` | `plugin:webview\|get_all_webviews` | `[{ label, windowLabel }]` を返す |
+| `getAllWebviewWindows()` / `getAllWindows()` | `plugin:window\|get_all_windows` | ラベル配列を返す |
+
+ラベルは `a-zA-Z0-9-/:_` のみ（最大 128 文字）。`url` は `http(s)` / `tauri` / `asset` /
+`isolation` / `ipc` のみ通し、相対パスは `tauri://localhost/` に解決します。
+`javascript:` や `file:` は `InvalidUrl`、`label` の重複は `DuplicateLabel` で拒否します。
+未実装の `WindowOptions`（`center` / `skipTaskbar` / `titleBarStyle` など）は無視されるだけで
+呼び出しは失敗しません（前方互換）。
+
 ### event — [`EventBus`](../../../api/zts_tauri/event.html#EventBus)
 
 バックエンド → フロントエンドの通知です。
@@ -185,11 +219,14 @@ var policy = try tauri.acl.Policy.init(allocator, .{
 });
 defer policy.deinit();
 
-if (!policy.allows("main-window", "plugin:fs|read_text_file")) return error.Forbidden;
+if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) return error.Forbidden;
 ```
 
 * **未知のパーミッションは警告**、**型違いはエラー**、そして**既定は拒否**（fail-closed）。
 * `build` 時に `Imported.warnings` を CI で表示しておくと、上流の設定変更に気づけます。
+* **ウィンドウ生成は `core:default` では許可されません。** `core:webview:allow-create-webview-window`
+  / `core:window:allow-create` / `core:webview:allow-create-webview` を明示してください
+  （[セキュリティの権限ごとの scope](../concepts/security.md) も参照）。
 
 ---
 

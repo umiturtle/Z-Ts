@@ -100,6 +100,39 @@ Sizes and positions accept **logical or physical** units
 ([`WireSize`](../../../api/zts_tauri/window.html#WireSize)). `HeadlessMock` follows the same path,
 so headless CI (Xvfb) sees the same values as a real window.
 
+
+### webview / multiple windows — [`Commands`](../../../api/zts_tauri/webview.html#Commands)
+
+You can open a second window from JS **without modifying `@tauri-apps/api`**. The upstream
+`plugin:webview|create_webview_window` / `plugin:window|create` commands arrive unchanged.
+
+```ts
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { Window } from "@tauri-apps/api/window";
+import { getAllWebviews } from "@tauri-apps/api/webview";
+
+const settings = new WebviewWindow("settings", {
+  url: "settings.html", width: 640, height: 480,
+});
+settings.once("tauri://created", () => console.log("ready"));
+
+const bare = new Window("docs", { title: "Docs" });
+console.log(await getAllWebviews()); // [{ label, windowLabel }, …]
+```
+
+| JS | Command | ziggurats behaviour |
+|---|---|---|
+| `new WebviewWindow(label, opts)` | `plugin:webview\|create_webview_window` | `Host.createWindow()` opens a native window; its own label-specific bootstrap is injected |
+| `new Window(label, opts)` | `plugin:window\|create` | same (a window with one webview) |
+| `new Webview(win, label, opts)` | `plugin:webview\|create_webview` | mounts a child `<iframe>` in the parent window (upstream's unstable feature) |
+| `getAllWebviews()` | `plugin:webview\|get_all_webviews` | returns `[{ label, windowLabel }]` |
+| `getAllWebviewWindows()` / `getAllWindows()` | `plugin:window\|get_all_windows` | returns label strings |
+
+Labels accept `a-zA-Z0-9-/:_` (max 128 chars). `url` allows `http(s)`, `tauri`, `asset`,
+`isolation` and `ipc`; relative paths resolve under `tauri://localhost/`. `javascript:` / `file:`
+are rejected with `InvalidUrl` and duplicate labels with `DuplicateLabel`. `WindowOptions` we do
+not act on (`center`, `skipTaskbar`, `titleBarStyle`, …) are ignored rather than failing the call.
+
 ### event — [`EventBus`](../../../api/zts_tauri/event.html#EventBus)
 
 Backend → frontend notifications.
@@ -189,11 +222,15 @@ var policy = try tauri.acl.Policy.init(allocator, .{
 });
 defer policy.deinit();
 
-if (!policy.allows("main-window", "plugin:fs|read_text_file")) return error.Forbidden;
+if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) return error.Forbidden;
 ```
 
 * **Unknown permissions warn**, **wrong types error**, and **the default is deny** (fail-closed).
 * Printing `Imported.warnings` during `build` makes upstream config changes visible.
+* **Creating windows is NOT granted by `core:default`.** Add
+  `core:webview:allow-create-webview-window`, `core:window:allow-create` or
+  `core:webview:allow-create-webview` explicitly (see
+  [per-permission scopes](../concepts/security.md)).
 
 ---
 

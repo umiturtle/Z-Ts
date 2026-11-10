@@ -264,7 +264,7 @@ pub fn permissionIdFor(wire_command: []const u8, is_core: bool, deny: bool, buff
 }
 
 fn isCorePlugin(plugin: []const u8) bool {
-    const core_plugins = [_][]const u8{ "window", "event", "app", "path", "resources", "menu", "tray" };
+    const core_plugins = [_][]const u8{ "window", "webview", "event", "app", "path", "resources", "menu", "tray" };
     for (core_plugins) |candidate| {
         if (std.mem.eql(u8, plugin, candidate)) return true;
     }
@@ -276,6 +276,22 @@ fn isCorePlugin(plugin: []const u8) bool {
 /// Handles the three shapes a real capability uses: an exact `<plugin>:allow-<cmd>`, a plugin
 /// default (`<plugin>:default`, `core:default`, `core:<plugin>:default`) and an app-level
 /// permission equal to the command name.
+/// Commands that open a new window / webview must be granted explicitly, exactly like upstream
+/// `core:webview:allow-create-webview-window`. `core:default` covers getters only, so importing a
+/// plain `core:default` capability never lets a compromised frontend spawn an unbounded number of
+/// OS windows.
+fn requiresExplicitPermission(command: []const u8) bool {
+    const explicit = [_][]const u8{
+        "plugin:window|create",
+        "plugin:webview|create_webview_window",
+        "plugin:webview|create_webview",
+    };
+    for (explicit) |c| {
+        if (std.mem.eql(u8, command, c)) return true;
+    }
+    return false;
+}
+
 fn permissionResolves(identifier: []const u8, command: []const u8, deny: bool) bool {
     var buf: [160]u8 = undefined;
 
@@ -293,6 +309,7 @@ fn permissionResolves(identifier: []const u8, command: []const u8, deny: bool) b
         const action = if (deny) "deny-" else "allow-";
         _ = action;
         if (!deny) {
+            if (requiresExplicitPermission(command)) return false;
             if (std.mem.eql(u8, identifier, std.fmt.bufPrint(&buf, "{s}:default", .{plugin}) catch return false)) return true;
             if (is_core and std.mem.eql(u8, identifier, std.fmt.bufPrint(&buf, "core:{s}:default", .{plugin}) catch return false)) return true;
             if (is_core and std.mem.eql(u8, identifier, "core:default")) return true;
@@ -924,4 +941,33 @@ test "P0-2: deny wins over allow, and an unscoped grant removes the restriction"
     try testing.expect(Policy.authorizeCtx(open_policy.context(), &ctx2, "plugin:fs|read_text_file"));
     try testing.expectEqualStrings("", ctx2.acl_scope_json);
     try testing.expect(scopeAllowsPath(&ctx2, "/etc/passwd"));
+}
+
+test "P0-1: window/webview creation needs an explicit capability, getters stay in core:default" {
+    var buf: [160]u8 = undefined;
+    try testing.expectEqualStrings(
+        "core:webview:allow-create-webview-window",
+        permissionIdFor("plugin:webview|create_webview_window", isCorePlugin("webview"), false, &buf).?,
+    );
+    try testing.expectEqualStrings(
+        "core:window:allow-create",
+        permissionIdFor("plugin:window|create", true, false, &buf).?,
+    );
+
+    // A plain `core:default` capability must NOT be able to create windows.
+    try testing.expect(!permissionResolves("core:default", "plugin:webview|create_webview_window", false));
+    try testing.expect(!permissionResolves("core:webview:default", "plugin:webview|create_webview_window", false));
+    try testing.expect(!permissionResolves("webview:default", "plugin:webview|create_webview_window", false));
+    try testing.expect(!permissionResolves("core:default", "plugin:window|create", false));
+    try testing.expect(!permissionResolves("core:default", "plugin:webview|create_webview", false));
+
+    // The exact upstream permission identifier does grant it; deny still wins.
+    try testing.expect(permissionResolves("core:webview:allow-create-webview-window", "plugin:webview|create_webview_window", false));
+    try testing.expect(permissionResolves("core:window:allow-create", "plugin:window|create", false));
+    try testing.expect(permissionResolves("core:webview:deny-create-webview-window", "plugin:webview|create_webview_window", true));
+
+    // Getters are unchanged: `core:default` still covers them.
+    try testing.expect(permissionResolves("core:default", "plugin:webview|get_all_webviews", false));
+    try testing.expect(permissionResolves("core:default", "plugin:window|get_all_windows", false));
+    try testing.expect(permissionResolves("core:default", "plugin:window|set_title", false));
 }

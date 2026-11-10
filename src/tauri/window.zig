@@ -21,7 +21,131 @@ const rpc = @import("zts_rpc");
 pub const WindowPluginError = core.HostError || error{
     MissingHostContext,
     UnknownWindowLabel,
+    /// `new WebviewWindow()` / `new Window()` sent a bad `label` or duplicated an existing one.
+    InvalidLabel,
+    DuplicateLabel,
+    /// `options` was not a JSON object, or a required field had the wrong type.
+    MalformedOptions,
+    /// `options.url` used a scheme ziggurats never loads (`javascript:`, `file:`, …).
+    InvalidUrl,
 };
+
+/// Maximum label length. Upstream allows `a-zA-Z0-9-/:_`; the cap keeps a hostile frontend from
+/// allocating unbounded strings and matches the config importer's expectations.
+pub const max_label_len = 128;
+
+/// Tauri v2 label grammar: `a-zA-Z0-9-/:_`.
+pub fn isValidLabel(label: []const u8) bool {
+    if (label.len == 0 or label.len > max_label_len) return false;
+    for (label) |c| {
+        if (std.ascii.isAlphanumeric(c)) continue;
+        switch (c) {
+            '-', '/', ':', '_' => {},
+            else => return false,
+        }
+    }
+    return true;
+}
+
+/// JSON helpers shared by `plugin:window|create` and `plugin:webview|*`. `options` is a raw JSON
+/// value so the dozens of upstream `WindowOptions` / `WebviewOptions` keys we do not act on are
+/// simply ignored instead of failing the whole command.
+pub const JsonHelpers = struct {
+    pub fn field(value: std.json.Value, names: []const []const u8) ?std.json.Value {
+        if (value != .object) return null;
+        for (names) |name| {
+            if (value.object.get(name)) |v| {
+                if (v == .null) return null;
+                return v;
+            }
+        }
+        return null;
+    }
+
+    pub fn string(value: std.json.Value, names: []const []const u8) ?[]const u8 {
+        const v = field(value, names) orelse return null;
+        return if (v == .string) v.string else null;
+    }
+
+    pub fn number(value: std.json.Value, names: []const []const u8) ?f64 {
+        const v = field(value, names) orelse return null;
+        return switch (v) {
+            .integer => |i| @floatFromInt(i),
+            .float => |f| f,
+            .number_string => |n| std.fmt.parseFloat(f64, n) catch null,
+            else => null,
+        };
+    }
+
+    pub fn boolean(value: std.json.Value, names: []const []const u8) ?bool {
+        const v = field(value, names) orelse return null;
+        return if (v == .bool) v.bool else null;
+    }
+};
+
+/// Normalises `options.url` into a URL the custom-protocol router can serve. Relative paths map to
+/// `tauri://localhost/<path>`; only http(s), tauri, asset, isolation and ipc schemes pass through.
+/// Returns `InvalidUrl` for `javascript:` / `file:` / `data:` and for a NUL byte.
+pub fn normalizeUrl(allocator: Allocator, raw_url: ?[]const u8) WindowPluginError![]const u8 {
+    const url = raw_url orelse return "tauri://localhost/";
+    if (url.len == 0) return "tauri://localhost/";
+    if (std.mem.indexOfScalar(u8, url, 0) != null) return error.InvalidUrl;
+    const colon = std.mem.indexOfScalar(u8, url, ':');
+    if (colon) |i| {
+        const scheme = url[0..i];
+        const allowed = [_][]const u8{ "http", "https", "tauri", "asset", "isolation", "ipc" };
+        for (allowed) |ok| {
+            if (std.ascii.eqlIgnoreCase(scheme, ok)) return url;
+        }
+        return error.InvalidUrl;
+    }
+    return std.fmt.allocPrint(allocator, "tauri://localhost/{s}", .{std.mem.trimStart(u8, url, "/")});
+}
+
+/// Builds a `core.WindowSpec` from the raw `{ label, ...WindowOptions }` object sent by
+/// `new Window()` / `new WebviewWindow()`. Unknown keys are ignored (forward compatibility).
+pub fn specFromOptions(allocator: Allocator, raw_json: []const u8) WindowPluginError!core.WindowSpec {
+    const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, raw_json, .{}) catch
+        return error.MalformedOptions;
+    if (parsed != .object) return error.MalformedOptions;
+    const opts = parsed;
+    const h = JsonHelpers;
+
+    const label = h.string(opts, &.{"label"}) orelse return error.InvalidLabel;
+    if (!isValidLabel(label)) return error.InvalidLabel;
+
+    const width = h.number(opts, &.{ "width", "width_" }) orelse 800;
+    const height = h.number(opts, &.{ "height", "height_" }) orelse 600;
+    const x = h.number(opts, &.{"x"});
+    const y = h.number(opts, &.{"y"});
+    const min_w = h.number(opts, &.{ "minWidth", "min_width" });
+    const min_h = h.number(opts, &.{ "minHeight", "min_height" });
+    const max_w = h.number(opts, &.{ "maxWidth", "max_width" });
+    const max_h = h.number(opts, &.{ "maxHeight", "max_height" });
+
+    var spec: core.WindowSpec = .{
+        .label = label,
+        .title = h.string(opts, &.{"title"}) orelse label,
+        .size = .wh(width, height),
+        .min_size = if (min_w != null and min_h != null) .wh(min_w.?, min_h.?) else null,
+        .max_size = if (max_w != null and max_h != null) .wh(max_w.?, max_h.?) else null,
+        .position = if (x != null and y != null) .xy(x.?, y.?) else null,
+        .resizable = h.boolean(opts, &.{"resizable"}) orelse true,
+        .decorations = h.boolean(opts, &.{"decorations"}) orelse true,
+        .transparent = h.boolean(opts, &.{"transparent"}) orelse false,
+        .always_on_top = h.boolean(opts, &.{ "alwaysOnTop", "always_on_top" }) orelse false,
+        .visible = h.boolean(opts, &.{"visible"}) orelse true,
+        .fullscreen = h.boolean(opts, &.{"fullscreen"}) orelse false,
+        .devtools = h.boolean(opts, &.{"devtools"}) orelse false,
+        .initial_url = try normalizeUrl(allocator, h.string(opts, &.{"url"})),
+    };
+    // `theme` is accepted but only the `dark`/`light` values are meaningful on all 3 OSes.
+    if (h.string(opts, &.{"theme"})) |theme| {
+        if (std.mem.eql(u8, theme, "dark")) spec.theme = .dark;
+        if (std.mem.eql(u8, theme, "light")) spec.theme = .light;
+    }
+    return spec;
+}
 
 /// Width/height pair as it arrives on the wire, in the unit named by the enclosing union arm.
 pub const RawDims = struct {
@@ -171,6 +295,22 @@ pub const WindowRegistry = struct {
     mu: Io.Mutex = .init,
     /// Every live window, in creation order.
     entries: std.ArrayList(TrackedWindow) = .empty,
+    /// Optional runtime hook. `DesktopRuntime` installs `openWindow` so a window created from JS
+    /// receives the *same* per-label bootstrap injection as one created at startup. Without it the
+    /// command falls back to `ctx.host.createWindow()` (which is what unit-test hosts provide).
+    window_factory_ctx: ?*anyopaque = null,
+    window_factory: ?*const fn (?*anyopaque, core.WindowSpec) core.HostError!core.WindowId = null,
+
+    /// Installs a runtime window factory (see the field docs). Returns `self` for chaining.
+    pub fn withWindowFactory(
+        self: *WindowRegistry,
+        ctx: ?*anyopaque,
+        factory: *const fn (?*anyopaque, core.WindowSpec) core.HostError!core.WindowId,
+    ) *WindowRegistry {
+        self.window_factory_ctx = ctx;
+        self.window_factory = factory;
+        return self;
+    }
 
     /// Creates an empty registry. One per engine; `withCorePlugins()` owns it.
     pub fn init(allocator: Allocator, io: Io) WindowRegistry {
@@ -308,12 +448,46 @@ fn resolveTarget(
     return error.UnknownWindowLabel;
 }
 
+/// Opens a window through the runtime factory (production) or through `ctx.host` (unit tests),
+/// then records it in the registry so `label` based commands can find it immediately.
+pub fn openWindow(
+    reg: *WindowRegistry,
+    host_opt: ?core.Host,
+    spec: core.WindowSpec,
+) WindowPluginError!core.WindowId {
+    const id: core.WindowId = if (reg.window_factory) |factory|
+        try factory(reg.window_factory_ctx, spec)
+    else if (host_opt) |host|
+        try host.createWindow(spec)
+    else
+        return error.MissingHostContext;
+    try reg.registerWindow(id, spec);
+    return id;
+}
+
 /// `plugin:window|*` RPC command namespace (`Schema` key: `.window`).
 pub const Commands = struct {
     /// Every command in this namespace starts with this prefix.
     pub const rpc_prefix = "plugin:window|";
     /// The state type `zts_rpc` resolves per app; identical to `WindowRegistry` here.
     pub const RpcState = WindowRegistry;
+
+    /// `plugin:window|create` — `new Window(label, options)`.
+    ///
+    /// The wire payload is `{ "options": { "label": "...", ...WindowOptions } }`. Keeping
+    /// `options` as `RawJson` means every upstream option we do not implement (`center`,
+    /// `skipTaskbar`, `titleBarStyle`, …) is ignored instead of failing the call.
+    pub fn create(
+        ctx: *rpc.Ctx,
+        reg: *WindowRegistry,
+        args: struct { options: rpc.RawJson },
+    ) WindowPluginError!void {
+        const spec = try specFromOptions(ctx.scratch, args.options.raw);
+        if (reg.resolveId(spec.label, core.WindowId.invalid) != null) return error.DuplicateLabel;
+        const call_ctx = ctx.getEnv(core.CallContext);
+        const host: ?core.Host = if (call_ctx) |c| c.host else null;
+        _ = try openWindow(reg, host, spec);
+    }
 
     /// `plugin:window|get_all_windows` — labels of every open window.
     pub fn get_all_windows(ctx: *rpc.Ctx, reg: *WindowRegistry) Allocator.Error![]const []const u8 {
