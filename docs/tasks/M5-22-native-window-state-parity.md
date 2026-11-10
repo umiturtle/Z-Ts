@@ -1,6 +1,6 @@
 # Task M5-22: ウィンドウ状態を「レジストリ止まり」からネイティブ反映へ
 
-- **Status**: `in_review`
+- **Status**: `done`
 - **Branch**: `arena/3ebd6625-z-ts`（main `f345741` = PR #20 マージ後）
 - **Scope**: `src/core/host.zig`, `src/webview/{types,mod,linux,macos,windows,mock,c_api}.zig`,
   `src/webview/macos_shim.m`, `src/webview/gtk_bindings.zig`, `src/webview_host.zig`,
@@ -9,8 +9,7 @@
   `docs/reference/tauri-usage{,.en}.md`, `scripts/check-docs.py`, `scripts/doc-sync.json`
 - **Upstream Reference**: [`M5-19-tauri-gap-implementation.md`](M5-19-tauri-gap-implementation.md)
   （P1 #8 / #10 の到達点）、[`../architecture/zts-webview-backends.md`](../architecture/zts-webview-backends.md)
-- **Next Step**: PR を 1 本作成して 3 OS CI を確認し、`done` にする。①〜④・規約 17・
-  日英 Doc・同期台帳は実装済み（ローカル全チェック緑）。
+- **Next Step**: 完了。PR [#21](https://github.com/umiturtle/Z-Ts/pull/21) のマージ待ち。
 
 ---
 
@@ -29,8 +28,8 @@
 - [x] 規約 17（ネイティブ状態配線の 3 OS 一致）を追加し、規約 1–16 を維持
 - [x] 日英 Doc 更新、同期台帳更新、`learn_path.steps` の 5 ステップ・95 分は不変
 - [x] `AGENTS.md` / `docs/roadmap/milestones.md` のチェックボックスは触らない
-- [ ] `quick-test` / `build test` / `doctest` / `fmt --check` / `docs-check` / 3 OS CI が緑
-- [ ] PR は 1 本だけ
+- [x] `quick-test` / `build test` / `doctest` / `fmt --check` / `docs-check` / 3 OS CI が緑
+- [x] PR は 1 本だけ
 
 ## 2. 変えてはいけない制約（M5-19 から継続）
 
@@ -65,5 +64,10 @@
   残りは `WindowCreationOptions`（スカラ＋ハッシュ）として 4 バックエンドに記録。
   `tauri.conf.json` の未対応 OS 項目は capability として `docs/architecture/zts-webview-backends.md`
   に明記（黙って成功とはしない）。
-- **次**: PR を 1 本作成 → 3 OS CI（特に macOS の Objective-C shim 実リンク）を確認 →
-  この票を `done` に更新。`AGENTS.md` / `docs/roadmap/milestones.md` は触らない。
+- **3 OS CI**: run [`42792348569`](https://github.com/umiturtle/Z-Ts/actions/runs/42792348569)
+  7/7 緑（Linux 9m34s / macOS 2m57s / Windows 6m55s / CLI smoke ×3 / Cross-OS parity）。
+  PR #21 の 1 本のみ。macOS の Objective-C shim 実リンク・GTK の C ABI 埋め込み E2E も通過。
+- **CI で直した 2 点**: Zig 0.17 に `Allocator.dupeZ` が無い（`dupeSentinel` に修正、規約 17 で
+  再発防止）、および `createWindow()` の共通オプション適用が GTK 埋め込みウィンドウで
+  `error.Unsupported` を返した（`toplevel` ガードを追加、規約 17 で検査）。
+- **次**: 完了。`AGENTS.md` / `docs/roadmap/milestones.md` は触っていない。
