@@ -110,7 +110,7 @@ pub const WindowSpec = struct {
     window_effects_json: ?[]const u8 = null,
 };
 
-/// M5-22 ② — re-exported from `zts_foundation` so `zts_webview` can share the SAME type without
+/// re-exported from `zts_foundation` so `zts_webview` can share the SAME type without
 /// importing `zts_core` (standalone products rule). See `window_extras.zig` for the field docs.
 pub const WindowExtrasSnapshot = foundation.WindowExtrasSnapshot;
 
@@ -167,7 +167,7 @@ pub const Host = struct {
         setWindowDecorations: ?*const fn (userdata: ?*anyopaque, win: WindowId, decorations: bool) HostError!void = null,
         setWindowAlwaysOnTop: ?*const fn (userdata: ?*anyopaque, win: WindowId, on_top: bool) HostError!void = null,
         setWindowFocus: ?*const fn (userdata: ?*anyopaque, win: WindowId) HostError!void = null,
-        /// M5-22 ② — one shot of every `plugin:window` P1 #8 intent (see `WindowExtrasSnapshot`).
+        /// one shot of every `plugin:window` P1 #8 intent (see `WindowExtrasSnapshot`).
         applyWindowExtras: ?*const fn (userdata: ?*anyopaque, win: WindowId, extras: WindowExtrasSnapshot) HostError!void = null,
         startWindowDrag: ?*const fn (userdata: ?*anyopaque, win: WindowId) HostError!void = null,
 
@@ -285,7 +285,7 @@ pub const Host = struct {
         return f(self.userdata, win);
     }
 
-    /// M5-22 ② — pushes the complete scalar intent snapshot to the OS backend. Optional so a
+    /// pushes the complete scalar intent snapshot to the OS backend. Optional so a
     /// bare `null_host` stays fail-closed (`error.Unsupported`), but every real host implements it.
     pub fn applyWindowExtras(self: Host, win: WindowId, extras: WindowExtrasSnapshot) HostError!void {
         const f = self.vtable.applyWindowExtras orelse return error.Unsupported;
@@ -350,7 +350,7 @@ pub const RecordingHost = struct {
     quit_requested: bool = false,
     /// How many times `startWindowDrag` was called.
     drag_count: usize = 0,
-    /// M5-22 ② — every `applyWindowExtras` call, in order, for deterministic assertions.
+    /// every `applyWindowExtras` call, in order, for deterministic assertions.
     extras_log: std.ArrayList(struct { win: WindowId, extras: WindowExtrasSnapshot }) = .empty,
 
     /// The state remembered per window, so tests can assert on the effect of a command.
@@ -507,7 +507,7 @@ pub const RecordingHost = struct {
         w.resizable = v;
     }
 
-    /// M5-22 ② — records the snapshot instead of touching an OS. Window existence is checked so
+    /// records the snapshot instead of touching an OS. Window existence is checked so
     /// an unknown id is `error.WindowNotFound`, matching every other setter.
     fn onApplyWindowExtras(u: ?*anyopaque, win: WindowId, extras: WindowExtrasSnapshot) HostError!void {
         const self = cast(u);

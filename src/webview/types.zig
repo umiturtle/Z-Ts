@@ -15,7 +15,7 @@ pub const IpcStatus = foundation.IpcStatus;
 pub const LogicalPoint = foundation.geometry.LogicalPoint;
 pub const LogicalSize = foundation.geometry.LogicalSize;
 pub const Color = foundation.geometry.Color;
-/// M5-22 ② — shared scalar snapshot (lives in `zts_foundation`, see `core/window_extras.zig`).
+/// shared scalar snapshot (lives in `zts_foundation`, see `core/window_extras.zig`).
 pub const WindowExtrasSnapshot = foundation.WindowExtrasSnapshot;
 pub const WindowCreationOptions = foundation.WindowCreationOptions;
 
@@ -250,7 +250,9 @@ pub const CloseHandler = struct {
     }
 };
 
-/// M5-22 ① — the OS changed a window behind the app's back (title-bar button, OS shortcut,
+/// Kinds of OS-originated window-state changes.
+///
+/// The OS changed a window behind the app's back (title-bar button, OS shortcut,
 /// window manager, display reconfiguration). Native backends push these through
 /// `Engine.setWindowStateHandler()` so an upper layer can keep its own bookkeeping in sync
 /// instead of answering `is_maximized()` with a stale flag.
@@ -280,18 +282,27 @@ pub const WindowStateKind = enum {
 /// One OS-originated window-state change. `value` carries the boolean kinds; `moved` / `resized`
 /// use the geometry fields. No borrowed slices, so a backend can queue these across threads.
 pub const WindowStateEvent = struct {
+    /// Window the change belongs to.
     window_id: WindowId,
+    /// Which state changed.
     kind: WindowStateKind,
+    /// New boolean value for flag kinds.
     value: bool = false,
+    /// Logical-pixel left edge for `moved`.
     x: f64 = 0,
+    /// Logical-pixel top edge for `moved`.
     y: f64 = 0,
+    /// Logical-pixel width for `resized`.
     width: f64 = 0,
+    /// Logical-pixel height for `resized`.
     height: f64 = 0,
 
+    /// Builds a boolean flag change; geometry fields stay zero.
     pub fn boolean(window_id: WindowId, kind: WindowStateKind, value: bool) WindowStateEvent {
         return .{ .window_id = window_id, .kind = kind, .value = value };
     }
 
+    /// Builds a `moved` / `resized` change in CSS logical pixels.
     pub fn geometry(
         window_id: WindowId,
         kind: WindowStateKind,
@@ -434,7 +445,7 @@ pub const WindowConfig = struct {
     window_effects_json: ?[]const u8 = null,
 };
 
-/// M5-22 ③ — flatten a `WindowConfig` into the scalar record every backend stores. String
+/// flatten a `WindowConfig` into the scalar record every backend stores. String
 /// options are hashed so no borrow of the caller's config outlives `createWindow`.
 pub fn creationOptions(cfg: WindowConfig) WindowCreationOptions {
     return .{

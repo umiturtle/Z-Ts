@@ -33,9 +33,9 @@ const LinuxWindow = struct {
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
     destroyed_by_signal: bool = false,
-    /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
+    /// last complete P1 #8 intent snapshot received from `core.Host`.
     extras: types.WindowExtrasSnapshot = .{},
-    /// M5-22 ③ — scalar record of every `WindowConfig` option applied at creation.
+    /// scalar record of every `WindowConfig` option applied at creation.
     creation: types.WindowCreationOptions = .{},
 };
 
@@ -114,7 +114,7 @@ fn cancelWebKitRequest(req_ptr: *c.WebKitURISchemeRequest) void {
 /// the build needs no clang at compile time). Requires a display; without one `Backend.init` falls back
 /// to `HeadlessMock` unless `.native` was requested explicitly.
 pub const LinuxGtkBackend = struct {
-    /// M5-22 ① — fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// fan out one OS-originated window-state change. A missing handler is a no-op,
     /// so backends can emit unconditionally from native callbacks.
     fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
         if (self.state_handler) |h| h.call(ev);
@@ -145,7 +145,7 @@ pub const LinuxGtkBackend = struct {
 
     /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
-    /// M5-22 ① — OS-originated window-state changes (see `WindowStateHandler`).
+    /// OS-originated window-state changes (see `WindowStateHandler`).
     state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
@@ -571,7 +571,7 @@ pub const LinuxGtkBackend = struct {
         }
     }
 
-    /// M5-22 ① — GTK tells us when the *window manager* (not the app) iconifies, maximises,
+    /// GTK tells us when the *window manager* (not the app) iconifies, maximises,
     /// fullscreens, focuses or re-layers a window. Only the bits in `changed_mask` are reported,
     /// so a repeated identical notification cannot flood the event bus.
     fn onGdkWindowState(_: *c.GtkWidget, event: *c.GdkEventWindowState, user_data: c.gpointer) callconv(.c) void {
@@ -596,7 +596,7 @@ pub const LinuxGtkBackend = struct {
         }
     }
 
-    /// M5-22 ① — `configure-event` carries physical pixels; divide by the widget scale factor so
+    /// `configure-event` carries physical pixels; divide by the widget scale factor so
     /// `WindowRegistry` keeps logical pixels on HiDPI exactly like the other two backends.
     fn onGdkConfigure(widget: *c.GtkWidget, event: *c.GdkEventConfigure, user_data: c.gpointer) callconv(.c) void {
         const slot: *SignalSlot = @ptrCast(@alignCast(user_data.?));
@@ -1029,7 +1029,7 @@ pub const LinuxGtkBackend = struct {
         c.gtk_window_set_keep_above(gtk_win, if (on_top) 1 else 0);
     }
 
-    /// M5-22 ③ — centre on the GDK primary monitor, converting physical px to CSS logical px.
+    /// centre on the GDK primary monitor, converting physical px to CSS logical px.
     pub fn centerWindow(self: *LinuxGtkBackend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         const win = try self.requireGtkWindow(win_id);
         const screen = c.gtk_window_get_screen(win) orelse return error.PlatformFailure;
@@ -1043,7 +1043,7 @@ pub const LinuxGtkBackend = struct {
         (self.windows.getPtr(win_id) orelse return error.WindowNotFound).creation.center = true;
     }
 
-    /// M5-22 ③ — GTK 3 honours `hiddenTitle` (empty title) and `userAgent`. The other string
+    /// GTK 3 honours `hiddenTitle` (empty title) and `userAgent`. The other string
     /// options have no GTK equivalent; they stay in the scalar record instead of being dropped.
     pub fn applyWindowCreationOptions(self: *LinuxGtkBackend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
@@ -1058,7 +1058,7 @@ pub const LinuxGtkBackend = struct {
         }
     }
 
-    /// M5-22 ② — apply the GTK 3 flags we can honour, keep the full snapshot for determinism.
+    /// apply the GTK 3 flags we can honour, keep the full snapshot for determinism.
     /// Embedded webviews have no `GtkWindow`, so those fail-closed with `error.Unsupported`.
     pub fn applyWindowExtras(self: *LinuxGtkBackend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;

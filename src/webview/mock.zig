@@ -87,11 +87,11 @@ pub const MockWindow = struct {
     focused: bool = false,
     /// How many `startDrag()` calls landed on this window.
     drag_count: usize = 0,
-    /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
+    /// last complete P1 #8 intent snapshot received from `core.Host`.
     extras: types.WindowExtrasSnapshot = .{},
     /// Number of `applyWindowExtras` calls (deterministic assertion hook).
     extras_applied: usize = 0,
-    /// M5-22 ③ — scalar record of every `WindowConfig` option applied at creation.
+    /// scalar record of every `WindowConfig` option applied at creation.
     creation: types.WindowCreationOptions = .{},
     /// Whether devtools were requested for this window.
     devtools_open: bool,
@@ -135,7 +135,7 @@ const MockPendingPayload = struct {
 /// contract as the native backends (scheme routing, IPC, capture, close) but paints nothing, so it
 /// runs without a display server.
 pub const HeadlessMock = struct {
-    /// M5-22 ① — fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// fan out one OS-originated window-state change. A missing handler is a no-op,
     /// so backends can emit unconditionally from native callbacks.
     fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
         if (self.state_handler) |h| h.call(ev);
@@ -166,7 +166,7 @@ pub const HeadlessMock = struct {
 
     /// `window.__zts.postMessage(…)` receiver, if registered.
     message_handler: ?types.MessageHandler = null,
-    /// M5-22 ① — OS-originated window-state changes (see `WindowStateHandler`).
+    /// OS-originated window-state changes (see `WindowStateHandler`).
     state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
@@ -385,7 +385,7 @@ pub const HeadlessMock = struct {
         }
     }
 
-    /// M5-22 ① — test hook for an OS-originated state change (a user clicking the maximise
+    /// test hook for an OS-originated state change (a user clicking the maximise
     /// button, the window manager moving a window, …). Native backends call the same handler
     /// from their own event callbacks, so unit tests exercise the exact same fan-out path.
     pub fn simulateWindowStateEvent(self: *HeadlessMock, ev: types.WindowStateEvent) types.WebviewError!void {
@@ -564,7 +564,7 @@ pub const HeadlessMock = struct {
         (try self.requireWin(win_id)).always_on_top = on_top;
     }
 
-    /// M5-22 ③ — deterministic 1280x800 virtual screen; no wall clock, no real display, so the
+    /// deterministic 1280x800 virtual screen; no wall clock, no real display, so the
     /// same `center: true` config yields byte-identical state on all three OS CI jobs.
     pub fn centerWindow(self: *HeadlessMock, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         const w = try self.requireWin(win_id);
@@ -572,12 +572,12 @@ pub const HeadlessMock = struct {
         w.creation.center = true;
     }
 
-    /// M5-22 ③ — records the full creation option set for parity assertions.
+    /// records the full creation option set for parity assertions.
     pub fn applyWindowCreationOptions(self: *HeadlessMock, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
         (try self.requireWin(win_id)).creation = types.creationOptions(cfg);
     }
 
-    /// M5-22 ② — records the complete scalar snapshot so E2E/unit tests can prove every
+    /// records the complete scalar snapshot so E2E/unit tests can prove every
     /// `applyExtras` setter went through `core.Host` with identical data on all backends.
     pub fn applyWindowExtras(self: *HeadlessMock, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
         const w = try self.requireWin(win_id);

@@ -134,6 +134,13 @@ await win.minimize();
 const imgUrl = convertFileSrc('/path/to/photo.png');
 ```
 
+`minimize()` / `unminimize()` / `maximize()` / `unmaximize()` / `setFullscreen(bool)` and
+`isMinimized()` / `isMaximized()` / `isFullscreen()` / `isFocused()` / `isVisible()` /
+`isDecorated()` / `isResizable()` form a state round trip. The `is*` getters report the state
+the **OS actually holds**, not the last value JS sent, so a user clicking a title-bar button is
+reflected too. Subscribe with `listen()` to `tauri://resize` / `tauri://move` /
+`tauri://focus` / `tauri://blur` / `tauri://window-flags-changed` for change notifications.
+
 ## 4. Configuration and security (`tauri.conf.json` & Capabilities)
 
 1. **`tauri.conf.json`**

@@ -252,34 +252,52 @@ pub const SizeConstraintsDto = struct {
 /// scalar or an enum, so no per-command allocation can leak and the state is byte-identical on all
 /// three OSes. Visual effects that need a real OS object are applied by the backend where
 /// available; the command always records the intent and emits the matching event.
-/// M5-22 ① — the kinds of OS-originated state changes `WindowRegistry` understands. The order
+/// Kinds of OS-originated state changes `WindowRegistry` understands. The order
 /// is identical to `zts_webview.WindowStateKind` on purpose: `DesktopRuntime` converts with
 /// `@intFromEnum`, and rule 17 verifies the two lists never drift. `zts_tauri` does NOT import
 /// `zts_webview` (dependency direction is preserved).
 pub const NativeStateKind = enum {
+    /// `minimized` state changed by the OS.
     minimized,
+    /// Maximised / restored by the OS.
     maximized,
+    /// Native fullscreen entered / left.
     fullscreen,
+    /// `focused` state changed by the OS.
     focused,
+    /// `visible` state changed by the OS.
     visible,
+    /// `decorated` state changed by the OS.
     decorated,
+    /// `resizable` state changed by the OS.
     resizable,
+    /// `always on top` state changed by the OS.
     always_on_top,
+    /// `moved` state changed by the OS.
     moved,
+    /// `resized` state changed by the OS.
     resized,
 };
 
 /// One OS-originated state change, expressed only with `zts_core` types.
 pub const NativeStateChange = struct {
+    /// Window the change belongs to.
     window_id: core.WindowId,
+    /// Which state changed.
     kind: NativeStateKind,
+    /// New boolean value for flag kinds.
     value: bool = false,
+    /// Logical-pixel left edge for `moved`.
     x: f64 = 0,
+    /// Logical-pixel top edge for `moved`.
     y: f64 = 0,
+    /// Logical-pixel width for `resized`.
     width: f64 = 0,
+    /// Logical-pixel height for `resized`.
     height: f64 = 0,
 };
 
+/// Title-bar theme requested by `set_theme` (`dark` / `light` / `system`).
 pub const Theme = enum { system, dark, light };
 /// Taskbar progress-bar state accepted by `set_progress_bar`.
 pub const ProgressStatus = enum { none, normal, indeterminate, paused, @"error" };
@@ -492,7 +510,7 @@ pub const WindowRegistry = struct {
     }
 
     /// Forgets a closed window. Safe to call for an id that is already gone.
-    /// M5-22 ① — fold an OS-originated state change into the registry so `is_*` commands stop
+    /// fold an OS-originated state change into the registry so `is_*` commands stop
     /// answering with a stale flag. Emits the matching `tauri://…` event exactly once per real
     /// change (native window managers repeat the same notification), through the same EventBus
     /// the command setters use. `host` is used only for `EventBus.dispatchRaw` → `Host.evalJs`.
@@ -582,6 +600,7 @@ pub const WindowRegistry = struct {
         }
     }
 
+    /// Removes a window from the registry after the OS closed it; event listeners stop targeting it.
     pub fn unregisterWindow(self: *WindowRegistry, id: core.WindowId) void {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
@@ -726,7 +745,7 @@ pub fn isWindowEventName(name: []const u8) bool {
     return false;
 }
 
-/// M5-22 ② — flatten `WindowExtras` into the ownership-free `core.Host` snapshot. Enum ordinals
+/// flatten `WindowExtras` into the ownership-free `core.Host` snapshot. Enum ordinals
 /// are the ones declared in THIS file; `core` never imports `tauri` (rule 2 / standalone modules).
 fn extrasSnapshot(e: *const WindowExtras) core.WindowExtrasSnapshot {
     return .{
@@ -759,7 +778,7 @@ fn extrasSnapshot(e: *const WindowExtras) core.WindowExtrasSnapshot {
     };
 }
 
-/// P1 #8 / M5-22 ② — shared body of the 17 scalar setters. Resolves the window, records the intent
+/// P1 #8 / shared body of the 17 scalar setters. Resolves the window, records the intent
 /// under the registry mutex, pushes the COMPLETE snapshot to `core.Host` (so every OS backend sees
 /// the same authoritative state), then emits the matching native→JS event. No app-level OS branch.
 fn applyExtras(

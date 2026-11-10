@@ -210,7 +210,7 @@ pub const Engine = union(enum) {
         }
     }
 
-    /// M5-22 ① — registers the receiver for OS-originated window-state changes. Every backend
+    /// registers the receiver for OS-originated window-state changes. Every backend
     /// (native and mock) installs the same handler, so a window maximised by the user updates the
     /// upper-layer registry on Linux, macOS, Windows and in headless tests alike.
     pub fn setWindowStateHandler(self: *Engine, handler: ?WindowStateHandler) void {
@@ -279,7 +279,7 @@ pub const Engine = union(enum) {
 
     /// Opens a window and returns its id.
     ///
-    /// M5-22 ③ — after the backend allocates the native window, the P1 #10 `tauri.conf.json`
+    /// after the backend allocates the native window, the P1 #10 `tauri.conf.json`
     /// options are applied here, ONCE, with no app-level OS branch. `maximized` / `center` /
     /// `focus` / `skipTaskbar` / `alwaysOnBottom` / `contentProtected` /
     /// `visibleOnAllWorkspaces` behave identically on GTK, Cocoa, Win32 and HeadlessMock; the
@@ -307,7 +307,7 @@ pub const Engine = union(enum) {
         return id;
     }
 
-    /// M5-22 ③ — centres `win_id` on the primary monitor, in CSS logical pixels.
+    /// centres `win_id` on the primary monitor, in CSS logical pixels.
     pub fn centerWindow(self: *Engine, win_id: WindowId, size: types.LogicalSize) WebviewError!void {
         return switch (self.*) {
             .headless_mock => |m| m.centerWindow(win_id, size),
@@ -317,7 +317,7 @@ pub const Engine = union(enum) {
         };
     }
 
-    /// M5-22 ③ — target-specific creation options (`hiddenTitle`, `titleBarStyle`,
+    /// target-specific creation options (`hiddenTitle`, `titleBarStyle`,
     /// `userAgent`, `tabbingIdentifier`, …). Every backend stores the scalar record and applies
     /// what its OS supports; unsupported flags stay recorded and are documented, never silently
     /// reported as a native success.
@@ -492,7 +492,7 @@ pub const Engine = union(enum) {
         };
     }
 
-    /// M5-22 ② — pushes the complete `plugin:window` scalar intent snapshot into the backend.
+    /// pushes the complete `plugin:window` scalar intent snapshot into the backend.
     /// Every backend records it and applies the flags its OS actually supports; the app never
     /// branches on the target (the union switch below is the only place OS knowledge lives).
     pub fn applyWindowExtras(self: *Engine, win_id: WindowId, extras: WindowExtrasSnapshot) WebviewError!void {

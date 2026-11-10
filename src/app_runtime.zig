@@ -281,7 +281,7 @@ pub const DesktopRuntime = struct {
         self.router.handlePostMessage(self.host(), win_id, message);
     }
 
-    /// M5-22 ① — bridge `zts_webview`'s OS event into `WindowRegistry` without making
+    /// bridge `zts_webview`'s OS event into `WindowRegistry` without making
     /// `zts_tauri` depend on `zts_webview`. The two enums share an ordinal (rule 17 checks it),
     /// so this is a plain `@enumFromInt` and contains no per-target branch.
     fn onWindowState(ud: ?*anyopaque, ev: webview.WindowStateEvent) void {

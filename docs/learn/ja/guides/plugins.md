@@ -99,6 +99,25 @@ try plugins.windows.setTitle(&win, "Renamed");
 サイズ・位置は **論理 / 物理**の両方を受け付けます（[`WireSize`](../../../api/zts_tauri/window.html#WireSize)）。
 `Xvfb` のようなヘッドレス CI でも同じ値が返るよう、`HeadlessMock` でも同じ経路を通ります。
 
+#### OS 側の操作も状態に反映される
+
+`isMinimized()` / `isMaximized()` / `isFullscreen()` / `isFocused()` などは、JS が最後に
+設定した値ではなく **実ウィンドウの状態** を返します。タイトルバーのボタンや OS の
+ショートカットで状態が変わると、GTK / Cocoa / Win32 のネイティブイベントが
+`WindowStateEvent` → `Engine.setWindowStateHandler()` → `WindowRegistry.applyNativeState()`
+の順に届きます。値が変わったときだけ `tauri://resize` / `tauri://move` /
+`tauri://focus` / `tauri://blur` / `tauri://window-flags-changed` が emit されるので、
+OS が同じ通知を重複して送っても余分なイベントは出ません。
+
+19 本の `applyExtras` 系セッター（`setSkipTaskbar()` / `setAlwaysOnBottom()` /
+`setContentProtected()` など）は `WindowExtras` を書き換えるだけでなく、
+`core.Host.applyWindowExtras()` へスカラだけの**完全な**スナップショットを渡します。
+3 OS と `HeadlessMock` は同じ契約で受け取り、その OS が表現できる項目を適用します。
+`tauri.conf.json` の `center` / `maximized` / `focus` / `skipTaskbar` /
+`alwaysOnBottom` / `contentProtected` / `visibleOnAllWorkspaces` は `createWindow()` の
+時点で効き、残りのターゲット固有オプションも `WindowCreationOptions` として
+4 バックエンドすべてに記録されます。
+
 
 ### webview / 複数ウィンドウ — [`Commands`](../../../api/zts_tauri/webview.html#Commands)
 

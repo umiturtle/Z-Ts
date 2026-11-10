@@ -100,6 +100,23 @@ Sizes and positions accept **logical or physical** units
 ([`WireSize`](../../../api/zts_tauri/window.html#WireSize)). `HeadlessMock` follows the same path,
 so headless CI (Xvfb) sees the same values as a real window.
 
+#### OS-driven changes are reflected too
+
+`isMinimized()` / `isMaximized()` / `isFullscreen()` / `isFocused()` report the **real window
+state**, not the last value JavaScript sent. When the user clicks a title-bar button or uses an
+OS shortcut, a GTK / Cocoa / Win32 native event travels through `WindowStateEvent` →
+`Engine.setWindowStateHandler()` → `WindowRegistry.applyNativeState()`. Only an actual change
+emits `tauri://resize` / `tauri://move` / `tauri://focus` / `tauri://blur` /
+`tauri://window-flags-changed`, so duplicate OS notifications never produce duplicate events.
+
+All 19 `applyExtras` setters (`setSkipTaskbar()`, `setAlwaysOnBottom()`,
+`setContentProtected()`, …) do more than mutate `WindowExtras`: they push a **complete**
+scalar-only snapshot to `core.Host.applyWindowExtras()`. All three OSes and `HeadlessMock`
+receive the same contract and apply whatever their platform can express. `center`, `maximized`,
+`focus`, `skipTaskbar`, `alwaysOnBottom`, `contentProtected` and `visibleOnAllWorkspaces`
+from `tauri.conf.json` take effect inside `createWindow()`; the remaining target-specific
+options are recorded as `WindowCreationOptions` on every backend.
+
 
 ### webview / multiple windows — [`Commands`](../../../api/zts_tauri/webview.html#Commands)
 

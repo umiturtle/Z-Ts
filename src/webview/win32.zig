@@ -141,7 +141,7 @@ pub const HWND_TOP: ?HWND = null;
 pub const HWND_TOPMOST: HWND = @ptrFromInt(@as(usize, @bitCast(@as(isize, -1))));
 pub const HWND_NOTOPMOST: HWND = @ptrFromInt(@as(usize, @bitCast(@as(isize, -2))));
 
-/// M5-22 ② — `SetWindowDisplayAffinity` values (Windows 7+ / Windows 10 2004+).
+/// `SetWindowDisplayAffinity` values (Windows 7+ / Windows 10 2004+).
 pub const HWND_BOTTOM: HWND = @ptrFromInt(1);
 pub const WS_EX_TOOLWINDOW: DWORD = 0x0000_0080;
 pub const WDA_NONE: DWORD = 0x0000_0000;

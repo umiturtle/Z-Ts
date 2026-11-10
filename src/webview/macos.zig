@@ -52,7 +52,7 @@ const shim = struct {
 
     const MessageCb = *const fn (userdata: ?*anyopaque, win: u64, json: [*:0]const u8) callconv(.c) void;
     const CloseCb = *const fn (userdata: ?*anyopaque, win: u64) callconv(.c) void;
-    /// M5-22 ① — OS-originated window-state change from `ZtsWindowDelegate`.
+    /// OS-originated window-state change from `ZtsWindowDelegate`.
     const StateCb = *const fn (
         userdata: ?*anyopaque,
         win: u64,
@@ -158,9 +158,9 @@ const MacWindow = struct {
     embedded: bool = false,
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
-    /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
+    /// last complete P1 #8 intent snapshot received from `core.Host`.
     extras: types.WindowExtrasSnapshot = .{},
-    /// M5-22 ③ — scalar record of every `WindowConfig` option applied at creation.
+    /// scalar record of every `WindowConfig` option applied at creation.
     creation: types.WindowCreationOptions = .{},
 };
 
@@ -223,7 +223,7 @@ pub const CocoaFrame = struct {
 /// Cocoa (`NSApplication` / `NSWindow`) + `WKWebView` backend. The Objective-C side lives in
 /// `macos_shim.m` behind a C ABI, so Zig never needs the Objective-C runtime headers.
 pub const MacOsBackend = struct {
-    /// M5-22 ① — fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// fan out one OS-originated window-state change. A missing handler is a no-op,
     /// so backends can emit unconditionally from native callbacks.
     fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
         if (self.state_handler) |h| h.call(ev);
@@ -245,7 +245,7 @@ pub const MacOsBackend = struct {
 
     /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
-    /// M5-22 ① — OS-originated window-state changes (see `WindowStateHandler`).
+    /// OS-originated window-state changes (see `WindowStateHandler`).
     state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
@@ -458,7 +458,7 @@ pub const MacOsBackend = struct {
         mh.call(win_id, std.mem.span(json));
     }
 
-    /// M5-22 ① — translate the C ABI ordinal into `WindowStateKind` and fan out. Geometry kinds
+    /// translate the C ABI ordinal into `WindowStateKind` and fan out. Geometry kinds
     /// carry logical pixels already converted from Cocoa's bottom-left points by the shim.
     fn onWindowState(
         userdata: ?*anyopaque,
@@ -836,7 +836,7 @@ pub const MacOsBackend = struct {
         shim.zts_macos_window_set_always_on_top(self.handle, w.native, @intFromBool(on_top));
     }
 
-    /// M5-22 ③ — centre on `NSScreen.mainScreen.visibleFrame`, in CSS logical pixels; `setPosition`
+    /// centre on `NSScreen.mainScreen.visibleFrame`, in CSS logical pixels; `setPosition`
     /// performs the Cocoa Y-flip, so all four backends share one coordinate convention.
     pub fn centerWindow(self: *MacOsBackend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         const screen = self.screenVisibleFrame();
@@ -847,7 +847,7 @@ pub const MacOsBackend = struct {
         (try self.requireWindow(win_id)).creation.center = true;
     }
 
-    /// M5-22 ③ — Cocoa honours `hiddenTitle`, `titleBarStyle`, `userAgent` and
+    /// Cocoa honours `hiddenTitle`, `titleBarStyle`, `userAgent` and
     /// `tabbingIdentifier`; the rest stay in the scalar record for 3-OS parity.
     pub fn applyWindowCreationOptions(self: *MacOsBackend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
@@ -868,7 +868,7 @@ pub const MacOsBackend = struct {
         );
     }
 
-    /// M5-22 ② — push the OS-supported flags through the Cocoa shim; the full snapshot stays in
+    /// push the OS-supported flags through the Cocoa shim; the full snapshot stays in
     /// `MacWindow.extras` so every platform reports the same intent back to Zig.
     pub fn applyWindowExtras(self: *MacOsBackend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
         const w = try self.requireWindow(win_id);

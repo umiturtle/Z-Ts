@@ -1,6 +1,6 @@
 # Task M5-22: ウィンドウ状態を「レジストリ止まり」からネイティブ反映へ
 
-- **Status**: `in_progress`
+- **Status**: `in_review`
 - **Branch**: `arena/3ebd6625-z-ts`（main `f345741` = PR #20 マージ後）
 - **Scope**: `src/core/host.zig`, `src/webview/{types,mod,linux,macos,windows,mock,c_api}.zig`,
   `src/webview/macos_shim.m`, `src/webview/gtk_bindings.zig`, `src/webview_host.zig`,
@@ -9,9 +9,8 @@
   `docs/reference/tauri-usage{,.en}.md`, `scripts/check-docs.py`, `scripts/doc-sync.json`
 - **Upstream Reference**: [`M5-19-tauri-gap-implementation.md`](M5-19-tauri-gap-implementation.md)
   （P1 #8 / #10 の到達点）、[`../architecture/zts-webview-backends.md`](../architecture/zts-webview-backends.md)
-- **Next Step**: ① OS イベント → `WindowRegistry` 自動反映、② `applyExtras` の `Host` 呼び出し、
-  ③ `createWindow` での残り config 適用、④ 状態遷移の E2E 追加。この順で 1 項目ずつ
-  `quick-test` を通しながら進める。
+- **Next Step**: PR を 1 本作成して 3 OS CI を確認し、`done` にする。①〜④・規約 17・
+  日英 Doc・同期台帳は実装済み（ローカル全チェック緑）。
 
 ---
 
@@ -22,14 +21,14 @@
 
 現状調査（前ターン）で判明した 3 つの穴を、この順で埋める:
 
-- [ ] ① `is_maximized()` 等が OS 側の操作（タイトルバーボタン / OS ショートカット）に追従する
-- [ ] ② 17 本の `applyExtras` setter が `WindowExtras` を書き換えるだけでなく `Host` を呼ぶ
-- [ ] ③ `tauri.conf.json` の `center` / `maximized` / `skipTaskbar` / `alwaysOnBottom` / `focus` /
+- [x] ① `is_maximized()` 等が OS 側の操作（タイトルバーボタン / OS ショートカット）に追従する
+- [x] ② 17 本の `applyExtras` setter が `WindowExtras` を書き換えるだけでなく `Host` を呼ぶ
+- [x] ③ `tauri.conf.json` の `center` / `maximized` / `skipTaskbar` / `alwaysOnBottom` / `focus` /
       `contentProtected` / `hiddenTitle` / `titleBarStyle` 等が `createWindow` で実際に効く
-- [ ] ④ `minimize()` / `setFullscreen()` / 状態往復の E2E を追加し 3 OS CI で検証する
-- [ ] 規約 17（ネイティブ状態配線の 3 OS 一致）を追加し、規約 1–16 を維持
-- [ ] 日英 Doc 更新、同期台帳更新、`learn_path.steps` の 5 ステップ・95 分は不変
-- [ ] `AGENTS.md` / `docs/roadmap/milestones.md` のチェックボックスは触らない
+- [x] ④ `minimize()` / `setFullscreen()` / 状態往復の E2E を追加し 3 OS CI で検証する
+- [x] 規約 17（ネイティブ状態配線の 3 OS 一致）を追加し、規約 1–16 を維持
+- [x] 日英 Doc 更新、同期台帳更新、`learn_path.steps` の 5 ステップ・95 分は不変
+- [x] `AGENTS.md` / `docs/roadmap/milestones.md` のチェックボックスは触らない
 - [ ] `quick-test` / `build test` / `doctest` / `fmt --check` / `docs-check` / 3 OS CI が緑
 - [ ] PR は 1 本だけ
 
@@ -54,8 +53,17 @@
 
 ## Current State / Next Step
 
-- **現在**: 30 秒ルーチン完了（ブランチ `arena/3ebd6625-z-ts`、HEAD `f345741`、Open PR は #9 のみ、
-  ワークツリー clean、`quick-test` 7 群 / `check-docs.py` / `fmt --check` すべて緑）。
-  分散ロックのためこの票を先に push。
-- **次**: 既存の `WindowExtras` / `TrackedWindow` / `event.dispatchRaw` / 各バックエンドの
-  イベント配線を読み、① のインターフェースを確定してから実装に入る。
+- **現在**: ①〜④・規約 17・日英 Doc・同期台帳まで実装済み。ブランチ
+  `arena/3ebd6625-z-ts`（分散ロック済み）。ローカル検証はすべて緑:
+  `quick-test` 7 群（91 / 3 / 4 / 62 / 86 / 37 / 10）、`build test` exit 0、
+  `doctest blocks=20`、`docs-check`（86 tests + `api_undoc=0`）、`fmt --check`、
+  `gen-framework-tutorials.py --check` 20 pages、`prepare-tauri-e2e.mjs`（tsc + esbuild）、
+  `x86_64-windows-gnu` クロスコンパイル 11/11 steps。
+- **実装メモ**: `WindowStateKind` / `NativeStateKind` は同名・同順の 10 種。Cocoa shim の
+  `ZTS_STATE_*` ordinal も規約 17 で照合。② の `WindowExtrasSnapshot` は `zts_foundation`
+  に置き依存方向を維持。③ は `Engine.createWindow()` の 1 箇所で共通 6 オプションを適用し、
+  残りは `WindowCreationOptions`（スカラ＋ハッシュ）として 4 バックエンドに記録。
+  `tauri.conf.json` の未対応 OS 項目は capability として `docs/architecture/zts-webview-backends.md`
+  に明記（黙って成功とはしない）。
+- **次**: PR を 1 本作成 → 3 OS CI（特に macOS の Objective-C shim 実リンク）を確認 →
+  この票を `done` に更新。`AGENTS.md` / `docs/roadmap/milestones.md` は触らない。

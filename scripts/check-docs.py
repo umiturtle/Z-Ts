@@ -38,6 +38,11 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       `learn_path.zig`, and the sidebar's first six groups are the five numbered
                       steps. A third tutorial that leaves the rail at "15 min" is a lie; a
                       language-dependent `GroupKey.order()` is the menu changing as you navigate.
+17. Native state     — the OS→`WindowRegistry` event path, the `core.Host.applyWindowExtras`
+                      contract and the `createWindow` option application must exist on all four
+                      backends (GTK / Cocoa / Win32 / HeadlessMock) with the SAME enum ordinals.
+                      A backend that only records state locally is how `isMaximized()` silently
+                      diverges between Linux, macOS and Windows.
 13. Sync ledger      — `scripts/doc-sync.json` records, for every bilingual pair, when the page was
                       last rewritten, which ziggurats / Zig version and commit were verified consistent,
                       which checks were run, and sha256 of both documents and of the implementation
@@ -1139,6 +1144,137 @@ for readme in ("examples/frameworks/README.md", "examples/frameworks/README.en.m
     for token in ("ZIG OFFLINE", "ZIG ONLINE", "zig_probe", "zig_inc", "zig_dec", "--require-zig"):
         if token not in text:
             errors.append(f"{readme}: missing {token!r} (rule 16)")
+
+# ---------------------------------------------------------------------------
+# 17. Native window-state wiring: one contract, four backends, three OSes (M5-22)
+# ---------------------------------------------------------------------------
+#
+# The registry used to be the *only* owner of window flags, so a title-bar button changed the OS
+# window while `isMaximized()` still returned the last value JS had set. Rule 17 pins the four
+# surfaces that must stay in lockstep: the webview event enum, the tauri counterpart (same names,
+# same order, because the runtime converts by ordinal), the four backend emitters, and the
+# `core.Host` vtable that every setter now goes through.
+
+R17_STATE_KINDS = (
+    "minimized", "maximized", "fullscreen", "focused", "visible",
+    "decorated", "resizable", "always_on_top", "moved", "resized",
+)
+R17_BACKENDS = {
+    "src/webview/mock.zig": (
+        "state_handler", "emitState", "simulateWindowStateEvent",
+        "applyWindowExtras", "centerWindow", "applyWindowCreationOptions",
+    ),
+    "src/webview/linux.zig": (
+        "state_handler", "emitState", "onGdkWindowState", "onGdkConfigure",
+        "applyWindowExtras", "centerWindow", "applyWindowCreationOptions",
+    ),
+    "src/webview/macos.zig": (
+        "state_handler", "emitState", "onWindowState",
+        "applyWindowExtras", "centerWindow", "applyWindowCreationOptions",
+        "zts_macos_apply_extras", "zts_macos_apply_creation_options",
+    ),
+    "src/webview/windows.zig": (
+        "state_handler", "emitState", "emitWin32Geometry", "WM_ACTIVATE",
+        "applyWindowExtras", "centerWindow", "applyWindowCreationOptions",
+    ),
+}
+R17_HOSTS = (
+    "src/core/host.zig", "src/webview_host.zig", "src/bridge_host.zig", "src/wasm/host.zig",
+)
+
+
+def r17_read(path):
+    if not os.path.isfile(path):
+        errors.append(f"{path}: missing (rule 17)")
+        return None
+    return open(path, encoding="utf-8").read()
+
+
+def r17_require(path, *tokens):
+    text = r17_read(path)
+    if text is None:
+        return
+    for token in tokens:
+        if token not in text:
+            errors.append(f"{path}: missing {token!r} (rule 17)")
+    return text
+
+
+def r17_enum_names(path, name):
+    text = r17_read(path)
+    if text is None:
+        return []
+    m = re.search(r"pub const " + name + r"\s*=\s*enum(?:\([^)]*\))?\s*\{([^}]*)\}", text, re.S)
+    if not m:
+        errors.append(f"{path}: cannot find enum {name} (rule 17)")
+        return []
+    return re.findall(r"^\s*([a-z_]+)\s*,", m.group(1), re.M)
+
+
+# (a) The two enums are the same names in the same order: `DesktopRuntime` converts by ordinal.
+webview_kinds = r17_enum_names("src/webview/types.zig", "WindowStateKind")
+native_kinds = r17_enum_names("src/tauri/window.zig", "NativeStateKind")
+if tuple(webview_kinds) != R17_STATE_KINDS:
+    errors.append("src/webview/types.zig: WindowStateKind order changed (rule 17)")
+if tuple(native_kinds) != R17_STATE_KINDS:
+    errors.append("src/tauri/window.zig: NativeStateKind order diverged from WindowStateKind (rule 17)")
+
+# (b) C ABI ordinals in the Cocoa shim match the Zig enum 0..9.
+shim = r17_read("src/webview/macos_shim.m")
+if shim is not None:
+    for i, kind in enumerate(R17_STATE_KINDS):
+        token = f"ZTS_STATE_{kind.upper()} = {i}"
+        if token not in shim:
+            errors.append(f"src/webview/macos_shim.m: missing {token!r} (rule 17)")
+    for delegate in (
+        "windowDidMiniaturize:", "windowDidDeminiaturize:", "windowDidEnterFullScreen:",
+        "windowDidExitFullScreen:", "windowDidBecomeKey:", "windowDidResignKey:",
+        "windowDidMove:", "windowDidResize:", "ZtsEmitState", "ZtsEmitFrame",
+        "zts_macos_state_cb", "zts_macos_apply_creation_options",
+    ):
+        if delegate not in shim:
+            errors.append(f"src/webview/macos_shim.m: missing {delegate!r} (rule 17)")
+
+# (c) Four backends + the GDK event structs + the runtime bridge.
+for path, tokens in R17_BACKENDS.items():
+    r17_require(path, *tokens)
+r17_require(
+    "src/webview/gtk_bindings.zig",
+    "GdkEventWindowState", "GdkEventConfigure", "GdkRectangle",
+    "gtk_window_set_skip_taskbar_hint", "gdk_monitor_get_geometry",
+)
+r17_require(
+    "src/app_runtime.zig", "onWindowState", "setWindowStateHandler", "applyNativeState",
+)
+r17_require(
+    "src/webview/mod.zig", "setWindowStateHandler", "applyWindowExtras",
+    "centerWindow", "applyWindowCreationOptions", "cfg.maximized", "cfg.center", "cfg.focus",
+)
+r17_require(
+    "src/core/window_extras.zig", "WindowExtrasSnapshot", "WindowCreationOptions",
+)
+
+# (d) `core.Host` + all four host implementations carry the one setter contract.
+r17_require("src/core/host.zig", "applyWindowExtras", "WindowExtrasSnapshot", "extras_log")
+for path in R17_HOSTS[1:]:
+    r17_require(path, "applyWindowExtras")
+r17_require(
+    "src/tauri/window.zig", "extrasSnapshot", "t.host.applyWindowExtras", "applyNativeState",
+)
+
+# (e) E2E state round trips + bilingual reader docs.
+r17_require(
+    "tests/tauri/src/e2e_suite.ts",
+    "win.minimize()", "win.unminimize()", "win.maximize()", "win.unmaximize()",
+    "win.setFullscreen(true)", "win.isFullscreen()", "win.isMinimized()", "win.isMaximized()",
+)
+r17_require("docs/learn/ja/guides/plugins.md", "applyWindowExtras", "WindowStateEvent", "isMaximized()")
+r17_require("docs/learn/en/guides/plugins.md", "applyWindowExtras", "WindowStateEvent", "isMaximized()")
+# The API reference describes the UNMODIFIED upstream package, so it names the public getters
+# instead of an internal `Host` method (rule 3 keeps internal identifiers out of reader pages).
+for path in ("docs/reference/tauri-usage.md", "docs/reference/tauri-usage.en.md"):
+    r17_require(path, "isMinimized()", "isMaximized()", "setFullscreen", "tauri://window-flags-changed")
+r17_require("docs/architecture/zts-webview-backends.md", "WindowStateEvent", "applyWindowExtras", "WindowCreationOptions")
 
 if warnings:
     for w in warnings:

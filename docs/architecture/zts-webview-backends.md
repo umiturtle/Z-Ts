@@ -164,3 +164,41 @@ WebView2 は `tauri://` を解釈できないため、Windows だけ `http://tau
 
 **マーカーが無い = 失敗**。ヘッドレス環境でのスキップは終了コード 0 のまま `SKIP …` を出し、
 CI は必ず `OK …` を grep する（無言スキップを成功と誤認しないため）。
+
+---
+
+## 6. ネイティブ状態イベントと生成時オプション（M5-22 / 3 OS 一致）
+
+`WindowStateEvent` は boolean 系 8 種（`minimized` / `maximized` / `fullscreen` /
+`focused` / `visible` / `decorated` / `resizable` / `always_on_top`）と geometry 系 2 種
+（`moved` / `resized`）を 1 構造体で表します。`Engine.setWindowStateHandler()` で登録した
+ハンドラへ、4 バックエンドすべてが同じ順序の `WindowStateKind` で届けます。
+`zts_tauri` は `zts_webview` を import せず、同名・同順の `NativeStateKind` を
+`@fromBackingInt` で変換します（規約 17 が enum 順と C ABI ordinal を機械検査）。
+
+| バックエンド | 起点 | CSS 論理 px への変換 |
+|---|---|---|
+| GTK | `window-state-event` / `configure-event` | GDK 物理 px ÷ `gtk_widget_get_scale_factor()` |
+| Cocoa | `ZtsWindowDelegate` の 8 通知 | bottom-left points → 画面高さで反転 |
+| Win32 | `WM_SIZE` / `WM_MOVE` / `WM_ACTIVATE` | `GetWindowRect()` ÷ DPI scale |
+| HeadlessMock | `simulateWindowStateEvent()` | 変換なし（決定性） |
+
+`DesktopRuntime.onWindowState()` → `WindowRegistry.applyNativeState()` が mutex 下で実状態へ
+反映し、**変化したときだけ** `tauri://resize` / `move` / `focus` / `blur` /
+`window-flags-changed` を `EventBus.dispatchRaw` で emit します。
+
+`core.Host.applyWindowExtras(win, snapshot)` は所有権なしのスカラ構造体
+（`WindowExtrasSnapshot`）を 1 メソッドで受け取ります。型は `zts_foundation` に置き、
+`zts_core` / `zts_tauri` / `zts_webview` / `zts_bridge` / wasm が同じ型を共有します。
+`applyExtras` の 19 セッターはレジストリ更新後に必ずこのメソッドを呼び、
+3 OS + Mock が「GTK: skip_taskbar / keep_below / sensitive / stick」「Cocoa: level /
+sharingType / collectionBehavior / ignoresMouseEvents」「Win32: EnableWindow /
+SetWindowDisplayAffinity / WS_EX_TOOLWINDOW / HWND_BOTTOM」を適用します。
+
+`Engine.createWindow()` はネイティブウィンドウ生成後に、`maximized` / `center` / `focus` /
+`skipTaskbar` / `alwaysOnBottom` / `contentProtected` / `visibleOnAllWorkspaces` を
+**1 箇所**で適用します（アプリ側にターゲット分岐は 0 行）。`hiddenTitle` /
+`titleBarStyle` / `userAgent` / `tabbingIdentifier` など OS 固有の項目は
+`applyWindowCreationOptions()` で適用しつつ、全項目を `WindowCreationOptions`（スカラ＋
+文字列ハッシュ）として 4 バックエンドすべてに記録します。OS が表現できない項目を
+黙って「成功」とはせず、状態として保持した上で capability を Doc に明示します。

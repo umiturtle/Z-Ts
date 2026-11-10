@@ -102,9 +102,9 @@ const WinWindow = struct {
     token_message: i64 = 0,
     token_resource: i64 = 0,
     token_close: i64 = 0,
-    /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
+    /// last complete P1 #8 intent snapshot received from `core.Host`.
     extras: types.WindowExtrasSnapshot = .{},
-    /// M5-22 ③ — scalar record of every `WindowConfig` option applied at creation.
+    /// scalar record of every `WindowConfig` option applied at creation.
     creation: types.WindowCreationOptions = .{},
 };
 
@@ -406,7 +406,7 @@ const close_vtable = CloseIface.VTable{
 /// (`webview2_com.zig`) and the runtime is found through the registry, so no
 /// `WebView2Loader.dll` ships with the app.
 pub const WindowsWebView2Backend = struct {
-    /// M5-22 ① — fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// fan out one OS-originated window-state change. A missing handler is a no-op,
     /// so backends can emit unconditionally from native callbacks.
     fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
         if (self.state_handler) |h| h.call(ev);
@@ -449,7 +449,7 @@ pub const WindowsWebView2Backend = struct {
 
     /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
-    /// M5-22 ① — OS-originated window-state changes (see `WindowStateHandler`).
+    /// OS-originated window-state changes (see `WindowStateHandler`).
     state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
@@ -1819,7 +1819,7 @@ pub const WindowsWebView2Backend = struct {
         );
     }
 
-    /// M5-22 ③ — centre on the primary monitor, converting physical px to CSS logical px using
+    /// centre on the primary monitor, converting physical px to CSS logical px using
     /// this window's DPI — the same conversion GTK uses with its widget scale factor.
     pub fn centerWindow(self: *WindowsWebView2Backend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
@@ -1833,7 +1833,7 @@ pub const WindowsWebView2Backend = struct {
         w.creation.center = true;
     }
 
-    /// M5-22 ③ — Win32 honours `hiddenTitle` by clearing the window caption. WebView2 settings
+    /// Win32 honours `hiddenTitle` by clearing the window caption. WebView2 settings
     /// that need a newer COM interface (`userAgent`, zoom hotkeys) stay in the scalar record.
     pub fn applyWindowCreationOptions(self: *WindowsWebView2Backend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
@@ -1845,7 +1845,7 @@ pub const WindowsWebView2Backend = struct {
         }
     }
 
-    /// M5-22 ② — apply the Win32 flags we can honour and keep the full snapshot. Unsupported
+    /// apply the Win32 flags we can honour and keep the full snapshot. Unsupported
     /// OS-specific flags stay recorded (no silent "success" without a state change).
     pub fn applyWindowExtras(self: *WindowsWebView2Backend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
@@ -1991,7 +1991,7 @@ pub const WindowsWebView2Backend = struct {
 // Window procedure
 // ---------------------------------------------------------------------------
 
-/// M5-22 ① — `WM_SIZE` / `WM_MOVE` report CLIENT geometry in physical pixels, while GTK's
+/// `WM_SIZE` / `WM_MOVE` report CLIENT geometry in physical pixels, while GTK's
 /// `configure-event` and Cocoa's frame report OUTER geometry. Use `GetWindowRect` + the window
 /// DPI so all three backends feed `WindowRegistry` the same CSS logical values.
 fn emitWin32Geometry(win: *WinWindow, kind: types.WindowStateKind) void {

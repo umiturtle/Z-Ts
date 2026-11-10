@@ -60,7 +60,7 @@ pub const GError = extern struct {
     message: ?[*:0]const gchar,
 };
 
-/// M5-22 ① — GDK window-state / configure events. Only the leading fields we read are declared;
+/// GDK window-state / configure events. Only the leading fields we read are declared;
 /// GTK guarantees this ABI layout (`GdkEventAny` header followed by the specific fields).
 pub const GdkEventWindowState = extern struct {
     event_type: c_int,
@@ -156,7 +156,7 @@ pub extern "c" fn g_idle_add_full(
 /// Device-pixel ratio of the widget's GdkWindow; used to convert GDK's physical configure
 /// coordinates into the logical pixels `WindowRegistry` stores.
 pub extern "c" fn gtk_widget_get_scale_factor(widget: *GtkWidget) c_int;
-/// M5-22 ③ — primary-monitor geometry used by `center`.
+/// primary-monitor geometry used by `center`.
 pub extern "c" fn gtk_window_get_screen(window: *GtkWindow) ?*GdkScreen;
 pub extern "c" fn gdk_screen_get_primary_monitor(screen: *GdkScreen) ?*GdkMonitor;
 pub extern "c" fn gdk_monitor_get_geometry(monitor: *GdkMonitor, geometry: *GdkRectangle) void;
@@ -221,7 +221,7 @@ pub extern "c" fn gtk_window_fullscreen(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_unfullscreen(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_set_decorated(window: *GtkWindow, setting: gboolean) void;
 pub extern "c" fn gtk_window_set_keep_above(window: *GtkWindow, setting: gboolean) void;
-/// M5-22 ② — `plugin:window` P1 #8 flags that GTK 3 supports natively.
+/// `plugin:window` P1 #8 flags that GTK 3 supports natively.
 pub extern "c" fn gtk_window_set_skip_taskbar_hint(window: *GtkWindow, setting: gboolean) void;
 pub extern "c" fn gtk_window_set_keep_below(window: *GtkWindow, setting: gboolean) void;
 pub extern "c" fn gtk_widget_set_sensitive(widget: *GtkWidget, sensitive: gboolean) void;

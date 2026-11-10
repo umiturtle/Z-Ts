@@ -185,6 +185,14 @@ await win.minimize();
 const imgUrl = convertFileSrc('/path/to/photo.png');
 ```
 
+`minimize()` / `unminimize()` / `maximize()` / `unmaximize()` / `setFullscreen(bool)` と
+`isMinimized()` / `isMaximized()` / `isFullscreen()` / `isFocused()` / `isVisible()` /
+`isDecorated()` / `isResizable()` は往復で検証できます。`is*` は「JS が最後に送った値」
+ではなく **OS が実際に保持している状態** を返すため、ユーザーがタイトルバーの
+ボタンを押した場合も追従します。状態が変わったときは `tauri://resize` /
+`tauri://move` / `tauri://focus` / `tauri://blur` /
+`tauri://window-flags-changed` を `listen()` で受け取れます。
+
 ---
 
 ## 4. 設定ファイルとセキュリティ（`tauri.conf.json` & Capabilities）
