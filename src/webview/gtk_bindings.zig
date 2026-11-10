@@ -53,6 +53,31 @@ pub const GError = extern struct {
     message: ?[*:0]const gchar,
 };
 
+/// M5-22 ① — GDK window-state / configure events. Only the leading fields we read are declared;
+/// GTK guarantees this ABI layout (`GdkEventAny` header followed by the specific fields).
+pub const GdkEventWindowState = extern struct {
+    event_type: c_int,
+    window: ?*GdkWindow,
+    send_event: i8,
+    changed_mask: c_uint,
+    new_window_state: c_uint,
+};
+pub const GdkEventConfigure = extern struct {
+    event_type: c_int,
+    window: ?*GdkWindow,
+    send_event: i8,
+    x: c_int,
+    y: c_int,
+    width: c_int,
+    height: c_int,
+};
+pub const GDK_WINDOW_STATE_WITHDRAWN: c_uint = 1 << 0;
+pub const GDK_WINDOW_STATE_ICONIFIED: c_uint = 1 << 1;
+pub const GDK_WINDOW_STATE_MAXIMIZED: c_uint = 1 << 2;
+pub const GDK_WINDOW_STATE_FULLSCREEN: c_uint = 1 << 4;
+pub const GDK_WINDOW_STATE_ABOVE: c_uint = 1 << 5;
+pub const GDK_WINDOW_STATE_FOCUSED: c_uint = 1 << 7;
+
 pub const GdkRGBA = extern struct {
     red: gdouble,
     green: gdouble,
@@ -120,6 +145,10 @@ pub extern "c" fn g_idle_add_full(
     data: gpointer,
     notify: ?GDestroyNotify,
 ) guint;
+
+/// Device-pixel ratio of the widget's GdkWindow; used to convert GDK's physical configure
+/// coordinates into the logical pixels `WindowRegistry` stores.
+pub extern "c" fn gtk_widget_get_scale_factor(widget: *GtkWidget) c_int;
 
 pub extern "c" fn g_object_new(object_type: GType, first_property_name: [*:0]const gchar, ...) *anyopaque;
 pub extern "c" fn g_object_ref(object: *anyopaque) *anyopaque;

@@ -252,6 +252,34 @@ pub const SizeConstraintsDto = struct {
 /// scalar or an enum, so no per-command allocation can leak and the state is byte-identical on all
 /// three OSes. Visual effects that need a real OS object are applied by the backend where
 /// available; the command always records the intent and emits the matching event.
+/// M5-22 ① — the kinds of OS-originated state changes `WindowRegistry` understands. The order
+/// is identical to `zts_webview.WindowStateKind` on purpose: `DesktopRuntime` converts with
+/// `@intFromEnum`, and rule 17 verifies the two lists never drift. `zts_tauri` does NOT import
+/// `zts_webview` (dependency direction is preserved).
+pub const NativeStateKind = enum {
+    minimized,
+    maximized,
+    fullscreen,
+    focused,
+    visible,
+    decorated,
+    resizable,
+    always_on_top,
+    moved,
+    resized,
+};
+
+/// One OS-originated state change, expressed only with `zts_core` types.
+pub const NativeStateChange = struct {
+    window_id: core.WindowId,
+    kind: NativeStateKind,
+    value: bool = false,
+    x: f64 = 0,
+    y: f64 = 0,
+    width: f64 = 0,
+    height: f64 = 0,
+};
+
 pub const Theme = enum { system, dark, light };
 /// Taskbar progress-bar state accepted by `set_progress_bar`.
 pub const ProgressStatus = enum { none, normal, indeterminate, paused, @"error" };
@@ -464,6 +492,96 @@ pub const WindowRegistry = struct {
     }
 
     /// Forgets a closed window. Safe to call for an id that is already gone.
+    /// M5-22 ① — fold an OS-originated state change into the registry so `is_*` commands stop
+    /// answering with a stale flag. Emits the matching `tauri://…` event exactly once per real
+    /// change (native window managers repeat the same notification), through the same EventBus
+    /// the command setters use. `host` is used only for `EventBus.dispatchRaw` → `Host.evalJs`.
+    pub fn applyNativeState(
+        self: *WindowRegistry,
+        host: core.Host,
+        change: NativeStateChange,
+    ) void {
+        var event_name: ?[]const u8 = null;
+        var label_copy: ?[]u8 = null;
+        {
+            self.mu.lockUncancelable(self.io);
+            defer self.mu.unlock(self.io);
+            const e = self.findLocked(null, change.window_id) orelse return;
+
+            const changed: bool = switch (change.kind) {
+                .minimized => blk: {
+                    const c = e.minimized != change.value;
+                    e.minimized = change.value;
+                    break :blk c;
+                },
+                .maximized => blk: {
+                    const c = e.maximized != change.value;
+                    e.maximized = change.value;
+                    break :blk c;
+                },
+                .fullscreen => blk: {
+                    const c = e.fullscreen != change.value;
+                    e.fullscreen = change.value;
+                    break :blk c;
+                },
+                .focused => blk: {
+                    const c = e.focused != change.value;
+                    e.focused = change.value;
+                    break :blk c;
+                },
+                .visible => blk: {
+                    const c = e.visible != change.value;
+                    e.visible = change.value;
+                    break :blk c;
+                },
+                .decorated => blk: {
+                    const c = e.decorated != change.value;
+                    e.decorated = change.value;
+                    break :blk c;
+                },
+                .resizable => blk: {
+                    const c = e.resizable != change.value;
+                    e.resizable = change.value;
+                    break :blk c;
+                },
+                .always_on_top => blk: {
+                    const c = e.always_on_top != change.value;
+                    e.always_on_top = change.value;
+                    break :blk c;
+                },
+                .moved => blk: {
+                    const p = core.LogicalPoint.xy(change.x, change.y);
+                    const c = e.position.x.v != p.x.v or e.position.y.v != p.y.v;
+                    e.position = p;
+                    break :blk c;
+                },
+                .resized => blk: {
+                    const sz = core.LogicalSize.wh(change.width, change.height);
+                    const c = e.size.width.v != sz.width.v or e.size.height.v != sz.height.v;
+                    e.size = sz;
+                    break :blk c;
+                },
+            };
+            if (!changed) return;
+            event_name = switch (change.kind) {
+                .minimized, .maximized, .fullscreen, .resized => "tauri://resize",
+                .moved => "tauri://move",
+                .focused => if (change.value) "tauri://focus" else "tauri://blur",
+                .visible, .decorated, .resizable, .always_on_top => "tauri://window-flags-changed",
+            };
+            label_copy = self.allocator.dupe(u8, e.label) catch null;
+        }
+
+        defer if (label_copy) |lbl| self.allocator.free(lbl);
+        if (self.events) |bus| {
+            const target: event.EventTarget = if (label_copy) |lbl|
+                .{ .Window = .{ .label = lbl } }
+            else
+                .Any;
+            bus.dispatchRaw(host, self.allocator, target, event_name.?, "null") catch {};
+        }
+    }
+
     pub fn unregisterWindow(self: *WindowRegistry, id: core.WindowId) void {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);

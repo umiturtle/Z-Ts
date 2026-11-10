@@ -66,6 +66,9 @@ pub const SchemeResponse = types.SchemeResponse;
 pub const SchemeHandler = types.SchemeHandler;
 pub const MessageHandler = types.MessageHandler;
 pub const CloseHandler = types.CloseHandler;
+pub const WindowStateEvent = types.WindowStateEvent;
+pub const WindowStateKind = types.WindowStateKind;
+pub const WindowStateHandler = types.WindowStateHandler;
 pub const WindowConfig = types.WindowConfig;
 pub const Capture = types.Capture;
 pub const CaptureFormat = types.CaptureFormat;
@@ -201,6 +204,24 @@ pub const Engine = union(enum) {
             },
             .windows_webview2 => |b| if (comptime has_native_windows) {
                 b.message_handler = handler;
+            },
+        }
+    }
+
+    /// M5-22 ① — registers the receiver for OS-originated window-state changes. Every backend
+    /// (native and mock) installs the same handler, so a window maximised by the user updates the
+    /// upper-layer registry on Linux, macOS, Windows and in headless tests alike.
+    pub fn setWindowStateHandler(self: *Engine, handler: ?WindowStateHandler) void {
+        switch (self.*) {
+            .headless_mock => |m| m.state_handler = handler,
+            .linux_gtk => |b| if (comptime has_native_gtk) {
+                b.state_handler = handler;
+            },
+            .macos_wk => |b| if (comptime has_native_macos) {
+                b.state_handler = handler;
+            },
+            .windows_webview2 => |b| if (comptime has_native_windows) {
+                b.state_handler = handler;
             },
         }
     }

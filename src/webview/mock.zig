@@ -129,6 +129,11 @@ const MockPendingPayload = struct {
 /// contract as the native backends (scheme routing, IPC, capture, close) but paints nothing, so it
 /// runs without a display server.
 pub const HeadlessMock = struct {
+    /// M5-22 ① — fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// so backends can emit unconditionally from native callbacks.
+    fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
+        if (self.state_handler) |h| h.call(ev);
+    }
     /// Allocator that owns windows, captures and the scheme table.
     allocator: Allocator,
     /// IO reactor behind the mutex and the condition variable.
@@ -155,6 +160,8 @@ pub const HeadlessMock = struct {
 
     /// `window.__zts.postMessage(…)` receiver, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// M5-22 ① — OS-originated window-state changes (see `WindowStateHandler`).
+    state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
@@ -370,6 +377,14 @@ pub const HeadlessMock = struct {
         if (self.message_handler) |mh| {
             mh.call(window_id, message);
         }
+    }
+
+    /// M5-22 ① — test hook for an OS-originated state change (a user clicking the maximise
+    /// button, the window manager moving a window, …). Native backends call the same handler
+    /// from their own event callbacks, so unit tests exercise the exact same fan-out path.
+    pub fn simulateWindowStateEvent(self: *HeadlessMock, ev: types.WindowStateEvent) types.WebviewError!void {
+        if (self.windows.getPtr(ev.window_id) == null) return error.WindowNotFound;
+        self.emitState(ev);
     }
 
     /// Records a window from `cfg` and returns its id.

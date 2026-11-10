@@ -52,6 +52,17 @@ const shim = struct {
 
     const MessageCb = *const fn (userdata: ?*anyopaque, win: u64, json: [*:0]const u8) callconv(.c) void;
     const CloseCb = *const fn (userdata: ?*anyopaque, win: u64) callconv(.c) void;
+    /// M5-22 ① — OS-originated window-state change from `ZtsWindowDelegate`.
+    const StateCb = *const fn (
+        userdata: ?*anyopaque,
+        win: u64,
+        kind: c_int,
+        value: c_int,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) callconv(.c) void;
 
     extern fn zts_macos_backend_new(regular: c_int) ?*anyopaque;
     extern fn zts_macos_backend_free(h: ?*anyopaque) void;
@@ -66,6 +77,8 @@ const shim = struct {
         msg_cb: MessageCb,
         close_userdata: ?*anyopaque,
         close_cb: CloseCb,
+        state_userdata: ?*anyopaque,
+        state_cb: StateCb,
     ) void;
     extern fn zts_macos_screen_visible_frame(h: ?*anyopaque, x: ?*f64, y: ?*f64, w: ?*f64, ht: ?*f64) void;
 
@@ -204,6 +217,11 @@ pub const CocoaFrame = struct {
 /// Cocoa (`NSApplication` / `NSWindow`) + `WKWebView` backend. The Objective-C side lives in
 /// `macos_shim.m` behind a C ABI, so Zig never needs the Objective-C runtime headers.
 pub const MacOsBackend = struct {
+    /// M5-22 ① — fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// so backends can emit unconditionally from native callbacks.
+    fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
+        if (self.state_handler) |h| h.call(ev);
+    }
     /// Allocator for windows, slots and pending tables.
     allocator: Allocator,
     /// IO reactor behind the run-loop wakeups.
@@ -221,6 +239,8 @@ pub const MacOsBackend = struct {
 
     /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// M5-22 ① — OS-originated window-state changes (see `WindowStateHandler`).
+    state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
@@ -252,7 +272,7 @@ pub const MacOsBackend = struct {
             .completions = pending_mod.CompletionQueue.init(allocator, io),
         };
 
-        shim.zts_macos_set_callbacks(handle, self, onJsMessage, self, onWindowClosed);
+        shim.zts_macos_set_callbacks(handle, self, onJsMessage, self, onWindowClosed, self, onWindowState);
         return self;
     }
 
@@ -263,7 +283,8 @@ pub const MacOsBackend = struct {
         // 1. Detach app callbacks FIRST so closing windows cannot re-enter a torn-down Zig backend.
         self.close_handler = null;
         self.message_handler = null;
-        shim.zts_macos_set_callbacks(self.handle, null, onJsMessage, null, onWindowClosed);
+        self.state_handler = null;
+        shim.zts_macos_set_callbacks(self.handle, null, onJsMessage, null, onWindowClosed, null, onWindowState);
 
         // 2. Cancel every in-flight request (fires `zts_macos_scheme_fail`, a no-op if already dead).
         self.pending.deinitWith(alloc, PendingToken.cancel);
@@ -429,6 +450,29 @@ pub const MacOsBackend = struct {
         const mh = self.message_handler orelse return;
         const win_id = self.windowIdFor(native_win);
         mh.call(win_id, std.mem.span(json));
+    }
+
+    /// M5-22 ① — translate the C ABI ordinal into `WindowStateKind` and fan out. Geometry kinds
+    /// carry logical pixels already converted from Cocoa's bottom-left points by the shim.
+    fn onWindowState(
+        userdata: ?*anyopaque,
+        native_win: u64,
+        kind: c_int,
+        value: c_int,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) callconv(.c) void {
+        const self: *MacOsBackend = @ptrCast(@alignCast(userdata orelse return));
+        const win_id = self.windowIdFor(native_win);
+        if (!win_id.isValid()) return;
+        if (kind < 0 or kind > @backingInt(types.WindowStateKind.resized)) return;
+        const k: types.WindowStateKind = @fromBackingInt(@intCast(kind));
+        switch (k) {
+            .moved, .resized => self.emitState(.geometry(win_id, k, x, y, w, h)),
+            else => self.emitState(.boolean(win_id, k, value != 0)),
+        }
     }
 
     fn onWindowClosed(userdata: ?*anyopaque, native_win: u64) callconv(.c) void {

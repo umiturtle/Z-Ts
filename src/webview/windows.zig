@@ -402,6 +402,11 @@ const close_vtable = CloseIface.VTable{
 /// (`webview2_com.zig`) and the runtime is found through the registry, so no
 /// `WebView2Loader.dll` ships with the app.
 pub const WindowsWebView2Backend = struct {
+    /// M5-22 ① — fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// so backends can emit unconditionally from native callbacks.
+    fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
+        if (self.state_handler) |h| h.call(ev);
+    }
     /// Allocator for windows, handlers and pending tables.
     allocator: Allocator,
     /// IO reactor behind the wakeup event reuse.
@@ -440,6 +445,8 @@ pub const WindowsWebView2Backend = struct {
 
     /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// M5-22 ① — OS-originated window-state changes (see `WindowStateHandler`).
+    state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
@@ -565,6 +572,7 @@ pub const WindowsWebView2Backend = struct {
     pub fn deinit(self: *WindowsWebView2Backend) void {
         self.shutting_down = true;
         self.message_handler = null;
+        self.state_handler = null;
         self.close_handler = null;
 
         // 1. Cancel in-flight requests; every deferral is completed so WebView2 is never left hanging.
@@ -1929,6 +1937,20 @@ pub const WindowsWebView2Backend = struct {
 // Window procedure
 // ---------------------------------------------------------------------------
 
+/// M5-22 ① — `WM_SIZE` / `WM_MOVE` report CLIENT geometry in physical pixels, while GTK's
+/// `configure-event` and Cocoa's frame report OUTER geometry. Use `GetWindowRect` + the window
+/// DPI so all three backends feed `WindowRegistry` the same CSS logical values.
+fn emitWin32Geometry(win: *WinWindow, kind: types.WindowStateKind) void {
+    var rect: win32.RECT = undefined;
+    if (win32.GetWindowRect(win.hwnd, &rect) == 0) return;
+    const scale = util.scaleFactor(win.dpi);
+    const x = @as(f64, @floatFromInt(rect.left)) / scale;
+    const y = @as(f64, @floatFromInt(rect.top)) / scale;
+    const width = @as(f64, @floatFromInt(rect.right - rect.left)) / scale;
+    const height = @as(f64, @floatFromInt(rect.bottom - rect.top)) / scale;
+    win.backend.emitState(.geometry(win.id, kind, x, y, width, height));
+}
+
 fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wparam: win32.WPARAM, lparam: win32.LPARAM) callconv(CALL) win32.LRESULT {
     if (msg == win32.WM_NCCREATE) {
         const create: *const win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
@@ -1959,12 +1981,26 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wparam: win32.WPARAM, lparam: win3
             return win32.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
         win32.WM_SIZE => {
-            if (w) |win| win.backend.resizeWebView(win);
+            if (w) |win| {
+                win.backend.resizeWebView(win);
+                emitWin32Geometry(win, .resized);
+                // SIZE_RESTORED / SIZE_MINIMIZED / SIZE_MAXIMIZED.
+                switch (wparam) {
+                    1 => win.backend.emitState(.boolean(win.id, .minimized, true)),
+                    2 => win.backend.emitState(.boolean(win.id, .maximized, true)),
+                    0 => {
+                        win.backend.emitState(.boolean(win.id, .minimized, false));
+                        win.backend.emitState(.boolean(win.id, .maximized, false));
+                    },
+                    else => {},
+                }
+            }
             return 0;
         },
         win32.WM_MOVE => {
             if (w) |win| {
                 if (win.controller) |c| _ = c.vtable.NotifyParentWindowPositionChanged(c);
+                emitWin32Geometry(win, .moved);
             }
             return 0;
         },
@@ -1985,6 +2021,14 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wparam: win32.WPARAM, lparam: win3
                 win.backend.resizeWebView(win);
             }
             return 0;
+        },
+        win32.WM_ACTIVATE => {
+            if (w) |win| {
+                // WA_INACTIVE = 0, WA_ACTIVE = 1, WA_CLICKACTIVE = 2.
+                const active: u16 = @truncate(wparam);
+                win.backend.emitState(.boolean(win.id, .focused, active != 0));
+            }
+            return win32.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
         win32.WM_GETMINMAXINFO => {
             if (w) |win| {

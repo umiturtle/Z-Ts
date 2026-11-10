@@ -110,6 +110,11 @@ fn cancelWebKitRequest(req_ptr: *c.WebKitURISchemeRequest) void {
 /// the build needs no clang at compile time). Requires a display; without one `Backend.init` falls back
 /// to `HeadlessMock` unless `.native` was requested explicitly.
 pub const LinuxGtkBackend = struct {
+    /// M5-22 ① — fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// so backends can emit unconditionally from native callbacks.
+    fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
+        if (self.state_handler) |h| h.call(ev);
+    }
     /// Allocator for windows, slots and pending tables.
     allocator: Allocator,
     /// IO reactor behind the idle-source wakeups.
@@ -136,6 +141,8 @@ pub const LinuxGtkBackend = struct {
 
     /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// M5-22 ① — OS-originated window-state changes (see `WindowStateHandler`).
+    state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
     /// Disable GPU compositing (headless CI without a GL stack).
@@ -183,6 +190,7 @@ pub const LinuxGtkBackend = struct {
         // synchronous GObject `"destroy"` signals cannot double-unref `ucm` or mutate an active iterator.
         self.close_handler = null;
         self.message_handler = null;
+        self.state_handler = null;
         while (true) {
             var win_it = self.windows.iterator();
             const first = win_it.next() orelse break;
@@ -559,6 +567,45 @@ pub const LinuxGtkBackend = struct {
         }
     }
 
+    /// M5-22 ① — GTK tells us when the *window manager* (not the app) iconifies, maximises,
+    /// fullscreens, focuses or re-layers a window. Only the bits in `changed_mask` are reported,
+    /// so a repeated identical notification cannot flood the event bus.
+    fn onGdkWindowState(_: *c.GtkWidget, event: *c.GdkEventWindowState, user_data: c.gpointer) callconv(.c) void {
+        const slot: *SignalSlot = @ptrCast(@alignCast(user_data.?));
+        const mask = event.changed_mask;
+        const state = event.new_window_state;
+        const b = slot.backend;
+        const pairs = [_]struct { bit: c_uint, kind: types.WindowStateKind }{
+            .{ .bit = c.GDK_WINDOW_STATE_ICONIFIED, .kind = .minimized },
+            .{ .bit = c.GDK_WINDOW_STATE_MAXIMIZED, .kind = .maximized },
+            .{ .bit = c.GDK_WINDOW_STATE_FULLSCREEN, .kind = .fullscreen },
+            .{ .bit = c.GDK_WINDOW_STATE_FOCUSED, .kind = .focused },
+            .{ .bit = c.GDK_WINDOW_STATE_ABOVE, .kind = .always_on_top },
+        };
+        for (pairs) |pair| {
+            if (mask & pair.bit != 0) {
+                b.emitState(.boolean(slot.win_id, pair.kind, state & pair.bit != 0));
+            }
+        }
+        if (mask & c.GDK_WINDOW_STATE_WITHDRAWN != 0) {
+            b.emitState(.boolean(slot.win_id, .visible, state & c.GDK_WINDOW_STATE_WITHDRAWN == 0));
+        }
+    }
+
+    /// M5-22 ① — `configure-event` carries physical pixels; divide by the widget scale factor so
+    /// `WindowRegistry` keeps logical pixels on HiDPI exactly like the other two backends.
+    fn onGdkConfigure(widget: *c.GtkWidget, event: *c.GdkEventConfigure, user_data: c.gpointer) callconv(.c) void {
+        const slot: *SignalSlot = @ptrCast(@alignCast(user_data.?));
+        const raw_scale = c.gtk_widget_get_scale_factor(widget);
+        const scale: f64 = @floatFromInt(if (raw_scale > 0) raw_scale else 1);
+        const x = @as(f64, @floatFromInt(event.x)) / scale;
+        const y = @as(f64, @floatFromInt(event.y)) / scale;
+        const w = @as(f64, @floatFromInt(event.width)) / scale;
+        const h = @as(f64, @floatFromInt(event.height)) / scale;
+        slot.backend.emitState(.geometry(slot.win_id, .moved, x, y, w, h));
+        slot.backend.emitState(.geometry(slot.win_id, .resized, x, y, w, h));
+    }
+
     /// Creates the `GtkWindow`, the `WebKitWebView` and the signal handlers.
     pub fn createWindow(self: *LinuxGtkBackend, cfg: types.WindowConfig) types.WebviewError!types.WindowId {
         const ucm = c.webkit_user_content_manager_new();
@@ -686,6 +733,22 @@ pub const LinuxGtkBackend = struct {
                 top,
                 "destroy",
                 @ptrCast(&onWindowDestroyed),
+                sig_slot,
+                null,
+                0,
+            );
+            _ = c.g_signal_connect_data(
+                top,
+                "window-state-event",
+                @ptrCast(&onGdkWindowState),
+                sig_slot,
+                null,
+                0,
+            );
+            _ = c.g_signal_connect_data(
+                top,
+                "configure-event",
+                @ptrCast(&onGdkConfigure),
                 sig_slot,
                 null,
                 0,

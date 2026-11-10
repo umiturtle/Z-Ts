@@ -247,6 +247,73 @@ pub const CloseHandler = struct {
     }
 };
 
+/// M5-22 ① — the OS changed a window behind the app's back (title-bar button, OS shortcut,
+/// window manager, display reconfiguration). Native backends push these through
+/// `Engine.setWindowStateHandler()` so an upper layer can keep its own bookkeeping in sync
+/// instead of answering `is_maximized()` with a stale flag.
+pub const WindowStateKind = enum {
+    /// Iconified / restored.
+    minimized,
+    /// Zoomed / unzoomed.
+    maximized,
+    /// Entered / left native fullscreen.
+    fullscreen,
+    /// Gained / lost keyboard focus.
+    focused,
+    /// Mapped / unmapped.
+    visible,
+    /// Native frame toggled.
+    decorated,
+    /// User resizing toggled.
+    resizable,
+    /// Above-others flag toggled by the window manager.
+    always_on_top,
+    /// Outer position changed (`x` / `y` are logical pixels).
+    moved,
+    /// Client size changed (`width` / `height` are logical pixels).
+    resized,
+};
+
+/// One OS-originated window-state change. `value` carries the boolean kinds; `moved` / `resized`
+/// use the geometry fields. No borrowed slices, so a backend can queue these across threads.
+pub const WindowStateEvent = struct {
+    window_id: WindowId,
+    kind: WindowStateKind,
+    value: bool = false,
+    x: f64 = 0,
+    y: f64 = 0,
+    width: f64 = 0,
+    height: f64 = 0,
+
+    pub fn boolean(window_id: WindowId, kind: WindowStateKind, value: bool) WindowStateEvent {
+        return .{ .window_id = window_id, .kind = kind, .value = value };
+    }
+
+    pub fn geometry(
+        window_id: WindowId,
+        kind: WindowStateKind,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    ) WindowStateEvent {
+        return .{ .window_id = window_id, .kind = kind, .x = x, .y = y, .width = width, .height = height };
+    }
+};
+
+/// Receives OS-originated window-state changes. `ev` is passed by value and owns nothing.
+pub const WindowStateHandler = struct {
+    /// Opaque pointer passed back on every call.
+    userdata: ?*anyopaque = null,
+    /// Handles one state change.
+    onState: *const fn (userdata: ?*anyopaque, ev: WindowStateEvent) void,
+
+    /// Invokes `onState` with `userdata`.
+    pub inline fn call(self: WindowStateHandler, ev: WindowStateEvent) void {
+        self.onState(self.userdata, ev);
+    }
+};
+
 /// Image format requested from `captureWindow()`. All backends are required to support `.png`
 /// (cairo, `NSBitmapImageRep`, WebView2 `CapturePreview` all encode it natively); the enum exists so
 /// a future `.jpeg` can be added without changing the ABI.

@@ -124,6 +124,8 @@ pub const DesktopRuntime = struct {
         try self.engine.registerScheme("isolation", scheme_handler);
         self.engine.setMessageHandler(.{ .userdata = self, .onMessage = onJsMessage });
         self.engine.setCloseHandler(.{ .userdata = self, .onClose = onWindowClosed });
+        // M5-22 ① — OS-driven minimise / maximise / fullscreen / focus now reach the registry.
+        self.engine.setWindowStateHandler(.{ .userdata = self, .onState = onWindowState });
 
         return self;
     }
@@ -135,6 +137,7 @@ pub const DesktopRuntime = struct {
         // signals emitted inside `engine.deinit()` never touch torn-down plugin registries!
         self.engine.setCloseHandler(null);
         self.engine.setMessageHandler(null);
+        self.engine.setWindowStateHandler(null);
         self.engine.deinit();
         self.plugins.destroy();
         alloc.destroy(self);
@@ -277,6 +280,22 @@ pub const DesktopRuntime = struct {
         const self: *DesktopRuntime = @ptrCast(@alignCast(ud.?));
         self.router.handlePostMessage(self.host(), win_id, message);
     }
+
+    /// M5-22 ① — bridge `zts_webview`'s OS event into `WindowRegistry` without making
+    /// `zts_tauri` depend on `zts_webview`. The two enums share an ordinal (rule 17 checks it),
+    /// so this is a plain `@enumFromInt` and contains no per-target branch.
+    fn onWindowState(ud: ?*anyopaque, ev: webview.WindowStateEvent) void {
+        const self: *DesktopRuntime = @ptrCast(@alignCast(ud.?));
+        self.plugins.windows.applyNativeState(self.host(), .{
+            .window_id = ev.window_id,
+            .kind = @fromBackingInt(@intCast(@backingInt(ev.kind))),
+            .value = ev.value,
+            .x = ev.x,
+            .y = ev.y,
+            .width = ev.width,
+            .height = ev.height,
+        });
+    }
 };
 
 test "DesktopRuntime + HeadlessMock runs end-to-end Tauri v2 custom commands, Channel<T>, and core plugins" {
@@ -407,4 +426,68 @@ test "P0-1: JS WebviewWindow creation goes through the runtime factory and injec
     const list = mock.completed_records.items[1].body;
     try testing.expect(std.mem.indexOf(u8, list, "{\"label\":\"main\",\"windowLabel\":\"main\"}") != null);
     try testing.expect(std.mem.indexOf(u8, list, "{\"label\":\"settings\",\"windowLabel\":\"settings\"}") != null);
+}
+
+test "M5-22 ①: OS-originated window state reaches WindowRegistry across all ten kinds" {
+    const assets: web.Assets = .{
+        .entries = &.{.{ .path = "/index.html", .bytes = "<h1>state</h1>" }},
+    };
+    const rt = try DesktopRuntime.create(testing.allocator, testing.io, .{
+        .backend = .headless_mock,
+        .app = .{ .name = "State", .version = "1.0.0", .identifier = "jp.zts.state" },
+        .assets = &assets,
+    });
+    defer rt.destroy();
+
+    const win_id = try rt.openWindow(.{ .label = "main" });
+    const mock = rt.engine.headless_mock;
+    const e = &rt.plugins.windows.entries.items[0];
+
+    // Boolean flags: all eight native kinds are mirrored into the registry.
+    try testing.expectEqual(false, e.minimized);
+    try testing.expectEqual(false, e.maximized);
+    try testing.expectEqual(false, e.fullscreen);
+    try testing.expectEqual(true, e.focused);
+    try testing.expectEqual(true, e.visible);
+    try testing.expectEqual(true, e.decorated);
+    try testing.expectEqual(true, e.resizable);
+    try testing.expectEqual(false, e.always_on_top);
+
+    inline for (.{
+        .{ webview.WindowStateKind.minimized, true },
+        .{ webview.WindowStateKind.maximized, true },
+        .{ webview.WindowStateKind.fullscreen, true },
+        .{ webview.WindowStateKind.focused, false },
+        .{ webview.WindowStateKind.visible, false },
+        .{ webview.WindowStateKind.decorated, false },
+        .{ webview.WindowStateKind.resizable, false },
+        .{ webview.WindowStateKind.always_on_top, true },
+    }) |pair| {
+        try mock.simulateWindowStateEvent(.boolean(win_id, pair[0], pair[1]));
+    }
+    try testing.expectEqual(true, e.minimized);
+    try testing.expectEqual(true, e.maximized);
+    try testing.expectEqual(true, e.fullscreen);
+    try testing.expectEqual(false, e.focused);
+    try testing.expectEqual(false, e.visible);
+    try testing.expectEqual(false, e.decorated);
+    try testing.expectEqual(false, e.resizable);
+    try testing.expectEqual(true, e.always_on_top);
+
+    // Replaying an identical value is a no-op (OSes send duplicate notifications).
+    try mock.simulateWindowStateEvent(.boolean(win_id, .minimized, true));
+    try testing.expectEqual(true, e.minimized);
+
+    // Geometry kinds feed the same logical-pixel units as the command API.
+    try mock.simulateWindowStateEvent(.geometry(win_id, .moved, 96.5, 42.25, 0, 0));
+    try testing.expectEqual(@as(f64, 96.5), e.position.x.v);
+    try testing.expectEqual(@as(f64, 42.25), e.position.y.v);
+    try mock.simulateWindowStateEvent(.geometry(win_id, .resized, 0, 0, 1024, 768));
+    try testing.expectEqual(@as(f64, 1024), e.size.width.v);
+    try testing.expectEqual(@as(f64, 768), e.size.height.v);
+
+    // An unknown window id is ignored (fail-closed, never a crash).
+    try testing.expectError(error.WindowNotFound, mock.simulateWindowStateEvent(
+        .boolean(core.WindowId.invalid, .focused, true),
+    ));
 }
