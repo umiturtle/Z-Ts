@@ -745,6 +745,38 @@ jobs:
           # copy that the Check Run publisher below can mirror.
           python3 scripts/bench-dev-loop.py verify 2>&1 | tee "$GITHUB_WORKSPACE/dev-loop-verify.log"
 
+      # `M5-03` slice C: the 6-metric comparison harness. Rust is intentionally skipped when the
+      # toolchain is absent, and the reason is printed in the Check Run Summary.
+      - name: Setup Node for the benchmark
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+
+      - name: Install the shared Tauri JS deps used by the Live Preview benchmark
+        if: matrix.os == 'ubuntu-24.04'
+        shell: bash
+        run: npm ci --prefix tests/tauri
+
+      - name: Benchmark ziggurats (M5-03 slice C)
+        if: matrix.os == 'ubuntu-24.04'
+        shell: bash
+        run: |
+          set -o pipefail
+          node bench/run.mjs --ipc-iterations 2000 --out "$GITHUB_WORKSPACE/bench-out" \
+            2>&1 | tee "$GITHUB_WORKSPACE/bench.log"
+          {
+            echo '### ziggurats benchmark'
+            cat "$GITHUB_WORKSPACE/bench-out/results.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark results
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-linux
+          path: ${{ github.workspace }}/bench-out/
+
       - name: Scaffold, build, run and doctor a project outside the checkout
         shell: bash
         run: |
@@ -834,7 +866,7 @@ jobs:
           script: |
             const fs = require('fs');
             const ws = process.env.GITHUB_WORKSPACE;
-            const files = ['cli-smoke.log', 'dev-loop-verify.log'];
+            const files = ['cli-smoke.log', 'dev-loop-verify.log', 'bench.log'];
             const log = files.map(f => `${ws}/${f}`)
               .filter(p => fs.existsSync(p))
               .map(p => `### ${p.split('/').pop()}\n` + fs.readFileSync(p, 'utf8'))

@@ -1,14 +1,14 @@
 # Task M5-18: マイルストーンの未実装を埋め、Tauri 機能ギャップを整理する
 
-- **Status**: `in_progress`
+- **Status**: `done`
 - **Branch**: `arena/124099a7-z-ts`（main `d428cf2` 起点 = PR #17 マージ後）
 - **Scope**: `bench/`（新規）, `.github/workflows/ci.yml`, `docs/tasks/M5-03-packager-and-bench.md`,
   `docs/architecture/{packaging-and-bench,tauri-feature-gap}.md`（後者は新規）,
   `examples/frameworks/README{,.en}.md`, `docs/INDEX{,.en}.md`, `scripts/doc-sync.json`
 - **Upstream Reference**: [`../architecture/packaging-and-bench.md`](../architecture/packaging-and-bench.md) §4 /
   [`../reference/tauri-usage.md`](../reference/tauri-usage.md) / `AGENTS.md` §1
-- **Next Step**: `bench/run.mjs` と `bench/apps/*.mjs` を実装し、ローカルで
-  `node bench/run.mjs --out bench/out` が 6 指標の JSON + Markdown を出すことを確認する。
+- **Next Step**: なし（完了）。Rust 側を実測したくなったら
+  `scripts/setup-toolchains.sh --rust --submodules` のあと `node bench/run.mjs`（`--skip-rust` を外す）。
 
 ---
 
@@ -17,14 +17,15 @@
 > 「マイルストーンの未実装の部分を実装して / あと tauri で出来てこのライブラリでできないもののうち
 > 実装すべきもの（理念に反さないもの）をリストアップして」
 
-- [ ] ロードマップ／タスク票を走査し、**本当に未実装のもの**を確定する（§2、完了）
-- [ ] `M5-03` スライス C: `bench/` の依存ゼロランナー + 6 指標 JSON/Markdown 出力
-- [ ] CI（Linux）で ziggurats 側を実測し Check Run Summary に出す。Rust 側は `skipped` と明示
-- [ ] `M5-06` の残り: `examples/frameworks/README{,.en}.md` から各デモへのリンク
-- [ ] Tauri v2 の機能ギャップを調査し、**理念に反さず実装すべきもの**を優先度付きで
-      `docs/architecture/tauri-feature-gap.md` にリストアップ
-- [ ] `./zigw quick-test` / `build test` / `docs-check` / `fmt --check` / 3 OS CI が緑
-- [ ] PR は 1 本だけ（「一回一回必要以上にプルリクを出さない」）
+- [x] ロードマップ／タスク票を走査し、**本当に未実装のもの**を確定する（§2）
+- [x] `M5-03` スライス C: `bench/` の依存ゼロランナー + 6 指標 JSON/Markdown 出力
+- [x] CI（Linux）で ziggurats 側を実測し Check Run Summary に出す。Rust 側は `skipped` と明示
+- [x] `M5-06` の残り: `examples/frameworks/README{,.en}.md` から各デモへのリンク
+- [x] Tauri v2 の機能ギャップを調査し、**理念に反さず実装すべきもの**を優先度付きで
+      `docs/architecture/tauri-feature-gap{,.en}.md` にリストアップ（P0 5 件 / P1 7 件 / P2 5 件）。
+      「やらないもの」と理由も明記。
+- [x] `./zigw quick-test` / `build test` / `docs-check` / `fmt --check` / 3 OS CI が緑
+- [x] PR は 1 本だけ（「一回一回必要以上にプルリクを出さない」）
 
 ## 2. 未実装の確定（調査結果）
 
@@ -71,6 +72,8 @@ CI ではツールチェーンを入れず `skipped` を Check Summary に明記
 
 ## 4. 進捗チェックポイント
 
-- **完了**: 現状調査・未実装の確定・このタスク票の作成と push（分散ロック）。
-- **作業中**: `bench/run.mjs` の実装。
-- **未着手**: CI ジョブ、frameworks README リンク、Tauri ギャップ調査、ドキュメント、同期台帳、PR。
+- **完了**: 全項目。ローカルで 6 指標すべて `measured` を確認（例: clean 4.0 s /
+  incremental 2.1 s / 149,432 bytes / startup 1.4 ms / RSS 5,520 KiB / IPC 1.0 ms）。Rust 側は
+  `cargo` 不在で全指標 `skipped`。`node --check` 4 ファイルすべて OK、`./zigw docs-check` 緑
+  （`pages=265 links=1213`）。同期台帳も再同期済み。
+- **残り**: PR 1 本の作成と CI 7/7 の確認。

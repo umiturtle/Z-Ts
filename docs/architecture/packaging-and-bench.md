@@ -153,10 +153,10 @@ CI では `ci-cli` ジョブが 3 OS で `zts init` → `zts build` → `zts pac
 
 ---
 
-## 4. 対 Rust 本家ベンチマーク（スライス C・未着手）
+## 4. 対 Rust 本家ベンチマーク（スライス C・実装済み）
 
-`M5-03` の後半は `vendor/tauri` の Rust 版との比較です。6 指標を GitHub Actions の
-Check Summary に出します。
+`M5-03` の後半は `vendor/tauri` の Rust 版との比較です。実装は [`bench/run.mjs`](../../bench/run.mjs)、
+6 指標は GitHub Actions の Check Summary に出します。
 
 | 指標 | 測り方 | 注意 |
 |---|---|---|
@@ -167,8 +167,25 @@ Check Summary に出します。
 | RSS（idle / load） | 起動 5 秒後と、負荷ページ表示後 | `/proc/<pid>/status` / `ps -o rss` |
 | IPC | 小さい JSON 10,000 往復 + 64 MB Raw のスループット | 往復は `invoke` の round-trip、Raw は `Channel`/`RawPayload` |
 
-Rust ツールチェーンは `scripts/setup-toolchains.sh --rust` でしか入らないため、このベンチは
-**CI 専用ジョブ**にします。ローカルでは `--skip-rust` で ziggurats 側だけ測ります。
+### 実装
+
+| ファイル | 役割 |
+|---|---|
+| `bench/run.mjs` | 引数解析・両側の呼び出し・`results.json` / `results.md` 出力 |
+| `bench/lib/probe.mjs` | spawn / 計時 / 中央値 / `VmRSS` / 空きポート / `which`（Node 標準のみ） |
+| `bench/apps/ziggurats.mjs` | `zts init` → clean/incremental `zts build` → サイズ → 起動 → Live Preview の RSS と IPC |
+| `bench/apps/rust-tauri.mjs` | `cargo build --release`（ツールチェーンと crate が揃うときだけ） |
+
+被測定アプリは「ビルドコマンド / 実行ファイル / 起動判定 / 停止」で記述します。
+**測れない指標は数値を捏造せず `status: "skipped"` と理由**を JSON と Markdown の両方に出します。
+Rust 側は `cargo` と `vendor/tauri` の helloworld crate が無い環境では全指標 `skipped`、
+実ウィンドウが必要な起動・RSS・IPC もヘッドレス CI では明示的に `skipped` です。
+
+Rust ツールチェーンは `scripts/setup-toolchains.sh --rust` でしか入らないため CI（`ci-cli` の
+Linux マトリクス）では ziggurats 側だけを実測し、Check Run Summary とアーティファクト
+`bench-results-linux` に出します。ローカルでは `--skip-rust` で同じ実行ができます。
+`npm ci --prefix tests/tauri` は Live Preview の `invoke` 往復にだけ必要です（生成アプリの
+ビルド・起動・サイズはそれに依存しません）。
 
 数値を README に手で書かないこと。ベンチは必ず CI の Check Summary を正とします（手で書いた
 数値は環境が変わると嘘になるため）。
@@ -183,6 +200,6 @@ Rust ツールチェーンは `scripts/setup-toolchains.sh --rust` でしか入�
 | macOS のコード署名 / notarytool | 未対応（`zts` は署名しない）。配布手順で `codesign` を案内 |
 | AppImage の実生成 | 未対応。AppDir まで作り `appimagetool` を案内 |
 | MSI / MSIX | 未対応。`.exe` まで |
-| ベンチ 6 指標 | スライス C。上記 §4 の設計のみ |
+| ベンチ 6 指標 | **実装済み**（`bench/`、CI の Linux ジョブ）。Rust 側は toolchain が無い環境で `skipped` |
 | `zts package` の `--arch` | 意図的に作らない（§2.2） |
 | Linux aarch64 / macOS x86_64 のバイナリ | 未対応。`release.yml` は runner のアーキテクチャで名付ける（`uname -m`）。arm ランナーが用意できたら matrix に足すだけ |

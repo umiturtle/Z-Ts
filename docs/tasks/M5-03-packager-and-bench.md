@@ -1,14 +1,14 @@
 # Task M5-03: 3-OS パッケージャ & 対 Rust Tauri ベンチマーク
 
-- **Status**: `in_progress`
+- **Status**: `done`
 - **Branch**: `arena/235a0653-z-ts`
 - **Scope**: `src/bundler/`（新規）, `src/cli/`（`package` サブコマンド）, `bench/`（新規）,
   `build.zig`, `zigw`, `.github/workflows/ci.yml`, `docs/reference/cli.md`,
   `docs/learn/ja/guides/package.md`, `docs/architecture/packaging-and-bench.md`, 本ファイル
 - **Upstream Reference**: `vendor/tauri/crates/tauri-bundler/src/bundle/{deb,macos,settings,common}.rs`
   （`.deb` の control/data 構成、`.app` の `Info.plist`、Windows の `.exe` リソース）
-- **Next Step**: スライス C（`bench/run.mjs` + CI の Check Summary）。A/B は実装・テスト・
-  `zts package` への配線・ドキュメントまで完了。
+- **Next Step**: なし（完了）。Rust 側を実測したくなったら
+  `scripts/setup-toolchains.sh --rust --submodules` のあと `node bench/run.mjs`（`--skip-rust` を外す）。
 
 ---
 
@@ -34,13 +34,15 @@
 - [x] 既存 PE にセクションを 1 本追加してリソースを埋め込む（純 Zig・クロスプラットフォーム）
 - [x] `zts package --format exe`（`zig-out/package/<name>.exe`）
 
-### スライス C — ベンチマーク
+### スライス C — ベンチマーク（完了）
 
-- [ ] `bench/`: 被測定アプリを「ビルドコマンド / 実行ファイル / 起動判定 / 停止」で記述する
-      依存ゼロのランナー（`bench/run.mjs`）と ziggurats 側の定義
-- [ ] 6 指標（コールドビルド・インクリメンタル・サイズ・起動・RSS・IPC）を JSON + Markdown で出力
-- [ ] CI: Linux で ziggurats 側を実測し Check Run Summary に出す（Rust 側はツールチェーンが
-      無いとき `skipped` と明示）
+- [x] `bench/`: 被測定アプリを「ビルドコマンド / 実行ファイル / 起動判定 / 停止」で記述する
+      依存ゼロのランナー（`bench/run.mjs` + `bench/lib/probe.mjs`）と両側の定義
+      （`bench/apps/{ziggurats,rust-tauri}.mjs`）
+- [x] 6 指標（コールドビルド・インクリメンタル・サイズ・起動・RSS・IPC）を JSON + Markdown で出力。
+      測れないものは数値を捏造せず `skipped` と理由を出す
+- [x] CI: Linux（`ci-cli`）で ziggurats 側を実測し Check Run Summary / アーティファクトに出す。
+      Rust 側はツールチェーンが無いとき `skipped` と明示
 
 ---
 
@@ -62,9 +64,11 @@
   2. `DevServer.stop` が Windows で `shutdown` に失敗して `abort`（`NTSTATUS=0xc000000d`）→
      `shutdown` は POSIX 限定に。
   3. `tar -tzf … | grep -q` の `EPIPE` で Linux のスモークだけ失敗 → 一覧をファイル経由に。
-- **再開するとき**: スライス C。`bench/run.mjs`（依存ゼロ・Node 22）から。CI は
-  `setup-toolchains.sh --rust` を呼ぶ **ベンチ専用ジョブ**にし、Rust が無い環境では
-  `skipped` を Check Summary に明記する。
+- **スライス C 完了（M5-18）**: `bench/` の 4 ファイルを実装。ローカルで 6 指標すべて
+  `measured` を確認（例: clean 4.5 s / incremental 2.6 s / 149,432 bytes / startup 1.3 ms /
+  RSS 5,520 KiB / IPC 0.8 ms）。Rust 側は `cargo` 不在で全指標 `skipped`。
+  CI は `ci-cli` の Linux マトリクスにベンチステップを追加（専用ジョブは作らず、ジョブ数を
+  増やさない方針に合わせた）。
 
 ---
 

@@ -161,6 +161,7 @@ ziggurats には読者が 3 種類いて、使うコマンドもページも別�
 | [`reference/tauri-internals.md`](reference/tauri-internals.md) | IPC プロトコル・マクロ・内蔵プラグインの解剖（移植の参考・内部資料扱い） |
 | [`decisions/0018-documentation-site.md`](decisions/0018-documentation-site.md) | このサイト自体の設計（4 層・リンク検査・検索・`llms.txt`） |
 | [`architecture/incremental-dev-build.md`](architecture/incremental-dev-build.md) | `zts dev` のインクリメンタルビルド（型検査・dirty flag・依存グラフ・計測） |
+| [`architecture/tauri-feature-gap.md`](architecture/tauri-feature-gap.md) | 上流 Tauri v2 との機能ギャップ。理念に反さず実装すべきものの優先度付きリスト |
 
 ## 名前から引く
 

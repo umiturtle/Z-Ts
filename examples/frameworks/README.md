@@ -21,6 +21,24 @@ node scripts/gen-framework-demos.mjs react      # 1 つだけ（他はそのま�
 
 生成物は **コミットする** ので、CI は `npm install` をしません（毎チャットのコールドスタート対策）。
 
+## 公開デモへのリンク
+
+`zig build docs` が書き出す Pages では、各フレームワークの静的出力がそのまま公開されます
+（[デモ一覧](https://umiturtle.github.io/Z-Ts/examples/frameworks/index.html)）。
+サイトのベース URL はリポジトリ名が変わったら 1 箇所まとめて差し替えてください。
+
+| フレームワーク | デモ | フレームワーク | デモ |
+|---|---|---|---|
+| Angular | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) | Astro | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
+| Next.js | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) | Nuxt | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
+| React | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) | SolidJS | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
+| SolidStart | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) | Svelte | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
+| SvelteKit | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) | — | — |
+
+スクリーンショット回帰そのものは
+[`examples/gallery/README.md`](../gallery/README.md) と
+[`docs/architecture/screenshot-parity.md`](../../docs/architecture/screenshot-parity.md) を参照してください。
+
 ## 何を確かめるデモか
 
 - 9 つとも **同じ DOM・同じ CSS・同じ文言**。違うのはフレームワーク名とバージョンだけ。

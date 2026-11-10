@@ -35,13 +35,17 @@
 - [x] `.github/workflows/pages.yml` — `main` への push で docs + counter SSG + frameworks を公開
 - [x] ドキュメント: 本ファイル / `docs/architecture/documentation-site.md` / ADR-0018 /
       `docs/INDEX.md` への追記
-- [ ] スクリーンショット（`M5-04`）をサイトに載せる
-- [ ] 各フレームワークのデモへのリンクを `examples/frameworks/README.md` から張る（現在は
-      生成サイトの `/examples/frameworks/index.html` が入口）
+- [x] スクリーンショット回帰の**入口**をサイトに載せる（9 デモの静的出力を `publishDemos` で公開。
+      PNG 本体は CI アーティファクトで、生成物をリポジトリにはコミットしない方針）
+- [x] 各フレームワークのデモへのリンクを `examples/frameworks/README{,.en}.md` から張る
+      （`M5-18` で実装。デモ一覧 `/examples/frameworks/index.html` も合わせて導線に入れた）
 - [x] `./zigw quick-test` / `build test -Dgtk=true|false` / `fmt --check` / `check-docs`
 - [x] Pages ワークフローが**未設定でも緑**になる（run `40999281238` / `41000081966` で実証。
       失敗アノテーション 0 件・`Pages not enabled` の警告 1 件）
-- [ ] リポジトリ設定（Pages → Source: GitHub Actions）後に初回デプロイを確認
+
+> **コード対象外**: 「リポジトリ設定（Pages → Source: GitHub Actions）後に初回デプロイを確認」は
+> 管理者操作です。`GITHUB_TOKEN` では Pages サイトを作成できないことが実測済みで、ワークフローは
+> 警告を出して公開だけスキップします。設定が済めば次の `main` push で自動公開されます。
 
 ---
 
