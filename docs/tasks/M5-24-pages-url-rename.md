@@ -1,6 +1,6 @@
 # Task M5-24: 公開サイトの URL を改名後のリポジトリ名へ寄せる
 
-- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `done` <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/14e12855-z-ts`（main `a5b9d73` = PR #22 マージ後）
 - **Scope**: `src/docsite/{main,frameworks,demos}.zig`, `scripts/gen-framework-tutorials.py`,
   `docs/learn/{ja,en}/tutorials/*.md`（生成物）, `README.md`, `README.en.md`, `AGENTS.md`,
@@ -11,8 +11,8 @@
 - **Upstream Reference**: [`M5-23-ci-rename-safe-check-runs.md`](M5-23-ci-rename-safe-check-runs.md)
   （リネーム発覚の経緯）、[`../architecture/documentation-site.md`](../architecture/documentation-site.md)
   （Pages サブパスの設計）、規約 14（旧リポジトリ URL / パス名の扱い）
-- **Next Step**: 実装を push して PR を 1 本作り、3 OS CI が 7/7 緑になることを確認して
-  `gh pr merge` で `main` へマージする（マージ後の Pages デプロイも確認）。
+- **Next Step**: 完了。PR #23 は `main 8870ff6` にマージ済みで、マージ後の CI / Pages も緑。
+  公開サイトは `https://umiturtle.github.io/ZigguraTs/` で配信中。次の作業は別タスク票で宣言する。
 
 ---
 
@@ -33,7 +33,7 @@
 - [x] 規約 19 を追加し、公開面に旧 Pages URL が残らないことを機械検査する
 - [x] 日英 Doc と同期台帳を更新、`learn_path.steps` / `AGENTS.md` と
       `docs/roadmap/milestones.md` の**チェックボックスは非編集**
-- [ ] `quick-test` / `build test` / `doctest` / `docs-check` / `fmt --check` / 3 OS CI が緑、PR は 1 本だけ
+- [x] `quick-test` / `build test` / `doctest` / `docs-check` / `fmt --check` / 3 OS CI が緑、PR は 1 本だけ
 
 ## 2. 原因と範囲の切り分け
 
@@ -59,15 +59,22 @@
 
 ## Current State / Next Step
 
-- **現在**: 実装・ローカル検証まで完了。31 ファイルの Pages URL と 3 箇所のサブパスコメントを
-  新名へ置換、チュートリアル 20 ページ再生成、規約 19、同期台帳
-  （`--sync --date 2026-10-21`）まで反映済み。生成 `sitemap.xml` の `<loc>` は
-  `https://umiturtle.github.io/ZigguraTs/...` に変わった。
+- **完了**: 31 ファイルの Pages URL と 3 箇所のサブパスコメントを新名へ置換、
+  チュートリアル 20 ページ再生成、規約 19、同期台帳（`--sync --date 2026-10-21`）まで反映済み。
+- **PR [#23](https://github.com/umiturtle/ZigguraTs/pull/23)**: 1 本のみ。
+  push run [`42923602525`](https://github.com/umiturtle/ZigguraTs/actions/runs/42923602525) と
+  PR run [`42923638164`](https://github.com/umiturtle/ZigguraTs/actions/runs/42923638164) が
+  ともに 7/7 緑。`gh pr merge 23 --merge` で `main 8870ff6` にマージ。
+- **マージ後 `main`**: CI
+  [`42925367837`](https://github.com/umiturtle/ZigguraTs/actions/runs/42925367837) が 7/7 緑、
+  Pages [`42925367831`](https://github.com/umiturtle/ZigguraTs/actions/runs/42925367831) が
+  build + deploy 成功。実測で
+  `https://umiturtle.github.io/ZigguraTs/` は 200、`sitemap.xml` の `<loc>` は全て新名、
+  旧 `https://umiturtle.github.io/Z-Ts/` は 404 のまま（想定どおり）。
 - **ローカル緑**: `quick-test`（37 / 10）、`build test` exit 0、`doctest blocks=20`、
   `docs-check`（86 tests + `OK docsite pages=297 … api_undoc=0`）、`fmt --check`、
   `check-docs.py`（177 md / 34 読者ページ × 2 言語、規約 19 含む）、
   `gen-framework-tutorials.py --check`（20 pages）、`node --test`（7/7）。
 - **残る旧 URL**: `docs/tasks/` / `docs/decisions/` の歴史的記述のみ（コードスパンでリンクではない）。
   `github.com` リンクとチェックアウトパスは規約 14 どおり据え置き。
-- **次の 1 手**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
-  `main` の CI / Pages デプロイが緑になったらタスク票を `done` にする。
+- **次の 1 手**: なし。`AGENTS.md` / `docs/roadmap/milestones.md` のチェックボックスは非編集のまま。
