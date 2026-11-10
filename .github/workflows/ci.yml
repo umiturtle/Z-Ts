@@ -196,7 +196,7 @@ jobs:
             WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ZTS_WEBVIEW_SOFTWARE_RENDER=1 \
               xvfb-run -a examples/gallery/zig-out/bin/zts_gallery \
                 --out "$RUNNER_TEMP/shots" --require-native
-            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17 --require-zig
           } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
 
       - name: Gate on the screenshot markers (M5-04)
@@ -417,7 +417,7 @@ jobs:
           {
             ( cd examples/gallery && ../../zigw build install --summary all )
             examples/gallery/zig-out/bin/zts_gallery --out "$RUNNER_TEMP/shots" --require-native
-            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17 --require-zig
           } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
 
       - name: Gate on the screenshot markers (M5-04)
@@ -650,7 +650,7 @@ jobs:
             ( cd examples/gallery && ../../zigw build install --summary all )
             ZTS_WEBVIEW_TRACE=1 examples/gallery/zig-out/bin/zts_gallery.exe \
               --out "$RUNNER_TEMP/shots" --require-native
-            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17
+            node scripts/verify-screenshots.mjs "$RUNNER_TEMP/shots" --require-native --require-counts 17 --require-zig
           } 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-output.log"
 
       - name: Gate on the screenshot markers (M5-04)
@@ -920,7 +920,7 @@ jobs:
             done
             # Every OS must have decoded the *bundled* fonts (see docs/environment/github-actions.md).
             for os in linux macos windows; do
-              node scripts/verify-screenshots.mjs "artifacts/screenshots-$os" --require-native --require-counts 17
+              node scripts/verify-screenshots.mjs "artifacts/screenshots-$os" --require-native --require-counts 17 --require-zig
             done
             # Layout fingerprints must be identical (≤1px) and rasters close (≤6% of pixels differ).
             node scripts/compare-screenshots.mjs \

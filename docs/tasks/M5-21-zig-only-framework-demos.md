@@ -11,7 +11,7 @@
   `docs/architecture/screenshot-parity.md`, `scripts/check-docs.py`, `scripts/doc-sync.json`
 - **Upstream Reference**: [`../architecture/screenshot-parity.md`](../architecture/screenshot-parity.md),
   [`../tasks/M5-20-framework-tutorial-variants.md`](../tasks/M5-20-framework-tutorial-variants.md)
-- **Next Step**: 生成器と Gallery の IPC を実装し、9 デモを再生成 → 規約 16 → 3 OS CI → PR 1 本。
+- **Next Step**: 全チェックを通し、PR を 1 本作って 3 OS CI（特に `--require-zig`）を確認してマージ。
 
 ---
 
@@ -22,12 +22,12 @@
 9 つのデモは今 **ローカル JS の状態だけ**で動いており、静的 HTML として開いても同じに見える。
 「裏で Zig が動いているか」を画面から判定できないのが問題。したがって:
 
-- [ ] 9 デモすべてに **Zig 側の秘密鍵でしか作れない署名（seal）** を表示する
-- [ ] 9 デモすべてに **Zig が保持するカウンタ** を置き、`＋` / `−` が Zig のコマンドを呼ぶ
-- [ ] Zig が居ない（GitHub Pages の静的デモ）ときは **`ZIG OFFLINE`** と明示し、ボタンを無効化する
-- [ ] Gallery を **本物の Zig ホスト**にする（`ipc` スキーム＋ `js_bootstrap` の `invoke`）
-- [ ] 3 OS 同一バイト列・同一画素（seal / 初期値 / 文言を固定、時刻・乱数を使わない）
-- [ ] 日英 Doc 更新、規約 11 / 12 / 13 / 14 / 15 維持、`AGENTS.md` と `milestones.md` のチェックボックスは触らない
+- [x] 9 デモすべてに **Zig 側の秘密鍵でしか作れない署名（seal）** を表示する
+- [x] 9 デモすべてに **Zig が保持するカウンタ** を置き、`＋` / `−` が Zig のコマンドを呼ぶ
+- [x] Zig が居ない（GitHub Pages の静的デモ）ときは **`ZIG OFFLINE`** と明示し、ボタンを無効化する
+- [x] Gallery を **本物の Zig ホスト**にする（`ipc` スキーム＋ `js_bootstrap` の `invoke`）
+- [x] 3 OS 同一バイト列・同一画素（seal / 初期値 / 文言を固定、時刻・乱数を使わない）
+- [x] 日英 Doc 更新、規約 11 / 12 / 13 / 14 / 15 維持、**規約 16 を追加**、`AGENTS.md` と `milestones.md` のチェックボックスは触らない
 - [ ] `quick-test` / `build test` / `doctest` / `fmt --check` / `docs-check` / 3 OS CI が緑
 - [ ] PR は 1 本だけ
 
@@ -51,7 +51,29 @@
   デモだけ直してホストを忘れる／その逆を防ぐ。
 - `learn_path.steps` の 5 ステップ・95 分は不変（分岐は代替の道のまま）。
 
+## 4. 実装メモ（決定の追加分）
+
+- 生成器は `ZIG_PANEL_HTML` / `ZIG_READY_JS` / `.zigbar` CSS を **1 箇所**だけ持ち、5 つのテンプレート
+  （`appBody` / `jsxBody` / `svelteBody` / `angularBody` / `vueBody`）に `${ZIG_PANEL_HTML}` を差し込む。
+  `reactBody` / `svelteKitBody` / `astroBody` はそこから派生するので 9 個すべてに波及する。
+- `types/zts-globals.d.ts` は 9 プロジェクトすべてへ配布（従来は 3 つだけ）。`__ZTS_ZIG__` の
+  宣言を規約 16 で検査する。
+- トランスポートは 2 段: 本命は `fetch('ipc://localhost/<cmd>')`（`Tauri-Response: ok`＋CORS）、
+  失敗時は `js_bootstrap` の `__ztsPostMessage` フォールバックを `onMessage` で受け、
+  `evalJs` で `__TAURI_INTERNALS__.runCallback` を呼ぶ。WebKitGTK が独自スキーム POST を
+  拒否しても同じ 3 コマンドに到達する。
+- `manifest.json` の 9 件に `zig_online` を追加。`scripts/verify-screenshots.mjs --require-zig` を
+  3 OS の CI と `ci-parity` の再検証に付けた。
+- `ready_script` の計測セレクタに `.zigbar` 一式を追加し、3 OS の layout 指紋が新しいパネルも
+  比較するようにした。`zig_count` はパターンごとに 0 へ戻す。
+- `docs/learn/{ja,en}/tutorials/counter-*.md` の 18 本＋ chooser 2 本は
+  `python3 scripts/gen-framework-tutorials.py` で再生成（付録「Zig が動いているかを画面で確かめる」）。
+  `scripts/doc-sync.json` は `--sync --date 2026-10-21` で更新。
+
 ## Current State / Next Step
 
-- **現在**: 現状復元・設計完了。分散ロックのためこの票を先に push。
-- **次**: `gen-framework-demos.mjs` に共有パネル／CSS／`ZIG_READY` を追加し、Gallery に IPC を実装。
+- **現在**: 実装・9 デモ再生成・規約 16・日英 Doc・同期台帳まで完了。ローカルでは
+  `examples/gallery` の `build test` 8/8、`build install`、HeadlessMock 17 パターン、
+  `gen-framework-tutorials.py --check` 20 ページ、`check-docs.py` 緑を確認済み。
+- **次**: `quick-test` / `build test` / `doctest` / `fmt --check` / `build docs` を通し、
+  PR を **1 本**作って 3 OS CI の `--require-zig` と Cross-OS parity を確認する。

@@ -72,6 +72,31 @@ For the screenshot regression itself see
 2. Relative asset paths still resolve when served from memory or from a static host.
 3. Inline scripts get CSP hashes automatically; no `unsafe-inline` is needed.
 4. A fixed font set plus deterministic CSS gives byte-identical screenshots on three OSes.
+5. The `.zigbar` strip cannot be filled in without the Zig backend (below).
+
+## The part that only works when Zig is running
+
+The counter itself uses each framework's local state so you can compare idioms. The `.zigbar` strip
+underneath it is the opposite: **static HTML can never fill it in**. That is what makes "is Zig
+actually running back there?" visible on screen instead of being a matter of trust.
+
+| What you see | Behind the page |
+|---|---|
+| red `ZIG OFFLINE`, `+` / `-` disabled | published demo / the `zts dev` browser: no `window.__ZTS_ZIG__`, no `invoke` |
+| green `ZIG ONLINE`, 16-character seal, `+` / `-` enabled | Zig answers `zig_probe` / `zig_inc` / `zig_dec` over `ipc://` |
+
+The seal is the first eight bytes of SHA-256 over **a secret held only by the Zig binary** and Zig's
+own counter. Neither the secret nor the computation ships in any static file, so JavaScript cannot
+forge it. `+` / `-` mutate the counter owned by Zig, not the framework's local state, and each press
+produces a new seal. No clock and no randomness are involved, so the initial frame is byte-identical
+and pixel-identical on all three OSes.
+
+The host side is real code: [`examples/gallery/src/main.zig`](../gallery/src/main.zig) registers the
+`ipc` scheme and the three commands, while
+[`examples/gallery/src/web/zig-bridge.js`](../gallery/src/web/zig-bridge.js) is injected at
+`DOCUMENT_START`. Both use the unmodified `js_bootstrap` `window.__TAURI_INTERNALS__.invoke`. CI
+fails unless all nine manifest entries report `zig_online: true`
+(`scripts/verify-screenshots.mjs --require-zig`).
 
 ## Build notes per framework
 

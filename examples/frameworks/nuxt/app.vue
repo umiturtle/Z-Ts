@@ -25,6 +25,14 @@
       <span data-zts="status">mounted</span>
       <span class="tag">tauri://localhost</span>
     </div>
+  <div class="zigbar" data-zts="zig-panel">
+  <span class="zigbadge" data-zts="zig-state">ZIG OFFLINE</span>
+  <code class="zigseal" data-zts="zig-seal">—</code>
+  <span class="zigcount" data-zts="zig-count">—</span>
+  <button class="zigbtn" data-zts="zig-inc" disabled>＋</button>
+  <button class="zigbtn" data-zts="zig-dec" disabled>−</button>
+  <span class="zighint" data-zts="zig-hint">Zig が必要 / Zig required</span>
+</div>
   </section>
 </div>
 </template>
@@ -34,7 +42,11 @@ const count = ref(0);
 onMounted(() => {
   if (import.meta.client) {
     document.querySelector('[data-zts="status"]')!.textContent = 'mounted';
-    const zts = window.__ztsPostMessage; if (zts) zts(JSON.stringify({ app: "ready" }));
+    {
+  const zig = window.__ZTS_ZIG__;
+  if (zig && typeof zig.mount === "function") { zig.mount(); }
+  else { const zts = window.__ztsPostMessage; if (zts) zts(JSON.stringify({ app: "ready" })); }
+}
   }
 });
 </script>
@@ -85,4 +97,19 @@ button.primary { background:#4f46e5; border-color:#4338ca; color:#fff; }
 .meta { margin-top:18px; display:flex; align-items:center; justify-content:space-between;
   font-family:ZTSMono; font-size:12px; color:#64748b; }
 .tag { color:#0f766e; }
+/* Zig-only panel. Shared by all nine builds so the 3-OS comparator still diffs identical DOM.
+   A red badge means the static demo has no Zig host behind it. */
+.zigbar { display:flex; align-items:center; gap:10px; flex-wrap:nowrap;
+  margin-top:14px; padding-top:12px; border-top:1px solid #e2e8f0; }
+.zigbadge { flex:0 0 auto; font-family:ZTSMono; font-size:11px; letter-spacing:.04em;
+  padding:4px 8px; border-radius:999px; background:#fee2e2; color:#b42318; border:1px solid #fecaca; }
+.zigbadge[data-online="true"] { background:#dcfce7; color:#0f7b3f; border-color:#bbf7d0; }
+.zigseal { flex:0 0 auto; font-family:ZTSMono; font-size:12px; color:#0f766e; }
+.zigcount { flex:0 0 auto; min-width:24px; text-align:right;
+  font-family:ZTSMono; font-size:14px; color:#0f172a; }
+.zigbtn { flex:0 0 auto; font-family:ZTSMono; font-size:12px; padding:4px 9px;
+  border-radius:8px; border:1px solid #cbd5e1; background:#fff; color:#0f172a; cursor:pointer; }
+.zigbtn:disabled { opacity:.45; cursor:not-allowed; }
+.zighint { flex:1 1 auto; min-width:0; overflow:hidden; white-space:nowrap;
+  font-family:ZTSMono; font-size:11px; color:#64748b; }
 </style>

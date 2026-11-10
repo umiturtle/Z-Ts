@@ -21,14 +21,94 @@ const Io = std.Io;
 
 const webview = @import("zts_webview");
 const foundation = @import("zts_foundation");
+const tauri = @import("zts_tauri");
 const builtin = @import("builtin");
 const fw = @import("fw_assets.zig");
+
+/// `examples/gallery/src/web/zig-bridge.js` — the DOCUMENT_START bridge that turns the unmodified
+/// Tauri v2 `invoke()` bootstrap into `window.__ZTS_ZIG__` for all nine framework demos. Kept as a
+/// real `.js` file (not a Zig multiline string) so `node --check` and rule 16 can inspect it.
+const zig_bridge_script = @embedFile("web/zig-bridge.js");
 
 /// The custom scheme the gallery serves itself from. WebView2 has no custom-scheme API, so
 /// `windows.zig` maps `tauri://localhost/x` onto `http://tauri.localhost/x`; registering the
 /// gallery under `tauri` is what makes the *same* URL work on macOS, GTK and Windows. Every
 /// other scheme name navigates nowhere on Windows (a blank surface, proven by CI run #40514152272).
 const scheme_name = "tauri";
+
+/// The scheme the unmodified Tauri v2 bootstrap POSTs `invoke()` calls to. WebView2 maps
+/// `ipc://localhost/<cmd>` onto `http://ipc.localhost/<cmd>`; registering `ipc` here is what makes
+/// the *same* `zig_probe` / `zig_inc` / `zig_dec` commands reachable from all three OSes.
+const ipc_scheme_name = "ipc";
+
+/// Fixed CSRF token echoed by `js_bootstrap` in `Tauri-Invoke-Key`. Deliberately a constant: the
+/// gallery must produce byte-identical screenshots on Linux, macOS and Windows, so no per-launch
+/// randomness, clock or PID is allowed anywhere in the Zig-only demo path.
+const zig_invoke_key = "ziggurats-gallery-zig-only-v1";
+
+/// Secret that exists **only inside the Zig binary**. The static Pages builds ship no copy of it,
+/// so they cannot forge the seal no matter how much JavaScript they run. This is a demo of
+/// "Zig had to be here", not a cryptographic guarantee about an open-source constant.
+const zig_secret = "ziggurats/M5-21/zig-only-demos";
+
+/// The counter is owned by Zig, not by any framework's `useState` / signal / ref. It is reset to
+/// zero once per pattern in `run()` so every demos's screenshot starts from the same byte stream.
+var zig_count: i64 = 0;
+
+/// Lowercase hex of the first 8 bytes of SHA-256(secret || command || count). Fixed width keeps
+/// the panel's layout identical on every OS and every screenshot.
+fn zigSeal(cmd: []const u8, count: i64) [16]u8 {
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    hasher.update(zig_secret);
+    hasher.update(cmd);
+    var count_buf: [32]u8 = undefined;
+    const count_text = std.fmt.bufPrint(&count_buf, "{d}", .{count}) catch unreachable;
+    hasher.update(count_text);
+    var digest: [32]u8 = undefined;
+    hasher.final(&digest);
+    var out: [16]u8 = undefined;
+    const hex = "0123456789abcdef";
+    for (digest[0..8], 0..) |byte, i| {
+        out[i * 2] = hex[byte >> 4];
+        out[i * 2 + 1] = hex[byte & 0xF];
+    }
+    return out;
+}
+
+/// Runs a Zig-only command and allocates the JSON reply handed back to `invoke()`.
+/// `zig_probe` reads, `zig_inc` / `zig_dec` mutate the Zig-owned counter; all three return a
+/// freshly signed seal so the page can never synthesise a valid answer by itself.
+fn zigResponse(allocator: Allocator, cmd: []const u8) ![]u8 {
+    if (std.mem.eql(u8, cmd, "zig_inc")) {
+        zig_count += 1;
+    } else if (std.mem.eql(u8, cmd, "zig_dec")) {
+        zig_count -= 1;
+    } else if (!std.mem.eql(u8, cmd, "zig_probe")) {
+        return error.UnknownZigCommand;
+    }
+    const seal = zigSeal(cmd, zig_count);
+    return std.fmt.allocPrint(
+        allocator,
+        "{{\"ok\":true,\"count\":{d},\"seal\":\"{s}\"}}",
+        .{ zig_count, &seal },
+    );
+}
+
+/// CORS + the `Tauri-Response` header the official bootstrap reads to choose its success callback.
+const zig_ok_headers = [_]webview.types.HeaderPair{
+    .{ .name = "Tauri-Response", .value = "ok" },
+    .{ .name = "Access-Control-Allow-Origin", .value = "*" },
+    .{ .name = "Access-Control-Allow-Methods", .value = "POST, OPTIONS" },
+    .{ .name = "Access-Control-Allow-Headers", .value = "*" },
+    .{ .name = "Access-Control-Expose-Headers", .value = "*" },
+};
+const zig_error_headers = [_]webview.types.HeaderPair{
+    .{ .name = "Tauri-Response", .value = "error" },
+    .{ .name = "Access-Control-Allow-Origin", .value = "*" },
+    .{ .name = "Access-Control-Allow-Methods", .value = "POST, OPTIONS" },
+    .{ .name = "Access-Control-Allow-Headers", .value = "*" },
+    .{ .name = "Access-Control-Expose-Headers", .value = "*" },
+};
 
 /// One screenshot scenario. `theme` is what the CI verifier asserts about the decoded pixels:
 /// `light` → mean luminance > 170, `dark` → < 90, `mixed` → no constraint.
@@ -210,6 +290,10 @@ const WindowState = struct {
     /// The `{"app":"fontfetch", …}` probe: can the page actually read the bundled woff2 bytes?
     /// A webfont that loads in Chromium but not in WebKit shows up here as a failed fetch.
     font_fetch: ?[]u8 = null,
+    /// `{"app":"zig","online":true}` — the framework demo really reached a Zig command through
+    /// `ipc://`. Written into the manifest so CI can reject a gallery that silently fell back to
+    /// a static page on one OS.
+    zig_online: bool = false,
 };
 
 const Gallery = struct {
@@ -244,6 +328,12 @@ fn pathOf(uri: []const u8) []const u8 {
     return path[0..end];
 }
 
+/// `ipc://localhost/zig_probe` and its WebView2 twin `http://ipc.localhost/zig_probe` both
+/// resolve to `zig_probe`. Keeping this in one function is what makes rule 16 verifiable.
+fn ipcCommand(uri: []const u8) []const u8 {
+    return std.mem.trimStart(u8, pathOf(uri), "/");
+}
+
 fn patternForPath(path: []const u8) ?usize {
     for (patterns, 0..) |p, idx| {
         var buf: [96]u8 = undefined;
@@ -263,8 +353,66 @@ fn patternForPath(path: []const u8) ?usize {
     return null;
 }
 
+/// Completes one `ipc://localhost/<zig-command>` POST. This is the *only* place the three
+/// Zig-only commands are answered: no framework bundle contains a JS implementation of them, and
+/// the static Pages builds have no such scheme at all.
+fn onIpcRequest(g: *Gallery, req: webview.types.SchemeRequest) void {
+    // WebView2 / WebKit treat a custom-scheme POST with custom headers as cross-origin, so a
+    // preflight has to be answered before `fetch()` will even send the invoke body.
+    if (std.ascii.eqlIgnoreCase(req.method, "OPTIONS")) {
+        g.engine.completeRequest(req.request_id, .{
+            .status_code = 204,
+            .content_type = "text/plain",
+            .extra_headers = &zig_error_headers,
+            .body = .{},
+        }) catch {};
+        return;
+    }
+
+    const key = req.header("Tauri-Invoke-Key") orelse "";
+    if (!std.mem.eql(u8, key, zig_invoke_key)) {
+        g.engine.completeRequest(req.request_id, .{
+            .status_code = 403,
+            .content_type = "application/json",
+            .extra_headers = &zig_error_headers,
+            .body = .static("{\"code\":\"ForbiddenInvalidInvokeKey\"}"),
+        }) catch {};
+        return;
+    }
+
+    const cmd = ipcCommand(req.uri);
+    const json = zigResponse(g.allocator, cmd) catch {
+        g.engine.completeRequest(req.request_id, .{
+            .status_code = 400,
+            .content_type = "application/json",
+            .extra_headers = &zig_error_headers,
+            .body = .static("{\"code\":\"UnknownZigCommand\"}"),
+        }) catch {};
+        return;
+    };
+    // Direct proof, independent of whether the page manages to post its own `{"app":"zig"}`
+    // message: this line only runs when the Zig command table actually answered the invoke.
+    if (g.stateFor(req.window_id)) |ws| ws.zig_online = true;
+    g.engine.completeRequest(req.request_id, .{
+        .status_code = 200,
+        .content_type = "application/json",
+        .extra_headers = &zig_ok_headers,
+        .body = foundation.OwnedBytes.fromOwnedSlice(g.allocator, json),
+    }) catch {
+        g.allocator.free(json);
+    };
+}
+
 fn onSchemeRequest(userdata: ?*anyopaque, req: webview.types.SchemeRequest) void {
     const g: *Gallery = @ptrCast(@alignCast(userdata orelse return));
+
+    // `ipc://` is a different origin from `tauri://`; route it before the asset/HTML lookups so
+    // the same handler can be shared by both registered schemes on Linux, macOS and Windows.
+    if (std.ascii.eqlIgnoreCase(req.scheme, ipc_scheme_name)) {
+        onIpcRequest(g, req);
+        return;
+    }
+
     const path = pathOf(req.uri);
 
     // Published framework builds (`/fw/<name>/…`), served like a real app's `dist/`.
@@ -349,6 +497,19 @@ fn onMessage(userdata: ?*anyopaque, win: webview.WindowId, message: []const u8) 
     const ws = g.stateFor(win) orelse return;
     ws.messages += 1;
 
+    // `js_bootstrap` falls back from a failed `fetch('ipc://…')` to `window.__ztsPostMessage`.
+    // Answer that path too, so a WebKitGTK build that refuses custom-scheme POSTs still reaches
+    // the *same* Zig commands. `evalJs` runs `__TAURI_INTERNALS__.runCallback` with the Zig JSON.
+    if (std.mem.indexOf(u8, message, "\"__TAURI_INVOKE_KEY__\"")) |_| {
+        handleNativeBridgeInvoke(g, win, message);
+        return;
+    }
+    if (std.mem.indexOf(u8, message, "\"app\":\"zig\"")) |_| {
+        // The page confirms it painted a valid seal. Never clear a proof the Zig side already
+        // recorded: this message is additive evidence, not the only transport.
+        if (std.mem.indexOf(u8, message, "\"online\":true") != null) ws.zig_online = true;
+        return;
+    }
     if (std.mem.indexOf(u8, message, "\"app\":\"layout\"")) |_| {
         if (ws.layout == null) ws.layout = g.allocator.dupe(u8, message) catch null;
         return;
@@ -364,6 +525,35 @@ fn onMessage(userdata: ?*anyopaque, win: webview.WindowId, message: []const u8) 
     if (ws.report == null) {
         ws.report = g.allocator.dupe(u8, message) catch null;
     }
+}
+
+/// Second transport for the very same Zig commands: parse the bootstrap's fallback IPC envelope
+/// and complete the promise with `evalJs`. Only `zig_*` commands are accepted here.
+fn handleNativeBridgeInvoke(g: *Gallery, win: webview.WindowId, message: []const u8) void {
+    var arena_state = std.heap.ArenaAllocator.init(g.allocator);
+    defer arena_state.deinit();
+    const scratch = arena_state.allocator();
+
+    const parsed = std.json.parseFromSlice(std.json.Value, scratch, message, .{}) catch return;
+    defer parsed.deinit();
+    if (parsed.value != .object) return;
+    const obj = parsed.value.object;
+    const cmd_val = obj.get("cmd") orelse return;
+    const cb_val = obj.get("callback") orelse return;
+    const key_val = obj.get("__TAURI_INVOKE_KEY__") orelse return;
+    if (cmd_val != .string or cb_val != .integer or key_val != .string) return;
+    if (!std.mem.eql(u8, key_val.string, zig_invoke_key)) return;
+    const cmd = cmd_val.string;
+    if (!std.mem.startsWith(u8, cmd, "zig_")) return;
+
+    const json = zigResponse(scratch, cmd) catch return;
+    const script = std.fmt.allocPrint(
+        scratch,
+        "window.__TAURI_INTERNALS__.runCallback({d}, {s});",
+        .{ cb_val.integer, json },
+    ) catch return;
+    if (g.stateFor(win)) |ws| ws.zig_online = true;
+    g.engine.evalJs(win, script) catch {};
 }
 
 /// `document.fonts.check()` result from the layout message: both bundled families really loaded.
@@ -575,9 +765,21 @@ const parity_script =
     \\})();
 ;
 
-/// Every window gets both scripts, in this order: the font/CSS bootstrap must register the faces
-/// before the measurer runs, otherwise the first measurement races the font load.
+/// The two *static* init scripts. `run()` composes these with the runtime-generated Tauri v2
+/// bootstrap and `zig-bridge.js`, in this order: font/CSS parity must register the faces before
+/// the measurer runs, and `invoke()` must exist before the bridge defines `__ZTS_ZIG__`.
 const init_scripts = [_][]const u8{ parity_script, ready_script };
+
+/// DOCUMENT_START scripts actually handed to `createWindow`. Kept as a named function so the
+/// tests can prove the unmodified bootstrap and the Zig bridge are both installed.
+fn composeInitScripts(bootstrap: []const u8) [4][]const u8 {
+    return .{
+        init_scripts[0], // parity_script   — bundled fonts + deterministic CSS
+        bootstrap, // js_bootstrap    — window.__TAURI_INTERNALS__.invoke
+        zig_bridge_script, // zig-bridge.js   — window.__ZTS_ZIG__
+        init_scripts[1], // ready_script    — load / layout / fontfetch probe
+    };
+}
 
 /// Injected at `DOCUMENT_START` (after the backends install `window.__ztsPostMessage`), so the
 /// gallery knows exactly when a page finished loading *and* how big its viewport really is.
@@ -615,7 +817,8 @@ const ready_script =
     \\    try { window.__ztsPostMessage(JSON.stringify(payload)); } catch (e) {}
     \\  };
     \\  var measure = function () {
-    \\    var sel = 'body,.shell,.head,.card,.counter,.value,.features,.features>li,.meta,' +
+    \\    var sel = 'body,.shell,.head,.card,.counter,.value,.features,.features>li,.meta,.zigbar,' +
+    \\              '.zigbadge,.zigseal,.zigcount,.zigbtn,.zighint,' +
     \\              'h1,h2,h3,p,ul,li,button,footer,.badge,.title,.sub,.brand,.logo,.tag';
     \\    var boxes = [];
     \\    var names = [];
@@ -918,6 +1121,15 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
     var manifest: std.Io.Writer.Allocating = .init(g.allocator);
     defer manifest.deinit();
 
+    // The *real* Tauri v2 bootstrap (src/tauri/js_bootstrap.zig), not a hand-written stub:
+    // `@tauri-apps/api` v2 would find exactly the same `window.__TAURI_INTERNALS__.invoke`.
+    const bootstrap = try tauri.js_bootstrap.renderScriptAlloc(g.allocator, .{
+        .label = "main",
+        .invoke_key = zig_invoke_key,
+    });
+    defer g.allocator.free(bootstrap);
+    var scripts = composeInitScripts(bootstrap);
+
     const writer = &manifest.writer;
     try writer.print(
         "{{\n  \"host\": \"{s}\",\n  \"os\": \"{s}\",\n  \"generated_by\": \"examples/gallery\",\n  \"patterns\": [\n",
@@ -929,24 +1141,19 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
             if (!std.mem.eql(u8, want, p.name)) continue;
         }
 
-        const ws = WindowState{ .id = undefined, .pattern = idx };
-        _ = ws;
+        // Deterministic across OSes: every demo starts from the same Zig-owned counter value.
+        zig_count = 0;
 
         const id = try g.engine.createWindow(.{
             .title = "Z-Ts gallery",
             .size = .wh(@floatFromInt(p.css_width), @floatFromInt(p.css_height)),
-            .init_scripts = &init_scripts,
+            .init_scripts = &scripts,
             .initial_url = null,
             .initial_html = null,
         });
 
-        var url_buf: [192]u8 = undefined;
-        const url = if (p.route.len != 0)
-            try std.fmt.bufPrint(&url_buf, "{s}://localhost/{s}", .{ scheme_name, p.route })
-        else
-            try std.fmt.bufPrint(&url_buf, "{s}://localhost/{s}", .{ scheme_name, p.name });
-        try g.engine.navigate(id, url);
-
+        // Register the state *before* navigating: a DOCUMENT_START script / `ipc://` POST can
+        // arrive as soon as the load starts, and `onMessage` needs the `zig_online` slot.
         try g.windows.append(g.allocator, .{ .id = id, .pattern = idx });
         defer {
             // The ready report is owned by the window state, so releasing the window releases it.
@@ -958,6 +1165,13 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
             _ = g.windows.pop();
             g.engine.closeWindow(id) catch {};
         }
+
+        var url_buf: [192]u8 = undefined;
+        const url = if (p.route.len != 0)
+            try std.fmt.bufPrint(&url_buf, "{s}://localhost/{s}", .{ scheme_name, p.route })
+        else
+            try std.fmt.bufPrint(&url_buf, "{s}://localhost/{s}", .{ scheme_name, p.name });
+        try g.engine.navigate(id, url);
 
         // 1. Wait until the document fired `load` **and** reported its real viewport. On Windows
         //    the WebView2 browser process can take seconds to start, so a fixed sleep alone would
@@ -1031,6 +1245,11 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
         if (ws_ptr.font_fetch) |probe| {
             try writer.writeAll(", \"font_fetch\": ");
             try writeJsonString(writer, probe);
+        }
+        // M5-21: did this framework demo actually reach a Zig command? CI rejects `false`,
+        // because a static HTML-only render must never be mistaken for a working Zig backend.
+        if (p.requires_app_ready) {
+            try writer.print(", \"zig_online\": {s}", .{if (ws_ptr.zig_online) "true" else "false"});
         }
         try writer.writeAll(" }");
         captured += 1;
@@ -1131,6 +1350,10 @@ pub fn main(init: std.process.Init) !void {
     defer g.windows.deinit(gpa);
 
     try engine.registerScheme(scheme_name, .{ .userdata = &g, .onRequest = onSchemeRequest });
+    // `ipc://localhost/<cmd>` (WebView2: `http://ipc.localhost/<cmd>`) — the scheme the
+    // unmodified Tauri v2 bootstrap POSTs `invoke()` to. Without it, `zig_probe` cannot run and
+    // all nine demos would stay at `ZIG OFFLINE` on every OS.
+    try engine.registerScheme(ipc_scheme_name, .{ .userdata = &g, .onRequest = onSchemeRequest });
     engine.setMessageHandler(.{ .userdata = &g, .onMessage = onMessage });
 
     const cwd = std.Io.Dir.cwd();
@@ -1245,6 +1468,78 @@ test "gallery: the injected scripts actually install the bundled fonts" {
     try std.testing.expect(std.mem.indexOf(u8, ready_script, "__ztsFontsReady") != null);
     try std.testing.expect(std.mem.indexOf(u8, ready_script, "sans0b") != null);
     try std.testing.expect(std.mem.indexOf(u8, ready_script, "\"font_ok\":") == null);
+}
+
+test "gallery: M5-21 init scripts install the real Tauri invoke() and the Zig bridge" {
+    const testing = std.testing;
+    // Static base is still exactly the two legacy scripts (fonts then measurer).
+    try testing.expectEqual(@as(usize, 2), init_scripts.len);
+    const bootstrap = try tauri.js_bootstrap.renderScriptAlloc(testing.allocator, .{
+        .label = "main",
+        .invoke_key = zig_invoke_key,
+    });
+    defer testing.allocator.free(bootstrap);
+    const scripts = composeInitScripts(bootstrap);
+    try testing.expectEqual(@as(usize, 4), scripts.len);
+    try testing.expectEqual(parity_script, scripts[0]);
+    try testing.expectEqual(bootstrap, scripts[1]);
+    try testing.expectEqual(zig_bridge_script, scripts[2]);
+    try testing.expectEqual(ready_script, scripts[3]);
+    // The bootstrap must be the unmodified one: real `__TAURI_INTERNALS__.invoke` + the fixed
+    // CSRF token the `ipc` scheme handler checks.
+    try testing.expect(std.mem.indexOf(u8, bootstrap, "__TAURI_INTERNALS__") != null);
+    try testing.expect(std.mem.indexOf(u8, bootstrap, zig_invoke_key) != null);
+    // The bridge exposes exactly the three commands the Zig host answers, and no JS fallback
+    // implementation of the seal (which would defeat the whole point of the demo).
+    for ([_][]const u8{ "__ZTS_ZIG__", "zig_probe", "zig_inc", "zig_dec", "ZIG ONLINE" }) |needle| {
+        try testing.expect(std.mem.indexOf(u8, zig_bridge_script, needle) != null);
+    }
+    try testing.expect(std.mem.indexOf(u8, zig_bridge_script, zig_secret) == null);
+    try testing.expect(std.mem.indexOf(u8, zig_bridge_script, "Sha256") == null);
+}
+
+test "gallery: M5-21 Zig seal is deterministic and the counter lives in Zig" {
+    const testing = std.testing;
+    zig_count = 0;
+    defer zig_count = 0;
+
+    const seal0 = zigSeal("zig_probe", 0);
+    try testing.expectEqual(@as(usize, 16), seal0.len);
+    try testing.expectEqualStrings(&seal0, &zigSeal("zig_probe", 0));
+    try testing.expect(!std.mem.eql(u8, &seal0, &zigSeal("zig_inc", 0)));
+    try testing.expect(!std.mem.eql(u8, &seal0, &zigSeal("zig_probe", 1)));
+
+    const probe = try zigResponse(testing.allocator, "zig_probe");
+    defer testing.allocator.free(probe);
+    try testing.expect(std.mem.indexOf(u8, probe, "\"ok\":true") != null);
+    try testing.expect(std.mem.indexOf(u8, probe, "\"count\":0") != null);
+    try testing.expect(std.mem.indexOf(u8, probe, &seal0) != null);
+
+    const inc = try zigResponse(testing.allocator, "zig_inc");
+    defer testing.allocator.free(inc);
+    try testing.expectEqual(@as(i64, 1), zig_count);
+    try testing.expect(std.mem.indexOf(u8, inc, "\"count\":1") != null);
+    const dec = try zigResponse(testing.allocator, "zig_dec");
+    defer testing.allocator.free(dec);
+    try testing.expectEqual(@as(i64, 0), zig_count);
+    try testing.expect(std.mem.indexOf(u8, dec, &seal0) == null); // seal includes the command
+    try testing.expectError(error.UnknownZigCommand, zigResponse(testing.allocator, "zig_nope"));
+}
+
+test "gallery: M5-21 ipc command parsing works for both Linux/macOS and WebView2 URLs" {
+    const testing = std.testing;
+    try testing.expectEqualStrings("zig_probe", ipcCommand("ipc://localhost/zig_probe"));
+    try testing.expectEqualStrings("zig_inc", ipcCommand("http://ipc.localhost/zig_inc"));
+    try testing.expectEqualStrings("zig_dec", ipcCommand("ipc://localhost/zig_dec?x=1"));
+    for ([_][]const u8{ "zig_probe", "zig_inc", "zig_dec" }) |cmd| {
+        const head = zig_ok_headers[0];
+        try testing.expectEqualStrings("Tauri-Response", head.name);
+        try testing.expectEqualStrings("ok", head.value);
+        var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena_state.deinit();
+        const json = try zigResponse(arena_state.allocator(), cmd);
+        try testing.expect(std.mem.indexOf(u8, json, "\"seal\":") != null);
+    }
 }
 
 test "gallery: SHA-256 helper produces lowercase hex of the right length" {

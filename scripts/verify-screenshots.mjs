@@ -18,9 +18,12 @@
 //      must render with the *same* woff2 files, otherwise the cross-OS comparison is meaningless.
 //   6. a layout fingerprint (`{"app":"layout", boxes:[…]}`) must be present: it is what
 //      `scripts/compare-screenshots.mjs` diffs between Linux / macOS / Windows.
+//   7. `--require-zig` (M5-21): all nine framework demos must have reached a real Zig command
+//      over `ipc://`. A gallery that rendered nothing but static HTML must not pass as a
+//      "framework demo", because that was the exact bug this task fixes.
 //
 // Usage:
-//   node scripts/verify-screenshots.mjs <dir> [--require-native] [--require-counts 17]
+//   node scripts/verify-screenshots.mjs <dir> [--require-native] [--require-counts 17] [--require-zig]
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -78,6 +81,7 @@ ${looseRows}
 
 const args = process.argv.slice(2);
 const requireNative = args.includes('--require-native');
+const requireZig = args.includes('--require-zig');
 const countsIdx = args.indexOf('--require-counts');
 const requireCounts = countsIdx >= 0 ? Number(args[countsIdx + 1]) : 0;
 // `--require-counts` eats the next token, so skip flag/value pairs before picking the directory
@@ -107,6 +111,23 @@ if (requireNative && manifest.host === 'mock') {
 }
 if (requireCounts > 0 && manifest.patterns.length < requireCounts) {
   fail(`only ${manifest.patterns.length} pattern(s) in the manifest, expected at least ${requireCounts}`);
+}
+
+// M5-21: the nine framework patterns carry `zig_online`, produced only when the page's
+// `zig_probe` invoke reached the Zig binary through `ipc://`. Static HTML cannot set it.
+const EXPECTED_ZIG_DEMOS = 9;
+const zigPatterns = manifest.patterns.filter((p) => Object.prototype.hasOwnProperty.call(p, 'zig_online'));
+if (requireZig) {
+  if (manifest.host === 'mock') {
+    fail('host=mock — cannot prove the Zig IPC bridge without a native WebView');
+  }
+  if (zigPatterns.length !== EXPECTED_ZIG_DEMOS) {
+    fail(`only ${zigPatterns.length}/${EXPECTED_ZIG_DEMOS} framework patterns report zig_online (gallery host is stale)`);
+  }
+  const offline = zigPatterns.filter((p) => p.zig_online !== true).map((p) => p.name);
+  if (offline.length) {
+    fail(`Zig backend unreachable for ${offline.join(', ')} — the demos rendered as static HTML only`);
+  }
 }
 
 const parseCount = 0;
@@ -247,6 +268,7 @@ contactSheet(dir, manifest, loose);
 
 console.log(lines.join('\n'));
 console.log(
-  `OK screenshots host=${manifest.host} os=${manifest.os} patterns=${checked} loose=${loose.length} dir=${dir}`,
+  `OK screenshots host=${manifest.host} os=${manifest.os} patterns=${checked} loose=${loose.length} ` +
+    `zig=${zigPatterns.filter((p) => p.zig_online === true).length}/${EXPECTED_ZIG_DEMOS} dir=${dir}`,
 );
 void parseCount;

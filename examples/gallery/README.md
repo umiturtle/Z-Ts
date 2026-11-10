@@ -9,12 +9,12 @@
 
 ```bash
 cd examples/gallery
-zig build test --summary all             # 3 本の単体テスト
+zig build test --summary all             # 単体テスト（8 本）
 zig build screenshots                    # zig-out/screenshots/ に 17 枚 + manifest.json
 zig build install
 ./zig-out/bin/zts_gallery --out /tmp/shots --require-native
 ./zig-out/bin/zts_gallery --out /tmp/shots --only js-roundtrip
-cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --require-counts 17
+cd ../.. && node scripts/verify-screenshots.mjs /tmp/shots --require-native --require-counts 17 --require-zig
 node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（= 豆腐）を検出
 ```
 
@@ -23,6 +23,7 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
 | `--out <dir>` | PNG と `manifest.json` の出力先（既定 `zig-out/screenshots`） |
 | `--only <name>` | 1 パターンだけ撮る（デバッグ用） |
 | `--require-native` | ネイティブバックエンドが使えず `HeadlessMock` に落ちたら **exit 1**（`FAIL gallery native backend unavailable (host=mock)`） |
+| `--require-zig`（検証スクリプト側） | 9 デモすべての `zig_online` が `true` でないと失敗。静的 HTML だけを撮って「デモが動いた」と誤判定しない |
 
 `DISPLAY` の無い Linux では GTK が起動できず `SKIP gallery … (DisplayUnavailable)` + exit 0 に
 なります。CI は `xvfb-run` で実行し `--require-native` を付けているため、この経路は通りません。
@@ -74,6 +75,25 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
 - ギャラリーは `parity_script` で `text-rendering: geometricPrecision` を全要素に強制する
   （これが無いと WebKitGTK が送り幅を整数に丸め、44 文字で 5px ずれる）
 
+## 9 デモの裏で本当に Zig を動かす（`ipc://`）
+
+9 つのフレームワークデモは、カウンター本体こそ各 FW のローカル状態ですが、下部の `.zigbar`
+パネルは **Zig が無いと埋まりません**。静的 HTML（GitHub Pages の公開デモ / `zts dev` の
+ブラウザ）では `ZIG OFFLINE` とボタン無効、ネイティブのギャラリーでは `ZIG ONLINE` と
+16 桁の seal・Zig 所有のカウンタが出ます。
+
+- `tauri` に加えて **`ipc` スキーム**を登録。`zig_probe` / `zig_inc` / `zig_dec` を
+  `application/json` + `Tauri-Response: ok` + CORS ヘッダで返す（Windows は
+  `http://ipc.localhost/<cmd>` に写像される）。
+- `DOCUMENT_START` に**無改造の** `src/tauri/js_bootstrap.zig` を注入 →
+  `window.__TAURI_INTERNALS__.invoke`。さらに [`src/web/zig-bridge.js`](src/web/zig-bridge.js)
+  が `window.__ZTS_ZIG__` を定義し、各 FW のライフサイクルから `mount()` を呼ぶ。
+- seal は `Sha256(Zig 側の秘密 || コマンド || count)` の先頭 8 バイトを hex 化したもの。
+  秘密も計算式も静的ファイルには無い。時刻・乱数を使わないので、初期画面は 3 OS で同一。
+- `fetch('ipc://…')` が失敗した環境向けに、`js_bootstrap` の `__ztsPostMessage`
+  フォールバックも同じ 3 コマンドで捌く（`evalJs` で callback を解決）。
+- `manifest.json` の 9 件に `zig_online` を書き、`--require-zig` が全件 `true` を要求する。
+
 ## カスタムスキームは `tauri://`（重要）
 
 ページは `tauri://localhost/<pattern>` から配信されます。**WebView2 はカスタムスキームを
@@ -93,7 +113,7 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
 
 - `<host>-<name>.png` — Web コンテンツの CSS 画素をそのまま PNG にしたもの（ウィンドウ装飾なし）
 - `manifest.json` — `{host, os, generated_by, patterns:[{name, file, theme, css_width, css_height,
-  width, height, bytes, messages, sha256, expect_center_rgb?, layout, font_ok}]}`
+  width, height, bytes, messages, sha256, expect_center_rgb?, layout, font_ok, zig_online?}]}`
   （`layout` はページが投稿した JSON を文字列のまま保存したもの）
 
 `index.html`（コンタクトシート）は検証スクリプトが生成します。

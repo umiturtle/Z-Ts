@@ -99,8 +99,10 @@ zts dev                 # http://127.0.0.1:5173
     <ul class="features">
 ```
 
-状態は `let count = 0` です。この example は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
-で動かしています。次の章でここに ziggurats のコマンドをつなぎます。
+状態は `let count = 0` です。カウンター本体は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
+で動かしています。その下の `.zigbar` パネルは逆で、**Zig が動いていないと絶対に埋まりません**
+（[付録](#付録-zig-が動いているかを画面で確かめる)）。次の章でここに ziggurats のコマンドを
+つなぎます。
 
 ## 4. Zig のコマンドを足す
 
@@ -155,6 +157,28 @@ zig-out/bin/my_app        # ウィンドウが開き、+1 が Zig まで届く
 
 `web/` は gzip 双子・CSP ハッシュ付きでバイナリに埋め込まれるので、隣にアセットディレクトリは
 要りません。
+
+## 付録: Zig が動いているかを画面で確かめる
+
+9 つの example はどれも同じ `.zigbar` パネルを持っています。ここだけは **Zig が無いと成立しません**。
+
+| 見た目 | 裏で起きていること |
+|---|---|
+| 赤い `ZIG OFFLINE`・`＋` `−` が無効 | 静的 HTML だけ（公開デモ、`zts dev` のブラウザ）。`window.__ZTS_ZIG__` が無い |
+| 緑の `ZIG ONLINE`・16 桁の seal・`＋` `−` が有効 | Zig のバイナリが `zig_probe` / `zig_inc` / `zig_dec` に答えている |
+
+seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA-256 の先頭 8 バイトです。静的
+ファイルには秘密も計算式も入っていないので、JavaScript だけでこの文字列をでっち上げることは
+できません。`＋` `−` はフレームワークのローカル状態ではなく **Zig が保持するカウンタ**を増減し、
+押すたびに seal が変わります。つまりこの 1 行が「裏で Zig が生きているか」の答えです。
+
+配線の実物は
+[`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) と
+[`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig) にあります。ギャラリーは
+無改造の `@tauri-apps/api` v2 と同じ `window.__TAURI_INTERNALS__.invoke` を `DOCUMENT_START` で
+注入し、`ipc://localhost/<command>` を Zig で捌きます。自分のアプリで点灯させたいときは、この
+3 コマンドを `rpc.Schema` に追加し、同じブリッジを注入してください。カウンター本体を IPC に
+つなぐ手順は [5 章](#5-ボタンを-ipc-につなぐ) のとおりです。
 
 ## ここから先
 

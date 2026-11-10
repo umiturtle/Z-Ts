@@ -1275,7 +1275,7 @@ var Version = class {
     this.patch = parts.slice(2).join(".");
   }
 };
-var VERSION = /* @__PURE__ */ new Version("22.2.3");
+var VERSION = /* @__PURE__ */ new Version("22.2.5");
 var DOC_PAGE_BASE_URL = (() => {
   const full = VERSION.full;
   const isPreRelease = full.includes("-next") || full.includes("-rc") || full === "0.0.0-PLACEHOLDER";
@@ -7136,7 +7136,7 @@ function getTemplateContent(el) {
 function isTemplateElement(el) {
   return el.nodeType === Node.ELEMENT_NODE && el.nodeName === "TEMPLATE";
 }
-var COMMENT_DISALLOWED = /^>|^->|<!--|-->|--!>|<!-$/g;
+var COMMENT_DISALLOWED = /(^-?|--!?)>|<(?=!--|!-$)/g;
 var COMMENT_DELIMITER = /(<|>)/g;
 var COMMENT_DELIMITER_ESCAPED = "\u200B$1\u200B";
 function escapeCommentText(value) {
@@ -9383,10 +9383,10 @@ function setDomProperty(tNode, lView, propName, value, renderer, sanitizer) {
     }
   }
 }
-function unwrapImgVideoSrcValue(propName, element, value) {
+function unwrapImgVideoSrcValue(propName, element, value, isAttribute = false) {
   if (propName === "src" && (element.tagName === "IMG" || element.tagName === "VIDEO")) {
     if (value == null) {
-      return "";
+      return isAttribute ? value : "";
     }
     return unwrapSafeValue(value);
   }
@@ -9524,7 +9524,7 @@ function elementAttributeInternal(tNode, lView, name, value, sanitizer, namespac
     assertTNodeType(tNode, 2, `Attempted to set attribute \`${name}\` on a container node. Host bindings are not valid on ng-container or ng-template.`);
   }
   const element = getNativeByTNode(tNode, lView);
-  value = unwrapImgVideoSrcValue(name, element, value);
+  value = unwrapImgVideoSrcValue(name, element, value, true);
   setElementAttribute(lView[RENDERER], element, namespace, tNode.value, name, value, sanitizer);
 }
 function setElementAttribute(renderer, element, namespace, tagName, name, value, sanitizer) {
@@ -10067,9 +10067,23 @@ function refreshView(tView, lView, templateFn, context2) {
       lView[FLAGS] &= ~(64 | 8);
     }
   } catch (e) {
-    let handled = false;
-    let errorToHandle = e;
-    let currentLView = lView;
+    handleViewError(lView, e, isInCheckNoChangesPass);
+  } finally {
+    if (currentConsumer !== null) {
+      consumerAfterComputation(currentConsumer, prevConsumer);
+      if (returnConsumerToPool) {
+        maybeReturnReactiveLViewConsumer(currentConsumer);
+      }
+    }
+    leaveView();
+  }
+}
+function handleViewError(lView, e, isInCheckNoChangesPass) {
+  let handled = false;
+  let errorToHandle = e;
+  let currentLView = lView;
+  const prevConsumer = setActiveConsumer(null);
+  try {
     while (currentLView !== null) {
       if (isLContainer(currentLView)) {
         currentLView = currentLView[PARENT];
@@ -10099,20 +10113,14 @@ function refreshView(tView, lView, templateFn, context2) {
       }
       currentLView = currentLView[PARENT];
     }
-    if (!handled) {
-      if (!isInCheckNoChangesPass) {
-        markAncestorsForTraversal(lView);
-      }
-      throw errorToHandle;
-    }
   } finally {
-    if (currentConsumer !== null) {
-      consumerAfterComputation(currentConsumer, prevConsumer);
-      if (returnConsumerToPool) {
-        maybeReturnReactiveLViewConsumer(currentConsumer);
-      }
+    setActiveConsumer(prevConsumer);
+  }
+  if (!handled) {
+    if (!isInCheckNoChangesPass) {
+      markAncestorsForTraversal(lView);
     }
-    leaveView();
+    throw errorToHandle;
   }
 }
 function detectChangesInEmbeddedViews(lView, mode) {
@@ -10170,7 +10178,11 @@ function detectChangesInView(lView, mode) {
     const prevConsumer = setActiveConsumer(null);
     try {
       if (!isInCheckNoChangesPass) {
-        runEffectsInView(lView);
+        try {
+          runEffectsInView(lView);
+        } catch (e) {
+          handleViewError(lView, e, isInCheckNoChangesPass);
+        }
       }
       detectChangesInEmbeddedViews(lView, 1);
       const components = tView.components;
@@ -10848,7 +10860,7 @@ function setTNodeInsertBeforeIndex(tNode, index) {
     setI18nHandling(getInsertInFrontOfRNodeWithI18n, processI18nInsertBefore);
     insertBeforeIndex = tNode.insertBeforeIndex = [null, index];
   } else {
-    assertEqual(Array.isArray(insertBeforeIndex), true, "Expecting array here");
+    ngDevMode && assertEqual(Array.isArray(insertBeforeIndex), true, "Expecting array here");
     insertBeforeIndex.push(index);
   }
 }
@@ -10873,6 +10885,9 @@ function getInstructionFromIcuCreateOpCode(mergedCode) {
 function icuCreateOpCode(opCode, parentIdx, refIdx) {
   ngDevMode && assertGreaterThanOrEqual(parentIdx, 0, "Missing parent index");
   ngDevMode && assertGreaterThan(refIdx, 0, "Missing ref index");
+  if (parentIdx > 32767 || refIdx > 65535) {
+    throw new Error("ICU node index out of range (too many nodes in ICU case)");
+  }
   return opCode | parentIdx << 17 | refIdx << 1;
 }
 function isRootTemplateMessage(subTemplateIndex) {
@@ -12359,7 +12374,7 @@ var ComponentFactory = class {
   }
 };
 function createRootTView(rootSelectorOrNode, componentDef, componentBindings, directives, allowNonStandaloneDirectives) {
-  const tAttributes = rootSelectorOrNode ? ["ng-version", "22.2.3"] : extractAttrsAndClassesFromSelector(componentDef.selectors[0]);
+  const tAttributes = rootSelectorOrNode ? ["ng-version", "22.2.5"] : extractAttrsAndClassesFromSelector(componentDef.selectors[0]);
   let creationBindings = null;
   let updateBindings = null;
   let varsToAllocate = 0;
@@ -15515,7 +15530,7 @@ function getDeepLinkProperties(instance) {
 var eventsStack = [];
 function getBaseDocUrl() {
   const full = VERSION.full;
-  const isPreRelease = full.includes("-next") || full.includes("-rc") || full === "22.2.3";
+  const isPreRelease = full.includes("-next") || full.includes("-rc") || full === "22.2.5";
   const prefix = isPreRelease ? "next" : `v${VERSION.major}`;
   return `https://${prefix}.angular.dev`;
 }
@@ -15683,7 +15698,7 @@ function getTransferState(injector) {
   const doc = injector.get(DOCUMENT);
   const appId = injector.get(APP_ID);
   const transferState = retrieveTransferredState(doc, appId);
-  const filteredEntries = {};
+  const filteredEntries = createDictionary();
   for (const [key, value] of Object.entries(transferState)) {
     if (!isInternalHydrationTransferStateKey(key)) {
       filteredEntries[key] = value;
@@ -16854,10 +16869,10 @@ function \u0275\u0275deferHydrateWhen(rawValue) {
   }
   if (!shouldAttachTrigger(2, lView, tNode)) return;
   const bindingIndex = nextBindingIndex();
-  const tView = getTView();
-  const hydrateTriggers = getHydrateTriggers(tView, tNode);
-  hydrateTriggers.set(6, null);
   if (bindingUpdated(lView, bindingIndex, rawValue)) {
+    const tView = getTView();
+    const hydrateTriggers = getHydrateTriggers(tView, tNode);
+    hydrateTriggers.set(6, null);
     if (false) {
       triggerDeferBlock(2, lView, tNode);
     } else {
@@ -18902,7 +18917,7 @@ var OpCodeParser = class {
   }
 };
 var BINDING_REGEXP = /�(\d+):?\d*�/gi;
-var ICU_REGEXP = /({\s*�\d+:?\d*�\s*,\s*\S{6}\s*,[\s\S]*})/gi;
+var ICU_REGEXP = /({\s*�\d+:?\d*�\s*,\s*\S{6}\s*,[\s\S]*})/i;
 var NESTED_ICU = /�(\d+)�/;
 var ICU_BLOCK_REGEXP = /^\s*(�\d+:?\d*�)\s*,\s*(select|plural)\s*,/;
 var MARKER = `\uFFFD`;
@@ -19268,6 +19283,10 @@ function walkIcuTree(ast, tView, tIcu, lView, sharedUpdateOpCodes, create, remov
           const elAttrs = element.attributes;
           for (let i = 0; i < elAttrs.length; i++) {
             const attr = elAttrs.item(i);
+            if (ngDevMode && isBindingLikeAttributeName(attr.name)) {
+              console.warn(formatRuntimeError(700, `ICU expressions cannot contain bindings or structural directives. The attribute "${attr.name}" on the <${tagName}> element inside an ICU expression is not supported and will be ignored. Only static attributes are allowed inside ICU cases.`));
+              continue;
+            }
             const lowerAttrName = attr.name.toLowerCase();
             const hasBinding2 = !!attr.value.match(BINDING_REGEXP);
             const namespaceUri = element.namespaceURI;
@@ -19384,6 +19403,9 @@ function i18nResolveSanitizer(attrName, tagName) {
     default:
       return null;
   }
+}
+function isBindingLikeAttributeName(attrName) {
+  return attrName.startsWith("[") || attrName.startsWith("(") || attrName.startsWith("*") || attrName.startsWith("#") || attrName.startsWith("@");
 }
 var ROOT_TEMPLATE_ID = 0;
 var PP_MULTI_VALUE_PLACEHOLDERS_REGEXP = /\[(�.+?�?)\]/;
@@ -29785,7 +29807,6 @@ var BrowserModule = class _BrowserModule {
 var Meta = class _Meta {
   _doc = inject2(DOCUMENT);
   _dom = getDOM();
-  _cachedHead;
   addTag(tag, forceCreation = false) {
     if (!tag) return null;
     return this._getOrCreateElement(tag, forceCreation);
@@ -30057,14 +30078,21 @@ var App = class _App {
     this.count.update((v) => v - 1);
   }
   ngAfterViewInit() {
-    const zts = window.__ztsPostMessage;
-    if (zts)
-      zts(JSON.stringify({ app: "ready" }));
+    {
+      const zig = window.__ZTS_ZIG__;
+      if (zig && typeof zig.mount === "function") {
+        zig.mount();
+      } else {
+        const zts = window.__ztsPostMessage;
+        if (zts)
+          zts(JSON.stringify({ app: "ready" }));
+      }
+    }
   }
   static \u0275fac = function App_Factory(__ngFactoryType__) {
     return new (__ngFactoryType__ || _App)();
   };
-  static \u0275cmp = /* @__PURE__ */ \u0275\u0275defineComponent({ type: _App, selectors: [["zts-root"]], decls: 38, vars: 1, consts: [[1, "shell"], [1, "head"], [1, "brand"], [1, "logo"], [1, "title"], [1, "sub"], [1, "badge"], [1, "card"], [1, "counter"], ["data-zts", "count", 1, "value"], ["data-zts", "dec", 3, "click"], ["data-zts", "inc", 1, "primary", 3, "click"], [1, "features"], [1, "meta"], ["data-zts", "status"], [1, "tag"]], template: function App_Template(rf, ctx) {
+  static \u0275cmp = /* @__PURE__ */ \u0275\u0275defineComponent({ type: _App, selectors: [["zts-root"]], decls: 51, vars: 1, consts: [[1, "shell"], [1, "head"], [1, "brand"], [1, "logo"], [1, "title"], [1, "sub"], [1, "badge"], [1, "card"], [1, "counter"], ["data-zts", "count", 1, "value"], ["data-zts", "dec", 3, "click"], ["data-zts", "inc", 1, "primary", 3, "click"], [1, "features"], [1, "meta"], ["data-zts", "status"], [1, "tag"], ["data-zts", "zig-panel", 1, "zigbar"], ["data-zts", "zig-state", 1, "zigbadge"], ["data-zts", "zig-seal", 1, "zigseal"], ["data-zts", "zig-count", 1, "zigcount"], ["data-zts", "zig-inc", "disabled", "", 1, "zigbtn"], ["data-zts", "zig-dec", "disabled", "", 1, "zigbtn"], ["data-zts", "zig-hint", 1, "zighint"]], template: function App_Template(rf, ctx) {
     if (rf & 1) {
       \u0275\u0275domElementStart(0, "div", 0)(1, "header", 1)(2, "div", 2)(3, "div", 3);
       \u0275\u0275text(4, "ZT");
@@ -30113,6 +30141,24 @@ var App = class _App {
       \u0275\u0275domElementEnd();
       \u0275\u0275domElementStart(36, "span", 15);
       \u0275\u0275text(37, "tauri://localhost");
+      \u0275\u0275domElementEnd()();
+      \u0275\u0275domElementStart(38, "div", 16)(39, "span", 17);
+      \u0275\u0275text(40, "ZIG OFFLINE");
+      \u0275\u0275domElementEnd();
+      \u0275\u0275domElementStart(41, "code", 18);
+      \u0275\u0275text(42, "\u2014");
+      \u0275\u0275domElementEnd();
+      \u0275\u0275domElementStart(43, "span", 19);
+      \u0275\u0275text(44, "\u2014");
+      \u0275\u0275domElementEnd();
+      \u0275\u0275domElementStart(45, "button", 20);
+      \u0275\u0275text(46, "\uFF0B");
+      \u0275\u0275domElementEnd();
+      \u0275\u0275domElementStart(47, "button", 21);
+      \u0275\u0275text(48, "\u2212");
+      \u0275\u0275domElementEnd();
+      \u0275\u0275domElementStart(49, "span", 22);
+      \u0275\u0275text(50, "Zig \u304C\u5FC5\u8981 / Zig required");
       \u0275\u0275domElementEnd()()()();
     }
     if (rf & 2) {
@@ -30153,6 +30199,14 @@ var App = class _App {
           <span data-zts="status">mounted</span>
           <span class="tag">tauri://localhost</span>
         </div>
+      <div class="zigbar" data-zts="zig-panel">
+  <span class="zigbadge" data-zts="zig-state">ZIG OFFLINE</span>
+  <code class="zigseal" data-zts="zig-seal">\u2014</code>
+  <span class="zigcount" data-zts="zig-count">\u2014</span>
+  <button class="zigbtn" data-zts="zig-inc" disabled>\uFF0B</button>
+  <button class="zigbtn" data-zts="zig-dec" disabled>\u2212</button>
+  <span class="zighint" data-zts="zig-hint">Zig \u304C\u5FC5\u8981 / Zig required</span>
+</div>
       </section>
     </div>
   `
@@ -30160,7 +30214,7 @@ var App = class _App {
   }], null, null);
 })();
 (() => {
-  (typeof ngDevMode === "undefined" || ngDevMode) && \u0275setClassDebugInfo(App, { className: "App", filePath: "src/main.ts", lineNumber: 37 });
+  (typeof ngDevMode === "undefined" || ngDevMode) && \u0275setClassDebugInfo(App, { className: "App", filePath: "src/main.ts", lineNumber: 45 });
 })();
 bootstrapApplication(App);
 export {

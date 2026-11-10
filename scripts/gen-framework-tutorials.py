@@ -170,8 +170,10 @@ zts dev                 # http://127.0.0.1:5173
 {{SNIPPET}}
 ```
 
-状態は {{STATE}} です。この example は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
-で動かしています。次の章でここに ziggurats のコマンドをつなぎます。
+状態は {{STATE}} です。カウンター本体は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
+で動かしています。その下の `.zigbar` パネルは逆で、**Zig が動いていないと絶対に埋まりません**
+（[付録](#付録-zig-が動いているかを画面で確かめる)）。次の章でここに ziggurats のコマンドを
+つなぎます。
 
 ## 4. Zig のコマンドを足す
 
@@ -224,6 +226,28 @@ zig-out/bin/my_app        # ウィンドウが開き、+1 が Zig まで届く
 
 `web/` は gzip 双子・CSP ハッシュ付きでバイナリに埋め込まれるので、隣にアセットディレクトリは
 要りません。
+
+## 付録: Zig が動いているかを画面で確かめる
+
+9 つの example はどれも同じ `.zigbar` パネルを持っています。ここだけは **Zig が無いと成立しません**。
+
+| 見た目 | 裏で起きていること |
+|---|---|
+| 赤い `ZIG OFFLINE`・`＋` `−` が無効 | 静的 HTML だけ（公開デモ、`zts dev` のブラウザ）。`window.__ZTS_ZIG__` が無い |
+| 緑の `ZIG ONLINE`・16 桁の seal・`＋` `−` が有効 | Zig のバイナリが `zig_probe` / `zig_inc` / `zig_dec` に答えている |
+
+seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA-256 の先頭 8 バイトです。静的
+ファイルには秘密も計算式も入っていないので、JavaScript だけでこの文字列をでっち上げることは
+できません。`＋` `−` はフレームワークのローカル状態ではなく **Zig が保持するカウンタ**を増減し、
+押すたびに seal が変わります。つまりこの 1 行が「裏で Zig が生きているか」の答えです。
+
+配線の実物は
+[`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) と
+[`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig) にあります。ギャラリーは
+無改造の `@tauri-apps/api` v2 と同じ `window.__TAURI_INTERNALS__.invoke` を `DOCUMENT_START` で
+注入し、`ipc://localhost/<command>` を Zig で捌きます。自分のアプリで点灯させたいときは、この
+3 コマンドを `rpc.Schema` に追加し、同じブリッジを注入してください。カウンター本体を IPC に
+つなぐ手順は [5 章](#5-ボタンを-ipc-につなぐ) のとおりです。
 
 ## ここから先
 
@@ -332,8 +356,10 @@ example). {{NOTE}}
 {{SNIPPET}}
 ```
 
-State lives in {{STATE}}. The example deliberately uses **local state only** so the pixel
-comparison across three OSes has no backend dependency. The next chapter connects ziggurats.
+State lives in {{STATE}}. The counter deliberately uses **local state only** so the pixel
+comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
+opposite: it **cannot be filled in unless Zig is running**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
 
 ## 4. Add the Zig command
 
@@ -386,6 +412,29 @@ zig-out/bin/my_app        # a window opens and +1 reaches Zig
 
 `web/` is embedded with gzip twins and CSP hashes, so no asset directory sits next to the binary.
 
+## Appendix: prove Zig is running from the screen
+
+All nine examples ship the same `.zigbar` panel. This one strip **cannot work without Zig**.
+
+| What you see | What is happening behind it |
+|---|---|
+| red `ZIG OFFLINE`, `+` / `-` disabled | static HTML only (public demo, the `zts dev` browser): no `window.__ZTS_ZIG__` |
+| green `ZIG ONLINE`, a 16-character seal, `+` / `-` enabled | the Zig binary is answering `zig_probe` / `zig_inc` / `zig_dec` |
+
+The seal is the first eight bytes of SHA-256 over **a secret that only the Zig binary holds** and
+Zig's own counter. Neither the secret nor the computation is present in any static file, so
+JavaScript alone cannot manufacture the string. `+` / `-` change **the counter owned by Zig**, not
+the framework's local state, and every press produces a new seal. That single line is the answer to
+"is Zig actually alive back there?".
+
+The real wiring lives in
+[`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
+[`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
+the same `window.__TAURI_INTERNALS__.invoke` that unmodified `@tauri-apps/api` v2 uses, at
+`DOCUMENT_START`, and answers `ipc://localhost/<command>` from Zig. To light the panel up in your
+own app, add those three commands to `rpc.Schema` and inject the same bridge. Chapter
+[5](#5-wire-the-button-to-ipc) shows how to connect the counter itself over IPC.
+
 ## Where next
 
 | You want | Go to |
@@ -432,6 +481,15 @@ CHOOSER_JA = '''# 好きなライブラリでチュートリアルを選ぶ
 リポジトリの [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) に
 ビルド方法と 3 OS のスクリーンショット比較の仕組みをまとめてあります。
 
+## 裏で Zig が動いているかを見分ける
+
+9 つの公開デモは静的 HTML なので、どれも下部のパネルが赤い **`ZIG OFFLINE`** になり、
+`＋` `−` は押せません。これで「ブラウザだけでは ziggurats は動いていない」ことが一目で分かります。
+ネイティブのギャラリー（`examples/gallery`）で開くと同じパネルが緑の **`ZIG ONLINE`** になり、
+Zig だけが作れる 16 桁の seal と、Zig が保持するカウンタが表示されます。
+`zig_probe` / `zig_inc` / `zig_dec` は `ipc://` 越しに Zig が答えるコマンドで、
+静的ファイルには実装がありません。各分岐ページの付録に配線の実物へのリンクがあります。
+
 ## 次に読むもの
 
 - まず 1 本通す → [カウンターを作る](counter.md)（素の JS）または上の表から 1 つ
@@ -471,6 +529,15 @@ are identical on every branch.
 
 See [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) for the
 build commands and the 3-OS screenshot comparison.
+
+## Telling whether Zig is running behind the page
+
+The nine published demos are static HTML, so the strip at the bottom of each one reads **`ZIG OFFLINE`**
+in red and its `+` / `-` buttons are disabled. That is the point: a browser alone does not run
+ziggurats. Open the same build in the native gallery (`examples/gallery`) and the strip turns
+**`ZIG ONLINE`** in green, showing a 16-character seal that only Zig can produce and a counter owned
+by Zig. `zig_probe` / `zig_inc` / `zig_dec` are answered over `ipc://` by the Zig binary; no static
+file implements them. Every branch page's appendix links to the real wiring.
 
 ## Next
 

@@ -65,7 +65,30 @@ Zig 側は共通で、フロントエンドの書き方だけが変わります�
 - フォントは同梱の `ZTS Sans` / `ZTS Mono` のみ（`/zts/fonts/*.woff2` をギャラリーが配信）。
   システムフォントを 1 つも使わないので、Linux でも豆腐にならず、3 OS で字形が一致する。
 - マウント後に `{"app":"ready"}` を `__ztsPostMessage` で送る。ギャラリーはこれを待ってから撮る
-  （CSR / hydration の完了を撮り逃さないため）。
+  （CSR / hydration の完了を撮り逃さないため）。9 つとも **Zig の probe が解決してから** ready を
+  送るので、`ZIG ONLINE` の出ていない画面を撮ってしまうことがない。
+
+## Zig が動いていないと成立しないパネル
+
+カウンター本体はフレームワークごとの流儀を見るためのローカル状態ですが、その下の `.zigbar` は
+**Zig が無いと絶対に埋まりません**。これで「静的 HTML と見た目が同じで裏の Zig が判別できない」
+状態を解消しています。
+
+| 見た目 | 裏側 |
+|---|---|
+| 赤い `ZIG OFFLINE`・`＋` `−` 無効 | 公開デモ / `zts dev` のブラウザ。`window.__ZTS_ZIG__` も `invoke` も無い |
+| 緑の `ZIG ONLINE`・16 桁の seal・`＋` `−` 有効 | `ipc://` 越しに `zig_probe` / `zig_inc` / `zig_dec` へ Zig が応答している |
+
+seal は **Zig バイナリだけが持つ秘密**と Zig のカウンタから作る SHA-256 の先頭 8 バイトです。
+静的出力には秘密も計算式も入っていないため、JavaScript だけでは偽造できません。`＋` `−` は
+Zig 側のカウンタを増減し、押すたびに seal が変わります。時刻・乱数は一切使わないので、
+3 OS の初期画面は同一バイト列・同一画素です。
+
+ホスト側の実物は [`examples/gallery/src/main.zig`](../gallery/src/main.zig)（`ipc` スキームと
+3 コマンド）、[`examples/gallery/src/web/zig-bridge.js`](../gallery/src/web/zig-bridge.js)
+（`DOCUMENT_START` で注入するブリッジ）です。無改造の `js_bootstrap` が作る
+`window.__TAURI_INTERNALS__.invoke` をそのまま使います。CI は manifest の `zig_online` が
+9 件すべて `true` でないと赤くなります（`scripts/verify-screenshots.mjs --require-zig`）。
 
 ## 各フレームワークのビルド方法と注意点
 
@@ -86,8 +109,9 @@ Zig 側は共通で、フロントエンドの書き方だけが変わります�
 1. **インライン化は不可**: 複数チャンクの ES モジュールは `<script type="module">` にインライン化すると
    `import "./chunk.js"` が解決できず真っ白になる（SvelteKit / SolidStart で発生）。→ ディレクトリを
    そのまま埋め込んでスキームで配信する方式にした。
-2. **`window.__ztsPostMessage` の型**: TypeScript プロジェクトは `types/zts-globals.d.ts` で
-   `declare global { interface Window { __ztsPostMessage?: … } }` が必要（Next / Angular / SolidStart のみ）。
+2. **`window` の型**: 9 つすべてに `types/zts-globals.d.ts` を生成する。JS だけのプロジェクトでは
+   無視され、TS プロジェクトでは `__ztsPostMessage` と `__ZTS_ZIG__` の宣言として効く
+   （以前は Next / Angular / SolidStart だけに配っていた）。
 3. **SolidStart の静的生成**: v2 に `preset: 'static'` は無い。SSR サーバを 1 回だけ叩いて
    HTML を得る方法と、SPA モードで `index.html` を自前生成する方法があり、本リポジトリは後者。
 4. **Nuxt の payload**: 静的生成物は `/_payload.json` を fetch する。カスタムスキームでは 404 だが

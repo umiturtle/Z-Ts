@@ -56,6 +56,11 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       is verbatim from the real example source. A tenth (plain-JS) branch is the
                       original counter tutorial. Adding a library without updating the docs (or
                       editing an example without regenerating the tutorial) turns this red.
+16. Zig-only demos   — the nine examples, the generator, the gallery host and the published
+                      output must all agree on the `.zigbar` panel. A static-only demo shows
+                      `ZIG OFFLINE`; the native gallery answers `zig_probe` / `zig_inc` /
+                      `zig_dec` over `ipc://` with a seal only Zig can make. If any one of the
+                      four surfaces drifts, the demos silently become "just HTML" again.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -1003,6 +1008,137 @@ else:
             )
     except (OSError, subprocess.SubprocessError) as exc:
         errors.append(f"cannot verify generated tutorial pages (rule 15): {exc}")
+
+
+
+# ---------------------------------------------------------------------------
+# 16. Every framework demo must prove that Zig is running (M5-21)
+# ---------------------------------------------------------------------------
+#
+# Before this rule the nine builds were *visually identical* to a static HTML file: the counter
+# was local JS state, so nothing on screen could tell a real WebView+Zig host from GitHub Pages.
+# The `.zigbar` panel fixes that: its seal can only be produced by `zig_probe` / `zig_inc` /
+# `zig_dec` inside the Zig binary. Four surfaces have to agree, or one of them silently regresses
+# back to "just HTML": the generator, the 9 example sources, the 9 published builds, and the
+# gallery host (bridge + ipc scheme + CI gate).
+
+GEN_SCRIPT = "scripts/gen-framework-demos.mjs"
+ZIG_BRIDGE = "examples/gallery/src/web/zig-bridge.js"
+GALLERY_MAIN = "examples/gallery/src/main.zig"
+GALLERY_BUILD = "examples/gallery/build.zig"
+GALLERY_ASSETS = "examples/gallery/src/fw_assets.zig"
+SHOT_VERIFY = "scripts/verify-screenshots.mjs"
+CI_WORKFLOW = ".github/workflows/ci.yml"
+ZIG_COMMANDS = ("zig_probe", "zig_inc", "zig_dec")
+PANEL_TOKENS = ('data-zts="zig-panel"', "ZIG OFFLINE", "__ZTS_ZIG__")
+# Bundlers minify attribute quoting away (`data-zts=zig-panel`), so published builds are checked
+# with the attribute *name* rather than the exact source spelling.
+PUBLISHED_TOKENS = ("zig-panel", "ZIG OFFLINE", "__ZTS_ZIG__")
+
+
+def rule16_text(path):
+    if not os.path.isfile(path):
+        return None
+    return open(path, encoding="utf-8").read()
+
+
+def rule16_require(path, token, label=None):
+    text = rule16_text(path)
+    if text is None:
+        errors.append(f"{path}: missing ({label or 'rule 16'})")
+    elif token not in text:
+        errors.append(f"{path}: missing {token!r} ({label or 'rule 16'})")
+    return text
+
+
+# (a) The generator owns all nine bodies: one shared panel + one shared lifecycle hook.
+gen = rule16_require(GEN_SCRIPT, "ZIG_PANEL_HTML", "shared Zig panel")
+if gen:
+    for token in ("ZIG_READY_JS", ".zigbar", '.zigbadge[data-online=', "writeGlobalTypes(dir)"):
+        if token not in gen:
+            errors.append(f"{GEN_SCRIPT}: missing {token!r} (rule 16)")
+
+# (b) The bridge must never contain the Zig secret or a JS reimplementation of the seal.
+bridge = rule16_require(ZIG_BRIDGE, "__ZTS_ZIG__", "DOCUMENT_START bridge")
+if bridge:
+    for cmd in ZIG_COMMANDS + ("ZIG ONLINE", "'zig-state'"):
+        if cmd not in bridge:
+            errors.append(f"{ZIG_BRIDGE}: missing {cmd!r} (rule 16)")
+    for forbidden in ("zig_secret", "Sha256", "sha256"):
+        if forbidden in bridge:
+            errors.append(f"{ZIG_BRIDGE}: leaks {forbidden!r} — static JS could forge the seal (rule 16)")
+
+# (c) The gallery really registers `ipc://`, uses the unmodified Tauri bootstrap, and reports
+#     `zig_online` into the manifest.
+gallery = rule16_require(GALLERY_MAIN, 'ipc_scheme_name = "ipc"', "ipc scheme")
+if gallery:
+    for token in (
+        "registerScheme(ipc_scheme_name", "js_bootstrap.renderScriptAlloc", "composeInitScripts",
+        "zig_bridge_script", "zig_online", "Tauri-Response", "zigSeal",
+    ) + ZIG_COMMANDS:
+        if token not in gallery:
+            errors.append(f"{GALLERY_MAIN}: missing {token!r} (rule 16)")
+rule16_require(GALLERY_BUILD, '"zts_tauri"', "unmodified js_bootstrap module import")
+rule16_require(SHOT_VERIFY, "--require-zig", "CI gate for zig_online")
+ci = rule16_text(CI_WORKFLOW)
+if ci is None or ci.count("--require-zig") < 3:
+    errors.append(f"{CI_WORKFLOW}: --require-zig must gate all three native OS captures (rule 16)")
+
+# (d) Every catalog entry: real source, published static build, embedded asset row and the TS
+#     declaration must all carry the panel / bridge markers.
+assets = rule16_text(GALLERY_ASSETS) or ""
+for fw in catalog:
+    fid = fw.get("id", "")
+    if not fid:
+        continue
+    source = fw.get("source", "")
+    src_text = rule16_text(source) or ""
+    for token in PANEL_TOKENS:
+        if token not in src_text:
+            errors.append(f"{source}: missing {token!r} in the example source (rule 16)")
+
+    out_dir = os.path.join("examples", "gallery", "src", "web", "fw", fid)
+    published = ""
+    if os.path.isdir(out_dir):
+        for base, _dirs, files in os.walk(out_dir):
+            for name in files:
+                if not name.endswith((".html", ".js", ".mjs", ".css", ".txt", ".json")):
+                    continue
+                try:
+                    published += open(os.path.join(base, name), encoding="utf-8", errors="ignore").read()
+                except OSError:
+                    pass
+    else:
+        errors.append(f"{out_dir}: missing published build (rule 16)")
+    for token in PUBLISHED_TOKENS:
+        if token not in published:
+            errors.append(f"{out_dir}: published build lost {token!r} — regenerate with gen-framework-demos.mjs (rule 16)")
+    if f'/fw/{fid}/index.html' not in assets:
+        errors.append(f"{GALLERY_ASSETS}: missing embedded /fw/{fid}/index.html row (rule 16)")
+
+    decl = os.path.join("examples", "frameworks", fid, "types", "zts-globals.d.ts")
+    decl_text = rule16_text(decl)
+    if decl_text is None or "__ZTS_ZIG__" not in decl_text:
+        errors.append(f"{decl}: missing __ZTS_ZIG__ declaration (rule 16)")
+
+    for lang in ("ja", "en"):
+        branch = os.path.join("docs", "learn", lang, "tutorials", f"counter-{fid}.md")
+        text = rule16_text(branch)
+        if text is None or "ZIG OFFLINE" not in text or "ZIG ONLINE" not in text:
+            errors.append(f"{branch}: missing the ZIG OFFLINE / ZIG ONLINE appendix (rule 16)")
+
+# (e) Reader docs in both languages describe the difference between static and native.
+for lang, off, on in (("ja", "ZIG OFFLINE", "ZIG ONLINE"), ("en", "ZIG OFFLINE", "ZIG ONLINE")):
+    chooser = os.path.join("docs", "learn", lang, "tutorials", "frameworks.md")
+    text = rule16_text(chooser) or ""
+    for token in (off, on, "zig_probe", "zig_inc", "zig_dec"):
+        if token not in text:
+            errors.append(f"{chooser}: missing {token!r} (rule 16)")
+for readme in ("examples/frameworks/README.md", "examples/frameworks/README.en.md"):
+    text = rule16_text(readme) or ""
+    for token in ("ZIG OFFLINE", "ZIG ONLINE", "zig_probe", "zig_inc", "zig_dec", "--require-zig"):
+        if token not in text:
+            errors.append(f"{readme}: missing {token!r} (rule 16)")
 
 if warnings:
     for w in warnings:
