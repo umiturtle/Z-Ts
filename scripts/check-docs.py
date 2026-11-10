@@ -50,6 +50,12 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       the site UI, CLI help, generated project templates, workflows and scripts
                       must say `ziggurats`. `zts` / `z_ts` / `zts_*` / `ZTS_*` are identifiers and
                       are deliberately not part of this rename.
+15. Tutorial branches — `src/docsite/frameworks.json` is the single list of libraries with a
+                      committed example. Each needs a Japanese and an English tutorial, the
+                      `<!-- framework-picker -->` directive, and an embedded code excerpt that
+                      is verbatim from the real example source. A tenth (plain-JS) branch is the
+                      original counter tutorial. Adding a library without updating the docs (or
+                      editing an example without regenerating the tutorial) turns this red.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -515,6 +521,7 @@ LEDGER_EN = "docs/contributing/doc-sync.en.md"
 
 SYNC_CHECKS = [
     "python3 scripts/check-docs.py",
+    "python3 scripts/gen-framework-tutorials.py --check",
     "./zigw docs-check",
     "./zigw quick-test",
     "./zigw test -Mroot=src/cli/mod.zig",
@@ -534,7 +541,12 @@ SYNC_IMPL = [
     "src/docsite/learn_path.zig",
     "src/docsite/i18n.zig",
     "src/docsite/site.zig",
+    "src/docsite/frameworks.zig",
+    "src/docsite/frameworks.json",
+    "src/docsite/assets/site.js",
+    "src/docsite/assets/site.css",
     "scripts/check-docs.py",
+    "scripts/gen-framework-tutorials.py",
 ]
 
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -874,6 +886,123 @@ for path in (
 ):
     if os.path.isfile(path) and NEW_NAME not in open(path, encoding="utf-8").read():
         errors.append(f"{path}: does not say '{NEW_NAME}' (rule 14)")
+
+# ---------------------------------------------------------------------------
+# 15. Framework tutorial branches must match the committed examples
+# ---------------------------------------------------------------------------
+
+FRAMEWORK_CATALOG = "src/docsite/frameworks.json"
+PICKER_MARKER = "<!-- framework-picker -->"
+
+
+def fenced_excerpt(lines, start):
+    """The first fenced code block at or after `start`, or None."""
+    i = start
+    while i < len(lines) and not lines[i].lstrip().startswith("```"):
+        i += 1
+    if i >= len(lines):
+        return None
+    j = i + 1
+    while j < len(lines) and not lines[j].lstrip().startswith("```"):
+        j += 1
+    return "\n".join(lines[i + 1:j]).strip("\n")
+
+
+if not os.path.isfile(FRAMEWORK_CATALOG):
+    errors.append(f"{FRAMEWORK_CATALOG}: missing — the framework picker has no catalog")
+else:
+    try:
+        catalog = json.load(open(FRAMEWORK_CATALOG, encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        catalog = []
+        errors.append(f"{FRAMEWORK_CATALOG}: cannot parse ({exc})")
+
+    ids = [fw.get("id", "") for fw in catalog]
+    if len(ids) != len(set(ids)):
+        errors.append(f"{FRAMEWORK_CATALOG}: duplicate framework ids")
+    if not ids:
+        errors.append(f"{FRAMEWORK_CATALOG}: empty catalog — the tutorials have no branches")
+
+    for fw in catalog:
+        fid = fw.get("id", "")
+        if not fid or not fid.islower() or not fid.isalnum():
+            errors.append(f"{FRAMEWORK_CATALOG}: bad framework id '{fid}' (lowercase alphanumeric)")
+            continue
+        example_dir = os.path.join("examples", "frameworks", fid)
+        if not os.path.isdir(example_dir):
+            errors.append(f"{example_dir}: missing example for framework '{fid}' (rule 15)")
+        source = fw.get("source", "")
+        if not os.path.isfile(source):
+            errors.append(f"{source}: example source for '{fid}' is missing (rule 15)")
+            continue
+        source_text = open(source, encoding="utf-8").read()
+        if 'data-zts="count"' not in source_text:
+            errors.append(f"{source}: example has no counter markup (rule 15)")
+
+        for lang in ("ja", "en"):
+            page = os.path.join("docs", "learn", lang, "tutorials", f"counter-{fid}.md")
+            if not os.path.isfile(page):
+                errors.append(f"{page}: missing tutorial branch for '{fid}' (rule 15)")
+                continue
+            text = open(page, encoding="utf-8").read()
+            if PICKER_MARKER not in text:
+                errors.append(f"{page}: missing '{PICKER_MARKER}' (rule 15)")
+            if "frameworks.md" not in text:
+                errors.append(f"{page}: does not link back to the chooser (rule 15)")
+            marker = f"<!-- source: {source} -->"
+            lines = text.splitlines()
+            at = next((i for i, ln in enumerate(lines) if ln.strip() == marker), None)
+            if at is None:
+                errors.append(f"{page}: missing '{marker}' (rule 15)")
+                continue
+            excerpt = fenced_excerpt(lines, at + 1)
+            if not excerpt or excerpt.strip() not in source_text:
+                errors.append(
+                    f"{page}: embedded excerpt is not verbatim from {source} "
+                    "(run python3 scripts/gen-framework-tutorials.py; rule 15)"
+                )
+
+    # The chooser links every branch plus the plain-JS original, in both languages.
+    for lang in ("ja", "en"):
+        chooser = os.path.join("docs", "learn", lang, "tutorials", "frameworks.md")
+        if not os.path.isfile(chooser):
+            errors.append(f"{chooser}: missing chooser page (rule 15)")
+            continue
+        chooser_text = open(chooser, encoding="utf-8").read()
+        if PICKER_MARKER not in chooser_text:
+            errors.append(f"{chooser}: missing '{PICKER_MARKER}' (rule 15)")
+        for link in ["counter.md"] + [f"counter-{fid}.md" for fid in ids]:
+            if link not in chooser_text:
+                errors.append(f"{chooser}: does not link '{link}' (rule 15)")
+
+    # All three originals must offer the branch, so a reader never gets stuck on one library.
+    for lang in ("ja", "en"):
+        for stem in ("index", "counter", "todo", "ui"):
+            page = os.path.join("docs", "learn", lang, "tutorials", f"{stem}.md")
+            if os.path.isfile(page) and PICKER_MARKER not in open(page, encoding="utf-8").read():
+                errors.append(f"{page}: missing '{PICKER_MARKER}' — this tutorial is not branchable (rule 15)")
+
+    # The picker's progressive enhancement must exist in both shipped assets; the Markdown
+    # table stays usable when it does not, but the selector would silently disappear.
+    site_js = "src/docsite/assets/site.js"
+    site_css = "src/docsite/assets/site.css"
+    if os.path.isfile(site_js) and "data-fw-picker" not in open(site_js, encoding="utf-8").read():
+        errors.append(f"{site_js}: framework picker enhancement is missing (rule 15)")
+    if os.path.isfile(site_css) and ".fw-picker" not in open(site_css, encoding="utf-8").read():
+        errors.append(f"{site_css}: framework picker styles are missing (rule 15)")
+
+    # The generated pages are a pure function of the catalog + examples.
+    try:
+        generated = subprocess.run(
+            [sys.executable, "scripts/gen-framework-tutorials.py", "--check"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if generated.returncode != 0:
+            errors.append(
+                "generated tutorial pages are stale (rule 15): " + generated.stderr.strip().replace("\n", " | ")
+            )
+    except (OSError, subprocess.SubprocessError) as exc:
+        errors.append(f"cannot verify generated tutorial pages (rule 15): {exc}")
 
 if warnings:
     for w in warnings:

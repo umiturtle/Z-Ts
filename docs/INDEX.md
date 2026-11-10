@@ -73,6 +73,16 @@ ziggurats には読者が 3 種類いて、使うコマンドもページも別�
 | [カウンターを作る](learn/ja/tutorials/counter.md) | `zts init` → コマンド → 画面 → `dev` → `build` → `doctor`（15 分） |
 | [Todo リストを作る](learn/ja/tutorials/todo.md) | 構造体に閉じた状態、3 つのコマンド、`error{}` の返し方とテスト（20 分） |
 | [画面を作る](learn/ja/tutorials/ui.md) | 読み込み中 / 空 / エラーを出し分ける画面、CSS 差し替え、CSP（15 分） |
+| [好きなライブラリを選ぶ](learn/ja/tutorials/frameworks.md) | 9 つの実物 example ＋素の JS から、好きなライブラリの分岐を選ぶ入口 |
+| [カウンター: React](learn/ja/tutorials/counter-react.md) | `useState` で数を持ち、`useEffect` でマウント完了を ziggurats に知らせる（15 分・分岐） |
+| [カウンター: Solid](learn/ja/tutorials/counter-solid.md) | `createSignal` の細粒度リアクティビティ。再レンダリングはコンポーネント単位で起きない（15 分・分岐） |
+| [カウンター: Svelte](learn/ja/tutorials/counter-svelte.md) | 1 つの `.svelte` ファイルに `<script>` とマークアップ。コンパイル時に DOM 操作へ変換される（15 分・分岐） |
+| [カウンター: Angular](learn/ja/tutorials/counter-angular.md) | `signal()` とインライン template。`index.html` に `<script>` を書かず builder が注入する（15 分・分岐） |
+| [カウンター: Next.js](learn/ja/tutorials/counter-next.md) | `output: 'export'` で静的書き出し。状態を持つページには `'use client'` が要る（15 分・分岐） |
+| [カウンター: Nuxt](learn/ja/tutorials/counter-nuxt.md) | `<script setup>` と SSR 済み HTML。`import.meta.client` でブラウザ側だけ実行する（15 分・分岐） |
+| [カウンター: Astro](learn/ja/tutorials/counter-astro.md) | アイランド無しの静的 HTML ＋ 小さな `<script>`。デフォルトで JS を送らない（15 分・分岐） |
+| [カウンター: SvelteKit](learn/ja/tutorials/counter-sveltekit.md) | adapter-static でプリレンダ。`svelte.config.js` は不要で Vite プラグインに渡す（15 分・分岐） |
+| [カウンター: SolidStart](learn/ja/tutorials/counter-solidstart.md) | SPA モード（`ssr:false`）。ルートの `index.tsx` がカウンター本体（15 分・分岐） |
 
 ### 4 · 実用パターン
 

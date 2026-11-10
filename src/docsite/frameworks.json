@@ -1,0 +1,110 @@
+[
+  {
+    "id": "react",
+    "label": "React",
+    "version": "19.3",
+    "build": "vite build",
+    "dist": "dist",
+    "source": "examples/frameworks/react/src/main.jsx",
+    "note_ja": "`useState` で数を持ち、`useEffect` でマウント完了を ziggurats に知らせる",
+    "note_en": "Holds the count in `useState` and reports mount completion from `useEffect`",
+    "state_ja": "`useState(0)`",
+    "state_en": "`useState(0)`"
+  },
+  {
+    "id": "solid",
+    "label": "Solid",
+    "version": "1.9",
+    "build": "vite build",
+    "dist": "dist",
+    "source": "examples/frameworks/solid/src/main.jsx",
+    "note_ja": "`createSignal` の細粒度リアクティビティ。再レンダリングはコンポーネント単位で起きない",
+    "note_en": "Fine-grained `createSignal` reactivity; components do not re-render wholesale",
+    "state_ja": "`createSignal(0)`",
+    "state_en": "`createSignal(0)`"
+  },
+  {
+    "id": "svelte",
+    "label": "Svelte",
+    "version": "5.57",
+    "build": "vite build",
+    "dist": "dist",
+    "source": "examples/frameworks/svelte/src/App.svelte",
+    "note_ja": "1 つの `.svelte` ファイルに `<script>` とマークアップ。コンパイル時に DOM 操作へ変換される",
+    "note_en": "One `.svelte` file with `<script>` and markup, compiled to direct DOM updates",
+    "state_ja": "`let count = 0`",
+    "state_en": "`let count = 0`"
+  },
+  {
+    "id": "angular",
+    "label": "Angular",
+    "version": "22.2",
+    "build": "ng build",
+    "dist": "dist/browser",
+    "source": "examples/frameworks/angular/src/main.ts",
+    "note_ja": "`signal()` とインライン template。`index.html` に `<script>` を書かず builder が注入する",
+    "note_en": "`signal()` with an inline template; the builder injects `<script>` into `index.html`",
+    "state_ja": "`signal(0)`",
+    "state_en": "`signal(0)`"
+  },
+  {
+    "id": "next",
+    "label": "Next.js",
+    "version": "16.4",
+    "build": "next build",
+    "dist": "out",
+    "source": "examples/frameworks/next/app/page.tsx",
+    "note_ja": "`output: 'export'` で静的書き出し。状態を持つページには `'use client'` が要る",
+    "note_en": "Static export via `output: 'export'`; a stateful page needs `'use client'`",
+    "state_ja": "`useState(0)`（`'use client'`）",
+    "state_en": "`useState(0)` (with `'use client'`)"
+  },
+  {
+    "id": "nuxt",
+    "label": "Nuxt",
+    "version": "4.6",
+    "build": "nuxt generate",
+    "dist": ".output/public",
+    "source": "examples/frameworks/nuxt/app.vue",
+    "note_ja": "`<script setup>` と SSR 済み HTML。`import.meta.client` でブラウザ側だけ実行する",
+    "note_en": "`<script setup>` with pre-rendered HTML; `import.meta.client` guards browser-only code",
+    "state_ja": "`ref(0)`",
+    "state_en": "`ref(0)`"
+  },
+  {
+    "id": "astro",
+    "label": "Astro",
+    "version": "6.4",
+    "build": "astro build",
+    "dist": "dist",
+    "source": "examples/frameworks/astro/src/pages/index.astro",
+    "note_ja": "アイランド無しの静的 HTML ＋ 小さな `<script>`。デフォルトで JS を送らない",
+    "note_en": "Static HTML with no islands plus a tiny `<script>`; ships no framework JS by default",
+    "state_ja": "DOM を直接更新（`data-zts`）",
+    "state_en": "Direct DOM updates (`data-zts`)"
+  },
+  {
+    "id": "sveltekit",
+    "label": "SvelteKit",
+    "version": "3.1",
+    "build": "vite build",
+    "dist": "build",
+    "source": "examples/frameworks/sveltekit/src/routes/+page.svelte",
+    "note_ja": "adapter-static でプリレンダ。`svelte.config.js` は不要で Vite プラグインに渡す",
+    "note_en": "Pre-rendered with adapter-static; no `svelte.config.js`, the adapter goes to Vite",
+    "state_ja": "`let count = 0`",
+    "state_en": "`let count = 0`"
+  },
+  {
+    "id": "solidstart",
+    "label": "SolidStart",
+    "version": "2.1",
+    "build": "vite build",
+    "dist": "dist/client",
+    "source": "examples/frameworks/solidstart/src/routes/index.tsx",
+    "note_ja": "SPA モード（`ssr:false`）。ルートの `index.tsx` がカウンター本体",
+    "note_en": "SPA mode (`ssr:false`); the route's `index.tsx` holds the counter",
+    "state_ja": "`createSignal(0)`",
+    "state_en": "`createSignal(0)`"
+  }
+]

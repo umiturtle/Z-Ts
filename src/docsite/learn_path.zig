@@ -135,7 +135,7 @@ pub const page_order = [_]struct { section: []const u8, pages: []const []const u
         "architecture.md", "commands.md", "plugins.md", "security.md",
     } },
     .{ .section = "tutorials/", .pages = &.{
-        "counter.md", "todo.md", "ui.md",
+        "counter.md", "todo.md", "ui.md", "frameworks.md",
     } },
     .{ .section = "patterns/", .pages = &.{
         "commands.md", "state.md", "errors.md", "boundaries.md",
@@ -364,4 +364,7 @@ test "the three tutorials are read in teaching order" {
     try testing.expectEqual(@as(?usize, 3), pageRank("docs/learn/en/tutorials/ui.md"));
     // The chapter index is always first, whatever the filenames are.
     try testing.expectEqual(@as(?usize, 0), pageRank("docs/learn/ja/tutorials/index.md"));
+    // The chooser closes the chapter; the nine library branches sort after it alphabetically.
+    try testing.expectEqual(@as(?usize, 4), pageRank("docs/learn/en/tutorials/frameworks.md"));
+    try testing.expectEqual(@as(?usize, null), pageRank("docs/learn/ja/tutorials/counter-react.md"));
 }

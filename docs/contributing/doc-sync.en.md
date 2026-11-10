@@ -19,11 +19,11 @@ version was verified consistent with the implementation. The source of truth is
 
 - **Verified version**: `ziggurats 0.1.0` / Zig `0.17.0`
 - **Verified on**: `2026-10-21`
-- **Base commit**: `9171fa2` (HEAD when verification began; the sha256 below identifies the implementation)
-- **Verified with**: `python3 scripts/check-docs.py` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
-- **Implementation hash**: `d3e4d4b7613987a7b79179d11b87fa1dea09370c9593ee214ad7b89433270cdd`
+- **Base commit**: `bb9c3c3` (HEAD when verification began; the sha256 below identifies the implementation)
+- **Verified with**: `python3 scripts/check-docs.py` · `python3 scripts/gen-framework-tutorials.py --check` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
+- **Implementation hash**: `353fb2f1a83b5706e2769d62e434cd30691a34bcf8d82c699be88684201b275e`
 
-Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `scripts/check-docs.py`
+Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `src/docsite/frameworks.zig`, `src/docsite/frameworks.json`, `src/docsite/assets/site.js`, `src/docsite/assets/site.css`, `scripts/check-docs.py`, `scripts/gen-framework-tutorials.py`
 
 ## Per-page record
 
@@ -57,7 +57,17 @@ Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`,
 | `docs/learn/ja/patterns/index.md` | `docs/learn/en/patterns/index.md` | 2026-10-21 | 0.1.0 |
 | `docs/learn/ja/patterns/state.md` | `docs/learn/en/patterns/state.md` | 2026-10-21 | 0.1.0 |
 | `docs/learn/ja/start.md` | `docs/learn/en/start.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-angular.md` | `docs/learn/en/tutorials/counter-angular.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-astro.md` | `docs/learn/en/tutorials/counter-astro.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-next.md` | `docs/learn/en/tutorials/counter-next.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-nuxt.md` | `docs/learn/en/tutorials/counter-nuxt.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-react.md` | `docs/learn/en/tutorials/counter-react.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-solid.md` | `docs/learn/en/tutorials/counter-solid.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-solidstart.md` | `docs/learn/en/tutorials/counter-solidstart.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-svelte.md` | `docs/learn/en/tutorials/counter-svelte.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/counter-sveltekit.md` | `docs/learn/en/tutorials/counter-sveltekit.md` | 2026-10-21 | 0.1.0 |
 | `docs/learn/ja/tutorials/counter.md` | `docs/learn/en/tutorials/counter.md` | 2026-10-21 | 0.1.0 |
+| `docs/learn/ja/tutorials/frameworks.md` | `docs/learn/en/tutorials/frameworks.md` | 2026-10-21 | 0.1.0 |
 | `docs/learn/ja/tutorials/index.md` | `docs/learn/en/tutorials/index.md` | 2026-10-21 | 0.1.0 |
 | `docs/learn/ja/tutorials/todo.md` | `docs/learn/en/tutorials/todo.md` | 2026-10-21 | 0.1.0 |
 | `docs/learn/ja/tutorials/ui.md` | `docs/learn/en/tutorials/ui.md` | 2026-10-21 | 0.1.0 |

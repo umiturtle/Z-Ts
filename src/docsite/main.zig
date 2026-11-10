@@ -35,6 +35,7 @@ const xref_index = @import("links.zig");
 const paths = @import("paths.zig");
 const i18n = @import("i18n.zig");
 const learn_path = @import("learn_path.zig");
+const frameworks = @import("frameworks.zig");
 
 /// Where a page sits in the sidebar. The enum (rather than a label string) is what lets the same
 /// corpus produce a Japanese and an English sidebar without duplicating the file walk.
@@ -577,26 +578,39 @@ fn repoPathKind(io: Io, path: []const u8) RepoPath {
 }
 
 /// Renders one source file into `out` (no link rewrites).
-/// Expands the `<!-- learn-path -->` directive. A line that is *only* the marker is replaced by
-/// the step list; the marker mentioned inline (inside backticks, in prose) is left alone, so
-/// the docs that describe this mechanism do not expand it. Pages without a marker line are
-/// returned untouched (no copy), so the hot path is unchanged.
+///
+/// Two directives exist, both expanded *before* the Markdown renderer sees the page:
+/// * `<!-- learn-path -->` → the five-step list from `learn_path.zig`;
+/// * `<!-- framework-picker -->` → the bilingual library chooser from `frameworks.zig`;
+/// * `<!-- source: path -->` → a localised "source" caption for the example snippet below it.
+///
+/// A line that is *only* the marker is replaced; a marker mentioned inline (inside backticks, in
+/// prose) is left alone so the docs that describe this mechanism do not expand it. Pages without a
+/// marker line are returned untouched (no copy), so the hot path is unchanged.
 fn expandDirectives(arena: Allocator, bytes: []const u8, lang: i18n.Lang) ![]const u8 {
-    const marker = "<!-- learn-path -->";
-    var found = false;
+    const learn_marker = "<!-- learn-path -->";
+    const picker_marker = "<!-- framework-picker -->";
+    const source_prefix = "<!-- source:";
+    var found_learn = false;
+    var found_picker = false;
+    var found_source = false;
     var probe = std.mem.splitScalar(u8, bytes, '\n');
     while (probe.next()) |line| {
-        if (std.mem.eql(u8, std.mem.trim(u8, line, " \t\r"), marker)) {
-            found = true;
-            break;
-        }
+        const trimmed = std.mem.trim(u8, line, " \t\r");
+        if (std.mem.eql(u8, trimmed, learn_marker)) found_learn = true;
+        if (std.mem.eql(u8, trimmed, picker_marker)) found_picker = true;
+        if (std.mem.startsWith(u8, trimmed, source_prefix)) found_source = true;
     }
-    if (!found) return bytes;
+    if (!found_learn and !found_picker and !found_source) return bytes;
 
-    const list = try learn_path.markdownList(arena, switch (lang) {
-        .ja => .ja,
-        .en => .en,
-    });
+    const list = if (found_learn)
+        try learn_path.markdownList(arena, switch (lang) {
+            .ja => .ja,
+            .en => .en,
+        })
+    else
+        "";
+    const picker = if (found_picker) try frameworks.pickerMarkdown(arena, lang) else "";
 
     var out: std.Io.Writer.Allocating = .init(arena);
     defer out.deinit();
@@ -605,10 +619,21 @@ fn expandDirectives(arena: Allocator, bytes: []const u8, lang: i18n.Lang) ![]con
     while (lines.next()) |line| {
         if (!first) try out.writer.writeAll("\n");
         first = false;
-        if (std.mem.eql(u8, std.mem.trim(u8, line, " \t\r"), marker)) {
+        const trimmed = std.mem.trim(u8, line, " \t\r");
+        if (std.mem.eql(u8, trimmed, learn_marker)) {
             // `markdownList` ends each item with a newline; keep the blank line that preceded the
             // marker so the list stays a separate block.
             try out.writer.writeAll(list);
+        } else if (std.mem.eql(u8, trimmed, picker_marker)) {
+            try out.writer.writeAll(picker);
+        } else if (std.mem.startsWith(u8, trimmed, source_prefix) and std.mem.endsWith(u8, trimmed, "-->")) {
+            // `<!-- source: path -->` marks the fenced snippet that follows. check-docs.py rule 15
+            // verifies that snippet against the committed example; the reader sees a caption
+            // instead of an implementation detail. The trailing newline keeps the fence a
+            // separate block.
+            const inner = std.mem.trim(u8, trimmed[source_prefix.len .. trimmed.len - 3], " \t");
+            const caption = if (lang == .ja) "出典" else "Source";
+            try out.writer.print("> **{s}**: `{s}`\n", .{ caption, inner });
         } else {
             try out.writer.writeAll(line);
         }
@@ -2188,6 +2213,42 @@ test "the learn-path directive expands only on its own line" {
     const plain = "# No marker\n";
     const same = try expandDirectives(arena, plain, .ja);
     try std.testing.expect(same.ptr == plain.ptr);
+}
+
+test "the framework-picker directive expands to a bilingual ten-row chooser" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const ja = try expandDirectives(arena, "# Hub\n\n<!-- framework-picker -->\n\nDone.\n", .ja);
+    try std.testing.expect(std.mem.indexOf(u8, ja, "<!-- framework-picker -->") == null);
+    try std.testing.expect(std.mem.indexOf(u8, ja, "ライブラリ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, ja, "counter-solidstart.md") != null);
+    try std.testing.expectEqual(@as(usize, 10), std.mem.count(u8, ja, "]("));
+
+    const en = try expandDirectives(arena, "# Hub\n\n<!-- framework-picker -->\n\nDone.\n", .en);
+    try std.testing.expect(std.mem.indexOf(u8, en, "| Library | Version | Build | State |") != null);
+    try std.testing.expect(std.mem.indexOf(u8, en, "No framework (plain JS)") != null);
+    try std.testing.expectEqual(@as(usize, 10), std.mem.count(u8, en, "]("));
+
+    // Both directives can live on the same page, and an inline mention stays verbatim.
+    const both = try expandDirectives(arena, "<!-- learn-path -->\n\n<!-- framework-picker -->\n\nWrite `<!-- framework-picker -->` on its own line.\n", .ja);
+    try std.testing.expect(std.mem.indexOf(u8, both, "**[はじめての ziggurats](start.html)**") != null);
+    try std.testing.expect(std.mem.indexOf(u8, both, "counter-react.md") != null);
+    try std.testing.expect(std.mem.indexOf(u8, both, "Write `<!-- framework-picker -->`") != null);
+}
+
+test "a source marker becomes a localised caption and keeps the following fence separated" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const ja = try expandDirectives(arena, "<!-- source: examples/frameworks/react/src/main.jsx -->\n```jsx\nconst a = 1;\n```\n", .ja);
+    try std.testing.expect(std.mem.indexOf(u8, ja, "> **出典**: `examples/frameworks/react/src/main.jsx`") != null);
+    try std.testing.expect(std.mem.indexOf(u8, ja, "<!-- source:") == null);
+    try std.testing.expect(std.mem.indexOf(u8, ja, "```jsx\nconst a = 1;") != null);
+
+    const en = try expandDirectives(arena, "<!-- source: examples/frameworks/react/src/main.jsx -->\n```jsx\nconst a = 1;\n```\n", .en);
+    try std.testing.expect(std.mem.indexOf(u8, en, "> **Source**: `examples/frameworks/react/src/main.jsx`") != null);
 }
 
 test "the sidebar heading of a path section carries its step number" {

@@ -1,7 +1,12 @@
 # Task M5-20: チュートリアルを全フレームワーク example へ分岐する
 
-- **Status**: `in_progress`
+- **Status**: `review`（PR #19 に追加。CI 確認待ち）
 - **Branch**: `arena/e54ae0fb-z-ts`（PR #19 に追加コミット。PR は増やさない）
+- **Scope**: `src/docsite/{frameworks.json,frameworks.zig,main.zig,assets/site.js,assets/site.css}`,
+  `scripts/{gen-framework-tutorials.py,check-docs.py,doc-sync.json}`,
+  `docs/learn/{ja,en}/tutorials/*`, `docs/INDEX{,.en}.md`,
+  `docs/contributing/writing-docs.md`, `examples/frameworks/README{,.en}.md`
+- **Next Step**: PR #19 の 3 OS CI が緑になったら完了。
 - **依頼**: 「Docのチュートリアルを分岐して同様のものをexample入りさせてる全ライブラリそれぞれ好きなライブラリでチュートリアルできるようにして」
 - **解釈**: `examples/frameworks/` に実物がある 9 ライブラリ（React / Solid / Svelte / Angular /
   Next.js / Nuxt / Astro / SvelteKit / SolidStart）＋フレームワーク無し（素の JS）の 10 択で、
@@ -44,5 +49,21 @@
 
 ## Current State / Next Step
 
-- **現在**: 現状復元・設計完了。分散ロックのためこの票を先に push。
-- **次**: `frameworks.json` → `frameworks.zig` → picker directive → 生成スクリプト → 規約 15。
+- **完了**:
+  - `frameworks.json`（9 件の単一の真実）＋ `frameworks.zig`（`@embedFile` → picker 表、
+    example ディレクトリとソースの存在テスト）
+  - `<!-- framework-picker -->`（日英の 10 行表）と `<!-- source: … -->`（日英の出典キャプション）
+    を `expandDirectives` に追加。4 本の既存チュートリアル × 2 言語すべてに picker を設置
+  - `site.js` が表を `<select>` へ progressive enhance（JS 無しでも 10 個の実リンク）、
+    `site.css` にライト／ダーク両対応のスタイル
+  - `scripts/gen-framework-tutorials.py` が 9 ライブラリ × 日英 = 18 バリアントと
+    日英の選択ハブを生成。各ページに**コミット済み example の実コード抜粋**を埋め込み
+  - 規約 15: カタログ ↔ example ディレクトリ ↔ バリアント ↔ 埋め込みコード片 ↔
+    生成ページの鮮度 ↔ サイト UI 资产 を機械検査
+  - 規約 11（索引 10 行 × 2 言語）・12（5 ステップ / 95 分は不変、`page_order` に選択ハブを追加）
+    ・13（49 組へ再同期）・14 を維持
+  - `README{,.en}.md` / 学習ハブ / `examples/frameworks/README{,.en}.md` / 書き方ガイドに導線
+  - ローカル検証: `quick-test` 90/3/4/62/86/37/8、`build test` exit 0、`doctest` 20、
+    `fmt --check`、`docs-check`（`docsite pages=292 links=1828 api_undoc=0`）、
+    `gen-framework-tutorials.py --check`、`node --check site.js` すべて緑
+- **現在**: PR #19 へ追加コミット済み。3 OS CI の再実行を確認中。

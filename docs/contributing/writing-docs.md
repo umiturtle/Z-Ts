@@ -257,6 +257,16 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 「関係ないものを巻き込まない」ため据え置いています。デモの可視テキストは 3 OS の画素一致
 ゲートの対象なので、リポジトリ名を変えるときに生成器と生成物をまとめて更新してください。
 
+**チュートリアルの分岐は 1 つのカタログから生成します。** `examples/frameworks/` に実物が
+コミットされている 9 ライブラリ＋素の JS の 10 択は、[`src/docsite/frameworks.json`](../../src/docsite/frameworks.json)
+が唯一の正本です。`<!-- framework-picker -->` を置いたページにはその表が日英で展開され、
+`src/docsite/assets/site.js` が JavaScript 有効時に `<select>` へ拡張します（JS 無しでも表の
+リンクだけで選べます）。各ライブラリのチュートリアルは
+`python3 scripts/gen-framework-tutorials.py` が実物のソースから生成するので、本文にコードを
+手でコピーしてはいけません。規約 15 が「カタログ ↔ example ディレクトリ ↔ 日英の分岐ページ ↔
+埋め込んだコード片」の一致を検査し、1 つでも欠けたり example を書き換えたのに再生成を
+忘れたりすると落ちます。分岐は**代替の道**なので `learn_path.steps` の分は増やしません。
+
 ## 9. 2 言語で書く（英語と日本語）
 
 読者向けのページは **`docs/learn/ja/` と `docs/learn/en/` に同じファイル名で 1 本ずつ**置きます。
@@ -308,6 +318,9 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 | `missing English counterpart` | 英語版を書き忘れた | `*.en.md` を足し、両方の索引に 1 行（規約 11・13） |
 | `changed after verification` / `implementation changed since verification` | 本文か実装を変えたが台帳を更新していない | 差分を読み直し、`python3 scripts/check-docs.py --sync` で日付とハッシュを更新（規約 13） |
 | `legacy project name … in prose` | 旧称が本文に残っている／頭文字を大文字にした | `ziggurats`（小文字）に直す。URL とチェックアウトのパス名だけ例外（規約 14） |
+| `embedded excerpt is not verbatim` / `generated tutorial pages are stale` | example を書き換えたが分岐ページを再生成していない | `python3 scripts/gen-framework-tutorials.py` を実行（規約 15） |
+| `missing tutorial branch for 'react'` | カタログにライブラリを足したが日英のページが無い | 生成器を実行し、両方の索引に 1 行足す（規約 11・15） |
+| `missing '<!-- framework-picker -->'` | チュートリアルを足したが分岐の入口を置き忘れた | そのページに 1 行足す（規約 15） |
 | `doc-tests: 1 of 2 blocks failed` | 例が古い（＝API が変わった） | 例を直す。**直せないなら API の変更が意図通りか疑う** |
 
 ## 関連

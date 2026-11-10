@@ -21,6 +21,26 @@ node scripts/gen-framework-demos.mjs react      # 1 つだけ（他はそのま�
 
 生成物は **コミットする** ので、CI は `npm install` をしません（毎チャットのコールドスタート対策）。
 
+
+## チュートリアル（好きなライブラリで進む）
+
+9 つの example には、それぞれ **同じカウンターチュートリアルの分岐ページ** があります。
+Zig 側は共通で、フロントエンドの書き方だけが変わります。素の JS 版が
+[カウンターを作る](../../docs/learn/ja/tutorials/counter.md)、全体の入口が
+[好きなライブラリを選ぶ](../../docs/learn/ja/tutorials/frameworks.md) です。
+
+| ライブラリ | 実物 | チュートリアル | 公開デモ |
+|---|---|---|---|
+| React | [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-react.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) |
+| Solid | [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-solid.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
+| Svelte | [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-svelte.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
+| Angular | [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-angular.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) |
+| Next.js | [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-next.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) |
+| Nuxt | [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-nuxt.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
+| Astro | [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-astro.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
+| SvelteKit | [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-sveltekit.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) |
+| SolidStart | [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-solidstart.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) |
+
 ## 公開デモへのリンク
 
 `zig build docs` が書き出す Pages では、各フレームワークの静的出力がそのまま公開されます

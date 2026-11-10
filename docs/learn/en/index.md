@@ -27,6 +27,10 @@ later instead of now.
 > [!NOTE]
 > **The concepts are not a prerequisite.** They are faster *after* you have run something: once
 > you have seen `zts dev`, the six-layer diagram in step 2 costs one "ah, that is what that was".
+>
+> From [Choose a library](tutorials/frameworks.md) you can follow the tutorials with any of the
+> nine real examples (React / Solid / Svelte / Angular / Next.js / Nuxt / Astro / SvelteKit /
+> SolidStart) or plain JS. The Zig side is shared, so reading one branch takes the same time.
 
 ## What ziggurats is (30 seconds)
 

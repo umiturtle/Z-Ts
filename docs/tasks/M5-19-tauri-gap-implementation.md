@@ -1,6 +1,6 @@
 # Task M5-19: Tauri 機能ギャップを P0→P1→P2 の順に実装する
 
-- **Status**: `in_progress`
+- **Status**: `done`（PR #19 / CI 7/7 green）
 - **Branch**: `arena/e54ae0fb-z-ts`（main `63e9073` 起点 = PR #18 マージ後）
 - **Scope**: `src/tauri/{acl,config_import,protocol,js_bootstrap,window,event,app,path,fs/scope}.zig`,
   `src/core/{host,assets}.zig`, `src/rpc/ctx.zig`, `src/bridge/server.zig`,
@@ -29,7 +29,7 @@
 - [x] 各項目に単体テスト（`std.testing.allocator`、正常系・異常系・境界値）
 - [x] 日英の読者向け Doc を更新、ルール 11（索引網羅）と規約 13（同期台帳）を維持
 - [x] `./zigw quick-test` / `build test` / `doctest` / `fmt --check` / `docs-check` / 3 OS CI が緑
-- [ ] PR は 1 本だけ
+- [x] PR は 1 本だけ（#19）
 
 ## 2. 実装順序の理由（再掲）
 

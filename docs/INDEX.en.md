@@ -73,6 +73,16 @@ pair, so a page added in one language fails CI.
 | [Build a counter](learn/en/tutorials/counter.md) | `zts init` → command → screen → `dev` → `build` → `doctor` (15 min) |
 | [Build a todo list](learn/en/tutorials/todo.md) | State in one struct, three commands, returning `error{}`, testing commands (20 min) |
 | [Build the screen](learn/en/tutorials/ui.md) | Loading / empty / error states, CSS swapping, CSP (15 min) |
+| [Choose a library](learn/en/tutorials/frameworks.md) | Pick one of nine real examples or plain JS for the same tutorial |
+| [Counter: React](learn/en/tutorials/counter-react.md) | Holds the count in `useState` and reports mount completion from `useEffect` (15 min branch) |
+| [Counter: Solid](learn/en/tutorials/counter-solid.md) | Fine-grained `createSignal` reactivity; components do not re-render wholesale (15 min branch) |
+| [Counter: Svelte](learn/en/tutorials/counter-svelte.md) | One `.svelte` file with `<script>` and markup, compiled to direct DOM updates (15 min branch) |
+| [Counter: Angular](learn/en/tutorials/counter-angular.md) | `signal()` with an inline template; the builder injects `<script>` into `index.html` (15 min branch) |
+| [Counter: Next.js](learn/en/tutorials/counter-next.md) | Static export via `output: 'export'`; a stateful page needs `'use client'` (15 min branch) |
+| [Counter: Nuxt](learn/en/tutorials/counter-nuxt.md) | `<script setup>` with pre-rendered HTML; `import.meta.client` guards browser-only code (15 min branch) |
+| [Counter: Astro](learn/en/tutorials/counter-astro.md) | Static HTML with no islands plus a tiny `<script>`; ships no framework JS by default (15 min branch) |
+| [Counter: SvelteKit](learn/en/tutorials/counter-sveltekit.md) | Pre-rendered with adapter-static; no `svelte.config.js`, the adapter goes to Vite (15 min branch) |
+| [Counter: SolidStart](learn/en/tutorials/counter-solidstart.md) | SPA mode (`ssr:false`); the route's `index.tsx` holds the counter (15 min branch) |
 
 ### 4 · Patterns that hold up
 

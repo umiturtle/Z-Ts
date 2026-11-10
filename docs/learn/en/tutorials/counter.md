@@ -17,6 +17,18 @@ save, and finish with a single binary. **Every command on this page is `zts`**. 
 | [4](#4-build-a-single-binary) | `zts build` | one self-contained executable |
 | [5](#5-when-it-breaks-run-zts-doctor) | `zts doctor` | you know where you got stuck |
 
+## Read this with another library
+
+This tutorial branches into **nine framework versions plus plain JavaScript**. The `increment`
+command, `zts dev` and `zts build` are identical on every branch, so pick one library and you are
+done in 15 minutes.
+
+<!-- framework-picker -->
+
+The [chooser hub](frameworks.md) lists every real example and live demo.
+
+---
+
 ## 0. Prerequisites
 
 | Item | Requirement |
