@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "c846f01",
+    "commit": "d27c291",
     "zts_version": "0.1.0",
     "zig_version": "0.17.0",
     "checks": [
@@ -30,22 +30,22 @@
       "scripts/check-docs.py",
       "scripts/gen-framework-tutorials.py"
     ],
-    "implementation_sha256": "65108999801026540d9e18826b20d341fe0fc6b7290facfd77f9d1f91ed3e5f2"
+    "implementation_sha256": "c915562f9ff6d601c4f984ac87c6ee40c7425aac5628c6e8fc53fac6f14fe4c1"
   },
   "pages": [
     {
       "ja": "README.md",
       "en": "README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "79d8b53f5c9bd89a2dcb99894f7367e6024c4e70fc3a74a812aab8edbc2c694d",
-      "en_sha256": "ade84b36c19841846f0fa844223a565fbb98ecbb1e1f85e45a5432ab0feb06e8"
+      "ja_sha256": "811caf77cb3a00e7f6d28aa2e29764d512969e8b01daf2e47794801882da1ff6",
+      "en_sha256": "9ad0098e1732a7d1cb65cca31016c3a21feb574d78a43422e4065e9890cad0eb"
     },
     {
       "ja": "docs/INDEX.md",
       "en": "docs/INDEX.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "48f5932c745a2b3364ba3396acfa75d9c44761d317b105898cf5c0c600a99cdd",
-      "en_sha256": "e60482f436ebed2271d6304b9d452a91e5393cba407b3f3da4e707e0a4975b88"
+      "ja_sha256": "d93de044f37c88bad09e10cc2e310406500137835d26a05ea06b91cf6bedaf29",
+      "en_sha256": "5fde47d3cce959c7b99a6b8f4b896b4d02d2d678c710c9fc0b53891b66ca4f68"
     },
     {
       "ja": "docs/contributing/README.md",
@@ -58,8 +58,8 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "13b1eb6869593a2b06a9faed4cb7d04894466e11f4858438919398d2ae311d04",
-      "en_sha256": "75e0dcb6efd363b7da47ccb3f315c248655204bdd65124ecf6bdd58d51db89be"
+      "ja_sha256": "cda794ed6e5bc781506748eb204b92781cac84c297bcb30a5456fbbfd541835e",
+      "en_sha256": "fe90dec2a6fadf4f88fb56301ea58830efbb8bf369b719fe22a081c26a800583"
     },
     {
       "ja": "docs/contributing/repository-map.md",
@@ -233,64 +233,64 @@
       "ja": "docs/learn/ja/tutorials/counter-angular.md",
       "en": "docs/learn/en/tutorials/counter-angular.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "663adb340f119aa5d9d0934e3b34727b0691c539bff309a73aedd9d977df40e5",
-      "en_sha256": "491d26bc302b72dbe7fdeaa8711affc17bd310737a7eb08991888eb06a056814"
+      "ja_sha256": "aafb8932f5d41d1a819aa4d314898fe585a53ba2c9db333a2e01d6f7e46a8dfd",
+      "en_sha256": "d2126f279e7e6019c681f666c1ae967e73dfaf152009cde3c0160ad901a1ad62"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-astro.md",
       "en": "docs/learn/en/tutorials/counter-astro.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "ed20650b43c096ae7d65f9a1c5ab88812286cf3e4a12178ecb3d99eb7464d62e",
-      "en_sha256": "3035e637b0051ebee1bcee7ad282ea95cc8dd2fb8946c0cf8a3550447f8eed20"
+      "ja_sha256": "2f68f4fed11fbf523109095db6f2810f49d8cc77b075b8c7350ee10b3fe9d250",
+      "en_sha256": "5144ccef44c48522a34ce42b53a11725a8e4f2431e816f2cefb50897a22dae29"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-next.md",
       "en": "docs/learn/en/tutorials/counter-next.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d20be7b6f20cfd7fed16952c51dc8563765e270ceceae31670d0295fa8b77fab",
-      "en_sha256": "5deb6f235cb036cc9c9e1d3fa85a41815974042112a15f24c540186acc30a0f3"
+      "ja_sha256": "bf5b3d3ba2a79b48ddecf356ec765479e3fd422579efe3190c31ae7c0b59fc31",
+      "en_sha256": "9bf75129a4443625d226bdaaf5dfa37488d724ff6646430a46ce3f5a5c9ec567"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-nuxt.md",
       "en": "docs/learn/en/tutorials/counter-nuxt.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "e0bd38281106825abcbee4aceb77793ec69660c361848d9da153ce42b3334698",
-      "en_sha256": "55e8b75343295e56012e6e5792ae87e2d879e1b94e6186b2e46fc96532bb4dfe"
+      "ja_sha256": "aed03b96e2641a8140dd98b9be87dc44726ab4a96fb46552daa8b34341a739f2",
+      "en_sha256": "4480646f4e5b682b22efdd2afc843adcd927ed128ffdab0e5b441967f0c55105"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-react.md",
       "en": "docs/learn/en/tutorials/counter-react.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "6bb685c0266a7a14e484f8a88fd40e597d248303fcaa71f7a010e6b862fa794f",
-      "en_sha256": "278465c9078e88bbe2202902adea04f2395660c773275470ef45b26ce04f1788"
+      "ja_sha256": "7e79d9a302168e2762f4296c74da78c0571369341943b662a3c048296a23e03f",
+      "en_sha256": "845fd9f5634d1edd602ee4cae006c00664769abc603182bbb09695d496b700c0"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-solid.md",
       "en": "docs/learn/en/tutorials/counter-solid.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "13ad8637b3f8a8eaead4b9e7a5dd03915d70beecd711d00fe357c4c502e28462",
-      "en_sha256": "3a94eb488ef239e91b7aa0e0344498402dd43d1952aae96c54ab4c49c0cfc669"
+      "ja_sha256": "197a4a20568efa6c811745f31a9d77aaee6460c8912d77ab226bcbef83d1ed06",
+      "en_sha256": "3245f7b0cfa2a6aabef26047404db839795575715dff2edb7f877d931902dcf5"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-solidstart.md",
       "en": "docs/learn/en/tutorials/counter-solidstart.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "81b557dd5e801aa82a2e6a188f792fef671e697aded948cf6f3972969dcd28f1",
-      "en_sha256": "e8de67e4ca7ef64bab60072c2f2a948f7bd471430eaf678a677533ea4d2a5dd9"
+      "ja_sha256": "4e2e142853b2cefc6fd3b96d40051c1593dd759ebe9d724b37be6ffd11675a38",
+      "en_sha256": "b7ad9c887e4f8df61544ed81550fd8eca5966b59fa0737f6ba07d2d2d1628b34"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-svelte.md",
       "en": "docs/learn/en/tutorials/counter-svelte.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a407e290cd714033b92b58fe97c0b1a5bee78137d1437bc4404b20dd841e8b2f",
-      "en_sha256": "4bce8920f0aad2a4deb681e7c9eb6eb491c57a76b6bbbdaa22f7ed741b72727b"
+      "ja_sha256": "e926085da5c0e45e0dc7408d29f3c2b7a943c9798d568227aa01980d1e9a0a15",
+      "en_sha256": "d71f913b24a227f8847c343ed8bcaecad09bccd04a3f35c84d96fddadbd27856"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-sveltekit.md",
       "en": "docs/learn/en/tutorials/counter-sveltekit.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d6802d7b66f224c5c9b285b4c3b66b108ed05ccd90dcc230a41b7c9d0ba39e0d",
-      "en_sha256": "06a384b539ac1e644dc7b35a883788e3d3c230e39bc760ee80efc112765907a4"
+      "ja_sha256": "00fcf557a9c4da5ad51a3e683679201fd5192b016ef44b69f766c352c9f6142a",
+      "en_sha256": "2524c2f4437ee2d929e57f990f6fa20a741eda2600a219e514330397a4d10177"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter.md",
@@ -303,8 +303,8 @@
       "ja": "docs/learn/ja/tutorials/frameworks.md",
       "en": "docs/learn/en/tutorials/frameworks.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "11be709008f04fccbddaedd06808fa920283d9c81b89fae68a0629b1ad4515d9",
-      "en_sha256": "62c841c28c57931427bedbfb1ba5b85a0508f1f1b858f2a2e875d242ee165173"
+      "ja_sha256": "a8bc08ae3dbd2ee71bdcaf2cc5e678195b209103bdfb9c495af9dfb61cd8b7ed",
+      "en_sha256": "af7e674351fe042d3802a94122214b6c05f88df72bc6f7b0d935399ab6663a42"
     },
     {
       "ja": "docs/learn/ja/tutorials/index.md",
@@ -366,8 +366,8 @@
       "ja": "examples/frameworks/README.md",
       "en": "examples/frameworks/README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "1795b09fbbbd1a680cc06c4921e103fbc0fb2cf1ec054bfeb468737d5130d7b0",
-      "en_sha256": "0498c04298bca65a1fa99b14fc6398b7b33cbcd5eedbf2bef7dda293e7410e4e"
+      "ja_sha256": "bb88d1ad21fca21349cc687b733f128ee78352d14c8781cf648d965462ab3af6",
+      "en_sha256": "bfc2f87f5578b5c75e05f69167181373f2cf82bb9817892a791aa21796d6847f"
     },
     {
       "ja": "examples/gallery/README.md",

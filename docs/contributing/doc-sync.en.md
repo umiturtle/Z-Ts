@@ -19,9 +19,9 @@ version was verified consistent with the implementation. The source of truth is
 
 - **Verified version**: `ziggurats 0.1.0` / Zig `0.17.0`
 - **Verified on**: `2026-10-21`
-- **Base commit**: `c846f01` (HEAD when verification began; the sha256 below identifies the implementation)
+- **Base commit**: `d27c291` (HEAD when verification began; the sha256 below identifies the implementation)
 - **Verified with**: `python3 scripts/check-docs.py` · `python3 scripts/gen-framework-tutorials.py --check` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
-- **Implementation hash**: `65108999801026540d9e18826b20d341fe0fc6b7290facfd77f9d1f91ed3e5f2`
+- **Implementation hash**: `c915562f9ff6d601c4f984ac87c6ee40c7425aac5628c6e8fc53fac6f14fe4c1`
 
 Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `src/docsite/frameworks.zig`, `src/docsite/frameworks.json`, `src/docsite/assets/site.js`, `src/docsite/assets/site.css`, `scripts/check-docs.py`, `scripts/gen-framework-tutorials.py`
 

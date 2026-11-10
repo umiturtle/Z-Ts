@@ -7,9 +7,9 @@
 > これまでどおり `zts` / `z_ts` / `zts_*` です。
 
 [![CI](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml)
-[![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/Z-Ts/)
+[![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/ZigguraTs/)
 
-📖 **ドキュメントサイト: <https://umiturtle.github.io/Z-Ts/>**
+📖 **ドキュメントサイト: <https://umiturtle.github.io/ZigguraTs/>**
 （全ドキュメントの検索・目次・**動くサンプル**つき。Markdown はこのリポジトリが正本です）
 
 ---
@@ -113,9 +113,9 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 | 配布物を作る（`.deb` / `.dmg` / `.exe`） | [`learn/ja/guides/package.md`](docs/learn/ja/guides/package.md) |
 | Tauri v2 からの移行 | [`learn/ja/guides/migrate-from-tauri.md`](docs/learn/ja/guides/migrate-from-tauri.md) |
 | うまく動かないとき | [`learn/ja/guides/troubleshooting.md`](docs/learn/ja/guides/troubleshooting.md) |
-| **API リファレンス**（ソースから自動生成） | <https://umiturtle.github.io/Z-Ts/docs/api/index.html>（`zig build docs` で手元にも生成） |
+| **API リファレンス**（ソースから自動生成） | <https://umiturtle.github.io/ZigguraTs/docs/api/index.html>（`zig build docs` で手元にも生成） |
 | 言葉の意味 | [`docs/glossary.md`](docs/glossary.md) |
-| エラー名から引く | <https://umiturtle.github.io/Z-Ts/docs/reference/errors.html> |
+| エラー名から引く | <https://umiturtle.github.io/ZigguraTs/docs/reference/errors.html> |
 | `zts` の全オプション | [`docs/reference/cli.md`](docs/reference/cli.md) |
 
 **ziggurats 本体を開発する人向け**（コマンドは `zig build`）

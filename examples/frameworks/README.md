@@ -31,29 +31,29 @@ Zig 側は共通で、フロントエンドの書き方だけが変わります�
 
 | ライブラリ | 実物 | チュートリアル | 公開デモ |
 |---|---|---|---|
-| React | [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-react.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) |
-| Solid | [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-solid.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
-| Svelte | [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-svelte.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
-| Angular | [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-angular.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) |
-| Next.js | [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-next.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) |
-| Nuxt | [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-nuxt.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
-| Astro | [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-astro.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
-| SvelteKit | [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-sveltekit.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) |
-| SolidStart | [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-solidstart.md) | [公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) |
+| React | [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-react.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
+| Solid | [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-solid.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
+| Svelte | [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-svelte.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
+| Angular | [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-angular.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
+| Next.js | [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-next.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) |
+| Nuxt | [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-nuxt.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
+| Astro | [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-astro.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
+| SvelteKit | [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-sveltekit.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) |
+| SolidStart | [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | [カウンターを作る](../../docs/learn/ja/tutorials/counter-solidstart.md) | [公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) |
 
 ## 公開デモへのリンク
 
 `zig build docs` が書き出す Pages では、各フレームワークの静的出力がそのまま公開されます
-（[デモ一覧](https://umiturtle.github.io/Z-Ts/examples/frameworks/index.html)）。
+（[デモ一覧](https://umiturtle.github.io/ZigguraTs/examples/frameworks/index.html)）。
 サイトのベース URL はリポジトリ名が変わったら 1 箇所まとめて差し替えてください。
 
 | フレームワーク | デモ | フレームワーク | デモ |
 |---|---|---|---|
-| Angular | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) | Astro | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
-| Next.js | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) | Nuxt | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
-| React | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) | SolidJS | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
-| SolidStart | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) | Svelte | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
-| SvelteKit | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) | — | — |
+| Angular | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) | Astro | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
+| Next.js | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) | Nuxt | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
+| React | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) | SolidJS | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
+| SolidStart | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) | Svelte | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
+| SvelteKit | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) | — | — |
 
 スクリーンショット回帰そのものは
 [`examples/gallery/README.md`](../gallery/README.md) と

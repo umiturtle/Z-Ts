@@ -38,29 +38,29 @@ frontend idiom changes. The plain-JS original is
 
 | Library | Example | Tutorial | Live demo |
 |---|---|---|---|
-| React | [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | [Build a counter](../../docs/learn/en/tutorials/counter-react.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) |
-| Solid | [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | [Build a counter](../../docs/learn/en/tutorials/counter-solid.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
-| Svelte | [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | [Build a counter](../../docs/learn/en/tutorials/counter-svelte.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
-| Angular | [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | [Build a counter](../../docs/learn/en/tutorials/counter-angular.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) |
-| Next.js | [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | [Build a counter](../../docs/learn/en/tutorials/counter-next.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) |
-| Nuxt | [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | [Build a counter](../../docs/learn/en/tutorials/counter-nuxt.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
-| Astro | [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | [Build a counter](../../docs/learn/en/tutorials/counter-astro.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
-| SvelteKit | [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | [Build a counter](../../docs/learn/en/tutorials/counter-sveltekit.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) |
-| SolidStart | [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | [Build a counter](../../docs/learn/en/tutorials/counter-solidstart.md) | [Open demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) |
+| React | [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | [Build a counter](../../docs/learn/en/tutorials/counter-react.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
+| Solid | [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | [Build a counter](../../docs/learn/en/tutorials/counter-solid.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
+| Svelte | [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | [Build a counter](../../docs/learn/en/tutorials/counter-svelte.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
+| Angular | [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | [Build a counter](../../docs/learn/en/tutorials/counter-angular.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
+| Next.js | [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | [Build a counter](../../docs/learn/en/tutorials/counter-next.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) |
+| Nuxt | [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | [Build a counter](../../docs/learn/en/tutorials/counter-nuxt.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
+| Astro | [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | [Build a counter](../../docs/learn/en/tutorials/counter-astro.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
+| SvelteKit | [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | [Build a counter](../../docs/learn/en/tutorials/counter-sveltekit.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) |
+| SolidStart | [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | [Build a counter](../../docs/learn/en/tutorials/counter-solidstart.md) | [Open demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) |
 
 ## Links to the published demos
 
 `zig build docs` publishes each framework's static output on Pages
-([demo index](https://umiturtle.github.io/Z-Ts/examples/frameworks/index.html)).
+([demo index](https://umiturtle.github.io/ZigguraTs/examples/frameworks/index.html)).
 If the repository is renamed, replace the base URL in this one table.
 
 | Framework | Demo | Framework | Demo |
 |---|---|---|---|
-| Angular | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) | Astro | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
-| Next.js | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) | Nuxt | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
-| React | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) | SolidJS | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
-| SolidStart | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) | Svelte | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
-| SvelteKit | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) | — | — |
+| Angular | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) | Astro | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
+| Next.js | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) | Nuxt | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
+| React | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) | SolidJS | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
+| SolidStart | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) | Svelte | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
+| SvelteKit | [open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) | — | — |
 
 For the screenshot regression itself see
 [`examples/gallery/README.en.md`](../gallery/README.en.md) and

@@ -62,7 +62,7 @@ ls dist/index.html
 
 > [!NOTE]
 > 9 つの example は**同じ DOM・同じ CSS・同じ文言**で作られています。違うのはフレームワーク名と
-> バージョンだけなので、[公開デモ](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) を見比べれば「どれを選んでも同じアプリ」だと
+> バージョンだけなので、[公開デモ](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) を見比べれば「どれを選んでも同じアプリ」だと
 > 確認できます。3 OS のスクリーンショット比較については
 > [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) を参照してください。
 
@@ -189,6 +189,6 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 | 状態を増やす・失敗を返す | [Todo リストを作る](todo.md) |
 | 読み込み中 / 空 / エラーの画面 | [画面を作る](ui.md) |
 | `React` の実物ソース | [`examples/frameworks/react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) |
-| `React` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) |
+| `React` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
 | 9 つの example の比較 | [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) |
 | コマンドの引数・エラー・型生成 | [ガイド: コマンド](../guides/rpc.md) |

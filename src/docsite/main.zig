@@ -1962,7 +1962,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
     return out.toOwnedSlice();
 }
 
-const site_url = "https://umiturtle.github.io/Z-Ts/";
+const site_url = "https://umiturtle.github.io/ZigguraTs/";
 
 fn renderLlmsTxt(arena: Allocator, groups_ja: []const site.Group, groups_en: []const site.Group, rendered: anytype) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(arena);

@@ -70,6 +70,10 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       with a GET before PATCH, are `continue-on-error`, and mirror to the Step
                       Summary. A `context.repo` frozen by a mid-run repository rename turns
                       `checks.update` into HTTP 500; that diagnostic must never fail the build.
+19. Pages URL        — the published site's absolute URLs (`site_url`, sitemap, llms.txt,
+                      framework demos, generated tutorials, README/index links) must use the
+                      *current* repository name. The old `/Z-Ts/` Pages path 404s after a rename;
+                      `github.com` links and checkout paths stay as rule 14 prescribes.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -1352,6 +1356,57 @@ if doc is not None:
     for token in ("publish-check-run-summary.js", "full_name", "continue-on-error"):
         if token not in doc:
             errors.append(f"{R18_DOC}: missing {token!r} (rule 18)")
+
+# ---------------------------------------------------------------------------
+# 19. Published Pages URLs follow the current repository name
+# ---------------------------------------------------------------------------
+#
+# A repository rename changes the GitHub Pages sub-path but not `github.com` URLs (those redirect).
+# Rule 14 deliberately keeps the legacy name inside repository URLs and checkout paths; rule 19 is
+# the narrower guard for the *published site*: `site_url`, sitemap.xml, llms.txt, framework demos,
+# the generated tutorials and every reader-facing link must use the current `/ZigguraTs/` base.
+# ADRs and task sheets are historical records and are intentionally excluded from the scan.
+
+R19_BASE = "https://umiturtle.github.io/ZigguraTs/"
+R19_OLD = "https://umiturtle.github.io/Z-Ts/"
+R19_SOURCES = (
+    "src/docsite/main.zig",
+    "src/docsite/frameworks.zig",
+    "scripts/gen-framework-tutorials.py",
+)
+R19_SCAN = (
+    [
+        "README.md", "README.en.md", "AGENTS.md",
+        "docs/INDEX.md", "docs/INDEX.en.md",
+        "docs/architecture/documentation-site.md",
+        ".github/workflows/pages.yml",
+        "src/docsite/demos.zig",
+    ]
+    + sorted(glob.glob("docs/learn/**/*.md", recursive=True))
+    + sorted(glob.glob("docs/reference/**/*.md", recursive=True))
+    + sorted(glob.glob("docs/contributing/**/*.md", recursive=True))
+    + sorted(glob.glob("docs/architecture/**/*.md", recursive=True))
+    + sorted(glob.glob("examples/*/README*.md", recursive=True))
+    + sorted(glob.glob("src/docsite/**/*.zig", recursive=True))
+    + ["scripts/gen-framework-tutorials.py"]
+)
+
+for path in R19_SOURCES:
+    if not os.path.isfile(path):
+        errors.append(f"{path}: missing (rule 19)")
+        continue
+    text = open(path, encoding="utf-8").read()
+    if R19_OLD in text:
+        errors.append(f"{path}: stale Pages base {R19_OLD!r} (rule 19)")
+    if R19_BASE not in text:
+        errors.append(f"{path}: missing current Pages base {R19_BASE!r} (rule 19)")
+
+for path in sorted(set(R19_SCAN)):
+    if not os.path.isfile(path):
+        continue
+    text = open(path, encoding="utf-8").read()
+    if R19_OLD in text:
+        errors.append(f"{path}: stale published Pages URL {R19_OLD!r} (rule 19)")
 
 if warnings:
     for w in warnings:

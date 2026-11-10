@@ -7,9 +7,9 @@ one toolchain.
 > `zts` / `z_ts` / `zts_*`.
 
 [![CI](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml)
-[![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/Z-Ts/)
+[![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/ZigguraTs/)
 
-📖 **Documentation site: <https://umiturtle.github.io/Z-Ts/>**
+📖 **Documentation site: <https://umiturtle.github.io/ZigguraTs/>**
 (search, table of contents and **working demos**; the Markdown in this repository is the source of
 truth). Japanese and English are both available on every reader page.
 
@@ -117,9 +117,9 @@ step 1.
 | Build installers (`.deb` / `.dmg` / `.exe`) | [`learn/en/guides/package.md`](docs/learn/en/guides/package.md) |
 | Migrate from Tauri v2 | [`learn/en/guides/migrate-from-tauri.md`](docs/learn/en/guides/migrate-from-tauri.md) |
 | Something broke | [`learn/en/guides/troubleshooting.md`](docs/learn/en/guides/troubleshooting.md) |
-| **API reference** (generated from source) | <https://umiturtle.github.io/Z-Ts/docs/api/index.html> |
+| **API reference** (generated from source) | <https://umiturtle.github.io/ZigguraTs/docs/api/index.html> |
 | A word's meaning | [`docs/glossary.en.md`](docs/glossary.en.md) |
-| An error name | <https://umiturtle.github.io/Z-Ts/docs/reference/errors.html> |
+| An error name | <https://umiturtle.github.io/ZigguraTs/docs/reference/errors.html> |
 | Every `zts` option | [`docs/reference/cli.en.md`](docs/reference/cli.en.md) |
 
 **For people developing ziggurats itself** (the command is `zig build`)

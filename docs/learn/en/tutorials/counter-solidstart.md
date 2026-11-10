@@ -61,7 +61,7 @@ ls dist/client/index.html
 
 > [!NOTE]
 > All nine examples render the **same DOM, CSS and copy**; only the framework name and version
-> differ. Compare the [live demo](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) with another one to see that the app is the same. See
+> differ. Compare the [live demo](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) with another one to see that the app is the same. See
 > [`examples/frameworks/README.md`](../../../../examples/frameworks/README.en.md) for the 3-OS
 > screenshot comparison.
 
@@ -187,6 +187,6 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | more state, returning failures | [Build a todo list](todo.md) |
 | loading / empty / error views | [Build the screen](ui.md) |
 | the real SolidStart source | [`examples/frameworks/solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) |
-| the live SolidStart demo | [Open in a browser](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) |
+| the live SolidStart demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
 | arguments, errors, generated types | [Guide: commands](../guides/rpc.md) |

@@ -25,15 +25,15 @@
 
 | 実物 | バージョン | ビルド | 出力先 | チュートリアル | 公開デモ |
 |---|---|---|---|---|---|
-| [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | 19.3 | `vite build` | `dist` | [チュートリアル](counter-react.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) |
-| [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | 1.9 | `vite build` | `dist` | [チュートリアル](counter-solid.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
-| [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | 5.57 | `vite build` | `dist` | [チュートリアル](counter-svelte.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
-| [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | 22.2 | `ng build` | `dist/browser` | [チュートリアル](counter-angular.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) |
-| [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | 16.4 | `next build` | `out` | [チュートリアル](counter-next.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) |
-| [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | 4.6 | `nuxt generate` | `.output/public` | [チュートリアル](counter-nuxt.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
-| [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | 6.4 | `astro build` | `dist` | [チュートリアル](counter-astro.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
-| [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | 3.1 | `vite build` | `build` | [チュートリアル](counter-sveltekit.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) |
-| [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | 2.1 | `vite build` | `dist/client` | [チュートリアル](counter-solidstart.md) | [開く](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) |
+| [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | 19.3 | `vite build` | `dist` | [チュートリアル](counter-react.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
+| [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | 1.9 | `vite build` | `dist` | [チュートリアル](counter-solid.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
+| [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | 5.57 | `vite build` | `dist` | [チュートリアル](counter-svelte.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
+| [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | 22.2 | `ng build` | `dist/browser` | [チュートリアル](counter-angular.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
+| [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | 16.4 | `next build` | `out` | [チュートリアル](counter-next.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) |
+| [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | 4.6 | `nuxt generate` | `.output/public` | [チュートリアル](counter-nuxt.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
+| [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | 6.4 | `astro build` | `dist` | [チュートリアル](counter-astro.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
+| [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | 3.1 | `vite build` | `build` | [チュートリアル](counter-sveltekit.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) |
+| [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | 2.1 | `vite build` | `dist/client` | [チュートリアル](counter-solidstart.md) | [開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) |
 
 リポジトリの [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) に
 ビルド方法と 3 OS のスクリーンショット比較の仕組みをまとめてあります。
