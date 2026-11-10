@@ -188,8 +188,32 @@ pub const Config = struct {
         /// `security.capabilities` — either a reference to a capability identifier or an inline
         /// capability object (kept as raw JSON for `acl.zig` to interpret).
         capabilities: []CapabilityEntry = &.{},
+        /// `security.pattern` — `"brownfield"` (default) or the AES-GCM isolation pattern.
+        pattern: Pattern = .brownfield,
         /// Extra response headers, as raw JSON.
         headers_json: ?[]const u8 = null,
+    };
+
+    /// `app.security.pattern`. Upstream Tauri v2 accepts either the string `"brownfield"` /
+    /// `"isolation"` or `{ "use": "isolation", "options": { "dir": "../dist-isolation" } }`.
+    pub const IsolationOptions = struct {
+        /// Directory (relative to the frontend `dist/`) holding the isolation iframe's assets.
+        /// Served from `isolation://localhost/` by `protocol.zig`.
+        dir: []const u8 = "isolation",
+        /// Optional 64-char hex AES-256 key. When empty, `isolation.deriveKey()` builds a
+        /// deterministic key from `identifier` instead — no runtime randomness in built assets.
+        key_hex: []const u8 = "",
+    };
+
+    pub const Pattern = union(enum) {
+        /// Default: the frontend talks to IPC directly (CSRF key + capabilities still apply).
+        brownfield,
+        /// Every IPC body is AES-256-GCM encrypted by the injected bootstrap.
+        isolation: IsolationOptions,
+
+        pub fn isIsolation(self: Pattern) bool {
+            return self == .isolation;
+        }
     };
 
     /// One entry of `security.capabilities`: either a name or an inline object.
@@ -609,6 +633,46 @@ fn parseScope(parser: *Parser, path: []const u8, value: std.json.Value) Error!Co
     }
 }
 
+/// Parses `app.security.pattern`. Both upstream spellings are accepted. An unknown `use` value
+/// fails with a diagnostic rather than silently changing the security posture of a command.
+fn parsePattern(parser: *Parser, path: []const u8, value: std.json.Value) Error!Config.Pattern {
+    switch (value) {
+        .string => |kind| {
+            if (std.mem.eql(u8, kind, "brownfield")) return .brownfield;
+            if (std.mem.eql(u8, kind, "isolation")) return .{ .isolation = .{} };
+            return parser.fail(path, "unknown security pattern `{s}` (expected `brownfield` or `isolation`)", .{kind});
+        },
+        .object => |object| {
+            const use = object.get("use") orelse
+                return parser.fail(path, "missing `use` in security pattern object", .{});
+            const kind = try parser.string(tryPath(parser, path, "use"), use);
+            if (std.mem.eql(u8, kind, "brownfield")) return .brownfield;
+            if (!std.mem.eql(u8, kind, "isolation")) {
+                return parser.fail(path, "unknown security pattern `{s}`", .{kind});
+            }
+            var opts: Config.IsolationOptions = .{};
+            if (object.get("options")) |options| {
+                const options_path = tryPath(parser, path, "options");
+                if (options != .object) return parser.fail(options_path, "expected an object", .{});
+                if (try parser.optString(tryPath(parser, options_path, "dir"), options.object.get("dir"))) |dir| {
+                    opts.dir = dir;
+                }
+                if (try parser.optString(tryPath(parser, options_path, "keyHex"), options.object.get("keyHex"))) |hex| {
+                    opts.key_hex = hex;
+                }
+                // Upstream `cryptoKeys` holds byte arrays; ziggurats accepts one fixed key via
+                // `keyHex` and notes any extra keys instead of silently picking one.
+                if (options.object.get("cryptoKeys")) |_| {
+                    parser.note(tryPath(parser, options_path, "cryptoKeys"), "use `keyHex` (64 hex chars) for a fixed AES-256 key; extra keys are ignored", .{});
+                }
+            }
+            return .{ .isolation = opts };
+        },
+        .null => return .brownfield,
+        else => return parser.fail(path, "expected a string or object, found {s}", .{@tagName(value)}),
+    }
+}
+
 fn parseSecurity(parser: *Parser, path: []const u8, value: std.json.Value) Error!Config.Security {
     if (value != .object) return parser.fail(path, "expected an object", .{});
     const object = value.object;
@@ -617,6 +681,9 @@ fn parseSecurity(parser: *Parser, path: []const u8, value: std.json.Value) Error
     if (object.get("csp")) |csp| security.csp_json = try stringify(parser.allocator, csp);
     if (object.get("devCsp")) |csp| security.dev_csp_json = try stringify(parser.allocator, csp);
     if (object.get("headers")) |headers| security.headers_json = try stringify(parser.allocator, headers);
+    if (object.get("pattern")) |pattern| {
+        security.pattern = try parsePattern(parser, tryPath(parser, path, "pattern"), pattern);
+    }
     if (try parser.optBool(tryPath(parser, path, "freezePrototype"), object.get("freezePrototype"))) |v| {
         security.freeze_prototype = v;
     }
@@ -648,7 +715,7 @@ fn parseSecurity(parser: *Parser, path: []const u8, value: std.json.Value) Error
         security.capabilities = out;
     }
 
-    const unsupported = [_][]const u8{ "pattern", "dangerousDisableAssetCspModification" };
+    const unsupported = [_][]const u8{"dangerousDisableAssetCspModification"};
     for (unsupported) |key| {
         if (object.get(key) == null) continue;
         parser.note(tryPath(parser, path, key), "not supported by ziggurats yet (ignored)", .{});
@@ -1027,4 +1094,33 @@ test "load reads tauri.conf.json plus capabilities/*.json from a directory" {
     try testing.expectEqualStrings("main.json", imported.capabilities[0].file_name);
     // The unreadable capability is a warning, not a hard failure.
     try testing.expect(imported.warnings.has("capabilities/broken.json"));
+}
+
+test "P0-3: app.security.pattern parses brownfield and isolation options" {
+    var plain = try parse(testing.allocator,
+        \\{"identifier":"x.y","app":{"security":{"freezePrototype":true}}}
+    , null);
+    defer plain.deinit();
+    try testing.expectEqual(Config.Pattern.brownfield, plain.config.app.security.pattern);
+
+    var short = try parse(testing.allocator,
+        \\{"identifier":"x.y","app":{"security":{"pattern":"isolation"}}}
+    , null);
+    defer short.deinit();
+    try testing.expect(short.config.app.security.pattern.isIsolation());
+    try testing.expectEqualStrings("isolation", short.config.app.security.pattern.isolation.dir);
+
+    var full = try parse(testing.allocator,
+        \\{"identifier":"x.y","app":{"security":{"pattern":{"use":"isolation","options":{"dir":"../dist-isolation","keyHex":"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}}}}
+    , null);
+    defer full.deinit();
+    try testing.expectEqualStrings("../dist-isolation", full.config.app.security.pattern.isolation.dir);
+    try testing.expectEqualStrings("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", full.config.app.security.pattern.isolation.key_hex);
+
+    var diags = Diagnostics.init(testing.allocator);
+    defer diags.deinit();
+    try testing.expectError(error.InvalidConfig, parse(testing.allocator,
+        \\{"identifier":"x.y","app":{"security":{"pattern":{"use":"quantum"}}}}
+    , &diags));
+    try testing.expect(diags.items.items.len > 0);
 }

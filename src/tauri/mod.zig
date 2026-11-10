@@ -23,6 +23,7 @@ pub const config_import = @import("config_import.zig");
 pub const dialog = @import("dialog/mod.zig");
 pub const event = @import("event.zig");
 pub const fs = @import("fs/mod.zig");
+pub const isolation = @import("isolation.zig");
 pub const js_bootstrap = @import("js_bootstrap.zig");
 pub const menu = @import("menu/mod.zig");
 pub const path = @import("path.zig");
@@ -45,6 +46,7 @@ pub const FsScope = fs.Scope;
 pub const EventTarget = event.EventTarget;
 pub const HeaderPair = protocol.HeaderPair;
 pub const IncomingSchemeRequest = protocol.IncomingSchemeRequest;
+pub const IsolationKey = isolation.Key;
 pub const OsTarget = js_bootstrap.OsTarget;
 pub const PathState = path.PathState;
 pub const ProtocolConfig = protocol.ProtocolConfig;
@@ -160,6 +162,7 @@ pub const CorePluginStates = struct {
 
 test {
     _ = acl;
+    _ = isolation;
     _ = app;
     _ = channel;
     _ = clipboard;

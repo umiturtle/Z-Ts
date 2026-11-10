@@ -37,6 +37,11 @@ pub const DesktopConfig = struct {
     extra_allowed_origins: []const []const u8 = &.{},
     /// Fixed invoke key (tests / embedded hosts); random when `null`.
     invoke_key_override: ?[]const u8 = null,
+    /// `app.security.pattern: "isolation"` key. `null` = brownfield (plaintext IPC bodies).
+    /// Build it with `tauri.isolation.keyFor(app.identifier, pattern.isolation.key_hex)`.
+    isolation_key: ?tauri.IsolationKey = null,
+    /// Asset path prefix backing `isolation://localhost/`.
+    isolation_asset_prefix: []const u8 = "/isolation/",
 };
 
 fn noopRpcDispatch(
@@ -102,6 +107,8 @@ pub const DesktopRuntime = struct {
             .asset_root_dir = cfg.paths.resource_dir,
             .asset_allow_globs = cfg.asset_allow_globs,
             .extra_allowed_origins = cfg.extra_allowed_origins,
+            .isolation_key = cfg.isolation_key,
+            .isolation_asset_prefix = cfg.isolation_asset_prefix,
         }, .{ .userdata = null, .dispatchFn = noopRpcDispatch });
 
         const scheme_handler: webview.SchemeHandler = .{
@@ -111,6 +118,7 @@ pub const DesktopRuntime = struct {
         try self.engine.registerScheme("tauri", scheme_handler);
         try self.engine.registerScheme("ipc", scheme_handler);
         try self.engine.registerScheme("asset", scheme_handler);
+        try self.engine.registerScheme("isolation", scheme_handler);
         self.engine.setMessageHandler(.{ .userdata = self, .onMessage = onJsMessage });
         self.engine.setCloseHandler(.{ .userdata = self, .onClose = onWindowClosed });
 
@@ -142,9 +150,15 @@ pub const DesktopRuntime = struct {
     /// Creates a window, injects `window.__TAURI_INTERNALS__` at `AT_DOCUMENT_START` with the
     /// window's exact `label` and `invoke_key`, registers it in `WindowRegistry`, and navigates to `initial_url`.
     pub fn openWindow(self: *DesktopRuntime, spec: core.WindowSpec) !core.WindowId {
+        var iso_hex_buf: [64]u8 = undefined;
+        const iso_hex: []const u8 = if (self.router.config.isolation_key) |key| blk: {
+            iso_hex_buf = tauri.isolation.keyHex(key);
+            break :blk &iso_hex_buf;
+        } else "";
         const boot_js = try tauri.js_bootstrap.renderScriptAlloc(self.allocator, .{
             .label = spec.label,
             .invoke_key = self.invoke_key,
+            .isolation_key_hex = iso_hex,
         });
         defer self.allocator.free(boot_js);
 

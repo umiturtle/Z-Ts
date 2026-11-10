@@ -20,7 +20,7 @@
 > 「**P0-2 → P0-3 → P0-1 → P0-4 → P0-5 → P1 → P2** を順に実装して」
 
 - [x] **P0-2** capability の scope を `Policy` → `rpc.Ctx` → `plugin:fs` で実適用する
-- [ ] **P0-3** `app.security.pattern: "isolation"`（暗号化 iframe）
+- [x] **P0-3** `app.security.pattern: "isolation"`（暗号化 iframe）
 - [ ] **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）
 - [ ] **P0-4** 生成済み `gzip_entries` を実際に配信する
 - [ ] **P0-5** `zts migrate`
@@ -77,5 +77,21 @@
   - `plugin:fs|*` の全 19 経路を `resolveScoped()` に集約（既存 `FsScope` と併用）
   - テスト: `quick-test` の tauri モジュール 67 件（+3: scope allow / deny / unscoped と
     fs の E2E）。日英 `concepts/security.md` にルール表を追加
-- **作業中**: **P0-3** `app.security.pattern: "isolation"`。
-- **未着手**: P0-1 / P0-4 / P0-5 / P1 / P2。
+- **完了**: **P0-3** `app.security.pattern: "isolation"`。
+  - `src/tauri/isolation.zig`: `std.crypto.aead.aes_gcm.Aes256Gcm`（Pure Zig）で
+    `seal` / `open`。AAD をバージョン固定、nonce 12 byte / tag 16 byte、`keyFor()` は
+    `keyHex` 優先・`identifier` からの決定論的導出
+  - `config_import.Security.pattern`: 文字列 / `{use,options}` 両対応、`dir` と `keyHex`、
+    未知の `use` は診断付き `InvalidConfig`（黙って平文に落とさない）
+  - `js_bootstrap`: `ISOKEY` と `__TAURI_ISOLATION_HOOK__`、WebCrypto で本文ごと暗号化。
+    平文フォールバックを **禁止**（`IsolationTransportUnavailable`）
+  - `protocol`: `isolation_key` が設定されていたら `ipc://` 本文を復号してから dispatch。
+    平文 / 別鍵 / 改ざんは 403 `ForbiddenIsolationEnvelope`。`isolation://localhost/` は
+    埋め込みアセットの `/isolation/` を配信（Windows の `.localhost` 形も対応）
+  - `app_runtime.DesktopConfig.isolation_key` で実アプリに配線、スキーム登録と
+    `openWindow()` のブートストラップへ鍵を注入
+  - テスト: tauri 73 件（+6: 暗号ラウンドトリップ / 改ざん / 鍵決定性、config、
+    protocol E2E、bootstrap）。`fmt --check` / `check-docs` / `docs-check` / `build test` 緑
+  - 日英 `concepts/security.md` に設定例・ルール表・限界を追加、gap レポートに進捗注記
+- **作業中**: **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）。
+- **未着手**: P0-4 / P0-5 / P1 / P2。

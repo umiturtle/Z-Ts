@@ -28,6 +28,7 @@ const web = @import("zts_web");
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 const js_bootstrap = @import("js_bootstrap.zig");
+const isolation = @import("isolation.zig");
 
 /// A request/response header. Values are borrowed slices, never NUL terminated.
 pub const HeaderPair = struct {
@@ -37,7 +38,7 @@ pub const HeaderPair = struct {
     value: []const u8,
 };
 
-/// One `tauri://` / `ipc://` / `asset://` hit, already decoded from the WebView's callback. A
+/// One `tauri://` / `ipc://` / `asset://` / `isolation://` hit, decoded from the WebView callback. A
 /// `WindowId` of `0` means "no window" (a request that arrived before the first window existed).
 pub const IncomingSchemeRequest = struct {
     /// Window the request came from (`0` = no window yet).
@@ -130,6 +131,11 @@ pub const ProtocolConfig = struct {
     asset_allow_globs: []const []const u8 = &.{},
     /// Additional origins allowed to call IPC.
     extra_allowed_origins: []const []const u8 = &.{},
+    /// `app.security.pattern: "isolation"` — when set, every `ipc://` body MUST be an
+    /// AES-256-GCM envelope produced by `js_bootstrap.zig`. Plaintext bodies are rejected.
+    isolation_key: ?isolation.Key = null,
+    /// Asset path prefix that backs `isolation://localhost/` (the encrypted iframe).
+    isolation_asset_prefix: []const u8 = "/isolation/",
 };
 
 fn constantTimeEql(a: []const u8, b: []const u8) bool {
@@ -174,8 +180,10 @@ pub fn percentDecodeRawAlloc(allocator: Allocator, input: []const u8) error{ Out
     return out.toOwnedSlice(allocator);
 }
 
+pub const SchemeKind = enum { tauri, ipc, asset, isolation, unknown };
+
 const ParsedSchemeTarget = struct {
-    kind: enum { tauri, ipc, asset, unknown },
+    kind: SchemeKind,
     path: []const u8,
 };
 
@@ -197,11 +205,13 @@ pub fn classifyUri(uri: []const u8) ParsedSchemeTarget {
     if (std.ascii.eqlIgnoreCase(raw_scheme, "tauri")) return .{ .kind = .tauri, .path = clean_path };
     if (std.ascii.eqlIgnoreCase(raw_scheme, "ipc")) return .{ .kind = .ipc, .path = clean_path };
     if (std.ascii.eqlIgnoreCase(raw_scheme, "asset")) return .{ .kind = .asset, .path = clean_path };
+    if (std.ascii.eqlIgnoreCase(raw_scheme, "isolation")) return .{ .kind = .isolation, .path = clean_path };
 
     if (std.ascii.eqlIgnoreCase(raw_scheme, "http") or std.ascii.eqlIgnoreCase(raw_scheme, "https")) {
         if (std.ascii.eqlIgnoreCase(host_part, "tauri.localhost")) return .{ .kind = .tauri, .path = clean_path };
         if (std.ascii.eqlIgnoreCase(host_part, "ipc.localhost")) return .{ .kind = .ipc, .path = clean_path };
         if (std.ascii.eqlIgnoreCase(host_part, "asset.localhost")) return .{ .kind = .asset, .path = clean_path };
+        if (std.ascii.eqlIgnoreCase(host_part, "isolation.localhost")) return .{ .kind = .isolation, .path = clean_path };
     }
     return .{ .kind = .unknown, .path = clean_path };
 }
@@ -263,6 +273,7 @@ pub const ProtocolRouter = struct {
             .ipc => self.handleIpc(host, req, target.path),
             .tauri => self.handleTauriAsset(req, target.path),
             .asset => self.handleFilesystemAsset(req, target.path),
+            .isolation => self.handleIsolationAsset(req, target.path),
             .unknown => .{
                 .status_code = 404,
                 .content_type = "application/json",
@@ -323,7 +334,21 @@ pub const ProtocolRouter = struct {
         var rpc_ctx = rpc.Ctx.init(self.io, scratch).withEnv(&call_ctx);
         if (req.header("Origin")) |orig| rpc_ctx.origin = orig;
 
-        var out = self.rpc_handler.dispatch(self.allocator, &rpc_ctx, cmd_name, req.body);
+        // P0-3: in isolation mode the custom-protocol body is an AES-GCM envelope. Open it with
+        // the Pure-Zig key before the command table ever sees the plaintext. A missing / tampered
+        // envelope is a hard 403 — there is no silent fallback to plaintext.
+        const dispatch_body: []const u8 = if (self.config.isolation_key) |key| blk: {
+            break :blk isolation.open(scratch, key, req.body) catch {
+                return .{
+                    .status_code = 403,
+                    .content_type = "application/json",
+                    .tauri_response = "error",
+                    .body = core.OwnedBytes.static("{\"code\":\"ForbiddenIsolationEnvelope\"}"),
+                };
+            };
+        } else req.body;
+
+        var out = self.rpc_handler.dispatch(self.allocator, &rpc_ctx, cmd_name, dispatch_body);
         defer out.deinit();
 
         const out_slice = out.body.slice();
@@ -363,10 +388,15 @@ pub const ProtocolRouter = struct {
         defer scratch_arena.deinit();
         const scratch = scratch_arena.allocator();
 
+        const isolation_hex: []const u8 = if (self.config.isolation_key) |key| blk: {
+            const hex = isolation.keyHex(key);
+            break :blk scratch.dupe(u8, &hex) catch "";
+        } else "";
         const head_inject: ?[]const u8 = if (self.config.inject_bootstrap_into_html)
             js_bootstrap.renderInlineHtmlTagAlloc(scratch, .{
                 .label = self.config.default_window_label,
                 .invoke_key = self.config.invoke_key,
+                .isolation_key_hex = isolation_hex,
             }) catch null
         else
             null;
@@ -397,6 +427,36 @@ pub const ProtocolRouter = struct {
             resp.content_range_len = cr.len;
         }
         return resp;
+    }
+
+    /// Serves the encrypted iframe. `isolation://localhost/index.html` resolves to
+    /// `/isolation/index.html` inside the embedded `Assets` catalog, so the same deterministic
+    /// bundle carries both the app and its isolation frame on all three OSes.
+    fn handleIsolationAsset(self: *const ProtocolRouter, req: IncomingSchemeRequest, raw_path: []const u8) RoutedResponse {
+        if (self.config.isolation_key == null) {
+            return .{
+                .status_code = 404,
+                .content_type = "application/json",
+                .body = core.OwnedBytes.static("{\"code\":\"IsolationDisabled\"}"),
+            };
+        }
+        var scratch_arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer scratch_arena.deinit();
+        const scratch = scratch_arena.allocator();
+        const trimmed = std.mem.trimStart(u8, raw_path, "/");
+        const mapped = std.fmt.allocPrint(scratch, "{s}{s}", .{
+            std.mem.trimEnd(u8, self.config.isolation_asset_prefix, "/"),
+            if (trimmed.len == 0) "/index.html" else std.fmt.allocPrint(scratch, "/{s}", .{trimmed}) catch return .{
+                .status_code = 500,
+                .content_type = "text/plain",
+                .body = core.OwnedBytes.static("Isolation Asset Error"),
+            },
+        }) catch return .{
+            .status_code = 500,
+            .content_type = "text/plain",
+            .body = core.OwnedBytes.static("Isolation Asset Error"),
+        };
+        return self.handleTauriAsset(req, mapped);
     }
 
     fn handleFilesystemAsset(self: *const ProtocolRouter, req: IncomingSchemeRequest, raw_path: []const u8) RoutedResponse {
@@ -680,4 +740,91 @@ test "ProtocolRouter enforces Invoke-Key & Origin, percent-decodes plugin comman
     });
     defer trav.body.deinit();
     try testing.expectEqual(@as(u16, 403), trav.status_code);
+}
+
+test "P0-3: isolation mode decrypts envelopes, rejects plaintext, and serves the encrypted iframe" {
+    var rec = core.RecordingHost.init(testing.allocator);
+    defer rec.deinit();
+    const win = try rec.host().createWindow(.{ .label = "main" });
+
+    const AppCmds = struct {
+        pub fn greet(args: struct { who: []const u8 }) []const u8 {
+            return args.who;
+        }
+    };
+    const S = rpc.Schema(.{ .root = AppCmds });
+    var bound = S.bind(.{});
+    const key = isolation.keyFor("com.example.isolated", "");
+    const nonce: isolation.Nonce = .{ 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 42, 43 };
+
+    const assets: web.Assets = .{
+        .entries = &.{
+            .{ .path = "/index.html", .bytes = "<html><head></head><body>app</body></html>" },
+            .{ .path = "/isolation/index.html", .bytes = "<html><head></head><body>isolated</body></html>" },
+        },
+    };
+    const router = ProtocolRouter.init(testing.allocator, testing.io, .{
+        .invoke_key = "iso-key",
+        .assets = &assets,
+        .inject_bootstrap_into_html = true,
+        .isolation_key = key,
+    }, bound.handler());
+
+    const headers = [_]HeaderPair{.{ .name = "Tauri-Invoke-Key", .value = "iso-key" }};
+    const envelope = try isolation.seal(testing.allocator, key, nonce, "{\"who\":\"from the iframe\"}");
+    defer testing.allocator.free(envelope);
+
+    // 1. Encrypted body reaches the command as the original plaintext payload.
+    var ok = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "POST",
+        .uri = "ipc://localhost/greet",
+        .headers = &headers,
+        .body = envelope,
+    });
+    defer ok.body.deinit();
+    try testing.expectEqual(@as(u16, 200), ok.status_code);
+    try testing.expectEqualStrings("\"from the iframe\"", ok.body.slice());
+    try testing.expect(std.mem.indexOf(u8, envelope, "from the iframe") == null);
+
+    // 2. Plaintext is rejected even with a valid CSRF key: the isolation iframe is mandatory.
+    var plain = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "POST",
+        .uri = "ipc://localhost/greet",
+        .headers = &headers,
+        .body = "{\"who\":\"plaintext\"}",
+    });
+    defer plain.body.deinit();
+    try testing.expectEqual(@as(u16, 403), plain.status_code);
+    try testing.expectEqualStrings("{\"code\":\"ForbiddenIsolationEnvelope\"}", plain.body.slice());
+
+    // 3. A valid envelope sealed with a different key fails authentication.
+    const wrong = try isolation.seal(testing.allocator, isolation.deriveKey("other-app"), nonce, "{\"who\":\"x\"}");
+    defer testing.allocator.free(wrong);
+    var forged = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "POST",
+        .uri = "ipc://localhost/greet",
+        .headers = &headers,
+        .body = wrong,
+    });
+    defer forged.body.deinit();
+    try testing.expectEqual(@as(u16, 403), forged.status_code);
+
+    // 4. `isolation://localhost/` serves the iframe from the same deterministic bundle, with
+    //    the AES key injected into its bootstrap (not into the outer app's page).
+    var iframe = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "GET",
+        .uri = "isolation://localhost/index.html",
+    });
+    defer iframe.body.deinit();
+    try testing.expectEqual(@as(u16, 200), iframe.status_code);
+    try testing.expect(std.mem.indexOf(u8, iframe.body.slice(), "isolated") != null);
+    const hex = isolation.keyHex(key);
+    try testing.expect(std.mem.indexOf(u8, iframe.body.slice(), &hex) != null);
+
+    // 5. Windows-style sub-origin URL for the same scheme.
+    try testing.expectEqual(SchemeKind.isolation, classifyUri("http://isolation.localhost/index.html").kind);
 }
