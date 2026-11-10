@@ -852,11 +852,11 @@ pub const MacOsBackend = struct {
     pub fn applyWindowCreationOptions(self: *MacOsBackend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         w.creation = types.creationOptions(cfg);
-        const style = self.allocator.dupeZ(u8, cfg.title_bar_style) catch return error.OutOfMemory;
+        const style = self.allocator.dupeSentinel(u8, cfg.title_bar_style, 0) catch return error.OutOfMemory;
         defer self.allocator.free(style);
-        const ua = if (cfg.user_agent) |v| self.allocator.dupeZ(u8, v) catch return error.OutOfMemory else null;
+        const ua = if (cfg.user_agent) |v| self.allocator.dupeSentinel(u8, v, 0) catch return error.OutOfMemory else null;
         defer if (ua) |v| self.allocator.free(v);
-        const tab = if (cfg.tabbing_identifier) |v| self.allocator.dupeZ(u8, v) catch return error.OutOfMemory else null;
+        const tab = if (cfg.tabbing_identifier) |v| self.allocator.dupeSentinel(u8, v, 0) catch return error.OutOfMemory else null;
         defer if (tab) |v| self.allocator.free(v);
         shim.zts_macos_apply_creation_options(
             self.handle,

@@ -1052,7 +1052,7 @@ pub const LinuxGtkBackend = struct {
             c.gtk_window_set_title(try self.requireGtkWindow(win_id), "");
         }
         if (cfg.user_agent) |ua| {
-            const z = self.allocator.dupeZ(u8, ua) catch return error.OutOfMemory;
+            const z = self.allocator.dupeSentinel(u8, ua, 0) catch return error.OutOfMemory;
             defer self.allocator.free(z);
             c.webkit_settings_set_user_agent(c.webkit_web_view_get_settings(w.webview), z.ptr);
         }

@@ -1262,6 +1262,13 @@ r17_require(
     "src/tauri/window.zig", "extrasSnapshot", "t.host.applyWindowExtras", "applyNativeState",
 )
 
+# Zig 0.17 removed `Allocator.dupeZ`; the Linux/macOS backends are only compiled on their own
+# OS CI jobs, so a local Linux run would NOT catch it. Pin the allowed API here.
+for path in ("src/webview/linux.zig", "src/webview/macos.zig", "src/webview/windows.zig", "src/webview/mock.zig"):
+    text = r17_read(path)
+    if text is not None and ".dupeZ(" in text:
+        errors.append(f"{path}: Allocator.dupeZ does not exist in Zig 0.17; use dupeSentinel(..., 0) (rule 17)")
+
 # (e) E2E state round trips + bilingual reader docs.
 r17_require(
     "tests/tauri/src/e2e_suite.ts",
