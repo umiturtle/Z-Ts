@@ -87,6 +87,12 @@ pub const MockWindow = struct {
     focused: bool = false,
     /// How many `startDrag()` calls landed on this window.
     drag_count: usize = 0,
+    /// last complete P1 #8 intent snapshot received from `core.Host`.
+    extras: types.WindowExtrasSnapshot = .{},
+    /// Number of `applyWindowExtras` calls (deterministic assertion hook).
+    extras_applied: usize = 0,
+    /// scalar record of every `WindowConfig` option applied at creation.
+    creation: types.WindowCreationOptions = .{},
     /// Whether devtools were requested for this window.
     devtools_open: bool,
     /// Background painted before the first frame, or `null` for the default.
@@ -129,6 +135,11 @@ const MockPendingPayload = struct {
 /// contract as the native backends (scheme routing, IPC, capture, close) but paints nothing, so it
 /// runs without a display server.
 pub const HeadlessMock = struct {
+    /// fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// so backends can emit unconditionally from native callbacks.
+    fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
+        if (self.state_handler) |h| h.call(ev);
+    }
     /// Allocator that owns windows, captures and the scheme table.
     allocator: Allocator,
     /// IO reactor behind the mutex and the condition variable.
@@ -155,6 +166,8 @@ pub const HeadlessMock = struct {
 
     /// `window.__zts.postMessage(…)` receiver, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// OS-originated window-state changes (see `WindowStateHandler`).
+    state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
@@ -372,6 +385,14 @@ pub const HeadlessMock = struct {
         }
     }
 
+    /// test hook for an OS-originated state change (a user clicking the maximise
+    /// button, the window manager moving a window, …). Native backends call the same handler
+    /// from their own event callbacks, so unit tests exercise the exact same fan-out path.
+    pub fn simulateWindowStateEvent(self: *HeadlessMock, ev: types.WindowStateEvent) types.WebviewError!void {
+        if (self.windows.getPtr(ev.window_id) == null) return error.WindowNotFound;
+        self.emitState(ev);
+    }
+
     /// Records a window from `cfg` and returns its id.
     pub fn createWindow(self: *HeadlessMock, cfg: types.WindowConfig) types.WebviewError!types.WindowId {
         const title = self.allocator.dupe(u8, cfg.title) catch return error.OutOfMemory;
@@ -541,6 +562,27 @@ pub const HeadlessMock = struct {
     /// Records the always-on-top flag.
     pub fn setAlwaysOnTop(self: *HeadlessMock, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).always_on_top = on_top;
+    }
+
+    /// deterministic 1280x800 virtual screen; no wall clock, no real display, so the
+    /// same `center: true` config yields byte-identical state on all three OS CI jobs.
+    pub fn centerWindow(self: *HeadlessMock, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
+        const w = try self.requireWin(win_id);
+        w.position = .xy((1280.0 - size.width.v) / 2.0, (800.0 - size.height.v) / 2.0);
+        w.creation.center = true;
+    }
+
+    /// records the full creation option set for parity assertions.
+    pub fn applyWindowCreationOptions(self: *HeadlessMock, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
+        (try self.requireWin(win_id)).creation = types.creationOptions(cfg);
+    }
+
+    /// records the complete scalar snapshot so E2E/unit tests can prove every
+    /// `applyExtras` setter went through `core.Host` with identical data on all backends.
+    pub fn applyWindowExtras(self: *HeadlessMock, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
+        const w = try self.requireWin(win_id);
+        w.extras = extras;
+        w.extras_applied += 1;
     }
 
     /// Marks the window focused.

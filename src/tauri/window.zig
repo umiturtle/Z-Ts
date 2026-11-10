@@ -252,6 +252,52 @@ pub const SizeConstraintsDto = struct {
 /// scalar or an enum, so no per-command allocation can leak and the state is byte-identical on all
 /// three OSes. Visual effects that need a real OS object are applied by the backend where
 /// available; the command always records the intent and emits the matching event.
+/// Kinds of OS-originated state changes `WindowRegistry` understands. The order
+/// is identical to `zts_webview.WindowStateKind` on purpose: `DesktopRuntime` converts with
+/// `@intFromEnum`, and rule 17 verifies the two lists never drift. `zts_tauri` does NOT import
+/// `zts_webview` (dependency direction is preserved).
+pub const NativeStateKind = enum {
+    /// `minimized` state changed by the OS.
+    minimized,
+    /// Maximised / restored by the OS.
+    maximized,
+    /// Native fullscreen entered / left.
+    fullscreen,
+    /// `focused` state changed by the OS.
+    focused,
+    /// `visible` state changed by the OS.
+    visible,
+    /// `decorated` state changed by the OS.
+    decorated,
+    /// `resizable` state changed by the OS.
+    resizable,
+    /// `always on top` state changed by the OS.
+    always_on_top,
+    /// `moved` state changed by the OS.
+    moved,
+    /// `resized` state changed by the OS.
+    resized,
+};
+
+/// One OS-originated state change, expressed only with `zts_core` types.
+pub const NativeStateChange = struct {
+    /// Window the change belongs to.
+    window_id: core.WindowId,
+    /// Which state changed.
+    kind: NativeStateKind,
+    /// New boolean value for flag kinds.
+    value: bool = false,
+    /// Logical-pixel left edge for `moved`.
+    x: f64 = 0,
+    /// Logical-pixel top edge for `moved`.
+    y: f64 = 0,
+    /// Logical-pixel width for `resized`.
+    width: f64 = 0,
+    /// Logical-pixel height for `resized`.
+    height: f64 = 0,
+};
+
+/// Title-bar theme requested by `set_theme` (`dark` / `light` / `system`).
 pub const Theme = enum { system, dark, light };
 /// Taskbar progress-bar state accepted by `set_progress_bar`.
 pub const ProgressStatus = enum { none, normal, indeterminate, paused, @"error" };
@@ -464,6 +510,97 @@ pub const WindowRegistry = struct {
     }
 
     /// Forgets a closed window. Safe to call for an id that is already gone.
+    /// fold an OS-originated state change into the registry so `is_*` commands stop
+    /// answering with a stale flag. Emits the matching `tauri://…` event exactly once per real
+    /// change (native window managers repeat the same notification), through the same EventBus
+    /// the command setters use. `host` is used only for `EventBus.dispatchRaw` → `Host.evalJs`.
+    pub fn applyNativeState(
+        self: *WindowRegistry,
+        host: core.Host,
+        change: NativeStateChange,
+    ) void {
+        var event_name: ?[]const u8 = null;
+        var label_copy: ?[]u8 = null;
+        {
+            self.mu.lockUncancelable(self.io);
+            defer self.mu.unlock(self.io);
+            const e = self.findLocked(null, change.window_id) orelse return;
+
+            const changed: bool = switch (change.kind) {
+                .minimized => blk: {
+                    const c = e.minimized != change.value;
+                    e.minimized = change.value;
+                    break :blk c;
+                },
+                .maximized => blk: {
+                    const c = e.maximized != change.value;
+                    e.maximized = change.value;
+                    break :blk c;
+                },
+                .fullscreen => blk: {
+                    const c = e.fullscreen != change.value;
+                    e.fullscreen = change.value;
+                    break :blk c;
+                },
+                .focused => blk: {
+                    const c = e.focused != change.value;
+                    e.focused = change.value;
+                    break :blk c;
+                },
+                .visible => blk: {
+                    const c = e.visible != change.value;
+                    e.visible = change.value;
+                    break :blk c;
+                },
+                .decorated => blk: {
+                    const c = e.decorated != change.value;
+                    e.decorated = change.value;
+                    break :blk c;
+                },
+                .resizable => blk: {
+                    const c = e.resizable != change.value;
+                    e.resizable = change.value;
+                    break :blk c;
+                },
+                .always_on_top => blk: {
+                    const c = e.always_on_top != change.value;
+                    e.always_on_top = change.value;
+                    break :blk c;
+                },
+                .moved => blk: {
+                    const p = core.LogicalPoint.xy(change.x, change.y);
+                    const c = e.position.x.v != p.x.v or e.position.y.v != p.y.v;
+                    e.position = p;
+                    break :blk c;
+                },
+                .resized => blk: {
+                    const sz = core.LogicalSize.wh(change.width, change.height);
+                    const c = e.size.width.v != sz.width.v or e.size.height.v != sz.height.v;
+                    e.size = sz;
+                    break :blk c;
+                },
+            };
+            if (!changed) return;
+            event_name = switch (change.kind) {
+                .minimized, .maximized, .fullscreen, .resized => "tauri://resize",
+                .moved => "tauri://move",
+                .focused => if (change.value) "tauri://focus" else "tauri://blur",
+                .visible, .decorated, .resizable, .always_on_top => "tauri://window-flags-changed",
+            };
+            label_copy = self.allocator.dupe(u8, e.label) catch null;
+        }
+
+        defer if (label_copy) |lbl| self.allocator.free(lbl);
+        if (self.events) |bus| {
+            const target: event.EventTarget = if (label_copy) |lbl|
+                .{ .Window = .{ .label = lbl } }
+            else
+                .Any;
+            bus.dispatchRaw(host, self.allocator, target, event_name.?, "null") catch {};
+        }
+    }
+
+    /// Removes a window from the registry after the OS closed it; event listeners stop targeting it.
     pub fn unregisterWindow(self: *WindowRegistry, id: core.WindowId) void {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
@@ -608,8 +745,42 @@ pub fn isWindowEventName(name: []const u8) bool {
     return false;
 }
 
-/// P1 #8 — shared body of the scalar setters. Resolves the window, records the intent under the
-/// registry mutex and emits the matching native→JS event. No allocation, no OS branch.
+/// flatten `WindowExtras` into the ownership-free `core.Host` snapshot. Enum ordinals
+/// are the ones declared in THIS file; `core` never imports `tauri` (rule 2 / standalone modules).
+fn extrasSnapshot(e: *const WindowExtras) core.WindowExtrasSnapshot {
+    return .{
+        .theme = @backingInt(e.theme),
+        .skip_taskbar = e.skip_taskbar,
+        .progress_status = @backingInt(e.progress_status),
+        .progress_value = e.progress_value,
+        .badge_count = e.badge_count,
+        .cursor_icon = @backingInt(e.cursor_icon),
+        .cursor_x = e.cursor_x,
+        .cursor_y = e.cursor_y,
+        .cursor_grab = e.cursor_grab,
+        .cursor_visible = e.cursor_visible,
+        .ignore_cursor_events = e.ignore_cursor_events,
+        .centered = e.centered,
+        .user_attention = @backingInt(e.user_attention),
+        .content_protected = e.content_protected,
+        .visible_on_all_workspaces = e.visible_on_all_workspaces,
+        .shadow = e.shadow,
+        .always_on_bottom = e.always_on_bottom,
+        .enabled = e.enabled,
+        .effect = @backingInt(e.effect),
+        .bg_set = e.bg_set,
+        .bg_r = e.bg_r,
+        .bg_g = e.bg_g,
+        .bg_b = e.bg_b,
+        .bg_a = e.bg_a,
+        .icon_hash = e.icon_hash,
+        .devtools_open = e.devtools_open,
+    };
+}
+
+/// P1 #8 / shared body of the 17 scalar setters. Resolves the window, records the intent
+/// under the registry mutex, pushes the COMPLETE snapshot to `core.Host` (so every OS backend sees
+/// the same authoritative state), then emits the matching native→JS event. No app-level OS branch.
 fn applyExtras(
     ctx: *rpc.Ctx,
     reg: *WindowRegistry,
@@ -619,9 +790,17 @@ fn applyExtras(
     event_name: []const u8,
 ) WindowPluginError!void {
     const t = try resolveTarget(ctx, reg, label);
-    reg.mu.lockUncancelable(reg.io);
-    defer reg.mu.unlock(reg.io);
-    if (reg.findLocked(label, t.win_id)) |entry| apply(&entry.extras, value);
+    var snapshot: ?core.WindowExtrasSnapshot = null;
+    {
+        reg.mu.lockUncancelable(reg.io);
+        defer reg.mu.unlock(reg.io);
+        if (reg.findLocked(label, t.win_id)) |entry| {
+            apply(&entry.extras, value);
+            snapshot = extrasSnapshot(&entry.extras);
+        }
+    }
+    // Outside the mutex: a backend may call back into the event loop while applying a native flag.
+    if (snapshot) |snap| try t.host.applyWindowExtras(t.win_id, snap);
     emitWindowEvent(ctx, reg, label, event_name, "null");
 }
 
@@ -1390,4 +1569,70 @@ test "plugin:window handles Tauri Size external tagging, HiDPI scaling, drag & d
     var r3 = h.dispatch(arena.allocator(), &ctx, "plugin:window|internal_toggle_maximize", "{}");
     defer r3.deinit();
     try testing.expect(reg.entries.items[0].maximized);
+}
+
+test "M5-22 ②: all 19 applyExtras setters push a complete snapshot through core.Host" {
+    var rec = core.RecordingHost.init(testing.allocator);
+    defer rec.deinit();
+    const win_id = try rec.host().createWindow(.{ .label = "main" });
+
+    var reg = WindowRegistry.init(testing.allocator, testing.io);
+    defer reg.deinit();
+    try reg.registerWindow(win_id, .{ .label = "main" });
+
+    const S = rpc.Schema(.{ .window = Commands });
+    var router = S.bind(.{ .window = &reg });
+    const h = router.handler();
+
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var call_ctx: core.CallContext = .{ .host = rec.host(), .window_id = win_id };
+    var ctx = rpc.Ctx.init(testing.io, arena.allocator()).withEnv(&call_ctx);
+
+    const calls = [_][2][]const u8{
+        .{ "plugin:window|set_theme", "{\"label\":\"main\",\"value\":\"dark\"}" },
+        .{ "plugin:window|set_skip_taskbar", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_progress_bar", "{\"label\":\"main\",\"status\":\"normal\",\"progress\":42}" },
+        .{ "plugin:window|set_badge_count", "{\"label\":\"main\",\"value\":7}" },
+        .{ "plugin:window|set_cursor_icon", "{\"label\":\"main\",\"value\":\"hand\"}" },
+        .{ "plugin:window|set_cursor_position", "{\"label\":\"main\",\"x\":11,\"y\":22}" },
+        .{ "plugin:window|set_cursor_grab", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_cursor_visible", "{\"label\":\"main\",\"value\":false}" },
+        .{ "plugin:window|set_ignore_cursor_events", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|center", "{\"label\":\"main\"}" },
+        .{ "plugin:window|request_user_attention", "{\"label\":\"main\",\"value\":\"critical\"}" },
+        .{ "plugin:window|set_content_protected", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_visible_on_all_workspaces", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_shadow", "{\"label\":\"main\",\"value\":false}" },
+        .{ "plugin:window|set_effects", "{\"label\":\"main\",\"value\":\"mica\"}" },
+        .{ "plugin:window|set_background_color", "{\"label\":\"main\",\"r\":10,\"g\":20,\"b\":30,\"a\":255}" },
+        .{ "plugin:window|set_icon", "{\"label\":\"main\",\"value\":\"icon.png\"}" },
+        .{ "plugin:window|set_always_on_bottom", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_enabled", "{\"label\":\"main\",\"value\":false}" },
+    };
+
+    for (calls, 0..) |c, i| {
+        var r = h.dispatch(arena.allocator(), &ctx, c[0], c[1]);
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+        // EVERY setter reaches the host exactly once — previously this was a registry-only write.
+        try testing.expectEqual(@as(usize, i + 1), rec.extras_log.items.len);
+        try testing.expectEqual(win_id, rec.extras_log.items[i].win);
+    }
+
+    const last = rec.extras_log.items[calls.len - 1].extras;
+    try testing.expectEqual(@as(u8, 1), last.theme); // Theme.dark
+    try testing.expectEqual(true, last.skip_taskbar);
+    try testing.expectEqual(@as(?u8, 42), last.progress_value);
+    try testing.expectEqual(@as(?u32, 7), last.badge_count);
+    try testing.expectEqual(@as(i32, 11), last.cursor_x);
+    try testing.expectEqual(@as(i32, 22), last.cursor_y);
+    try testing.expectEqual(true, last.centered);
+    try testing.expectEqual(true, last.content_protected);
+    try testing.expectEqual(true, last.visible_on_all_workspaces);
+    try testing.expectEqual(false, last.shadow);
+    try testing.expectEqual(@as(u8, 10), last.bg_r);
+    try testing.expectEqual(true, last.bg_set);
+    try testing.expectEqual(true, last.always_on_bottom);
+    try testing.expectEqual(false, last.enabled);
 }

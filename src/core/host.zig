@@ -110,6 +110,10 @@ pub const WindowSpec = struct {
     window_effects_json: ?[]const u8 = null,
 };
 
+/// re-exported from `zts_foundation` so `zts_webview` can share the SAME type without
+/// importing `zts_core` (standalone products rule). See `window_extras.zig` for the field docs.
+pub const WindowExtrasSnapshot = foundation.WindowExtrasSnapshot;
+
 pub const IpcStatus = response.IpcStatus;
 pub const OutgoingResponse = response.OutgoingResponse;
 
@@ -163,6 +167,8 @@ pub const Host = struct {
         setWindowDecorations: ?*const fn (userdata: ?*anyopaque, win: WindowId, decorations: bool) HostError!void = null,
         setWindowAlwaysOnTop: ?*const fn (userdata: ?*anyopaque, win: WindowId, on_top: bool) HostError!void = null,
         setWindowFocus: ?*const fn (userdata: ?*anyopaque, win: WindowId) HostError!void = null,
+        /// one shot of every `plugin:window` P1 #8 intent (see `WindowExtrasSnapshot`).
+        applyWindowExtras: ?*const fn (userdata: ?*anyopaque, win: WindowId, extras: WindowExtrasSnapshot) HostError!void = null,
         startWindowDrag: ?*const fn (userdata: ?*anyopaque, win: WindowId) HostError!void = null,
 
         evalJs: ?*const fn (userdata: ?*anyopaque, win: WindowId, script: []const u8) HostError!void = null,
@@ -279,6 +285,13 @@ pub const Host = struct {
         return f(self.userdata, win);
     }
 
+    /// pushes the complete scalar intent snapshot to the OS backend. Optional so a
+    /// bare `null_host` stays fail-closed (`error.Unsupported`), but every real host implements it.
+    pub fn applyWindowExtras(self: Host, win: WindowId, extras: WindowExtrasSnapshot) HostError!void {
+        const f = self.vtable.applyWindowExtras orelse return error.Unsupported;
+        return f(self.userdata, win, extras);
+    }
+
     /// Starts an OS-level drag, so `data-tauri-drag-region` works without a JS loop.
     pub fn startWindowDrag(self: Host, win: WindowId) HostError!void {
         const f = self.vtable.startWindowDrag orelse return error.Unsupported;
@@ -337,6 +350,8 @@ pub const RecordingHost = struct {
     quit_requested: bool = false,
     /// How many times `startWindowDrag` was called.
     drag_count: usize = 0,
+    /// every `applyWindowExtras` call, in order, for deterministic assertions.
+    extras_log: std.ArrayList(struct { win: WindowId, extras: WindowExtrasSnapshot }) = .empty,
 
     /// The state remembered per window, so tests can assert on the effect of a command.
     pub const MockWindow = struct {
@@ -369,6 +384,7 @@ pub const RecordingHost = struct {
         self.windows.deinit(alloc);
         for (self.eval_log.items) |s| alloc.free(s);
         self.eval_log.deinit(alloc);
+        self.extras_log.deinit(alloc);
     }
 
     /// Wraps `self` as a `Host` the command handlers can call into.
@@ -394,6 +410,7 @@ pub const RecordingHost = struct {
         .setWindowDecorations = onSetDeco,
         .setWindowAlwaysOnTop = onSetTop,
         .setWindowResizable = onSetResizable,
+        .applyWindowExtras = onApplyWindowExtras,
         .startWindowDrag = onStartDrag,
         .evalJs = onEvalJs,
     };
@@ -490,6 +507,14 @@ pub const RecordingHost = struct {
         w.resizable = v;
     }
 
+    /// records the snapshot instead of touching an OS. Window existence is checked so
+    /// an unknown id is `error.WindowNotFound`, matching every other setter.
+    fn onApplyWindowExtras(u: ?*anyopaque, win: WindowId, extras: WindowExtrasSnapshot) HostError!void {
+        const self = cast(u);
+        if (self.windows.getPtr(win) == null) return error.WindowNotFound;
+        try self.extras_log.append(self.allocator, .{ .win = win, .extras = extras });
+    }
+
     fn onStartDrag(u: ?*anyopaque, win: WindowId) HostError!void {
         const self = cast(u);
         if (!self.windows.contains(win)) return error.WindowNotFound;
@@ -539,4 +564,35 @@ test "Host & RecordingHost: lifecycle, stale window rejection, and automatic res
     try h.closeWindow(win);
     try std.testing.expectError(error.WindowNotFound, h.setWindowTitle(win, "Should Fail"));
     try std.testing.expectError(error.WindowNotFound, h.evalJs(win, "alert(1)"));
+}
+
+test "M5-22 ②: RecordingHost records the complete applyWindowExtras snapshot" {
+    const testing = std.testing;
+    var rec = RecordingHost.init(testing.allocator);
+    defer rec.deinit();
+    const h = rec.host();
+    const win = try h.createWindow(.{ .label = "main" });
+
+    try h.applyWindowExtras(win, .{
+        .skip_taskbar = true,
+        .content_protected = true,
+        .badge_count = 7,
+        .cursor_x = 11,
+        .bg_r = 200,
+    });
+    try testing.expectEqual(@as(usize, 1), rec.extras_log.items.len);
+    const entry = rec.extras_log.items[0];
+    try testing.expectEqual(win, entry.win);
+    try testing.expectEqual(true, entry.extras.skip_taskbar);
+    try testing.expectEqual(true, entry.extras.content_protected);
+    try testing.expectEqual(@as(?u32, 7), entry.extras.badge_count);
+    try testing.expectEqual(@as(i32, 11), entry.extras.cursor_x);
+    try testing.expectEqual(@as(u8, 200), entry.extras.bg_r);
+    // Defaults are preserved: a snapshot is the COMPLETE state, not just the changed field.
+    try testing.expectEqual(true, entry.extras.cursor_visible);
+    try testing.expectEqual(true, entry.extras.shadow);
+
+    // Fail-closed for an unknown window, and `null_host` stays `error.Unsupported`.
+    try testing.expectError(error.WindowNotFound, h.applyWindowExtras(WindowId.invalid, .{}));
+    try testing.expectError(error.Unsupported, Host.null_host.applyWindowExtras(win, .{}));
 }

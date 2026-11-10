@@ -33,6 +33,10 @@ const LinuxWindow = struct {
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
     destroyed_by_signal: bool = false,
+    /// last complete P1 #8 intent snapshot received from `core.Host`.
+    extras: types.WindowExtrasSnapshot = .{},
+    /// scalar record of every `WindowConfig` option applied at creation.
+    creation: types.WindowCreationOptions = .{},
 };
 
 const SignalSlot = struct {
@@ -110,6 +114,11 @@ fn cancelWebKitRequest(req_ptr: *c.WebKitURISchemeRequest) void {
 /// the build needs no clang at compile time). Requires a display; without one `Backend.init` falls back
 /// to `HeadlessMock` unless `.native` was requested explicitly.
 pub const LinuxGtkBackend = struct {
+    /// fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// so backends can emit unconditionally from native callbacks.
+    fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
+        if (self.state_handler) |h| h.call(ev);
+    }
     /// Allocator for windows, slots and pending tables.
     allocator: Allocator,
     /// IO reactor behind the idle-source wakeups.
@@ -136,6 +145,8 @@ pub const LinuxGtkBackend = struct {
 
     /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// OS-originated window-state changes (see `WindowStateHandler`).
+    state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
     /// Disable GPU compositing (headless CI without a GL stack).
@@ -183,6 +194,7 @@ pub const LinuxGtkBackend = struct {
         // synchronous GObject `"destroy"` signals cannot double-unref `ucm` or mutate an active iterator.
         self.close_handler = null;
         self.message_handler = null;
+        self.state_handler = null;
         while (true) {
             var win_it = self.windows.iterator();
             const first = win_it.next() orelse break;
@@ -559,6 +571,45 @@ pub const LinuxGtkBackend = struct {
         }
     }
 
+    /// GTK tells us when the *window manager* (not the app) iconifies, maximises,
+    /// fullscreens, focuses or re-layers a window. Only the bits in `changed_mask` are reported,
+    /// so a repeated identical notification cannot flood the event bus.
+    fn onGdkWindowState(_: *c.GtkWidget, event: *c.GdkEventWindowState, user_data: c.gpointer) callconv(.c) void {
+        const slot: *SignalSlot = @ptrCast(@alignCast(user_data.?));
+        const mask = event.changed_mask;
+        const state = event.new_window_state;
+        const b = slot.backend;
+        const pairs = [_]struct { bit: c_uint, kind: types.WindowStateKind }{
+            .{ .bit = c.GDK_WINDOW_STATE_ICONIFIED, .kind = .minimized },
+            .{ .bit = c.GDK_WINDOW_STATE_MAXIMIZED, .kind = .maximized },
+            .{ .bit = c.GDK_WINDOW_STATE_FULLSCREEN, .kind = .fullscreen },
+            .{ .bit = c.GDK_WINDOW_STATE_FOCUSED, .kind = .focused },
+            .{ .bit = c.GDK_WINDOW_STATE_ABOVE, .kind = .always_on_top },
+        };
+        for (pairs) |pair| {
+            if (mask & pair.bit != 0) {
+                b.emitState(.boolean(slot.win_id, pair.kind, state & pair.bit != 0));
+            }
+        }
+        if (mask & c.GDK_WINDOW_STATE_WITHDRAWN != 0) {
+            b.emitState(.boolean(slot.win_id, .visible, state & c.GDK_WINDOW_STATE_WITHDRAWN == 0));
+        }
+    }
+
+    /// `configure-event` carries physical pixels; divide by the widget scale factor so
+    /// `WindowRegistry` keeps logical pixels on HiDPI exactly like the other two backends.
+    fn onGdkConfigure(widget: *c.GtkWidget, event: *c.GdkEventConfigure, user_data: c.gpointer) callconv(.c) void {
+        const slot: *SignalSlot = @ptrCast(@alignCast(user_data.?));
+        const raw_scale = c.gtk_widget_get_scale_factor(widget);
+        const scale: f64 = @floatFromInt(if (raw_scale > 0) raw_scale else 1);
+        const x = @as(f64, @floatFromInt(event.x)) / scale;
+        const y = @as(f64, @floatFromInt(event.y)) / scale;
+        const w = @as(f64, @floatFromInt(event.width)) / scale;
+        const h = @as(f64, @floatFromInt(event.height)) / scale;
+        slot.backend.emitState(.geometry(slot.win_id, .moved, x, y, w, h));
+        slot.backend.emitState(.geometry(slot.win_id, .resized, x, y, w, h));
+    }
+
     /// Creates the `GtkWindow`, the `WebKitWebView` and the signal handlers.
     pub fn createWindow(self: *LinuxGtkBackend, cfg: types.WindowConfig) types.WebviewError!types.WindowId {
         const ucm = c.webkit_user_content_manager_new();
@@ -686,6 +737,22 @@ pub const LinuxGtkBackend = struct {
                 top,
                 "destroy",
                 @ptrCast(&onWindowDestroyed),
+                sig_slot,
+                null,
+                0,
+            );
+            _ = c.g_signal_connect_data(
+                top,
+                "window-state-event",
+                @ptrCast(&onGdkWindowState),
+                sig_slot,
+                null,
+                0,
+            );
+            _ = c.g_signal_connect_data(
+                top,
+                "configure-event",
+                @ptrCast(&onGdkConfigure),
                 sig_slot,
                 null,
                 0,
@@ -962,10 +1029,53 @@ pub const LinuxGtkBackend = struct {
         c.gtk_window_set_keep_above(gtk_win, if (on_top) 1 else 0);
     }
 
-    /// Calls `gtk_window_present`.
+    /// centre on the GDK primary monitor, converting physical px to CSS logical px.
+    pub fn centerWindow(self: *LinuxGtkBackend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
+        const win = try self.requireGtkWindow(win_id);
+        const screen = c.gtk_window_get_screen(win) orelse return error.PlatformFailure;
+        const monitor = c.gdk_screen_get_primary_monitor(screen) orelse return error.PlatformFailure;
+        var rect: c.GdkRectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
+        c.gdk_monitor_get_geometry(monitor, &rect);
+        const scale: f64 = @floatFromInt(c.gtk_widget_get_scale_factor(@ptrCast(win)));
+        const cx = (@as(f64, @floatFromInt(rect.x)) + @as(f64, @floatFromInt(rect.width)) / 2.0) / scale;
+        const cy = (@as(f64, @floatFromInt(rect.y)) + @as(f64, @floatFromInt(rect.height)) / 2.0) / scale;
+        try self.setPosition(win_id, .xy(cx - size.width.v / 2.0, cy - size.height.v / 2.0));
+        (self.windows.getPtr(win_id) orelse return error.WindowNotFound).creation.center = true;
+    }
+
+    /// GTK 3 honours `hiddenTitle` (empty title) and `userAgent`. The other string
+    /// options have no GTK equivalent; they stay in the scalar record instead of being dropped.
+    pub fn applyWindowCreationOptions(self: *LinuxGtkBackend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        w.creation = types.creationOptions(cfg);
+        if (cfg.hidden_title) {
+            if (w.toplevel) |top| c.gtk_window_set_title(@ptrCast(top), "");
+        }
+        if (cfg.user_agent) |ua| {
+            const z = self.allocator.dupeSentinel(u8, ua, 0) catch return error.OutOfMemory;
+            defer self.allocator.free(z);
+            c.webkit_settings_set_user_agent(c.webkit_web_view_get_settings(w.webview), z.ptr);
+        }
+    }
+
+    /// apply the GTK 3 flags we can honour, keep the full snapshot for determinism. Embedded
+    /// webviews have no `GtkWindow`; the host owns those OS flags, so only the snapshot is kept.
+    pub fn applyWindowExtras(self: *LinuxGtkBackend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        w.extras = extras;
+        const top = w.toplevel orelse return;
+        const win: *c.GtkWindow = @ptrCast(top);
+        c.gtk_window_set_skip_taskbar_hint(win, if (extras.skip_taskbar) 1 else 0);
+        c.gtk_window_set_keep_below(win, if (extras.always_on_bottom) 1 else 0);
+        c.gtk_widget_set_sensitive(@ptrCast(win), if (extras.enabled) 1 else 0);
+        if (extras.visible_on_all_workspaces) c.gtk_window_stick(win) else c.gtk_window_unstick(win);
+    }
+
+    /// Calls `gtk_window_present` for a toplevel. An embedded webview has no `GtkWindow` and its
+    /// host owns focus, so the C ABI overlay path stays `ZTS_WEBVIEW_OK` instead of `Unsupported`.
     pub fn setFocus(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
-        const gtk_win = try self.requireGtkWindow(win_id);
-        c.gtk_window_present(gtk_win);
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        if (w.toplevel) |top| c.gtk_window_present(@ptrCast(top));
     }
 
     /// Calls `gtk_window_begin_move_drag`, so GTK runs the drag.

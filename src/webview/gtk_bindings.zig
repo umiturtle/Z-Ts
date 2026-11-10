@@ -31,6 +31,13 @@ pub const GBytes = opaque {};
 pub const GdkScreen = opaque {};
 pub const GdkVisual = opaque {};
 pub const GdkWindow = opaque {};
+pub const GdkMonitor = opaque {};
+pub const GdkRectangle = extern struct {
+    x: gint,
+    y: gint,
+    width: gint,
+    height: gint,
+};
 pub const GtkWidget = opaque {};
 pub const GtkContainer = opaque {};
 pub const GtkWindow = opaque {};
@@ -52,6 +59,31 @@ pub const GError = extern struct {
     code: gint,
     message: ?[*:0]const gchar,
 };
+
+/// GDK window-state / configure events. Only the leading fields we read are declared;
+/// GTK guarantees this ABI layout (`GdkEventAny` header followed by the specific fields).
+pub const GdkEventWindowState = extern struct {
+    event_type: c_int,
+    window: ?*GdkWindow,
+    send_event: i8,
+    changed_mask: c_uint,
+    new_window_state: c_uint,
+};
+pub const GdkEventConfigure = extern struct {
+    event_type: c_int,
+    window: ?*GdkWindow,
+    send_event: i8,
+    x: c_int,
+    y: c_int,
+    width: c_int,
+    height: c_int,
+};
+pub const GDK_WINDOW_STATE_WITHDRAWN: c_uint = 1 << 0;
+pub const GDK_WINDOW_STATE_ICONIFIED: c_uint = 1 << 1;
+pub const GDK_WINDOW_STATE_MAXIMIZED: c_uint = 1 << 2;
+pub const GDK_WINDOW_STATE_FULLSCREEN: c_uint = 1 << 4;
+pub const GDK_WINDOW_STATE_ABOVE: c_uint = 1 << 5;
+pub const GDK_WINDOW_STATE_FOCUSED: c_uint = 1 << 7;
 
 pub const GdkRGBA = extern struct {
     red: gdouble,
@@ -121,6 +153,15 @@ pub extern "c" fn g_idle_add_full(
     notify: ?GDestroyNotify,
 ) guint;
 
+/// Device-pixel ratio of the widget's GdkWindow; used to convert GDK's physical configure
+/// coordinates into the logical pixels `WindowRegistry` stores.
+pub extern "c" fn gtk_widget_get_scale_factor(widget: *GtkWidget) c_int;
+/// primary-monitor geometry used by `center`.
+pub extern "c" fn gtk_window_get_screen(window: *GtkWindow) ?*GdkScreen;
+pub extern "c" fn gdk_screen_get_primary_monitor(screen: *GdkScreen) ?*GdkMonitor;
+pub extern "c" fn gdk_monitor_get_geometry(monitor: *GdkMonitor, geometry: *GdkRectangle) void;
+pub extern "c" fn webkit_settings_set_user_agent(settings: *WebKitSettings, user_agent: [*:0]const gchar) void;
+
 pub extern "c" fn g_object_new(object_type: GType, first_property_name: [*:0]const gchar, ...) *anyopaque;
 pub extern "c" fn g_object_ref(object: *anyopaque) *anyopaque;
 pub extern "c" fn g_object_unref(object: *anyopaque) void;
@@ -180,6 +221,12 @@ pub extern "c" fn gtk_window_fullscreen(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_unfullscreen(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_set_decorated(window: *GtkWindow, setting: gboolean) void;
 pub extern "c" fn gtk_window_set_keep_above(window: *GtkWindow, setting: gboolean) void;
+/// `plugin:window` P1 #8 flags that GTK 3 supports natively.
+pub extern "c" fn gtk_window_set_skip_taskbar_hint(window: *GtkWindow, setting: gboolean) void;
+pub extern "c" fn gtk_window_set_keep_below(window: *GtkWindow, setting: gboolean) void;
+pub extern "c" fn gtk_widget_set_sensitive(widget: *GtkWidget, sensitive: gboolean) void;
+pub extern "c" fn gtk_window_stick(window: *GtkWindow) void;
+pub extern "c" fn gtk_window_unstick(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_present(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_begin_move_drag(
     window: *GtkWindow,

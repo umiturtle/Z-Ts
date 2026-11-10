@@ -141,6 +141,12 @@ pub const HWND_TOP: ?HWND = null;
 pub const HWND_TOPMOST: HWND = @ptrFromInt(@as(usize, @bitCast(@as(isize, -1))));
 pub const HWND_NOTOPMOST: HWND = @ptrFromInt(@as(usize, @bitCast(@as(isize, -2))));
 
+/// `SetWindowDisplayAffinity` values (Windows 7+ / Windows 10 2004+).
+pub const HWND_BOTTOM: HWND = @ptrFromInt(1);
+pub const WS_EX_TOOLWINDOW: DWORD = 0x0000_0080;
+pub const WDA_NONE: DWORD = 0x0000_0000;
+pub const WDA_EXCLUDEFROMCAPTURE: DWORD = 0x0000_0011;
+
 pub const SWP_NOSIZE = 0x0001;
 pub const SWP_NOMOVE = 0x0002;
 pub const SWP_NOZORDER = 0x0004;
@@ -306,6 +312,7 @@ pub extern "user32" fn ShowWindow(hwnd: HWND, cmd: i32) callconv(CC) BOOL;
 pub extern "user32" fn UpdateWindow(hwnd: HWND) callconv(CC) BOOL;
 pub extern "user32" fn IsWindowVisible(hwnd: HWND) callconv(CC) BOOL;
 pub extern "user32" fn EnableWindow(hwnd: HWND, enable: BOOL) callconv(CC) BOOL;
+pub extern "user32" fn SetWindowDisplayAffinity(hwnd: HWND, affinity: DWORD) callconv(CC) BOOL;
 pub extern "user32" fn SetWindowTextW(hwnd: HWND, text: W) callconv(CC) BOOL;
 pub extern "user32" fn GetWindowTextW(hwnd: HWND, buf: [*]u16, max: i32) callconv(CC) i32;
 pub extern "user32" fn GetWindowLongPtrW(hwnd: HWND, index: i32) callconv(CC) isize;

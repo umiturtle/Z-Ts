@@ -127,6 +127,7 @@ pub const WasmHost = struct {
         .setWindowVisible = vSetWindowVisible,
         .setWindowDecorations = vSetWindowDecorations,
         .setWindowAlwaysOnTop = vSetWindowAlwaysOnTop,
+        .applyWindowExtras = vApplyWindowExtras,
         .setWindowFocus = vSetWindowFocus,
         .startWindowDrag = vStartWindowDrag,
         .evalJs = vEvalJs,
@@ -211,6 +212,10 @@ pub const WasmHost = struct {
 
     fn vSetWindowFocus(ptr: ?*anyopaque, win: core.WindowId) core.HostError!void {
         return cast(ptr).backing.host().setWindowFocus(win);
+    }
+
+    fn vApplyWindowExtras(ptr: ?*anyopaque, win: core.WindowId, extras: core.WindowExtrasSnapshot) core.HostError!void {
+        return cast(ptr).backing.host().applyWindowExtras(win, extras);
     }
 
     fn vStartWindowDrag(ptr: ?*anyopaque, win: core.WindowId) core.HostError!void {

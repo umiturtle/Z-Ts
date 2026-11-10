@@ -15,6 +15,9 @@ pub const IpcStatus = foundation.IpcStatus;
 pub const LogicalPoint = foundation.geometry.LogicalPoint;
 pub const LogicalSize = foundation.geometry.LogicalSize;
 pub const Color = foundation.geometry.Color;
+/// shared scalar snapshot (lives in `zts_foundation`, see `core/window_extras.zig`).
+pub const WindowExtrasSnapshot = foundation.WindowExtrasSnapshot;
+pub const WindowCreationOptions = foundation.WindowCreationOptions;
 
 /// Nominal 53-bit generational window identifier (`foundation.Handle(.window)` — exact same type as `zts_core.WindowId`!).
 pub const WindowId = Handle(.window);
@@ -247,6 +250,84 @@ pub const CloseHandler = struct {
     }
 };
 
+/// Kinds of OS-originated window-state changes.
+///
+/// The OS changed a window behind the app's back (title-bar button, OS shortcut,
+/// window manager, display reconfiguration). Native backends push these through
+/// `Engine.setWindowStateHandler()` so an upper layer can keep its own bookkeeping in sync
+/// instead of answering `is_maximized()` with a stale flag.
+pub const WindowStateKind = enum {
+    /// Iconified / restored.
+    minimized,
+    /// Zoomed / unzoomed.
+    maximized,
+    /// Entered / left native fullscreen.
+    fullscreen,
+    /// Gained / lost keyboard focus.
+    focused,
+    /// Mapped / unmapped.
+    visible,
+    /// Native frame toggled.
+    decorated,
+    /// User resizing toggled.
+    resizable,
+    /// Above-others flag toggled by the window manager.
+    always_on_top,
+    /// Outer position changed (`x` / `y` are logical pixels).
+    moved,
+    /// Client size changed (`width` / `height` are logical pixels).
+    resized,
+};
+
+/// One OS-originated window-state change. `value` carries the boolean kinds; `moved` / `resized`
+/// use the geometry fields. No borrowed slices, so a backend can queue these across threads.
+pub const WindowStateEvent = struct {
+    /// Window the change belongs to.
+    window_id: WindowId,
+    /// Which state changed.
+    kind: WindowStateKind,
+    /// New boolean value for flag kinds.
+    value: bool = false,
+    /// Logical-pixel left edge for `moved`.
+    x: f64 = 0,
+    /// Logical-pixel top edge for `moved`.
+    y: f64 = 0,
+    /// Logical-pixel width for `resized`.
+    width: f64 = 0,
+    /// Logical-pixel height for `resized`.
+    height: f64 = 0,
+
+    /// Builds a boolean flag change; geometry fields stay zero.
+    pub fn boolean(window_id: WindowId, kind: WindowStateKind, value: bool) WindowStateEvent {
+        return .{ .window_id = window_id, .kind = kind, .value = value };
+    }
+
+    /// Builds a `moved` / `resized` change in CSS logical pixels.
+    pub fn geometry(
+        window_id: WindowId,
+        kind: WindowStateKind,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    ) WindowStateEvent {
+        return .{ .window_id = window_id, .kind = kind, .x = x, .y = y, .width = width, .height = height };
+    }
+};
+
+/// Receives OS-originated window-state changes. `ev` is passed by value and owns nothing.
+pub const WindowStateHandler = struct {
+    /// Opaque pointer passed back on every call.
+    userdata: ?*anyopaque = null,
+    /// Handles one state change.
+    onState: *const fn (userdata: ?*anyopaque, ev: WindowStateEvent) void,
+
+    /// Invokes `onState` with `userdata`.
+    pub inline fn call(self: WindowStateHandler, ev: WindowStateEvent) void {
+        self.onState(self.userdata, ev);
+    }
+};
+
 /// Image format requested from `captureWindow()`. All backends are required to support `.png`
 /// (cairo, `NSBitmapImageRep`, WebView2 `CapturePreview` all encode it natively); the enum exists so
 /// a future `.jpeg` can be added without changing the ABI.
@@ -363,3 +444,24 @@ pub const WindowConfig = struct {
     /// `windowEffects` kept as raw JSON text for the backend to interpret.
     window_effects_json: ?[]const u8 = null,
 };
+
+/// flatten a `WindowConfig` into the scalar record every backend stores. String
+/// options are hashed so no borrow of the caller's config outlives `createWindow`.
+pub fn creationOptions(cfg: WindowConfig) WindowCreationOptions {
+    return .{
+        .center = cfg.center,
+        .maximized = cfg.maximized,
+        .skip_taskbar = cfg.skip_taskbar,
+        .always_on_bottom = cfg.always_on_bottom,
+        .focus = cfg.focus,
+        .content_protected = cfg.content_protected,
+        .drag_drop_enabled = cfg.drag_drop_enabled,
+        .zoom_hotkeys_enabled = cfg.zoom_hotkeys_enabled,
+        .hidden_title = cfg.hidden_title,
+        .title_bar_style_hash = std.hash.Wyhash.hash(0, cfg.title_bar_style),
+        .user_agent_hash = if (cfg.user_agent) |ua| std.hash.Wyhash.hash(0, ua) else 0,
+        .tabbing_identifier_hash = if (cfg.tabbing_identifier) |t| std.hash.Wyhash.hash(0, t) else 0,
+        .visible_on_all_workspaces = cfg.visible_on_all_workspaces,
+        .window_effects_hash = if (cfg.window_effects_json) |j| std.hash.Wyhash.hash(0, j) else 0,
+    };
+}

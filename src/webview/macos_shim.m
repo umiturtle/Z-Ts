@@ -41,6 +41,25 @@ typedef void (*zts_macos_message_cb)(void *userdata, unsigned long long win, con
 /// Screenshot completion (`M5-04`): `bytes == NULL` means the render failed.
 typedef void (*zts_macos_capture_cb)(void *userdata, unsigned long long win, const void *bytes, unsigned long len);
 typedef void (*zts_macos_close_cb)(void *userdata, unsigned long long win);
+/// M5-22 ① — OS-originated window-state change. `kind` is the ordinal of
+/// `zts_webview.WindowStateKind`; x/y/w/h are CSS logical pixels (top-left origin), already
+/// converted from Cocoa's bottom-left points.
+typedef void (*zts_macos_state_cb)(void *userdata, unsigned long long win, int kind, int value,
+                                   double x, double y, double w, double h);
+
+/// Ordinals kept in lockstep with `src/webview/types.zig` (rule 17 checks the Zig side).
+enum {
+    ZTS_STATE_MINIMIZED = 0,
+    ZTS_STATE_MAXIMIZED = 1,
+    ZTS_STATE_FULLSCREEN = 2,
+    ZTS_STATE_FOCUSED = 3,
+    ZTS_STATE_VISIBLE = 4,
+    ZTS_STATE_DECORATED = 5,
+    ZTS_STATE_RESIZABLE = 6,
+    ZTS_STATE_ALWAYS_ON_TOP = 7,
+    ZTS_STATE_MOVED = 8,
+    ZTS_STATE_RESIZED = 9,
+};
 
 @class ZtsBackend;
 
@@ -49,6 +68,7 @@ typedef void (*zts_macos_close_cb)(void *userdata, unsigned long long win);
 @interface ZtsWindowDelegate : NSObject <NSWindowDelegate>
 @property (nonatomic, assign) void *backend;
 @property (nonatomic, assign) unsigned long long ident;
+@property (nonatomic, weak) NSWindow *windowRef;
 @end
 
 #pragma mark - JS -> Zig message bridge (`window.webkit.messageHandlers.__zts`)
@@ -108,6 +128,8 @@ typedef void (*zts_macos_close_cb)(void *userdata, unsigned long long win);
 @property (nonatomic, assign) zts_macos_message_cb msgCb;
 @property (nonatomic, assign) void *closeUserdata;
 @property (nonatomic, assign) zts_macos_close_cb closeCb;
+@property (nonatomic, assign) void *stateUserdata;
+@property (nonatomic, assign) zts_macos_state_cb stateCb;
 @end
 
 #pragma mark - Scheme handler
@@ -253,11 +275,77 @@ static void ZtsAnswerPreflight(ZtsBackend *b, id<WKURLSchemeTask> task,
 
 #pragma mark - Window delegate
 
+/// Fan out one OS-originated state change. All nine kinds use the same C ABI callback, so the
+/// Zig side never needs a per-target branch and the headless mock can be driven identically.
+static void ZtsEmitState(ZtsWindowDelegate *delegate, int kind, int value,
+                         double x, double y, double w, double h) {
+    ZtsBackend *b = ZtsB(delegate.backend);
+    if (b == nil || b.stateCb == NULL) return;
+    b.stateCb(b.stateUserdata, delegate.ident, kind, value, x, y, w, h);
+}
+
+/// Cocoa is bottom-left / Y-up; `WindowRegistry` stores CSS top-left coordinates like GTK and
+/// Win32. Screen height converts the frame origin once, here, so all three backends agree.
+static void ZtsEmitFrame(ZtsWindowDelegate *delegate, int kind) {
+    NSWindow *win = delegate.windowRef;
+    if (win == nil) return;
+    NSRect f = win.frame;
+    double screen_h = [NSScreen mainScreen].frame.size.height;
+    double css_y = screen_h - (f.origin.y + f.size.height);
+    ZtsEmitState(delegate, kind, 0, f.origin.x, css_y, f.size.width, f.size.height);
+}
+
 @implementation ZtsWindowDelegate
 
 - (BOOL)windowShouldClose:(NSWindow *)sender {
     (void)sender;
     return YES;
+}
+
+- (void)windowDidMiniaturize:(NSNotification *)notification {
+    (void)notification;
+    ZtsEmitState(self, ZTS_STATE_MINIMIZED, 1, 0, 0, 0, 0);
+}
+
+- (void)windowDidDeminiaturize:(NSNotification *)notification {
+    (void)notification;
+    ZtsEmitState(self, ZTS_STATE_MINIMIZED, 0, 0, 0, 0, 0);
+}
+
+- (void)windowDidEnterFullScreen:(NSNotification *)notification {
+    (void)notification;
+    ZtsEmitState(self, ZTS_STATE_FULLSCREEN, 1, 0, 0, 0, 0);
+}
+
+- (void)windowDidExitFullScreen:(NSNotification *)notification {
+    (void)notification;
+    ZtsEmitState(self, ZTS_STATE_FULLSCREEN, 0, 0, 0, 0, 0);
+}
+
+- (void)windowDidBecomeKey:(NSNotification *)notification {
+    (void)notification;
+    ZtsEmitState(self, ZTS_STATE_FOCUSED, 1, 0, 0, 0, 0);
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification {
+    (void)notification;
+    ZtsEmitState(self, ZTS_STATE_FOCUSED, 0, 0, 0, 0, 0);
+}
+
+- (void)windowDidMove:(NSNotification *)notification {
+    (void)notification;
+    ZtsEmitFrame(self, ZTS_STATE_MOVED);
+}
+
+- (void)windowDidResize:(NSNotification *)notification {
+    (void)notification;
+    ZtsEmitFrame(self, ZTS_STATE_RESIZED);
+    NSWindow *win = self.windowRef;
+    if (win != nil && [win isZoomed]) {
+        ZtsEmitState(self, ZTS_STATE_MAXIMIZED, 1, 0, 0, 0, 0);
+    } else {
+        ZtsEmitState(self, ZTS_STATE_MAXIMIZED, 0, 0, 0, 0, 0);
+    }
 }
 
 - (void)windowWillClose:(NSNotification *)notification {
@@ -512,13 +600,17 @@ void zts_macos_set_callbacks(
     void *msg_userdata,
     zts_macos_message_cb msg_cb,
     void *close_userdata,
-    zts_macos_close_cb close_cb) {
+    zts_macos_close_cb close_cb,
+    void *state_userdata,
+    zts_macos_state_cb state_cb) {
     ZtsBackend *b = ZtsB(h);
     if (b == nil) return;
     b.msgUserdata = msg_userdata;
     b.msgCb = msg_cb;
     b.closeUserdata = close_userdata;
     b.closeCb = close_cb;
+    b.stateUserdata = state_userdata;
+    b.stateCb = state_cb;
 }
 
 void zts_macos_screen_visible_frame(void *h, double *out_x, double *out_y, double *out_w, double *out_h) {
@@ -735,6 +827,7 @@ unsigned long long zts_macos_window_new(
         ZtsWindowDelegate *delegate = [ZtsWindowDelegate new];
         delegate.backend = h;
         delegate.ident = ident;
+        delegate.windowRef = win;
         win.delegate = delegate;
 
         ZtsWindow *rec = [ZtsWindow new];
@@ -823,6 +916,47 @@ void zts_macos_window_frame(void *h, unsigned long long ident, double *out_x, do
     if (out_y != NULL) *out_y = f.origin.y;
     if (out_w != NULL) *out_w = f.size.width;
     if (out_h != NULL) *out_h = f.size.height;
+}
+
+/// M5-22 ② — one C ABI call applies every Cocoa-supported `plugin:window` P1 #8 flag. Flags an
+/// OS cannot express stay in the Zig-side scalar snapshot; nothing is silently dropped.
+void zts_macos_apply_extras(void *h, unsigned long long ident, int below, int protect,
+                            int all_spaces, int accepts_input) {
+    ZtsWindow *rec = ZtsWindowFor(ZtsB(h), ident);
+    if (rec == nil || rec.window == nil) return;
+    NSWindow *win = rec.window;
+    [win setLevel:(below ? NSNormalWindowLevel - 1 : NSNormalWindowLevel)];
+    [win setSharingType:(protect ? NSWindowSharingNone : NSWindowSharingReadOnly)];
+    NSWindowCollectionBehavior behavior = [win collectionBehavior];
+    if (all_spaces) {
+        behavior |= NSWindowCollectionBehaviorCanJoinAllSpaces;
+    } else {
+        behavior &= ~NSWindowCollectionBehaviorCanJoinAllSpaces;
+    }
+    [win setCollectionBehavior:behavior];
+    [win setIgnoresMouseEvents:(accepts_input ? NO : YES)];
+}
+
+/// M5-22 ③ — Cocoa-only `WindowConfig` options. Strings are copied synchronously by AppKit /
+/// WebKit, so they may point into the caller's temporary buffer.
+void zts_macos_apply_creation_options(void *h, unsigned long long ident, int hidden_title,
+                                      const char *style, const char *user_agent,
+                                      const char *tabbing) {
+    ZtsWindow *rec = ZtsWindowFor(ZtsB(h), ident);
+    if (rec == nil || rec.window == nil) return;
+    @autoreleasepool {
+        NSWindow *win = rec.window;
+        [win setTitleVisibility:(hidden_title ? NSWindowTitleHidden : NSWindowTitleVisible)];
+        BOOL transparent = (style != NULL &&
+                            (strcmp(style, "Transparent") == 0 || strcmp(style, "Overlay") == 0));
+        [win setTitlebarAppearsTransparent:transparent];
+        if (user_agent != NULL && *user_agent != '\0' && rec.webview != nil) {
+            rec.webview.customUserAgent = ZtsStr(user_agent);
+        }
+        if (tabbing != NULL && *tabbing != '\0') {
+            win.tabbingIdentifier = ZtsStr(tabbing);
+        }
+    }
 }
 
 void *zts_macos_window_native(void *h, unsigned long long ident) {

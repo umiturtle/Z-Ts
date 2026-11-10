@@ -52,6 +52,17 @@ const shim = struct {
 
     const MessageCb = *const fn (userdata: ?*anyopaque, win: u64, json: [*:0]const u8) callconv(.c) void;
     const CloseCb = *const fn (userdata: ?*anyopaque, win: u64) callconv(.c) void;
+    /// OS-originated window-state change from `ZtsWindowDelegate`.
+    const StateCb = *const fn (
+        userdata: ?*anyopaque,
+        win: u64,
+        kind: c_int,
+        value: c_int,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) callconv(.c) void;
 
     extern fn zts_macos_backend_new(regular: c_int) ?*anyopaque;
     extern fn zts_macos_backend_free(h: ?*anyopaque) void;
@@ -66,6 +77,8 @@ const shim = struct {
         msg_cb: MessageCb,
         close_userdata: ?*anyopaque,
         close_cb: CloseCb,
+        state_userdata: ?*anyopaque,
+        state_cb: StateCb,
     ) void;
     extern fn zts_macos_screen_visible_frame(h: ?*anyopaque, x: ?*f64, y: ?*f64, w: ?*f64, ht: ?*f64) void;
 
@@ -118,6 +131,8 @@ const shim = struct {
     extern fn zts_macos_window_set_fullscreen(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_window_set_visible(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_window_set_decorations(h: ?*anyopaque, ident: u64, value: c_int) void;
+    extern fn zts_macos_apply_extras(h: ?*anyopaque, ident: u64, below: c_int, protect: c_int, all_spaces: c_int, accepts_input: c_int) void;
+    extern fn zts_macos_apply_creation_options(h: ?*anyopaque, ident: u64, hidden_title: c_int, style: [*:0]const u8, user_agent: ?[*:0]const u8, tabbing: ?[*:0]const u8) void;
     extern fn zts_macos_window_set_always_on_top(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_window_set_focus(h: ?*anyopaque, ident: u64) void;
     extern fn zts_macos_window_start_drag(h: ?*anyopaque, ident: u64) void;
@@ -143,6 +158,10 @@ const MacWindow = struct {
     embedded: bool = false,
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
+    /// last complete P1 #8 intent snapshot received from `core.Host`.
+    extras: types.WindowExtrasSnapshot = .{},
+    /// scalar record of every `WindowConfig` option applied at creation.
+    creation: types.WindowCreationOptions = .{},
 };
 
 const SchemeSlot = struct {
@@ -204,6 +223,11 @@ pub const CocoaFrame = struct {
 /// Cocoa (`NSApplication` / `NSWindow`) + `WKWebView` backend. The Objective-C side lives in
 /// `macos_shim.m` behind a C ABI, so Zig never needs the Objective-C runtime headers.
 pub const MacOsBackend = struct {
+    /// fan out one OS-originated window-state change. A missing handler is a no-op,
+    /// so backends can emit unconditionally from native callbacks.
+    fn emitState(self: *@This(), ev: types.WindowStateEvent) void {
+        if (self.state_handler) |h| h.call(ev);
+    }
     /// Allocator for windows, slots and pending tables.
     allocator: Allocator,
     /// IO reactor behind the run-loop wakeups.
@@ -221,6 +245,8 @@ pub const MacOsBackend = struct {
 
     /// Receiver for page `postMessage`, if registered.
     message_handler: ?types.MessageHandler = null,
+    /// OS-originated window-state changes (see `WindowStateHandler`).
+    state_handler: ?types.WindowStateHandler = null,
     /// Window-closed notification, if registered.
     close_handler: ?types.CloseHandler = null,
 
@@ -252,7 +278,7 @@ pub const MacOsBackend = struct {
             .completions = pending_mod.CompletionQueue.init(allocator, io),
         };
 
-        shim.zts_macos_set_callbacks(handle, self, onJsMessage, self, onWindowClosed);
+        shim.zts_macos_set_callbacks(handle, self, onJsMessage, self, onWindowClosed, self, onWindowState);
         return self;
     }
 
@@ -263,7 +289,8 @@ pub const MacOsBackend = struct {
         // 1. Detach app callbacks FIRST so closing windows cannot re-enter a torn-down Zig backend.
         self.close_handler = null;
         self.message_handler = null;
-        shim.zts_macos_set_callbacks(self.handle, null, onJsMessage, null, onWindowClosed);
+        self.state_handler = null;
+        shim.zts_macos_set_callbacks(self.handle, null, onJsMessage, null, onWindowClosed, null, onWindowState);
 
         // 2. Cancel every in-flight request (fires `zts_macos_scheme_fail`, a no-op if already dead).
         self.pending.deinitWith(alloc, PendingToken.cancel);
@@ -429,6 +456,29 @@ pub const MacOsBackend = struct {
         const mh = self.message_handler orelse return;
         const win_id = self.windowIdFor(native_win);
         mh.call(win_id, std.mem.span(json));
+    }
+
+    /// translate the C ABI ordinal into `WindowStateKind` and fan out. Geometry kinds
+    /// carry logical pixels already converted from Cocoa's bottom-left points by the shim.
+    fn onWindowState(
+        userdata: ?*anyopaque,
+        native_win: u64,
+        kind: c_int,
+        value: c_int,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) callconv(.c) void {
+        const self: *MacOsBackend = @ptrCast(@alignCast(userdata orelse return));
+        const win_id = self.windowIdFor(native_win);
+        if (!win_id.isValid()) return;
+        if (kind < 0 or kind > @backingInt(types.WindowStateKind.resized)) return;
+        const k: types.WindowStateKind = @fromBackingInt(@intCast(kind));
+        switch (k) {
+            .moved, .resized => self.emitState(.geometry(win_id, k, x, y, w, h)),
+            else => self.emitState(.boolean(win_id, k, value != 0)),
+        }
     }
 
     fn onWindowClosed(userdata: ?*anyopaque, native_win: u64) callconv(.c) void {
@@ -784,6 +834,53 @@ pub const MacOsBackend = struct {
     pub fn setAlwaysOnTop(self: *MacOsBackend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_always_on_top(self.handle, w.native, @intFromBool(on_top));
+    }
+
+    /// centre on `NSScreen.mainScreen.visibleFrame`, in CSS logical pixels; `setPosition`
+    /// performs the Cocoa Y-flip, so all four backends share one coordinate convention.
+    pub fn centerWindow(self: *MacOsBackend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
+        const screen = self.screenVisibleFrame();
+        try self.setPosition(win_id, .xy(
+            (screen.width - size.width.v) / 2.0,
+            (screen.height - size.height.v) / 2.0,
+        ));
+        (try self.requireWindow(win_id)).creation.center = true;
+    }
+
+    /// Cocoa honours `hiddenTitle`, `titleBarStyle`, `userAgent` and
+    /// `tabbingIdentifier`; the rest stay in the scalar record for 3-OS parity.
+    pub fn applyWindowCreationOptions(self: *MacOsBackend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        w.creation = types.creationOptions(cfg);
+        const style = self.allocator.dupeSentinel(u8, cfg.title_bar_style, 0) catch return error.OutOfMemory;
+        defer self.allocator.free(style);
+        const ua = if (cfg.user_agent) |v| self.allocator.dupeSentinel(u8, v, 0) catch return error.OutOfMemory else null;
+        defer if (ua) |v| self.allocator.free(v);
+        const tab = if (cfg.tabbing_identifier) |v| self.allocator.dupeSentinel(u8, v, 0) catch return error.OutOfMemory else null;
+        defer if (tab) |v| self.allocator.free(v);
+        shim.zts_macos_apply_creation_options(
+            self.handle,
+            w.native,
+            @intFromBool(cfg.hidden_title),
+            style.ptr,
+            if (ua) |v| v.ptr else null,
+            if (tab) |v| v.ptr else null,
+        );
+    }
+
+    /// push the OS-supported flags through the Cocoa shim; the full snapshot stays in
+    /// `MacWindow.extras` so every platform reports the same intent back to Zig.
+    pub fn applyWindowExtras(self: *MacOsBackend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        w.extras = extras;
+        shim.zts_macos_apply_extras(
+            self.handle,
+            w.native,
+            @intFromBool(extras.always_on_bottom),
+            @intFromBool(extras.content_protected),
+            @intFromBool(extras.visible_on_all_workspaces),
+            @intFromBool(extras.enabled and !extras.ignore_cursor_events),
+        );
     }
 
     /// Calls `makeKeyAndOrderFront:` on the main thread.

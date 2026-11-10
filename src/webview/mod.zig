@@ -13,6 +13,8 @@ const Io = std.Io;
 const webview_options = @import("webview_options");
 
 pub const types = @import("types.zig");
+pub const WindowExtrasSnapshot = types.WindowExtrasSnapshot;
+pub const WindowCreationOptions = types.WindowCreationOptions;
 pub const pending = @import("pending.zig");
 pub const mock = @import("mock.zig");
 pub const c_api = @import("c_api.zig");
@@ -66,6 +68,9 @@ pub const SchemeResponse = types.SchemeResponse;
 pub const SchemeHandler = types.SchemeHandler;
 pub const MessageHandler = types.MessageHandler;
 pub const CloseHandler = types.CloseHandler;
+pub const WindowStateEvent = types.WindowStateEvent;
+pub const WindowStateKind = types.WindowStateKind;
+pub const WindowStateHandler = types.WindowStateHandler;
 pub const WindowConfig = types.WindowConfig;
 pub const Capture = types.Capture;
 pub const CaptureFormat = types.CaptureFormat;
@@ -205,6 +210,24 @@ pub const Engine = union(enum) {
         }
     }
 
+    /// registers the receiver for OS-originated window-state changes. Every backend
+    /// (native and mock) installs the same handler, so a window maximised by the user updates the
+    /// upper-layer registry on Linux, macOS, Windows and in headless tests alike.
+    pub fn setWindowStateHandler(self: *Engine, handler: ?WindowStateHandler) void {
+        switch (self.*) {
+            .headless_mock => |m| m.state_handler = handler,
+            .linux_gtk => |b| if (comptime has_native_gtk) {
+                b.state_handler = handler;
+            },
+            .macos_wk => |b| if (comptime has_native_macos) {
+                b.state_handler = handler;
+            },
+            .windows_webview2 => |b| if (comptime has_native_windows) {
+                b.state_handler = handler;
+            },
+        }
+    }
+
     /// Registers the receiver for user-initiated window closes.
     pub fn setCloseHandler(self: *Engine, handler: ?CloseHandler) void {
         switch (self.*) {
@@ -255,12 +278,55 @@ pub const Engine = union(enum) {
     }
 
     /// Opens a window and returns its id.
+    ///
+    /// after the backend allocates the native window, the P1 #10 `tauri.conf.json`
+    /// options are applied here, ONCE, with no app-level OS branch. `maximized` / `center` /
+    /// `focus` / `skipTaskbar` / `alwaysOnBottom` / `contentProtected` /
+    /// `visibleOnAllWorkspaces` behave identically on GTK, Cocoa, Win32 and HeadlessMock; the
+    /// remaining target-specific options go through `applyWindowCreationOptions`.
     pub fn createWindow(self: *Engine, cfg: WindowConfig) WebviewError!WindowId {
-        return switch (self.*) {
+        const id = try switch (self.*) {
             .headless_mock => |m| m.createWindow(cfg),
             .linux_gtk => |b| if (comptime has_native_gtk) b.createWindow(cfg) else unreachable,
             .macos_wk => |b| if (comptime has_native_macos) b.createWindow(cfg) else unreachable,
             .windows_webview2 => |b| if (comptime has_native_windows) b.createWindow(cfg) else unreachable,
+        };
+        errdefer self.closeWindow(id) catch {};
+
+        if (cfg.maximized) try self.setMaximized(id, true);
+        if (cfg.center) try self.centerWindow(id, cfg.size);
+        if (cfg.focus) try self.setFocus(id);
+        try self.applyWindowExtras(id, .{
+            .skip_taskbar = cfg.skip_taskbar,
+            .always_on_bottom = cfg.always_on_bottom,
+            .content_protected = cfg.content_protected,
+            .visible_on_all_workspaces = cfg.visible_on_all_workspaces,
+            .centered = cfg.center,
+        });
+        try self.applyWindowCreationOptions(id, cfg);
+        return id;
+    }
+
+    /// centres `win_id` on the primary monitor, in CSS logical pixels.
+    pub fn centerWindow(self: *Engine, win_id: WindowId, size: types.LogicalSize) WebviewError!void {
+        return switch (self.*) {
+            .headless_mock => |m| m.centerWindow(win_id, size),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.centerWindow(win_id, size) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.centerWindow(win_id, size) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.centerWindow(win_id, size) else unreachable,
+        };
+    }
+
+    /// target-specific creation options (`hiddenTitle`, `titleBarStyle`,
+    /// `userAgent`, `tabbingIdentifier`, …). Every backend stores the scalar record and applies
+    /// what its OS supports; unsupported flags stay recorded and are documented, never silently
+    /// reported as a native success.
+    pub fn applyWindowCreationOptions(self: *Engine, win_id: WindowId, cfg: WindowConfig) WebviewError!void {
+        return switch (self.*) {
+            .headless_mock => |m| m.applyWindowCreationOptions(win_id, cfg),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.applyWindowCreationOptions(win_id, cfg) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.applyWindowCreationOptions(win_id, cfg) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.applyWindowCreationOptions(win_id, cfg) else unreachable,
         };
     }
 
@@ -423,6 +489,18 @@ pub const Engine = union(enum) {
             .linux_gtk => |b| if (comptime has_native_gtk) b.setFocus(win_id) else unreachable,
             .macos_wk => |b| if (comptime has_native_macos) b.setFocus(win_id) else unreachable,
             .windows_webview2 => |b| if (comptime has_native_windows) b.setFocus(win_id) else unreachable,
+        };
+    }
+
+    /// pushes the complete `plugin:window` scalar intent snapshot into the backend.
+    /// Every backend records it and applies the flags its OS actually supports; the app never
+    /// branches on the target (the union switch below is the only place OS knowledge lives).
+    pub fn applyWindowExtras(self: *Engine, win_id: WindowId, extras: WindowExtrasSnapshot) WebviewError!void {
+        return switch (self.*) {
+            .headless_mock => |m| m.applyWindowExtras(win_id, extras),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.applyWindowExtras(win_id, extras) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.applyWindowExtras(win_id, extras) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.applyWindowExtras(win_id, extras) else unreachable,
         };
     }
 
