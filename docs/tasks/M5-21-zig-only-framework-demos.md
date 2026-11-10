@@ -11,7 +11,7 @@
   `docs/architecture/screenshot-parity.md`, `scripts/check-docs.py`, `scripts/doc-sync.json`
 - **Upstream Reference**: [`../architecture/screenshot-parity.md`](../architecture/screenshot-parity.md),
   [`../tasks/M5-20-framework-tutorial-variants.md`](../tasks/M5-20-framework-tutorial-variants.md)
-- **Next Step**: 全チェックを通し、PR を 1 本作って 3 OS CI（特に `--require-zig`）を確認してマージ。
+- **Next Step**: PR #20 の再実行 CI（3 OS ＋ Cross-OS parity）を確認してマージ。
 
 ---
 
@@ -70,10 +70,32 @@
   `python3 scripts/gen-framework-tutorials.py` で再生成（付録「Zig が動いているかを画面で確かめる」）。
   `scripts/doc-sync.json` は `--sync --date 2026-10-21` で更新。
 
+## 5. CI 1 回目で判明した競合と対策（run 42777574746）
+
+3 OS のジョブはすべて緑（`--require-zig` も通過）だったが、`Cross-OS parity` が 18 件失敗した。
+原因は **レイアウト指紋を測る瞬間** に `zig_probe` が解決するかどうかが OS ごとに違ったこと。
+`ZIG OFFLINE` + `—` の指紋を測った OS と `ZIG ONLINE` + 16 桁 seal の指紋を測った OS が混ざり、
+`.zigseal` の幅が 7px と 112px に割れて 108px 差として検出された。加えて素の `<button>` の
+UA パディングが WebKitGTK と WKWebView で 5px 違うことも露呈した。
+
+対策は 2 段:
+
+1. **寸法の固定**: `.zigbar` / `.zigbadge` / `.zigseal` / `.zigcount` / `.zigbtn` / `.zighint` の
+   全部に `box-sizing:border-box` + 明示的な `width` / `height` / `line-height`、
+   ボタンには `-webkit-appearance:none`。文言が変わっても 1px も動かない。
+2. **計測の同期**: ブリッジが全ての終端経路で `window.__ZTS_ZIG_DONE__` を立て、
+   `ready_script` の `measure()` は `.zigbar` があるページではそれを待ってから測る
+   （上限 5 秒、手書き 8 ページは待たない）。
+
+さらに `manifest.json` を `zig_online`（**ページが seal を描いた**）と `zig_invoked`
+（**Zig のコマンドが応答した**）に分け、`--require-zig` は両方の 9 件 `true` を要求する。
+ホスト側だけで `zig_online` を立てていた初版は「答えたが画面は静的なまま」を通してしまっていた。
+
 ## Current State / Next Step
 
-- **現在**: 実装・9 デモ再生成・規約 16・日英 Doc・同期台帳まで完了。ローカルでは
-  `examples/gallery` の `build test` 8/8、`build install`、HeadlessMock 17 パターン、
-  `gen-framework-tutorials.py --check` 20 ページ、`check-docs.py` 緑を確認済み。
-- **次**: `quick-test` / `build test` / `doctest` / `fmt --check` / `build docs` を通し、
-  PR を **1 本**作って 3 OS CI の `--require-zig` と Cross-OS parity を確認する。
+- **現在**: 実装・9 デモ再生成・規約 16・日英 Doc・同期台帳・parity 競合の修正まで完了。
+  ローカルでは `quick-test` 7 群、`build test`、`doctest`、`build docs` / `docs-check`、
+  `fmt --check`、`check-font-coverage`、`gen-framework-tutorials.py --check`、
+  `examples/gallery` の `build test` 8/8 と `build install` がすべて緑。
+  PR は **#20 の 1 本**のみ。
+- **次**: PR #20 へ修正を push し、3 OS CI と `Cross-OS parity` が揃って緑になるのを確認してマージ。

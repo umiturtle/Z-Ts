@@ -25,12 +25,16 @@ examples/gallery (Zig)                         scripts/                      .gi
   `layout`（ページが投稿したレイアウト指紋）と `font_ok` が入る。
 - `ci-parity` は 3 つの artifact を `artifacts/screenshots-<os>/` に展開し、
   ① それぞれを `verify-screenshots.mjs` で再検証 ② `compare-screenshots.mjs` で相互比較する。
-- 9 つのフレームワークパターンには `zig_online` が入る。`--require-zig` は 9 件すべて
-  `true` であることを要求し、**静的 HTML だけを撮って「Zig のデモが動いた」と誤判定するのを防ぐ**。
+- 9 つのフレームワークパターンには `zig_online`（ページが seal を描いた）と `zig_invoked`
+  （Zig がコマンドに答えた）が入る。`--require-zig` は両方が 9 件すべて `true` であることを要求し、
+  **静的 HTML だけを撮って「Zig のデモが動いた」と誤判定するのを防ぐ**。
   ギャラリーは `ipc://localhost/<cmd>` を登録して `zig_probe` / `zig_inc` / `zig_dec` を捌き、
   無改造の `js_bootstrap` が作る `invoke()` と `src/web/zig-bridge.js` を `DOCUMENT_START` で注入する。
   seal は `Sha256(Zig 側の秘密 || コマンド || count)` の先頭 8 バイトで、静的ビルドには秘密も
   計算式も無い。時刻・乱数は使わないので 3 OS の初期画素は一致する。
+  ただし probe が解決する瞬間に文言が変わるため、`ready_script` は `__ZTS_ZIG_DONE__` を待ってから
+  レイアウト指紋を測り、`.zigbar` の全要素は幅・高さを固定してある（CI run 42777574746 で
+  「片方の OS だけ OFFLINE の指紋を測る」競合を実測し、この 2 段で解消した）。
 
 ---
 

@@ -17,6 +17,10 @@
     try { window.__ztsPostMessage(JSON.stringify(payload)); } catch (e) {}
   }
   function ready() {
+    // `ready_script` waits for this flag before taking its layout fingerprint. Without it the
+    // 3-OS comparator sometimes measured the panel while it was still ZIG OFFLINE on one runner
+    // and ZIG ONLINE on another (a ~100px layout difference, proven by CI run 42777574746).
+    window.__ZTS_ZIG_DONE__ = true;
     if (posted) return;
     posted = true;
     post({ app: 'ready' });
@@ -60,8 +64,9 @@
     var inv = internals();
     if (!inv || typeof inv.invoke !== 'function') { ready(); return; }
     // A hung custom-protocol request must never block the screenshot pipeline forever. The
-    // 8s guard is far below the gallery's 20s app-ready timeout, and late results are ignored.
-    var guard = setTimeout(function () { if (!posted) ready(); }, 8000);
+    // 15s guard is below the gallery's 20s app-ready timeout; late results are ignored so a
+    // screenshot is never a mix of two states.
+    var guard = setTimeout(function () { if (!posted) ready(); }, 15000);
     call('zig_probe').then(function (info) {
       if (posted) return;                 // guard already fired: keep the pixels deterministic
       clearTimeout(guard);

@@ -126,7 +126,14 @@ if (requireZig) {
   }
   const offline = zigPatterns.filter((p) => p.zig_online !== true).map((p) => p.name);
   if (offline.length) {
-    fail(`Zig backend unreachable for ${offline.join(', ')} — the demos rendered as static HTML only`);
+    fail(`no valid Zig seal was painted for ${offline.join(', ')} — the demos rendered as static HTML only`);
+  }
+  // The host-side half is kept separate: `zig_online` alone could be faked by a page, while
+  // `zig_invoked` alone would pass even if the page never showed the seal (the exact race that
+  // broke Cross-OS parity in CI run 42777574746). Both must be true.
+  const unanswered = zigPatterns.filter((p) => p.zig_invoked !== true).map((p) => p.name);
+  if (unanswered.length) {
+    fail(`Zig command table never answered for ${unanswered.join(', ')} (zig_invoked=false)`);
   }
 }
 

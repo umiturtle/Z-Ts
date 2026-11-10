@@ -95,7 +95,7 @@ The host side is real code: [`examples/gallery/src/main.zig`](../gallery/src/mai
 `ipc` scheme and the three commands, while
 [`examples/gallery/src/web/zig-bridge.js`](../gallery/src/web/zig-bridge.js) is injected at
 `DOCUMENT_START`. Both use the unmodified `js_bootstrap` `window.__TAURI_INTERNALS__.invoke`. CI
-fails unless all nine manifest entries report `zig_online: true`
+fails unless all nine manifest entries report `zig_online: true` and `zig_invoked: true`
 (`scripts/verify-screenshots.mjs --require-zig`).
 
 ## Build notes per framework

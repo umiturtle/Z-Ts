@@ -87,7 +87,7 @@ Zig 側のカウンタを増減し、押すたびに seal が変わります。�
 ホスト側の実物は [`examples/gallery/src/main.zig`](../gallery/src/main.zig)（`ipc` スキームと
 3 コマンド）、[`examples/gallery/src/web/zig-bridge.js`](../gallery/src/web/zig-bridge.js)
 （`DOCUMENT_START` で注入するブリッジ）です。無改造の `js_bootstrap` が作る
-`window.__TAURI_INTERNALS__.invoke` をそのまま使います。CI は manifest の `zig_online` が
+`window.__TAURI_INTERNALS__.invoke` をそのまま使います。CI は manifest の `zig_online` / `zig_invoked` が
 9 件すべて `true` でないと赤くなります（`scripts/verify-screenshots.mjs --require-zig`）。
 
 ## 各フレームワークのビルド方法と注意点

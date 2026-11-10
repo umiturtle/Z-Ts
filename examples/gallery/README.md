@@ -23,7 +23,7 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
 | `--out <dir>` | PNG と `manifest.json` の出力先（既定 `zig-out/screenshots`） |
 | `--only <name>` | 1 パターンだけ撮る（デバッグ用） |
 | `--require-native` | ネイティブバックエンドが使えず `HeadlessMock` に落ちたら **exit 1**（`FAIL gallery native backend unavailable (host=mock)`） |
-| `--require-zig`（検証スクリプト側） | 9 デモすべての `zig_online` が `true` でないと失敗。静的 HTML だけを撮って「デモが動いた」と誤判定しない |
+| `--require-zig`（検証スクリプト側） | 9 デモすべての `zig_online`（ページが seal を描いた）と `zig_invoked`（Zig がコマンドに答えた）が `true` でないと失敗 |
 
 `DISPLAY` の無い Linux では GTK が起動できず `SKIP gallery … (DisplayUnavailable)` + exit 0 に
 なります。CI は `xvfb-run` で実行し `--require-native` を付けているため、この経路は通りません。
@@ -92,7 +92,13 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
   秘密も計算式も静的ファイルには無い。時刻・乱数を使わないので、初期画面は 3 OS で同一。
 - `fetch('ipc://…')` が失敗した環境向けに、`js_bootstrap` の `__ztsPostMessage`
   フォールバックも同じ 3 コマンドで捌く（`evalJs` で callback を解決）。
-- `manifest.json` の 9 件に `zig_online` を書き、`--require-zig` が全件 `true` を要求する。
+- `manifest.json` の 9 件に `zig_online`（ページが seal を描いた）と `zig_invoked`
+  （Zig のコマンドが応答した）を書き、`--require-zig` が両方の全件 `true` を要求する。
+  片方だけでは「ホストは答えたが画面は静的なまま」を見逃す（CI run 42777574746 で実測）。
+- `ready_script` のレイアウト計測はブリッジの `__ZTS_ZIG_DONE__` を待つ。パネルの文言が
+  `ZIG OFFLINE` → `ZIG ONLINE` に変わる途中を 3 OS が別々に測らないようにするため。
+  さらに `.zigbar` の全要素は幅・高さを固定し（`box-sizing:border-box`、
+  `-webkit-appearance:none`）、文言が変わっても指紋が動かない。
 
 ## カスタムスキームは `tauri://`（重要）
 
@@ -113,7 +119,8 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
 
 - `<host>-<name>.png` — Web コンテンツの CSS 画素をそのまま PNG にしたもの（ウィンドウ装飾なし）
 - `manifest.json` — `{host, os, generated_by, patterns:[{name, file, theme, css_width, css_height,
-  width, height, bytes, messages, sha256, expect_center_rgb?, layout, font_ok, zig_online?}]}`
+  width, height, bytes, messages, sha256, expect_center_rgb?, layout, font_ok,
+  zig_online?, zig_invoked?}]}`
   （`layout` はページが投稿した JSON を文字列のまま保存したもの）
 
 `index.html`（コンタクトシート）は検証スクリプトが生成します。

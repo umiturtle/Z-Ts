@@ -59,8 +59,14 @@ browser) shows `ZIG OFFLINE` with disabled buttons; the native gallery shows `ZI
   used, so the initial frame is identical on all three OSes.
 - If `fetch('ipc://…')` is unavailable, the bootstrap's `__ztsPostMessage` fallback is answered
   by the same three Zig commands (the promise is resolved with `evalJs`).
-- The nine manifest entries carry `zig_online`; `verify-screenshots.mjs --require-zig` fails
-  unless every one is `true`.
+- The nine manifest entries carry `zig_online` (the page painted a valid seal) and
+  `zig_invoked` (the Zig command table answered); `verify-screenshots.mjs --require-zig` requires
+  both for every entry. Either one alone would miss "the host answered but the page stayed static"
+  (observed in CI run 42777574746).
+- `ready_script` waits for the bridge's `__ZTS_ZIG_DONE__` before taking the layout fingerprint,
+  so no OS measures the panel halfway through its `ZIG OFFLINE` → `ZIG ONLINE` swap. Every
+  `.zigbar` box also has a fixed width/height (`box-sizing:border-box`,
+  `-webkit-appearance:none`), which removes WebKitGTK's differing UA button padding.
 
 ## The custom scheme is `tauri://` (important)
 

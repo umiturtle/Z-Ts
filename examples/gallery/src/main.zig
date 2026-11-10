@@ -290,10 +290,13 @@ const WindowState = struct {
     /// The `{"app":"fontfetch", …}` probe: can the page actually read the bundled woff2 bytes?
     /// A webfont that loads in Chromium but not in WebKit shows up here as a failed fetch.
     font_fetch: ?[]u8 = null,
-    /// `{"app":"zig","online":true}` — the framework demo really reached a Zig command through
-    /// `ipc://`. Written into the manifest so CI can reject a gallery that silently fell back to
-    /// a static page on one OS.
+    /// `{"app":"zig","online":true}` — the page itself painted a valid seal. This is the
+    /// user-visible proof; CI rejects a gallery that silently fell back to a static page.
     zig_online: bool = false,
+    /// The Zig command table really answered an invoke (`ipc://` or the native-bridge fallback).
+    /// Kept separate from `zig_online` so "host answered but page never painted" stays visible
+    /// in `manifest.json` instead of being mistaken for a working demo.
+    zig_invoked: bool = false,
 };
 
 const Gallery = struct {
@@ -390,9 +393,9 @@ fn onIpcRequest(g: *Gallery, req: webview.types.SchemeRequest) void {
         }) catch {};
         return;
     };
-    // Direct proof, independent of whether the page manages to post its own `{"app":"zig"}`
-    // message: this line only runs when the Zig command table actually answered the invoke.
-    if (g.stateFor(req.window_id)) |ws| ws.zig_online = true;
+    // The Zig command table really answered the invoke. The page still has to confirm that it
+    // painted the seal (`zig_online`) before CI accepts the capture.
+    if (g.stateFor(req.window_id)) |ws| ws.zig_invoked = true;
     g.engine.completeRequest(req.request_id, .{
         .status_code = 200,
         .content_type = "application/json",
@@ -507,7 +510,12 @@ fn onMessage(userdata: ?*anyopaque, win: webview.WindowId, message: []const u8) 
     if (std.mem.indexOf(u8, message, "\"app\":\"zig\"")) |_| {
         // The page confirms it painted a valid seal. Never clear a proof the Zig side already
         // recorded: this message is additive evidence, not the only transport.
-        if (std.mem.indexOf(u8, message, "\"online\":true") != null) ws.zig_online = true;
+        if (std.mem.indexOf(u8, message, "\"online\":true") != null) {
+            ws.zig_online = true;
+            // A valid seal can only come from the Zig command table, so this also confirms the
+            // host-side half even if the scheme callback could not resolve its WindowId.
+            ws.zig_invoked = true;
+        }
         return;
     }
     if (std.mem.indexOf(u8, message, "\"app\":\"layout\"")) |_| {
@@ -552,7 +560,7 @@ fn handleNativeBridgeInvoke(g: *Gallery, win: webview.WindowId, message: []const
         "window.__TAURI_INTERNALS__.runCallback({d}, {s});",
         .{ cb_val.integer, json },
     ) catch return;
-    if (g.stateFor(win)) |ws| ws.zig_online = true;
+    if (g.stateFor(win)) |ws| ws.zig_invoked = true;
     g.engine.evalJs(win, script) catch {};
 }
 
@@ -816,7 +824,15 @@ const ready_script =
     \\  var post = function (payload) {
     \\    try { window.__ztsPostMessage(JSON.stringify(payload)); } catch (e) {}
     \\  };
+    \\  var zigWait = 0;
     \\  var measure = function () {
+    \\    // M5-21: the Zig panel swaps its text when `zig_probe` resolves. Measure only after the
+    \\    // bridge has settled (it sets `__ZTS_ZIG_DONE__` on every terminal path), otherwise one
+    \\    // runner fingerprints ZIG OFFLINE while another fingerprints ZIG ONLINE. The 5s cap is
+    \\    // well below the gallery's 20s app-ready timeout and the 8 hand-written pages skip it.
+    \\    if (document.querySelector('.zigbar') && !window.__ZTS_ZIG_DONE__) {
+    \\      if (zigWait++ < 200) { setTimeout(measure, 25); return; }
+    \\    }
     \\    var sel = 'body,.shell,.head,.card,.counter,.value,.features,.features>li,.meta,.zigbar,' +
     \\              '.zigbadge,.zigseal,.zigcount,.zigbtn,.zighint,' +
     \\              'h1,h2,h3,p,ul,li,button,footer,.badge,.title,.sub,.brand,.logo,.tag';
@@ -1153,7 +1169,7 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
         });
 
         // Register the state *before* navigating: a DOCUMENT_START script / `ipc://` POST can
-        // arrive as soon as the load starts, and `onMessage` needs the `zig_online` slot.
+        // arrive as soon as the load starts, and `onMessage` needs `zig_online` / `zig_invoked`.
         try g.windows.append(g.allocator, .{ .id = id, .pattern = idx });
         defer {
             // The ready report is owned by the window state, so releasing the window releases it.
@@ -1246,10 +1262,12 @@ fn run(g: *Gallery, out_dir: std.Io.Dir, host: []const u8, only: ?[]const u8) !u
             try writer.writeAll(", \"font_fetch\": ");
             try writeJsonString(writer, probe);
         }
-        // M5-21: did this framework demo actually reach a Zig command? CI rejects `false`,
-        // because a static HTML-only render must never be mistaken for a working Zig backend.
+        // M5-21: did this framework demo reach a Zig command *and* paint its seal? CI rejects a
+        // `false`, because a static HTML-only render must never be mistaken for a working Zig
+        // backend. `zig_invoked` is the host-side half of the round trip.
         if (p.requires_app_ready) {
             try writer.print(", \"zig_online\": {s}", .{if (ws_ptr.zig_online) "true" else "false"});
+            try writer.print(", \"zig_invoked\": {s}", .{if (ws_ptr.zig_invoked) "true" else "false"});
         }
         try writer.writeAll(" }");
         captured += 1;

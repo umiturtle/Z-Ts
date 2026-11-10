@@ -1074,7 +1074,7 @@ gallery = rule16_require(GALLERY_MAIN, 'ipc_scheme_name = "ipc"', "ipc scheme")
 if gallery:
     for token in (
         "registerScheme(ipc_scheme_name", "js_bootstrap.renderScriptAlloc", "composeInitScripts",
-        "zig_bridge_script", "zig_online", "Tauri-Response", "zigSeal",
+        "zig_bridge_script", "zig_online", "zig_invoked", "__ZTS_ZIG_DONE__", "Tauri-Response", "zigSeal",
     ) + ZIG_COMMANDS:
         if token not in gallery:
             errors.append(f"{GALLERY_MAIN}: missing {token!r} (rule 16)")
