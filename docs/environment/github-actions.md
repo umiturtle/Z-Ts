@@ -147,3 +147,42 @@ CI は生成物をそのまま使う（`npm`/`pip` を追加しない）。
 `examples/gallery/src/web/fw/<name>/` と `src/fw_assets.zig` が更新されるので、
 `examples/frameworks/node_modules` と各 `dist/` はコミットしない（`.gitignore` 済み）。
 
+
+---
+
+## 5. リポジトリ改名と Check Run ログ公開（規約 18）
+
+Arena サンドボックスからは Actions の生ログを置いてある Blob ホストに到達できないため、
+各ジョブは `ci-output.log` / `cli-smoke.log` / `parity.log` を Check Run の `output.summary`
+にもミラーしています。ここは**診断専用**で、ビルドの合否を左右してはいけません。
+
+### 5.1 起きた障害
+
+`main` へのマージで始まった run の実行中にリポジトリが改名されました。
+`GITHUB_REPOSITORY` と `actions/github-script` の `context.repo` は**ラン開始時点の名前で固定**
+されるため、改名後に `PATCH /repos/{旧名}/check-runs/{id}` を送ると
+`HttpError: fetch failed` / HTTP 500 になります（GET はリダイレクトされるので
+`listJobsForWorkflowRun` は通ってしまうのが厄介な点）。
+実際に 6 ジョブが「Publish … to Check Run API」ステップだけで failure になり、
+ビルド・テスト・スクリーンショット・parity 本体はすべて成功していました。
+
+### 5.2 現在の契約
+
+- 5 本の公開ステップは [`scripts/publish-check-run-summary.js`](../../scripts/publish-check-run-summary.js)
+  を 1 箇所から呼ぶだけ。重複した Octokit 呼び出しは置かない。
+- ヘルパーは最初に `GET /repos/{owner}/{repo}` を行い、レスポンスの `full_name` を
+  **現在の正規名**として使う。イベントペイロードの名前は fallback にすぎない。
+- すべての公開ステップに `continue-on-error: true` を付け、API 不通・改名競合・
+  レート制限でもジョブを赤くしない。3 回（初回 + 2 リトライ）失敗したら `core.warning` を出す。
+- 同じログを `$GITHUB_STEP_SUMMARY` にも書く。Check Run API が完全に落ちても記録は残る。
+- `output.summary` は UTF-8 バイト数で 60000 に丸める（日本語ログで 65535 制限を超えないため）。
+- `.github/workflows/pages.yml` も `gh api repos/${GITHUB_REPOSITORY}` の `full_name` を
+  解決してから `…/pages` を呼ぶ。POST は旧名だと失敗し得る。
+- `node --test tests/ci/publish-check-run-summary.test.cjs` が旧名解決・リトライ・
+  永続失敗・UTF-8 丸め・ジョブ名不一致を検証する。
+- `check-docs.py` の規約 18 がヘルパー・5 ステップ・Pages・テスト・本ページの一致を
+  機械検査する。
+
+> 旧リポジトリ URL とチェックアウトのパス名は規約 14 により据え置きです。
+> `github.com` 側はリダイレクトされますが、GitHub Pages のサブパスは変わるので、
+> 公開サイトの URL を変更する場合は別タスクで扱います。

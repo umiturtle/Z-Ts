@@ -1,6 +1,6 @@
 # Task M5-23: リポジトリ名変更中でも CI の Check Run ログ公開で赤くしない
 
-- **Status**: `in_progress` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/55f07ace-z-ts`（main `b5b8f6b` = PR #21 マージ後）
 - **Scope**: `.github/workflows/ci.yml`, `.github/workflows/pages.yml`,
   `scripts/publish-check-run-summary.js`（新規）, `tests/ci/publish-check-run-summary.test.cjs`（新規）,
@@ -9,12 +9,8 @@
 - **Upstream Reference**: [`../environment/github-actions.md`](../environment/github-actions.md)
   （Check Run Summary にログをミラーする運用）、[`M5-22-native-window-state-parity.md`](M5-22-native-window-state-parity.md)
   （最終 3 OS CI 7/7 green の到達点）
-- **Next Step**: `.github/workflows/ci.yml` の 6 本の Check Run 公開ステップを
-  `scripts/publish-check-run-summary.js` に集約し、実行時に `GET /repos/{owner}/{repo}` で
-  正規のリポジトリ名を解決してから `checks.update` する。API 失敗は警告に落としてジョブを失敗させない。
-  ローカルで `node --test tests/ci/publish-check-run-summary.test.cjs` と
-  `python3 scripts/check-docs.py` / `./zigw quick-test` / `./zigw fmt --check` を通し、
-  push 後に 3 OS CI を確認する。
+- **Next Step**: 実装を push して PR を 1 本作り、3 OS CI が 7/7 緑になることを確認して
+  `gh pr merge` で `main` へマージする（マージ後の新しい `main` run も緑になる）。
 
 ---
 
@@ -22,16 +18,16 @@
 
 > 「CIでエラー吐いてるので対応して」「途中でレポジトリ名変更したからかも」
 
-- [ ] 失敗原因をログで特定し、リネームが原因であることを記録する
-- [ ] `GITHUB_REPOSITORY`（ラン開始時点で固定）に依存せず、実行時の API から正規の
+- [x] 失敗原因をログで特定し、リネームが原因であることを記録する
+- [x] `GITHUB_REPOSITORY`（ラン開始時点で固定）に依存せず、実行時の API から正規の
       `owner/repo` を解決して `checks.update` する
-- [ ] Check Run API の 500 / ネットワーク障害・リネーム競合・summary サイズ超過で
+- [x] Check Run API の 500 / ネットワーク障害・リネーム競合・summary サイズ超過で
       CI 本体が失敗しない（診断用ステップは non-fatal、ログは Step Summary にも残す）
-- [ ] `actions/github-script` の 6 本の重複スクリプトを 1 つのヘルパーに集約する
-- [ ] `pages.yml` の `gh api repos/${GITHUB_REPOSITORY}/pages` も正規名に正規化する
-- [ ] ヘルパーの単体テスト（正常系・旧名解決・リトライ・永続失敗・UTF-8 切り詰め・
+- [x] `actions/github-script` の 5 本の重複スクリプトを 1 つのヘルパーに集約する
+- [x] `pages.yml` の `gh api repos/${GITHUB_REPOSITORY}/pages` も正規名に正規化する
+- [x] ヘルパーの単体テスト（正常系・旧名解決・リトライ・永続失敗・UTF-8 切り詰め・
       ジョブ名不一致）を追加し `node --test` で通す
-- [ ] 日英 Doc と同期台帳を更新、`learn_path.steps` / `AGENTS.md` /
+- [x] 日英 Doc と同期台帳を更新、`learn_path.steps` / `AGENTS.md` /
       `docs/roadmap/milestones.md` のチェックボックスは非編集
 - [ ] 新しいランで 3 OS CI が 7/7 緑、PR は 1 本だけ
 
@@ -62,7 +58,15 @@
 
 ## Current State / Next Step
 
-- **現在**: 原因調査完了。30 秒ルーチン（`quick-test` / `check-docs.py` / `fmt --check`）は緑。
-  旧 CI run は `conclusion: failure` だが、コード・テストの失敗ではない。
-- **次の 1 手**: `scripts/publish-check-run-summary.js` とその Node テストを追加し、
-  `ci.yml` / `pages.yml` を書き換えてコミットする。
+- **現在**: 実装・ローカル検証まで完了。`scripts/publish-check-run-summary.js`、
+  `tests/ci/publish-check-run-summary.test.cjs`（7/7 pass）、`ci.yml` の 5 ステップ差し替え＋
+  `node --test` の CI 実行、`pages.yml` の正規名解決、規約 18、環境 Doc、同期台帳
+  （`--sync --date 2026-10-21`）まで反映済み。
+- **ローカル緑**: `node --test`（7/7）、`python3 scripts/check-docs.py`（176 md / 34 読者ページ × 2 言語）、
+  `./zigw quick-test`（37 / 10 tests）、`./zigw fmt --check`、5 個の inline JS `node --check`、
+  `pages.yml` の run ブロック `bash -n`。
+- **旧 CI run**: [`42810958509`](https://github.com/umiturtle/ZigguraTs/actions/runs/42810958509)
+  は `failure` のままだが、これはリネーム中に固定された旧名への PATCH によるもので
+  コード・テストの失敗ではない。新しいランで上書きする。
+- **次の 1 手**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
+  `main` の新しい CI / Pages run が緑になったらタスク票を `done` にする。

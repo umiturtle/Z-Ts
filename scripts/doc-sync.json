@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "76e52a9",
+    "commit": "c846f01",
     "zts_version": "0.1.0",
     "zig_version": "0.17.0",
     "checks": [
@@ -30,7 +30,7 @@
       "scripts/check-docs.py",
       "scripts/gen-framework-tutorials.py"
     ],
-    "implementation_sha256": "508b80b6dc4a9040ce558922fa23bf25294b61f0f399861dd4569b36ce505672"
+    "implementation_sha256": "65108999801026540d9e18826b20d341fe0fc6b7290facfd77f9d1f91ed3e5f2"
   },
   "pages": [
     {
@@ -58,8 +58,8 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "cb2bb399d9413d8ec59e1b9fb6a2805cef8ebb07f9afe2a176231d6fd76dda6c",
-      "en_sha256": "bb0afb69917cfcafb9e4b19f6c18f9d6966ad4bd743fbec4cf434e6accc6c6e9"
+      "ja_sha256": "13b1eb6869593a2b06a9faed4cb7d04894466e11f4858438919398d2ae311d04",
+      "en_sha256": "75e0dcb6efd363b7da47ccb3f315c248655204bdd65124ecf6bdd58d51db89be"
     },
     {
       "ja": "docs/contributing/repository-map.md",

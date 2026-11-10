@@ -66,6 +66,10 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       `ZIG OFFLINE`; the native gallery answers `zig_probe` / `zig_inc` /
                       `zig_dec` over `ipc://` with a seal only Zig can make. If any one of the
                       four surfaces drifts, the demos silently become "just HTML" again.
+18. Rename-safe CI   — Check Run log publishers resolve the repository's current `full_name`
+                      with a GET before PATCH, are `continue-on-error`, and mirror to the Step
+                      Summary. A `context.repo` frozen by a mid-run repository rename turns
+                      `checks.update` into HTTP 500; that diagnostic must never fail the build.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -1288,6 +1292,66 @@ r17_require("docs/learn/en/guides/plugins.md", "applyWindowExtras", "WindowState
 for path in ("docs/reference/tauri-usage.md", "docs/reference/tauri-usage.en.md"):
     r17_require(path, "isMinimized()", "isMaximized()", "setFullscreen", "tauri://window-flags-changed")
 r17_require("docs/architecture/zts-webview-backends.md", "WindowStateEvent", "applyWindowExtras", "WindowCreationOptions")
+
+# ---------------------------------------------------------------------------
+# 18. Rename-safe Check Run log publishing (CI diagnostics must never fail the build)
+# ---------------------------------------------------------------------------
+#
+# A repository rename during a run leaves `context.repo` / `GITHUB_REPOSITORY` pointing at the
+# old name. `GET /repos/{old}` redirects, but `PATCH /repos/{old}/check-runs/{id}` returns
+# HTTP 500 (`HttpError: fetch failed`). Rule 18 pins the guard: one helper resolves the canonical
+# `full_name`, every publishing step is non-fatal, and the Pages API uses the same resolution.
+
+R18_HELPER = "scripts/publish-check-run-summary.js"
+R18_TEST = "tests/ci/publish-check-run-summary.test.cjs"
+R18_DOC = "docs/environment/github-actions.md"
+
+
+def r18_read(path):
+    if not os.path.isfile(path):
+        errors.append(f"{path}: missing (rule 18)")
+        return None
+    return open(path, encoding="utf-8").read()
+
+
+helper = r18_read(R18_HELPER)
+if helper is not None:
+    for token in (
+        "resolveRepository", "github.rest.repos.get", "full_name",
+        "core.summary.addRaw", "truncateUtf8", "MAX_SUMMARY_BYTES",
+        "core?.warning?.(", "github.rest.checks.update",
+    ):
+        if token not in helper:
+            errors.append(f"{R18_HELPER}: missing {token!r} (rule 18)")
+
+ci = r18_read(".github/workflows/ci.yml")
+if ci is not None:
+    if ci.count("publish-check-run-summary.js") != 5:
+        errors.append(".github/workflows/ci.yml: every Check Run publisher must use the helper (rule 18)")
+    if ci.count("continue-on-error: true") != 5:
+        errors.append(".github/workflows/ci.yml: every Check Run publisher must be continue-on-error (rule 18)")
+    if "github.rest.checks.update" in ci:
+        errors.append(".github/workflows/ci.yml: direct checks.update bypasses the rename-safe helper (rule 18)")
+    if "node --test tests/ci/publish-check-run-summary.test.cjs" not in ci:
+        errors.append(".github/workflows/ci.yml: the helper's Node tests must run in CI (rule 18)")
+
+pages = r18_read(".github/workflows/pages.yml")
+if pages is not None:
+    for token in ("canonical=\"$(gh api \"repos/${repo}\"", "repos/${repo}/pages"):
+        if token not in pages:
+            errors.append(f".github/workflows/pages.yml: missing {token!r} (rule 18)")
+
+test = r18_read(R18_TEST)
+if test is not None:
+    for token in ("node:test", "fullName", "updateFailures", "renamed"):
+        if token not in test:
+            errors.append(f"{R18_TEST}: missing {token!r} (rule 18)")
+
+doc = r18_read(R18_DOC)
+if doc is not None:
+    for token in ("publish-check-run-summary.js", "full_name", "continue-on-error"):
+        if token not in doc:
+            errors.append(f"{R18_DOC}: missing {token!r} (rule 18)")
 
 if warnings:
     for w in warnings:
