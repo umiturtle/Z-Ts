@@ -1,6 +1,6 @@
 # Task M5-23: リポジトリ名変更中でも CI の Check Run ログ公開で赤くしない
 
-- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `done` <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/55f07ace-z-ts`（main `b5b8f6b` = PR #21 マージ後）
 - **Scope**: `.github/workflows/ci.yml`, `.github/workflows/pages.yml`,
   `scripts/publish-check-run-summary.js`（新規）, `tests/ci/publish-check-run-summary.test.cjs`（新規）,
@@ -9,8 +9,8 @@
 - **Upstream Reference**: [`../environment/github-actions.md`](../environment/github-actions.md)
   （Check Run Summary にログをミラーする運用）、[`M5-22-native-window-state-parity.md`](M5-22-native-window-state-parity.md)
   （最終 3 OS CI 7/7 green の到達点）
-- **Next Step**: 実装を push して PR を 1 本作り、3 OS CI が 7/7 緑になることを確認して
-  `gh pr merge` で `main` へマージする（マージ後の新しい `main` run も緑になる）。
+- **Next Step**: 完了。PR #22 は `main a5b9d73` にマージ済みで、マージ後の
+  `main` CI / Pages も緑。次の作業は別タスク票で宣言する。
 
 ---
 
@@ -29,7 +29,7 @@
       ジョブ名不一致）を追加し `node --test` で通す
 - [x] 日英 Doc と同期台帳を更新、`learn_path.steps` / `AGENTS.md` /
       `docs/roadmap/milestones.md` のチェックボックスは非編集
-- [ ] 新しいランで 3 OS CI が 7/7 緑、PR は 1 本だけ
+- [x] 新しいランで 3 OS CI が 7/7 緑、PR は 1 本だけ
 
 ## 2. 原因（確定）
 
@@ -58,15 +58,20 @@
 
 ## Current State / Next Step
 
-- **現在**: 実装・ローカル検証まで完了。`scripts/publish-check-run-summary.js`、
-  `tests/ci/publish-check-run-summary.test.cjs`（7/7 pass）、`ci.yml` の 5 ステップ差し替え＋
-  `node --test` の CI 実行、`pages.yml` の正規名解決、規約 18、環境 Doc、同期台帳
-  （`--sync --date 2026-10-21`）まで反映済み。
-- **ローカル緑**: `node --test`（7/7）、`python3 scripts/check-docs.py`（176 md / 34 読者ページ × 2 言語）、
-  `./zigw quick-test`（37 / 10 tests）、`./zigw fmt --check`、5 個の inline JS `node --check`、
-  `pages.yml` の run ブロック `bash -n`。
-- **旧 CI run**: [`42810958509`](https://github.com/umiturtle/ZigguraTs/actions/runs/42810958509)
-  は `failure` のままだが、これはリネーム中に固定された旧名への PATCH によるもので
-  コード・テストの失敗ではない。新しいランで上書きする。
-- **次の 1 手**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
-  `main` の新しい CI / Pages run が緑になったらタスク票を `done` にする。
+- **完了**: `scripts/publish-check-run-summary.js`、`tests/ci/publish-check-run-summary.test.cjs`
+  （7/7 pass）、`ci.yml` の 5 ステップ差し替え＋ `node --test` の CI 実行、`pages.yml` の
+  正規名解決、規約 18、環境 Doc、同期台帳（`--sync --date 2026-10-21`）まで反映済み。
+- **PR [#22](https://github.com/umiturtle/ZigguraTs/pull/22)**: 1 本のみ。最終 CI
+  [`42815698628`](https://github.com/umiturtle/ZigguraTs/actions/runs/42815698628) が 7/7 緑、
+  7 本の Check Run 公開ステップもすべて `success`（`continue-on-error` で隠していない）。
+  `gh pr merge 22 --merge` で `main a5b9d73` にマージ。
+- **マージ後 `main`**: CI
+  [`42816876757`](https://github.com/umiturtle/ZigguraTs/actions/runs/42816876757) が 7/7 緑、
+  Pages [`42816876778`](https://github.com/umiturtle/ZigguraTs/actions/runs/42816876778) が
+  build + deploy ともに成功。旧失敗 run
+  [`42810958509`](https://github.com/umiturtle/ZigguraTs/actions/runs/42810958509) は履歴に残るが、
+  リネーム中に固定された旧名への PATCH によるものでコード・テストの失敗ではない。
+- **ローカル緑**: `node --test`（7/7）、`python3 scripts/check-docs.py`
+  （176 md / 34 読者ページ × 2 言語、規約 18 含む）、`./zigw quick-test`（37 / 10 tests）、
+  `./zigw fmt --check`、5 個の inline JS `node --check`、`pages.yml` の run ブロック `bash -n`。
+- **次の 1 手**: なし。`AGENTS.md` / `docs/roadmap/milestones.md` のチェックボックスは非編集のまま。
