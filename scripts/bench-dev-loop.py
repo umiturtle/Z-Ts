@@ -314,6 +314,9 @@ def run_verify(args, zts, zig, root):
             body = session.log_text()
             if "incremental compiler server ready" not in body:
                 print("      note: compiler server unavailable here; fallback path verified")
+                for line in body.splitlines():
+                    if "compiler server" in line:
+                        print("      dev:", line.strip())
                 return
             checks = [int(x) for x in re.findall(r"zts: type-check ok \((\d+) ms\)", body)]
             assert checks, "server announced ready but emitted no timing line"
