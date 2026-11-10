@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "1d04c7a",
+    "commit": "b080341",
     "zts_version": "0.1.0",
     "zig_version": "0.17.0",
     "checks": [
@@ -38,8 +38,8 @@
       "ja": "docs/INDEX.md",
       "en": "docs/INDEX.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "3b75846206060146600727527269295ddaf05c5b0517ca7e3c91e2716c6b17f0",
-      "en_sha256": "1ec6b071c2d3ec46b5d05bfa60c0b104b030da4131bf26c82972c006cb521cd2"
+      "ja_sha256": "3840498150f9b045b79205bc50440408617f199fac148645227801c1d47132d0",
+      "en_sha256": "1b6f9782385ea52eb677886b4705a3833cad5f0a64df0f582a0482ed93cbba23"
     },
     {
       "ja": "docs/contributing/README.md",
@@ -52,8 +52,8 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "256f22797dba84cbad098e0e2b1a2f91df49b1d57af0b765ccf52f5a730e15bc",
-      "en_sha256": "47dffe3dab39c747e0478105fc33f999646ee0eaf0c09ea229951c89bf798a5f"
+      "ja_sha256": "46cf0b859780be6130cda63972ac560953bd5a93e161fdec7eb6b4fee915f2f6",
+      "en_sha256": "a147a2596f3733950c729c7e94241f959ecabd77b826aab7f320058db62886ab"
     },
     {
       "ja": "docs/contributing/repository-map.md",
@@ -290,8 +290,8 @@
       "ja": "examples/frameworks/README.md",
       "en": "examples/frameworks/README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "0e80cd563bae9b23f515055594aba4cc170d32912262b65f5502597111b1664c",
-      "en_sha256": "22a9a9129d517a0ed97f297984747eacb72e895412ae2fa0d067f9a8f1c39489"
+      "ja_sha256": "28c895236979216d57e1d5500d5c998ea5a4494852367246f226058c1751c555",
+      "en_sha256": "a615aaba4bda44bd87c007ccba2144f066c49dc1e6ebcb0cc3984206921d71d4"
     },
     {
       "ja": "examples/gallery/README.md",

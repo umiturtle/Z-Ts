@@ -163,6 +163,7 @@ when you are looking for why the implementation looks the way it does.
 | [`reference/tauri-internals.en.md`](reference/tauri-internals.en.md) | IPC protocol, macros and built-in plugins dissected (for porters) |
 | [`decisions/0018-documentation-site.md`](decisions/0018-documentation-site.md) | The design of this site itself |
 | [`architecture/incremental-dev-build.md`](architecture/incremental-dev-build.md) | Incremental builds in `zts dev` (type-check, dirty flags, import graph, measurements) |
+| [`architecture/tauri-feature-gap.en.md`](architecture/tauri-feature-gap.en.md) | Tauri v2 feature gap — a prioritised list of what is worth implementing without breaking the principles |
 
 ## Look a name up
 

@@ -28,6 +28,24 @@ node scripts/gen-framework-demos.mjs
 The generated sites are published with the documentation site under
 `examples/frameworks/<name>/`, so the SSG output of the examples is browsable on GitHub Pages too.
 
+## Links to the published demos
+
+`zig build docs` publishes each framework's static output on Pages
+([demo index](https://umiturtle.github.io/Z-Ts/examples/frameworks/index.html)).
+If the repository is renamed, replace the base URL in this one table.
+
+| Framework | Demo | Framework | Demo |
+|---|---|---|---|
+| Angular | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) | Astro | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
+| Next.js | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) | Nuxt | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
+| React | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) | SolidJS | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
+| SolidStart | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) | Svelte | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
+| SvelteKit | [open](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) | — | — |
+
+For the screenshot regression itself see
+[`examples/gallery/README.en.md`](../gallery/README.en.md) and
+[`docs/architecture/screenshot-parity.md`](../../docs/architecture/screenshot-parity.md).
+
 ## What this demo proves
 
 1. `embedFrontend` (or `exportStaticSite`) accepts the output of any of these bundlers unchanged.
