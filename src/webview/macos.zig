@@ -132,6 +132,7 @@ const shim = struct {
     extern fn zts_macos_window_set_visible(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_window_set_decorations(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_apply_extras(h: ?*anyopaque, ident: u64, below: c_int, protect: c_int, all_spaces: c_int, accepts_input: c_int) void;
+    extern fn zts_macos_apply_creation_options(h: ?*anyopaque, ident: u64, hidden_title: c_int, style: [*:0]const u8, user_agent: ?[*:0]const u8, tabbing: ?[*:0]const u8) void;
     extern fn zts_macos_window_set_always_on_top(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_window_set_focus(h: ?*anyopaque, ident: u64) void;
     extern fn zts_macos_window_start_drag(h: ?*anyopaque, ident: u64) void;
@@ -159,6 +160,8 @@ const MacWindow = struct {
     max_size: ?types.LogicalSize,
     /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
     extras: types.WindowExtrasSnapshot = .{},
+    /// M5-22 ③ — scalar record of every `WindowConfig` option applied at creation.
+    creation: types.WindowCreationOptions = .{},
 };
 
 const SchemeSlot = struct {
@@ -831,6 +834,38 @@ pub const MacOsBackend = struct {
     pub fn setAlwaysOnTop(self: *MacOsBackend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_always_on_top(self.handle, w.native, @intFromBool(on_top));
+    }
+
+    /// M5-22 ③ — centre on `NSScreen.mainScreen.visibleFrame`, in CSS logical pixels; `setPosition`
+    /// performs the Cocoa Y-flip, so all four backends share one coordinate convention.
+    pub fn centerWindow(self: *MacOsBackend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
+        const screen = self.screenVisibleFrame();
+        try self.setPosition(win_id, .xy(
+            (screen.width - size.width.v) / 2.0,
+            (screen.height - size.height.v) / 2.0,
+        ));
+        (try self.requireWindow(win_id)).creation.center = true;
+    }
+
+    /// M5-22 ③ — Cocoa honours `hiddenTitle`, `titleBarStyle`, `userAgent` and
+    /// `tabbingIdentifier`; the rest stay in the scalar record for 3-OS parity.
+    pub fn applyWindowCreationOptions(self: *MacOsBackend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        w.creation = types.creationOptions(cfg);
+        const style = self.allocator.dupeZ(u8, cfg.title_bar_style) catch return error.OutOfMemory;
+        defer self.allocator.free(style);
+        const ua = if (cfg.user_agent) |v| self.allocator.dupeZ(u8, v) catch return error.OutOfMemory else null;
+        defer if (ua) |v| self.allocator.free(v);
+        const tab = if (cfg.tabbing_identifier) |v| self.allocator.dupeZ(u8, v) catch return error.OutOfMemory else null;
+        defer if (tab) |v| self.allocator.free(v);
+        shim.zts_macos_apply_creation_options(
+            self.handle,
+            w.native,
+            @intFromBool(cfg.hidden_title),
+            style.ptr,
+            if (ua) |v| v.ptr else null,
+            if (tab) |v| v.ptr else null,
+        );
     }
 
     /// M5-22 ② — push the OS-supported flags through the Cocoa shim; the full snapshot stays in

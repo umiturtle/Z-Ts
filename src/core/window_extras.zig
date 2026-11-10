@@ -54,3 +54,33 @@ test "WindowExtrasSnapshot defaults are deterministic and scalar-only" {
     // No allocator-owned data: the struct is bitwise comparable and trivially copyable.
     try std.testing.expectEqual(@as(usize, @sizeOf(WindowExtrasSnapshot)), @sizeOf(@TypeOf(a)));
 }
+
+/// M5-22 ③ — scalar record of every `WindowConfig` option a backend consumed at creation.
+/// Strings are kept as deterministic hashes (they are applied synchronously to the OS during
+/// `createWindow`, so no borrow outlives the call). Four backends store the SAME record, which is
+/// what rule 17 checks for 3-OS parity.
+pub const WindowCreationOptions = struct {
+    center: bool = false,
+    maximized: bool = false,
+    skip_taskbar: bool = false,
+    always_on_bottom: bool = false,
+    focus: bool = true,
+    content_protected: bool = false,
+    drag_drop_enabled: bool = true,
+    zoom_hotkeys_enabled: bool = false,
+    hidden_title: bool = false,
+    title_bar_style_hash: u64 = 0,
+    user_agent_hash: u64 = 0,
+    tabbing_identifier_hash: u64 = 0,
+    visible_on_all_workspaces: bool = false,
+    window_effects_hash: u64 = 0,
+};
+
+test "WindowCreationOptions captures every config field deterministically" {
+    const std = @import("std");
+    const a = WindowCreationOptions{};
+    try std.testing.expectEqual(true, a.focus);
+    try std.testing.expectEqual(true, a.drag_drop_enabled);
+    try std.testing.expectEqual(false, a.zoom_hotkeys_enabled);
+    try std.testing.expectEqual(a, WindowCreationOptions{});
+}

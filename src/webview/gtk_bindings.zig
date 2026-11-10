@@ -31,6 +31,13 @@ pub const GBytes = opaque {};
 pub const GdkScreen = opaque {};
 pub const GdkVisual = opaque {};
 pub const GdkWindow = opaque {};
+pub const GdkMonitor = opaque {};
+pub const GdkRectangle = extern struct {
+    x: gint,
+    y: gint,
+    width: gint,
+    height: gint,
+};
 pub const GtkWidget = opaque {};
 pub const GtkContainer = opaque {};
 pub const GtkWindow = opaque {};
@@ -149,6 +156,11 @@ pub extern "c" fn g_idle_add_full(
 /// Device-pixel ratio of the widget's GdkWindow; used to convert GDK's physical configure
 /// coordinates into the logical pixels `WindowRegistry` stores.
 pub extern "c" fn gtk_widget_get_scale_factor(widget: *GtkWidget) c_int;
+/// M5-22 ③ — primary-monitor geometry used by `center`.
+pub extern "c" fn gtk_window_get_screen(window: *GtkWindow) ?*GdkScreen;
+pub extern "c" fn gdk_screen_get_primary_monitor(screen: *GdkScreen) ?*GdkMonitor;
+pub extern "c" fn gdk_monitor_get_geometry(monitor: *GdkMonitor, geometry: *GdkRectangle) void;
+pub extern "c" fn webkit_settings_set_user_agent(settings: *WebKitSettings, user_agent: [*:0]const gchar) void;
 
 pub extern "c" fn g_object_new(object_type: GType, first_property_name: [*:0]const gchar, ...) *anyopaque;
 pub extern "c" fn g_object_ref(object: *anyopaque) *anyopaque;

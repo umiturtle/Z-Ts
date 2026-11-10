@@ -104,6 +104,8 @@ const WinWindow = struct {
     token_close: i64 = 0,
     /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
     extras: types.WindowExtrasSnapshot = .{},
+    /// M5-22 ③ — scalar record of every `WindowConfig` option applied at creation.
+    creation: types.WindowCreationOptions = .{},
 };
 
 const SchemeSlot = struct {
@@ -1815,6 +1817,32 @@ pub const WindowsWebView2Backend = struct {
             0,
             win32.SWP_NOMOVE | win32.SWP_NOSIZE | win32.SWP_NOACTIVATE,
         );
+    }
+
+    /// M5-22 ③ — centre on the primary monitor, converting physical px to CSS logical px using
+    /// this window's DPI — the same conversion GTK uses with its widget scale factor.
+    pub fn centerWindow(self: *WindowsWebView2Backend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        const cx = @max(1, win32.GetSystemMetrics(win32.SM_CXSCREEN));
+        const cy = @max(1, win32.GetSystemMetrics(win32.SM_CYSCREEN));
+        const scale = util.scaleFactor(w.dpi);
+        try self.setPosition(win_id, .xy(
+            (@as(f64, @floatFromInt(cx)) / scale - size.width.v) / 2.0,
+            (@as(f64, @floatFromInt(cy)) / scale - size.height.v) / 2.0,
+        ));
+        w.creation.center = true;
+    }
+
+    /// M5-22 ③ — Win32 honours `hiddenTitle` by clearing the window caption. WebView2 settings
+    /// that need a newer COM interface (`userAgent`, zoom hotkeys) stay in the scalar record.
+    pub fn applyWindowCreationOptions(self: *WindowsWebView2Backend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        w.creation = types.creationOptions(cfg);
+        if (cfg.hidden_title) {
+            const empty = win32.toWide(self.allocator, "") catch return error.OutOfMemory;
+            defer self.allocator.free(empty);
+            _ = win32.SetWindowTextW(w.hwnd, empty.ptr);
+        }
     }
 
     /// M5-22 ② — apply the Win32 flags we can honour and keep the full snapshot. Unsupported

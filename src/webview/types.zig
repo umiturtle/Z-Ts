@@ -17,6 +17,7 @@ pub const LogicalSize = foundation.geometry.LogicalSize;
 pub const Color = foundation.geometry.Color;
 /// M5-22 ② — shared scalar snapshot (lives in `zts_foundation`, see `core/window_extras.zig`).
 pub const WindowExtrasSnapshot = foundation.WindowExtrasSnapshot;
+pub const WindowCreationOptions = foundation.WindowCreationOptions;
 
 /// Nominal 53-bit generational window identifier (`foundation.Handle(.window)` — exact same type as `zts_core.WindowId`!).
 pub const WindowId = Handle(.window);
@@ -432,3 +433,24 @@ pub const WindowConfig = struct {
     /// `windowEffects` kept as raw JSON text for the backend to interpret.
     window_effects_json: ?[]const u8 = null,
 };
+
+/// M5-22 ③ — flatten a `WindowConfig` into the scalar record every backend stores. String
+/// options are hashed so no borrow of the caller's config outlives `createWindow`.
+pub fn creationOptions(cfg: WindowConfig) WindowCreationOptions {
+    return .{
+        .center = cfg.center,
+        .maximized = cfg.maximized,
+        .skip_taskbar = cfg.skip_taskbar,
+        .always_on_bottom = cfg.always_on_bottom,
+        .focus = cfg.focus,
+        .content_protected = cfg.content_protected,
+        .drag_drop_enabled = cfg.drag_drop_enabled,
+        .zoom_hotkeys_enabled = cfg.zoom_hotkeys_enabled,
+        .hidden_title = cfg.hidden_title,
+        .title_bar_style_hash = std.hash.Wyhash.hash(0, cfg.title_bar_style),
+        .user_agent_hash = if (cfg.user_agent) |ua| std.hash.Wyhash.hash(0, ua) else 0,
+        .tabbing_identifier_hash = if (cfg.tabbing_identifier) |t| std.hash.Wyhash.hash(0, t) else 0,
+        .visible_on_all_workspaces = cfg.visible_on_all_workspaces,
+        .window_effects_hash = if (cfg.window_effects_json) |j| std.hash.Wyhash.hash(0, j) else 0,
+    };
+}

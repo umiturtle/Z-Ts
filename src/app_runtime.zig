@@ -491,3 +491,59 @@ test "M5-22 ①: OS-originated window state reaches WindowRegistry across all te
         .boolean(core.WindowId.invalid, .focused, true),
     ));
 }
+
+test "M5-22 ③: tauri.conf.json creation options reach the backend instead of being dropped" {
+    const assets: web.Assets = .{
+        .entries = &.{.{ .path = "/index.html", .bytes = "<h1>config</h1>" }},
+    };
+    const rt = try DesktopRuntime.create(testing.allocator, testing.io, .{
+        .backend = .headless_mock,
+        .app = .{ .name = "Config", .version = "1.0.0", .identifier = "jp.zts.config" },
+        .assets = &assets,
+    });
+    defer rt.destroy();
+
+    const win_id = try rt.openWindow(.{
+        .label = "main",
+        .size = .wh(800, 600),
+        .center = true,
+        .maximized = true,
+        .skip_taskbar = true,
+        .always_on_bottom = true,
+        .focus = false,
+        .content_protected = true,
+        .drag_drop_enabled = false,
+        .zoom_hotkeys_enabled = true,
+        .hidden_title = true,
+        .title_bar_style = "Transparent",
+        .user_agent = "zts-test/1.0",
+        .tabbing_identifier = "docs",
+        .visible_on_all_workspaces = true,
+        .window_effects_json = "{\"effects\":[\"mica\"]}",
+    });
+
+    const w = rt.engine.headless_mock.windows.getPtr(win_id).?;
+    // The six 3-OS-common options are real operations, not just recorded fields.
+    try testing.expectEqual(true, w.maximized);
+    try testing.expectEqual(@as(f64, 240), w.position.x.v); // (1280 - 800) / 2
+    try testing.expectEqual(@as(f64, 100), w.position.y.v); // (800 - 600) / 2
+    try testing.expectEqual(false, w.focused); // focus: false
+    try testing.expectEqual(true, w.extras.skip_taskbar);
+    try testing.expectEqual(true, w.extras.always_on_bottom);
+    try testing.expectEqual(true, w.extras.content_protected);
+    try testing.expectEqual(true, w.extras.visible_on_all_workspaces);
+    try testing.expectEqual(true, w.extras.centered);
+    try testing.expectEqual(@as(usize, 1), w.extras_applied);
+
+    // Target-specific options are still captured (deterministic hashes) on every backend.
+    try testing.expectEqual(true, w.creation.center);
+    try testing.expectEqual(true, w.creation.maximized);
+    try testing.expectEqual(true, w.creation.hidden_title);
+    try testing.expectEqual(false, w.creation.focus);
+    try testing.expectEqual(false, w.creation.drag_drop_enabled);
+    try testing.expectEqual(true, w.creation.zoom_hotkeys_enabled);
+    try testing.expect(w.creation.title_bar_style_hash != 0);
+    try testing.expect(w.creation.user_agent_hash != 0);
+    try testing.expect(w.creation.tabbing_identifier_hash != 0);
+    try testing.expect(w.creation.window_effects_hash != 0);
+}

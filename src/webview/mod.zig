@@ -14,6 +14,7 @@ const webview_options = @import("webview_options");
 
 pub const types = @import("types.zig");
 pub const WindowExtrasSnapshot = types.WindowExtrasSnapshot;
+pub const WindowCreationOptions = types.WindowCreationOptions;
 pub const pending = @import("pending.zig");
 pub const mock = @import("mock.zig");
 pub const c_api = @import("c_api.zig");
@@ -277,12 +278,55 @@ pub const Engine = union(enum) {
     }
 
     /// Opens a window and returns its id.
+    ///
+    /// M5-22 ③ — after the backend allocates the native window, the P1 #10 `tauri.conf.json`
+    /// options are applied here, ONCE, with no app-level OS branch. `maximized` / `center` /
+    /// `focus` / `skipTaskbar` / `alwaysOnBottom` / `contentProtected` /
+    /// `visibleOnAllWorkspaces` behave identically on GTK, Cocoa, Win32 and HeadlessMock; the
+    /// remaining target-specific options go through `applyWindowCreationOptions`.
     pub fn createWindow(self: *Engine, cfg: WindowConfig) WebviewError!WindowId {
-        return switch (self.*) {
+        const id = try switch (self.*) {
             .headless_mock => |m| m.createWindow(cfg),
             .linux_gtk => |b| if (comptime has_native_gtk) b.createWindow(cfg) else unreachable,
             .macos_wk => |b| if (comptime has_native_macos) b.createWindow(cfg) else unreachable,
             .windows_webview2 => |b| if (comptime has_native_windows) b.createWindow(cfg) else unreachable,
+        };
+        errdefer self.closeWindow(id) catch {};
+
+        if (cfg.maximized) try self.setMaximized(id, true);
+        if (cfg.center) try self.centerWindow(id, cfg.size);
+        if (cfg.focus) try self.setFocus(id);
+        try self.applyWindowExtras(id, .{
+            .skip_taskbar = cfg.skip_taskbar,
+            .always_on_bottom = cfg.always_on_bottom,
+            .content_protected = cfg.content_protected,
+            .visible_on_all_workspaces = cfg.visible_on_all_workspaces,
+            .centered = cfg.center,
+        });
+        try self.applyWindowCreationOptions(id, cfg);
+        return id;
+    }
+
+    /// M5-22 ③ — centres `win_id` on the primary monitor, in CSS logical pixels.
+    pub fn centerWindow(self: *Engine, win_id: WindowId, size: types.LogicalSize) WebviewError!void {
+        return switch (self.*) {
+            .headless_mock => |m| m.centerWindow(win_id, size),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.centerWindow(win_id, size) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.centerWindow(win_id, size) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.centerWindow(win_id, size) else unreachable,
+        };
+    }
+
+    /// M5-22 ③ — target-specific creation options (`hiddenTitle`, `titleBarStyle`,
+    /// `userAgent`, `tabbingIdentifier`, …). Every backend stores the scalar record and applies
+    /// what its OS supports; unsupported flags stay recorded and are documented, never silently
+    /// reported as a native success.
+    pub fn applyWindowCreationOptions(self: *Engine, win_id: WindowId, cfg: WindowConfig) WebviewError!void {
+        return switch (self.*) {
+            .headless_mock => |m| m.applyWindowCreationOptions(win_id, cfg),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.applyWindowCreationOptions(win_id, cfg) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.applyWindowCreationOptions(win_id, cfg) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.applyWindowCreationOptions(win_id, cfg) else unreachable,
         };
     }
 

@@ -45,6 +45,7 @@ pub const PhysicalSize = geometry.PhysicalSize;
 pub const ScaleFactor = geometry.ScaleFactor;
 
 pub const WindowExtrasSnapshot = window_extras.WindowExtrasSnapshot;
+pub const WindowCreationOptions = window_extras.WindowCreationOptions;
 
 pub const ParsedUrl = url.ParsedUrl;
 pub const UrlError = url.UrlError;

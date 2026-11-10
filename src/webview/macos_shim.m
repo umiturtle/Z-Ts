@@ -937,6 +937,28 @@ void zts_macos_apply_extras(void *h, unsigned long long ident, int below, int pr
     [win setIgnoresMouseEvents:(accepts_input ? NO : YES)];
 }
 
+/// M5-22 ③ — Cocoa-only `WindowConfig` options. Strings are copied synchronously by AppKit /
+/// WebKit, so they may point into the caller's temporary buffer.
+void zts_macos_apply_creation_options(void *h, unsigned long long ident, int hidden_title,
+                                      const char *style, const char *user_agent,
+                                      const char *tabbing) {
+    ZtsWindow *rec = ZtsWindowFor(ZtsB(h), ident);
+    if (rec == nil || rec.window == nil) return;
+    @autoreleasepool {
+        NSWindow *win = rec.window;
+        [win setTitleVisibility:(hidden_title ? NSWindowTitleHidden : NSWindowTitleVisible)];
+        BOOL transparent = (style != NULL &&
+                            (strcmp(style, "Transparent") == 0 || strcmp(style, "Overlay") == 0));
+        [win setTitlebarAppearsTransparent:transparent];
+        if (user_agent != NULL && *user_agent != '\0' && rec.webview != nil) {
+            rec.webview.customUserAgent = ZtsStr(user_agent);
+        }
+        if (tabbing != NULL && *tabbing != '\0') {
+            win.tabbingIdentifier = ZtsStr(tabbing);
+        }
+    }
+}
+
 void *zts_macos_window_native(void *h, unsigned long long ident) {
     ZtsWindow *rec = ZtsWindowFor(ZtsB(h), ident);
     if (rec == nil) return NULL;

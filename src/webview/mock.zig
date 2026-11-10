@@ -91,6 +91,8 @@ pub const MockWindow = struct {
     extras: types.WindowExtrasSnapshot = .{},
     /// Number of `applyWindowExtras` calls (deterministic assertion hook).
     extras_applied: usize = 0,
+    /// M5-22 ③ — scalar record of every `WindowConfig` option applied at creation.
+    creation: types.WindowCreationOptions = .{},
     /// Whether devtools were requested for this window.
     devtools_open: bool,
     /// Background painted before the first frame, or `null` for the default.
@@ -560,6 +562,19 @@ pub const HeadlessMock = struct {
     /// Records the always-on-top flag.
     pub fn setAlwaysOnTop(self: *HeadlessMock, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).always_on_top = on_top;
+    }
+
+    /// M5-22 ③ — deterministic 1280x800 virtual screen; no wall clock, no real display, so the
+    /// same `center: true` config yields byte-identical state on all three OS CI jobs.
+    pub fn centerWindow(self: *HeadlessMock, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
+        const w = try self.requireWin(win_id);
+        w.position = .xy((1280.0 - size.width.v) / 2.0, (800.0 - size.height.v) / 2.0);
+        w.creation.center = true;
+    }
+
+    /// M5-22 ③ — records the full creation option set for parity assertions.
+    pub fn applyWindowCreationOptions(self: *HeadlessMock, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
+        (try self.requireWin(win_id)).creation = types.creationOptions(cfg);
     }
 
     /// M5-22 ② — records the complete scalar snapshot so E2E/unit tests can prove every

@@ -35,6 +35,8 @@ const LinuxWindow = struct {
     destroyed_by_signal: bool = false,
     /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
     extras: types.WindowExtrasSnapshot = .{},
+    /// M5-22 ③ — scalar record of every `WindowConfig` option applied at creation.
+    creation: types.WindowCreationOptions = .{},
 };
 
 const SignalSlot = struct {
@@ -1025,6 +1027,35 @@ pub const LinuxGtkBackend = struct {
     pub fn setAlwaysOnTop(self: *LinuxGtkBackend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_set_keep_above(gtk_win, if (on_top) 1 else 0);
+    }
+
+    /// M5-22 ③ — centre on the GDK primary monitor, converting physical px to CSS logical px.
+    pub fn centerWindow(self: *LinuxGtkBackend, win_id: types.WindowId, size: types.LogicalSize) types.WebviewError!void {
+        const win = try self.requireGtkWindow(win_id);
+        const screen = c.gtk_window_get_screen(win) orelse return error.PlatformFailure;
+        const monitor = c.gdk_screen_get_primary_monitor(screen) orelse return error.PlatformFailure;
+        var rect: c.GdkRectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
+        c.gdk_monitor_get_geometry(monitor, &rect);
+        const scale: f64 = @floatFromInt(c.gtk_widget_get_scale_factor(@ptrCast(win)));
+        const cx = (@as(f64, @floatFromInt(rect.x)) + @as(f64, @floatFromInt(rect.width)) / 2.0) / scale;
+        const cy = (@as(f64, @floatFromInt(rect.y)) + @as(f64, @floatFromInt(rect.height)) / 2.0) / scale;
+        try self.setPosition(win_id, .xy(cx - size.width.v / 2.0, cy - size.height.v / 2.0));
+        (self.windows.getPtr(win_id) orelse return error.WindowNotFound).creation.center = true;
+    }
+
+    /// M5-22 ③ — GTK 3 honours `hiddenTitle` (empty title) and `userAgent`. The other string
+    /// options have no GTK equivalent; they stay in the scalar record instead of being dropped.
+    pub fn applyWindowCreationOptions(self: *LinuxGtkBackend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        w.creation = types.creationOptions(cfg);
+        if (cfg.hidden_title) {
+            c.gtk_window_set_title(try self.requireGtkWindow(win_id), "");
+        }
+        if (cfg.user_agent) |ua| {
+            const z = self.allocator.dupeZ(u8, ua) catch return error.OutOfMemory;
+            defer self.allocator.free(z);
+            c.webkit_settings_set_user_agent(c.webkit_web_view_get_settings(w.webview), z.ptr);
+        }
     }
 
     /// M5-22 ② — apply the GTK 3 flags we can honour, keep the full snapshot for determinism.
