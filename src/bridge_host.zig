@@ -79,6 +79,7 @@ pub const BridgeHost = struct {
         .setWindowVisible = vSetWindowVisible,
         .setWindowDecorations = vSetWindowDecorations,
         .setWindowAlwaysOnTop = vSetWindowAlwaysOnTop,
+        .applyWindowExtras = vApplyWindowExtras,
         .setWindowFocus = vSetWindowFocus,
         .startWindowDrag = vStartWindowDrag,
         .evalJs = vEvalJs,
@@ -212,6 +213,10 @@ pub const BridgeHost = struct {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
         return self.backing.host().setWindowFocus(win);
+    }
+
+    fn vApplyWindowExtras(ptr: ?*anyopaque, win: core.WindowId, extras: core.WindowExtrasSnapshot) core.HostError!void {
+        return cast(ptr).backing.host().applyWindowExtras(win, extras);
     }
 
     fn vStartWindowDrag(ptr: ?*anyopaque, win: core.WindowId) core.HostError!void {

@@ -918,6 +918,25 @@ void zts_macos_window_frame(void *h, unsigned long long ident, double *out_x, do
     if (out_h != NULL) *out_h = f.size.height;
 }
 
+/// M5-22 ② — one C ABI call applies every Cocoa-supported `plugin:window` P1 #8 flag. Flags an
+/// OS cannot express stay in the Zig-side scalar snapshot; nothing is silently dropped.
+void zts_macos_apply_extras(void *h, unsigned long long ident, int below, int protect,
+                            int all_spaces, int accepts_input) {
+    ZtsWindow *rec = ZtsWindowFor(ZtsB(h), ident);
+    if (rec == nil || rec.window == nil) return;
+    NSWindow *win = rec.window;
+    [win setLevel:(below ? NSNormalWindowLevel - 1 : NSNormalWindowLevel)];
+    [win setSharingType:(protect ? NSWindowSharingNone : NSWindowSharingReadOnly)];
+    NSWindowCollectionBehavior behavior = [win collectionBehavior];
+    if (all_spaces) {
+        behavior |= NSWindowCollectionBehaviorCanJoinAllSpaces;
+    } else {
+        behavior &= ~NSWindowCollectionBehaviorCanJoinAllSpaces;
+    }
+    [win setCollectionBehavior:behavior];
+    [win setIgnoresMouseEvents:(accepts_input ? NO : YES)];
+}
+
 void *zts_macos_window_native(void *h, unsigned long long ident) {
     ZtsWindow *rec = ZtsWindowFor(ZtsB(h), ident);
     if (rec == nil) return NULL;

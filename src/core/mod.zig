@@ -56,6 +56,7 @@ pub const StepMode = host.StepMode;
 pub const WindowId = host.WindowId;
 pub const WindowSpec = host.WindowSpec;
 pub const WindowTheme = host.WindowTheme;
+pub const WindowExtrasSnapshot = host.WindowExtrasSnapshot;
 
 // Top-level ergonomic type re-exports (M1-02)
 pub const AssetResponse = web.AssetResponse;

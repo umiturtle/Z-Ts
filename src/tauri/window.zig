@@ -726,8 +726,42 @@ pub fn isWindowEventName(name: []const u8) bool {
     return false;
 }
 
-/// P1 #8 — shared body of the scalar setters. Resolves the window, records the intent under the
-/// registry mutex and emits the matching native→JS event. No allocation, no OS branch.
+/// M5-22 ② — flatten `WindowExtras` into the ownership-free `core.Host` snapshot. Enum ordinals
+/// are the ones declared in THIS file; `core` never imports `tauri` (rule 2 / standalone modules).
+fn extrasSnapshot(e: *const WindowExtras) core.WindowExtrasSnapshot {
+    return .{
+        .theme = @backingInt(e.theme),
+        .skip_taskbar = e.skip_taskbar,
+        .progress_status = @backingInt(e.progress_status),
+        .progress_value = e.progress_value,
+        .badge_count = e.badge_count,
+        .cursor_icon = @backingInt(e.cursor_icon),
+        .cursor_x = e.cursor_x,
+        .cursor_y = e.cursor_y,
+        .cursor_grab = e.cursor_grab,
+        .cursor_visible = e.cursor_visible,
+        .ignore_cursor_events = e.ignore_cursor_events,
+        .centered = e.centered,
+        .user_attention = @backingInt(e.user_attention),
+        .content_protected = e.content_protected,
+        .visible_on_all_workspaces = e.visible_on_all_workspaces,
+        .shadow = e.shadow,
+        .always_on_bottom = e.always_on_bottom,
+        .enabled = e.enabled,
+        .effect = @backingInt(e.effect),
+        .bg_set = e.bg_set,
+        .bg_r = e.bg_r,
+        .bg_g = e.bg_g,
+        .bg_b = e.bg_b,
+        .bg_a = e.bg_a,
+        .icon_hash = e.icon_hash,
+        .devtools_open = e.devtools_open,
+    };
+}
+
+/// P1 #8 / M5-22 ② — shared body of the 17 scalar setters. Resolves the window, records the intent
+/// under the registry mutex, pushes the COMPLETE snapshot to `core.Host` (so every OS backend sees
+/// the same authoritative state), then emits the matching native→JS event. No app-level OS branch.
 fn applyExtras(
     ctx: *rpc.Ctx,
     reg: *WindowRegistry,
@@ -737,9 +771,17 @@ fn applyExtras(
     event_name: []const u8,
 ) WindowPluginError!void {
     const t = try resolveTarget(ctx, reg, label);
-    reg.mu.lockUncancelable(reg.io);
-    defer reg.mu.unlock(reg.io);
-    if (reg.findLocked(label, t.win_id)) |entry| apply(&entry.extras, value);
+    var snapshot: ?core.WindowExtrasSnapshot = null;
+    {
+        reg.mu.lockUncancelable(reg.io);
+        defer reg.mu.unlock(reg.io);
+        if (reg.findLocked(label, t.win_id)) |entry| {
+            apply(&entry.extras, value);
+            snapshot = extrasSnapshot(&entry.extras);
+        }
+    }
+    // Outside the mutex: a backend may call back into the event loop while applying a native flag.
+    if (snapshot) |snap| try t.host.applyWindowExtras(t.win_id, snap);
     emitWindowEvent(ctx, reg, label, event_name, "null");
 }
 
@@ -1508,4 +1550,70 @@ test "plugin:window handles Tauri Size external tagging, HiDPI scaling, drag & d
     var r3 = h.dispatch(arena.allocator(), &ctx, "plugin:window|internal_toggle_maximize", "{}");
     defer r3.deinit();
     try testing.expect(reg.entries.items[0].maximized);
+}
+
+test "M5-22 ②: all 19 applyExtras setters push a complete snapshot through core.Host" {
+    var rec = core.RecordingHost.init(testing.allocator);
+    defer rec.deinit();
+    const win_id = try rec.host().createWindow(.{ .label = "main" });
+
+    var reg = WindowRegistry.init(testing.allocator, testing.io);
+    defer reg.deinit();
+    try reg.registerWindow(win_id, .{ .label = "main" });
+
+    const S = rpc.Schema(.{ .window = Commands });
+    var router = S.bind(.{ .window = &reg });
+    const h = router.handler();
+
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var call_ctx: core.CallContext = .{ .host = rec.host(), .window_id = win_id };
+    var ctx = rpc.Ctx.init(testing.io, arena.allocator()).withEnv(&call_ctx);
+
+    const calls = [_][2][]const u8{
+        .{ "plugin:window|set_theme", "{\"label\":\"main\",\"value\":\"dark\"}" },
+        .{ "plugin:window|set_skip_taskbar", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_progress_bar", "{\"label\":\"main\",\"status\":\"normal\",\"progress\":42}" },
+        .{ "plugin:window|set_badge_count", "{\"label\":\"main\",\"value\":7}" },
+        .{ "plugin:window|set_cursor_icon", "{\"label\":\"main\",\"value\":\"hand\"}" },
+        .{ "plugin:window|set_cursor_position", "{\"label\":\"main\",\"x\":11,\"y\":22}" },
+        .{ "plugin:window|set_cursor_grab", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_cursor_visible", "{\"label\":\"main\",\"value\":false}" },
+        .{ "plugin:window|set_ignore_cursor_events", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|center", "{\"label\":\"main\"}" },
+        .{ "plugin:window|request_user_attention", "{\"label\":\"main\",\"value\":\"critical\"}" },
+        .{ "plugin:window|set_content_protected", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_visible_on_all_workspaces", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_shadow", "{\"label\":\"main\",\"value\":false}" },
+        .{ "plugin:window|set_effects", "{\"label\":\"main\",\"value\":\"mica\"}" },
+        .{ "plugin:window|set_background_color", "{\"label\":\"main\",\"r\":10,\"g\":20,\"b\":30,\"a\":255}" },
+        .{ "plugin:window|set_icon", "{\"label\":\"main\",\"value\":\"icon.png\"}" },
+        .{ "plugin:window|set_always_on_bottom", "{\"label\":\"main\",\"value\":true}" },
+        .{ "plugin:window|set_enabled", "{\"label\":\"main\",\"value\":false}" },
+    };
+
+    for (calls, 0..) |c, i| {
+        var r = h.dispatch(arena.allocator(), &ctx, c[0], c[1]);
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+        // EVERY setter reaches the host exactly once — previously this was a registry-only write.
+        try testing.expectEqual(@as(usize, i + 1), rec.extras_log.items.len);
+        try testing.expectEqual(win_id, rec.extras_log.items[i].win);
+    }
+
+    const last = rec.extras_log.items[calls.len - 1].extras;
+    try testing.expectEqual(@as(u8, 1), last.theme); // Theme.dark
+    try testing.expectEqual(true, last.skip_taskbar);
+    try testing.expectEqual(@as(?u8, 42), last.progress_value);
+    try testing.expectEqual(@as(?u32, 7), last.badge_count);
+    try testing.expectEqual(@as(i32, 11), last.cursor_x);
+    try testing.expectEqual(@as(i32, 22), last.cursor_y);
+    try testing.expectEqual(true, last.centered);
+    try testing.expectEqual(true, last.content_protected);
+    try testing.expectEqual(true, last.visible_on_all_workspaces);
+    try testing.expectEqual(false, last.shadow);
+    try testing.expectEqual(@as(u8, 10), last.bg_r);
+    try testing.expectEqual(true, last.bg_set);
+    try testing.expectEqual(true, last.always_on_bottom);
+    try testing.expectEqual(false, last.enabled);
 }

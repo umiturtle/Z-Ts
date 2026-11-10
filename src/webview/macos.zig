@@ -131,6 +131,7 @@ const shim = struct {
     extern fn zts_macos_window_set_fullscreen(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_window_set_visible(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_window_set_decorations(h: ?*anyopaque, ident: u64, value: c_int) void;
+    extern fn zts_macos_apply_extras(h: ?*anyopaque, ident: u64, below: c_int, protect: c_int, all_spaces: c_int, accepts_input: c_int) void;
     extern fn zts_macos_window_set_always_on_top(h: ?*anyopaque, ident: u64, value: c_int) void;
     extern fn zts_macos_window_set_focus(h: ?*anyopaque, ident: u64) void;
     extern fn zts_macos_window_start_drag(h: ?*anyopaque, ident: u64) void;
@@ -156,6 +157,8 @@ const MacWindow = struct {
     embedded: bool = false,
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
+    /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
+    extras: types.WindowExtrasSnapshot = .{},
 };
 
 const SchemeSlot = struct {
@@ -828,6 +831,21 @@ pub const MacOsBackend = struct {
     pub fn setAlwaysOnTop(self: *MacOsBackend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         const w = try self.requireWindow(win_id);
         shim.zts_macos_window_set_always_on_top(self.handle, w.native, @intFromBool(on_top));
+    }
+
+    /// M5-22 ② — push the OS-supported flags through the Cocoa shim; the full snapshot stays in
+    /// `MacWindow.extras` so every platform reports the same intent back to Zig.
+    pub fn applyWindowExtras(self: *MacOsBackend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        w.extras = extras;
+        shim.zts_macos_apply_extras(
+            self.handle,
+            w.native,
+            @intFromBool(extras.always_on_bottom),
+            @intFromBool(extras.content_protected),
+            @intFromBool(extras.visible_on_all_workspaces),
+            @intFromBool(extras.enabled and !extras.ignore_cursor_events),
+        );
     }
 
     /// Calls `makeKeyAndOrderFront:` on the main thread.

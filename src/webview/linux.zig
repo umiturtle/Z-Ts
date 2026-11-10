@@ -33,6 +33,8 @@ const LinuxWindow = struct {
     min_size: ?types.LogicalSize,
     max_size: ?types.LogicalSize,
     destroyed_by_signal: bool = false,
+    /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
+    extras: types.WindowExtrasSnapshot = .{},
 };
 
 const SignalSlot = struct {
@@ -1023,6 +1025,18 @@ pub const LinuxGtkBackend = struct {
     pub fn setAlwaysOnTop(self: *LinuxGtkBackend, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         const gtk_win = try self.requireGtkWindow(win_id);
         c.gtk_window_set_keep_above(gtk_win, if (on_top) 1 else 0);
+    }
+
+    /// M5-22 ② — apply the GTK 3 flags we can honour, keep the full snapshot for determinism.
+    /// Embedded webviews have no `GtkWindow`, so those fail-closed with `error.Unsupported`.
+    pub fn applyWindowExtras(self: *LinuxGtkBackend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        w.extras = extras;
+        const win = try self.requireGtkWindow(win_id);
+        c.gtk_window_set_skip_taskbar_hint(win, if (extras.skip_taskbar) 1 else 0);
+        c.gtk_window_set_keep_below(win, if (extras.always_on_bottom) 1 else 0);
+        c.gtk_widget_set_sensitive(@ptrCast(win), if (extras.enabled) 1 else 0);
+        if (extras.visible_on_all_workspaces) c.gtk_window_stick(win) else c.gtk_window_unstick(win);
     }
 
     /// Calls `gtk_window_present`.

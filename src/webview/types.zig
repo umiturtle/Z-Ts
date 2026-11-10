@@ -15,6 +15,8 @@ pub const IpcStatus = foundation.IpcStatus;
 pub const LogicalPoint = foundation.geometry.LogicalPoint;
 pub const LogicalSize = foundation.geometry.LogicalSize;
 pub const Color = foundation.geometry.Color;
+/// M5-22 ② — shared scalar snapshot (lives in `zts_foundation`, see `core/window_extras.zig`).
+pub const WindowExtrasSnapshot = foundation.WindowExtrasSnapshot;
 
 /// Nominal 53-bit generational window identifier (`foundation.Handle(.window)` — exact same type as `zts_core.WindowId`!).
 pub const WindowId = Handle(.window);

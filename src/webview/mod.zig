@@ -13,6 +13,7 @@ const Io = std.Io;
 const webview_options = @import("webview_options");
 
 pub const types = @import("types.zig");
+pub const WindowExtrasSnapshot = types.WindowExtrasSnapshot;
 pub const pending = @import("pending.zig");
 pub const mock = @import("mock.zig");
 pub const c_api = @import("c_api.zig");
@@ -444,6 +445,18 @@ pub const Engine = union(enum) {
             .linux_gtk => |b| if (comptime has_native_gtk) b.setFocus(win_id) else unreachable,
             .macos_wk => |b| if (comptime has_native_macos) b.setFocus(win_id) else unreachable,
             .windows_webview2 => |b| if (comptime has_native_windows) b.setFocus(win_id) else unreachable,
+        };
+    }
+
+    /// M5-22 ② — pushes the complete `plugin:window` scalar intent snapshot into the backend.
+    /// Every backend records it and applies the flags its OS actually supports; the app never
+    /// branches on the target (the union switch below is the only place OS knowledge lives).
+    pub fn applyWindowExtras(self: *Engine, win_id: WindowId, extras: WindowExtrasSnapshot) WebviewError!void {
+        return switch (self.*) {
+            .headless_mock => |m| m.applyWindowExtras(win_id, extras),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.applyWindowExtras(win_id, extras) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.applyWindowExtras(win_id, extras) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.applyWindowExtras(win_id, extras) else unreachable,
         };
     }
 

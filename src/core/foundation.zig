@@ -18,6 +18,7 @@ pub const owned_bytes = @import("owned_bytes.zig");
 pub const queue = @import("queue.zig");
 pub const response = @import("response.zig");
 pub const url = @import("url.zig");
+pub const window_extras = @import("window_extras.zig");
 
 pub const MAX_JS_SAFE_INT = handle_pool.MAX_JS_SAFE_INT;
 pub const Handle = handle_pool.Handle;
@@ -43,6 +44,8 @@ pub const PhysicalRect = geometry.PhysicalRect;
 pub const PhysicalSize = geometry.PhysicalSize;
 pub const ScaleFactor = geometry.ScaleFactor;
 
+pub const WindowExtrasSnapshot = window_extras.WindowExtrasSnapshot;
+
 pub const ParsedUrl = url.ParsedUrl;
 pub const UrlError = url.UrlError;
 
@@ -55,4 +58,5 @@ test {
     _ = queue;
     _ = response;
     _ = url;
+    _ = window_extras;
 }

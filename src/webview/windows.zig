@@ -102,6 +102,8 @@ const WinWindow = struct {
     token_message: i64 = 0,
     token_resource: i64 = 0,
     token_close: i64 = 0,
+    /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
+    extras: types.WindowExtrasSnapshot = .{},
 };
 
 const SchemeSlot = struct {
@@ -1813,6 +1815,30 @@ pub const WindowsWebView2Backend = struct {
             0,
             win32.SWP_NOMOVE | win32.SWP_NOSIZE | win32.SWP_NOACTIVATE,
         );
+    }
+
+    /// M5-22 ② — apply the Win32 flags we can honour and keep the full snapshot. Unsupported
+    /// OS-specific flags stay recorded (no silent "success" without a state change).
+    pub fn applyWindowExtras(self: *WindowsWebView2Backend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
+        const w = try self.requireWindow(win_id);
+        w.extras = extras;
+        _ = win32.EnableWindow(w.hwnd, if (extras.enabled) 1 else 0);
+        _ = win32.SetWindowDisplayAffinity(w.hwnd, if (extras.content_protected) win32.WDA_EXCLUDEFROMCAPTURE else win32.WDA_NONE);
+        const style = win32.GetWindowLongPtrW(w.hwnd, win32.GWL_EXSTYLE);
+        const tool_bit: isize = @as(isize, win32.WS_EX_TOOLWINDOW);
+        const next_style = if (extras.skip_taskbar) style | tool_bit else style & ~tool_bit;
+        _ = win32.SetWindowLongPtrW(w.hwnd, win32.GWL_EXSTYLE, next_style);
+        if (extras.always_on_bottom) {
+            _ = win32.SetWindowPos(
+                w.hwnd,
+                win32.HWND_BOTTOM,
+                0,
+                0,
+                0,
+                0,
+                win32.SWP_NOMOVE | win32.SWP_NOSIZE | win32.SWP_NOACTIVATE,
+            );
+        }
     }
 
     /// Calls `SetForegroundWindow`.

@@ -57,6 +57,7 @@ pub const WebviewHost = struct {
         .setWindowDecorations = vSetWindowDecorations,
         .setWindowAlwaysOnTop = vSetWindowAlwaysOnTop,
         .setWindowFocus = vSetWindowFocus,
+        .applyWindowExtras = vApplyWindowExtras,
         .startWindowDrag = vStartWindowDrag,
         .evalJs = vEvalJs,
         .navigate = vNavigate,
@@ -163,6 +164,10 @@ pub const WebviewHost = struct {
 
     fn vSetWindowFocus(ptr: ?*anyopaque, win: core.WindowId) core.HostError!void {
         cast(ptr).engine.setFocus(win) catch |e| return mapErr(e);
+    }
+
+    fn vApplyWindowExtras(ptr: ?*anyopaque, win: core.WindowId, extras: core.WindowExtrasSnapshot) core.HostError!void {
+        cast(ptr).engine.applyWindowExtras(win, extras) catch |e| return mapErr(e);
     }
 
     fn vStartWindowDrag(ptr: ?*anyopaque, win: core.WindowId) core.HostError!void {

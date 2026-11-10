@@ -87,6 +87,10 @@ pub const MockWindow = struct {
     focused: bool = false,
     /// How many `startDrag()` calls landed on this window.
     drag_count: usize = 0,
+    /// M5-22 ② — last complete P1 #8 intent snapshot received from `core.Host`.
+    extras: types.WindowExtrasSnapshot = .{},
+    /// Number of `applyWindowExtras` calls (deterministic assertion hook).
+    extras_applied: usize = 0,
     /// Whether devtools were requested for this window.
     devtools_open: bool,
     /// Background painted before the first frame, or `null` for the default.
@@ -556,6 +560,14 @@ pub const HeadlessMock = struct {
     /// Records the always-on-top flag.
     pub fn setAlwaysOnTop(self: *HeadlessMock, win_id: types.WindowId, on_top: bool) types.WebviewError!void {
         (try self.requireWin(win_id)).always_on_top = on_top;
+    }
+
+    /// M5-22 ② — records the complete scalar snapshot so E2E/unit tests can prove every
+    /// `applyExtras` setter went through `core.Host` with identical data on all backends.
+    pub fn applyWindowExtras(self: *HeadlessMock, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
+        const w = try self.requireWin(win_id);
+        w.extras = extras;
+        w.extras_applied += 1;
     }
 
     /// Marks the window focused.

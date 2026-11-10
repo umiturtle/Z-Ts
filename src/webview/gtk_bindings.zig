@@ -209,6 +209,12 @@ pub extern "c" fn gtk_window_fullscreen(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_unfullscreen(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_set_decorated(window: *GtkWindow, setting: gboolean) void;
 pub extern "c" fn gtk_window_set_keep_above(window: *GtkWindow, setting: gboolean) void;
+/// M5-22 ② — `plugin:window` P1 #8 flags that GTK 3 supports natively.
+pub extern "c" fn gtk_window_set_skip_taskbar_hint(window: *GtkWindow, setting: gboolean) void;
+pub extern "c" fn gtk_window_set_keep_below(window: *GtkWindow, setting: gboolean) void;
+pub extern "c" fn gtk_widget_set_sensitive(widget: *GtkWidget, sensitive: gboolean) void;
+pub extern "c" fn gtk_window_stick(window: *GtkWindow) void;
+pub extern "c" fn gtk_window_unstick(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_present(window: *GtkWindow) void;
 pub extern "c" fn gtk_window_begin_move_drag(
     window: *GtkWindow,
