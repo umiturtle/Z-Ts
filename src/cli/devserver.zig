@@ -1,8 +1,9 @@
 //! `M5-02` `zts dev` — the preview server and the change detector.
 //!
 //! `zts dev` is the Angular-CLI-shaped half of the CLI: it serves the project's `web/` directory so
-//! the page opens in any browser, and it reports when a watched file changed so `main.zig` can run
-//! `zig build` and bump the reload counter.
+//! the page opens in any browser, and it reports when a watched file changed so `main.zig` can
+//! decide (see `incremental.zig`) whether to type-check, full-build, or not build at all, then
+//! bump the reload counter.
 //!
 //! Deliberately small. The library's own `zts_bridge` is the *application* server (RPC, SSE,
 //! sessions, CSP, 206 ranges); a dev preview needs none of that. This one is a single-threaded
@@ -31,7 +32,9 @@ pub const Change = enum {
     /// Only `web/**/*.css` changed: replace the `<link>` in place. No reload, no compile, so the
     /// page keeps its scroll position and the devtools console keeps its history.
     css,
-    /// Something under `src/` changed: the Zig side has to compile before the page can be trusted.
+    /// Something under `src/` (or `build.zig*`) changed: the Zig side has to be checked before
+    /// the page can be trusted. `incremental.plan` decides whether that is a type-check or a
+    /// full build.
     source,
 
     /// Classifies the paths a [`Snapshot`] diff produced. A change anywhere in `src/` wins over a
@@ -39,7 +42,10 @@ pub const Change = enum {
     pub fn classify(changed: []const []const u8) Change {
         var kind: Change = .none;
         for (changed) |path| {
-            if (std.mem.startsWith(u8, path, "src/")) return .source;
+            // `build.zig*` changes the build graph itself; `src/` changes what it compiles.
+            if (std.mem.startsWith(u8, path, "src/") or
+                std.mem.eql(u8, path, "build.zig") or
+                std.mem.eql(u8, path, "build.zig.zon")) return .source;
             // One non-stylesheet is enough to force a reload; a page whose only edits are
             // stylesheets keeps its state.
             if (!std.mem.endsWith(u8, path, ".css")) {
@@ -71,10 +77,39 @@ fn watchKey(gpa: Allocator, dir: []const u8, path: []const u8) ![]u8 {
     return key;
 }
 
-/// Every file below the watched directories, stamped with `mtime ^ size`. A diff against the
-/// previous scan names the files that changed, which [`Change.classify`] turns into a decision.
+/// One watched file. `stat` is the cheap dirty flag (`mtime ^ size`); `content` is a strong one for
+/// files whose bytes decide whether a rebuild is needed. A formatter or `touch` moves `stat` but
+/// not `content`, so `zts dev` no longer recompiles a file that did not actually change.
+pub const Stamp = struct {
+    stat: u64,
+    content: ?u64 = null,
+};
+
+/// Root-level files that are part of the build graph but live outside `src/` / `web/`.
+pub const build_files = [_][]const u8{ "build.zig", "build.zig.zon" };
+
+/// Only the Zig inputs get a content hash. `web/` can be large (images, fonts, bundles) and a
+/// harmless extra stylesheet swap is cheaper than re-reading all of it every 250 ms.
+pub fn isContentHashed(path: []const u8) bool {
+    if (std.mem.eql(u8, path, "build.zig") or std.mem.eql(u8, path, "build.zig.zon")) return true;
+    return std.mem.startsWith(u8, path, "src/") and std.mem.endsWith(u8, path, ".zig");
+}
+
+fn statStamp(stat: anytype) u64 {
+    const nanos: u64 = @bitCast(@as(i64, @truncate(stat.mtime.nanoseconds)));
+    return nanos ^ (stat.size *% 0x9e37_79b9_7f4a_7c15);
+}
+
+fn stampEqual(a: Stamp, b: Stamp) bool {
+    if (a.content != null and b.content != null) return a.content.? == b.content.?;
+    return a.stat == b.stat;
+}
+
+/// Every file below the watched directories, plus `build.zig` / `build.zig.zon`, stamped for a
+/// diff. Keys are project-relative and POSIX (`"src/main.zig"`, `"build.zig"`), so the classifiers
+/// do not have to care where the project lives.
 pub const Snapshot = struct {
-    stamps: std.StringHashMapUnmanaged(u64) = .empty,
+    stamps: std.StringHashMapUnmanaged(Stamp) = .empty,
 
     pub fn deinit(self: *Snapshot, gpa: Allocator) void {
         var it = self.stamps.iterator();
@@ -82,11 +117,29 @@ pub const Snapshot = struct {
         self.stamps.deinit(gpa);
     }
 
+    pub fn contains(self: *const Snapshot, path: []const u8) bool {
+        return self.stamps.contains(path);
+    }
+
     /// `project_dir` is where `build.zig` lives and `subs` are the directories watched inside it
-    /// (`"src"`, `"web"`). Keys are recorded as `"src/main.zig"`, `"web/index.html"` — relative to
-    /// the project, so [`Change.classify`] does not have to care where the project is. A missing
-    /// directory is skipped: a project without `src/` still previews.
+    /// (`"src"`, `"web"`). A missing directory or build file is skipped: a project without `src/`
+    /// still previews.
     pub fn scan(gpa: Allocator, io: Io, project_dir: []const u8, subs: []const []const u8) !Snapshot {
+        return scanAgainst(gpa, io, project_dir, subs, null);
+    }
+
+    /// `previous` is an optional stat cache. When a file's `mtime ^ size` is unchanged, its old
+    /// content hash is reused: source bytes are read only for files that look dirty. That keeps a
+    /// large `src/` tree cheap to poll while still ignoring same-content rewrites. A writer that
+    /// forges BOTH mtime and size is indistinguishable without a read — the same limitation the
+    /// old stat-only detector had, and one no editor in practice hits.
+    pub fn scanAgainst(
+        gpa: Allocator,
+        io: Io,
+        project_dir: []const u8,
+        subs: []const []const u8,
+        previous: ?*const Snapshot,
+    ) !Snapshot {
         var self: Snapshot = .{};
         errdefer self.deinit(gpa);
         const cwd = Io.Dir.cwd();
@@ -102,14 +155,55 @@ pub const Snapshot = struct {
                 const stat = handle.statFile(io, entry.path, .{}) catch continue;
                 const key = try watchKey(gpa, dir_path, entry.path);
                 errdefer gpa.free(key);
-                // Nanoseconds from the epoch fit in 64 bits until 2554; multiplied and xored with
-                // the size so that an editor that keeps mtime (rsync, some formatters) still shows
-                // up when the content length moves.
-                const nanos: u64 = @bitCast(@as(i64, @truncate(stat.mtime.nanoseconds)));
-                try self.stamps.put(gpa, key, nanos ^ (stat.size *% 0x9e37_79b9_7f4a_7c15));
+                try self.put(gpa, io, project_dir, key, statStamp(stat), previous);
             }
         }
+        // Build files are not below either watched directory, but changing one invalidates the
+        // whole build graph. Watch them explicitly instead of silently keeping a stale preview.
+        for (build_files) |name| {
+            const full = try std.fmt.allocPrint(gpa, "{s}/{s}", .{ project_dir, name });
+            defer gpa.free(full);
+            const stat = cwd.statFile(io, full, .{}) catch continue;
+            const key = try gpa.dupe(u8, name);
+            errdefer gpa.free(key);
+            try self.put(gpa, io, project_dir, key, statStamp(stat), previous);
+        }
         return self;
+    }
+
+    fn put(
+        self: *Snapshot,
+        gpa: Allocator,
+        io: Io,
+        project_dir: []const u8,
+        key: []const u8,
+        stat: u64,
+        previous: ?*const Snapshot,
+    ) !void {
+        var stamp: Stamp = .{ .stat = stat };
+        if (isContentHashed(key)) {
+            if (previous) |prev| {
+                if (prev.stamps.get(key)) |old| {
+                    if (old.stat == stat and old.content != null) {
+                        stamp.content = old.content;
+                        try self.stamps.put(gpa, key, stamp);
+                        return;
+                    }
+                }
+            }
+            const full = try std.fmt.allocPrint(gpa, "{s}/{s}", .{ project_dir, key });
+            defer gpa.free(full);
+            const bytes = Io.Dir.cwd().readFileAlloc(io, full, gpa, .limited(64 * 1024 * 1024)) catch {
+                // Unreadable while being written: fall back to the stat flag this scan; the next
+                // scan will hash it. Never pretend the file is unchanged.
+                stamp.content = null;
+                try self.stamps.put(gpa, key, stamp);
+                return;
+            };
+            defer gpa.free(bytes);
+            stamp.content = std.hash.Wyhash.hash(0, bytes);
+        }
+        try self.stamps.put(gpa, key, stamp);
     }
 
     /// Paths that are new, changed, or gone. Allocated from `arena`; there is nothing to free.
@@ -118,7 +212,27 @@ pub const Snapshot = struct {
         var it = next.stamps.iterator();
         while (it.next()) |entry| {
             const previous = self.stamps.get(entry.key_ptr.*);
-            if (previous == null or previous.? != entry.value_ptr.*) {
+            if (previous == null or !stampEqual(previous.?, entry.value_ptr.*)) {
+                try out.append(arena, try arena.dupe(u8, entry.key_ptr.*));
+            }
+        }
+        var old = self.stamps.iterator();
+        while (old.next()) |entry| {
+            if (!next.stamps.contains(entry.key_ptr.*)) {
+                try out.append(arena, try arena.dupe(u8, entry.key_ptr.*));
+            }
+        }
+        return out.items;
+    }
+
+    /// Paths that appeared or disappeared. Unlike `changed`, an identical-content rewrite is not
+    /// structural. Callers use this to stay conservative: a new `src/*.zig` may change the module
+    /// graph in ways a content diff cannot describe, so it forces a full rebuild.
+    pub fn structural(self: *const Snapshot, arena: Allocator, next: *const Snapshot) ![]const []const u8 {
+        var out: std.ArrayListUnmanaged([]const u8) = .empty;
+        var it = next.stamps.iterator();
+        while (it.next()) |entry| {
+            if (!self.stamps.contains(entry.key_ptr.*)) {
                 try out.append(arena, try arena.dupe(u8, entry.key_ptr.*));
             }
         }
@@ -415,6 +529,99 @@ test "Snapshot names the files that changed, and Change classifies them" {
     changed = try after_src.changed(arena_state.allocator(), &after_delete);
     try testing.expectEqual(@as(usize, 1), changed.len);
     try testing.expectEqual(Change.css, Change.classify(changed));
+}
+
+test "a same-content rewrite is not a change, but a real edit is" {
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    const io = testing.io;
+    try tmp.dir.createDirPath(io, "src");
+    try tmp.dir.writeFile(io, .{ .sub_path = "build.zig", .data = "pub fn build() void {}" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "src/main.zig", .data = "pub fn main() void {}" });
+
+    const root_dir = try std.fmt.allocPrint(testing.allocator, ".zig-cache/tmp/{s}", .{tmp.sub_path});
+    defer testing.allocator.free(root_dir);
+    const subs = [_][]const u8{ "src", "web" };
+
+    var before = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer before.deinit(testing.allocator);
+    try testing.expect(before.contains("build.zig"));
+    try testing.expect(before.contains("src/main.zig"));
+
+    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    // A formatter (or `touch`) writes the same bytes back: mtime moves, content does not.
+    try tmp.dir.writeFile(io, .{ .sub_path = "src/main.zig", .data = "pub fn main() void {}" });
+    var touched = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer touched.deinit(testing.allocator);
+    try testing.expectEqual(@as(usize, 0), (try before.changed(arena, &touched)).len);
+    try testing.expectEqual(@as(usize, 0), (try before.structural(arena, &touched)).len);
+
+    // The stat cache path must behave identically: `scanAgainst` reuses a hash when mtime/size
+    // are unchanged, and re-reads (and still ignores) a same-content rewrite when they move.
+    var cached_touched = try Snapshot.scanAgainst(testing.allocator, io, root_dir, &subs, &before);
+    defer cached_touched.deinit(testing.allocator);
+    try testing.expectEqual(@as(usize, 0), (try before.changed(arena, &cached_touched)).len);
+
+    // A real edit is still reported, and a `build.zig` edit too.
+    try tmp.dir.writeFile(io, .{ .sub_path = "src/main.zig", .data = "pub fn main() void { _ = 1; }" });
+    var edited = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer edited.deinit(testing.allocator);
+    const diff = try touched.changed(arena, &edited);
+    try testing.expectEqual(@as(usize, 1), diff.len);
+    try testing.expectEqualStrings("src/main.zig", diff[0]);
+    try testing.expectEqual(Change.source, Change.classify(diff));
+
+    try tmp.dir.writeFile(io, .{ .sub_path = "build.zig", .data = "pub fn build() void { _ = 2; }" });
+    var rebuild_graph = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer rebuild_graph.deinit(testing.allocator);
+    const graph_diff = try edited.changed(arena, &rebuild_graph);
+    try testing.expectEqual(@as(usize, 1), graph_diff.len);
+    try testing.expectEqualStrings("build.zig", graph_diff[0]);
+    try testing.expectEqual(Change.source, Change.classify(graph_diff));
+}
+
+test "structural reports added and removed files only" {
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    const io = testing.io;
+    try tmp.dir.createDirPath(io, "src");
+    try tmp.dir.writeFile(io, .{ .sub_path = "src/main.zig", .data = "pub fn main() void {}" });
+
+    const root_dir = try std.fmt.allocPrint(testing.allocator, ".zig-cache/tmp/{s}", .{tmp.sub_path});
+    defer testing.allocator.free(root_dir);
+    const subs = [_][]const u8{ "src", "web" };
+    var before = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer before.deinit(testing.allocator);
+
+    try tmp.dir.writeFile(io, .{ .sub_path = "src/extra.zig", .data = "pub const x = 1;" });
+    var after = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer after.deinit(testing.allocator);
+
+    var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const structural = try before.structural(arena, &after);
+    try testing.expectEqual(@as(usize, 1), structural.len);
+    try testing.expectEqualStrings("src/extra.zig", structural[0]);
+    try testing.expectEqual(@as(usize, 1), (try before.changed(arena, &after)).len);
+
+    try tmp.dir.deleteFile(io, "src/extra.zig");
+    var gone = try Snapshot.scan(testing.allocator, io, root_dir, &subs);
+    defer gone.deinit(testing.allocator);
+    try testing.expectEqual(@as(usize, 1), (try after.structural(arena, &gone)).len);
+}
+
+test "isContentHashed covers Zig inputs but not web assets" {
+    try testing.expect(isContentHashed("src/main.zig"));
+    try testing.expect(isContentHashed("src/deep/util.zig"));
+    try testing.expect(isContentHashed("build.zig"));
+    try testing.expect(isContentHashed("build.zig.zon"));
+    try testing.expect(!isContentHashed("src/data.txt"));
+    try testing.expect(!isContentHashed("web/index.html"));
+    try testing.expect(!isContentHashed("web/site.css"));
 }
 
 test "watchKey normalises the Windows walker's separators" {

@@ -160,6 +160,7 @@ ziggurats には読者が 3 種類いて、使うコマンドもページも別�
 | [`environment/`](environment/arena-and-caching.md) | Arena のキャッシュ・GitHub Actions の運用 |
 | [`reference/tauri-internals.md`](reference/tauri-internals.md) | IPC プロトコル・マクロ・内蔵プラグインの解剖（移植の参考・内部資料扱い） |
 | [`decisions/0018-documentation-site.md`](decisions/0018-documentation-site.md) | このサイト自体の設計（4 層・リンク検査・検索・`llms.txt`） |
+| [`architecture/incremental-dev-build.md`](architecture/incremental-dev-build.md) | `zts dev` のインクリメンタルビルド（型検査・dirty flag・依存グラフ・計測） |
 
 ## 名前から引く
 

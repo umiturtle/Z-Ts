@@ -17,9 +17,9 @@
 
 - **確認バージョン**: `ziggurats 0.1.0` / Zig `0.17.0`
 - **確認日**: `2026-10-21`
-- **基準コミット**: `59ea73e`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）
+- **基準コミット**: `1d04c7a`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）
 - **確認コマンド**: `python3 scripts/check-docs.py` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
-- **実装ハッシュ**: `c1034fba2f42765fbba8d544ab21ecdb6ffab1b9d1e05de6ffda486a38c315fb`
+- **実装ハッシュ**: `93c738526c2b3274bf2493d2967cbb6e87ca9dfa7a167faf4d5eba899c34d5e0`
 
 実装として突き合わせたファイル: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `scripts/check-docs.py`
 

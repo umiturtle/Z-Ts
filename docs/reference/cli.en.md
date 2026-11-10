@@ -102,13 +102,32 @@ Serves `web/` over HTTP, watches for changes, and does **only the smallest neces
 
 ### What gets updated
 
-`zts dev` scans `src/` and `web/` every 250 ms and picks one changed file.
+`zts dev` polls `src/`, `web/`, `build.zig` and `build.zig.zon`, and does the smallest update the
+**contents** of the changed files require (no inotify / FSEvents). Zig sources are compared by a
+**content hash** as well as their stat, so `touch` or a formatter writing the same bytes back does
+not trigger a rebuild.
 
 | Changed | What `zts dev` does | In the browser | Measured here |
 |---|---|---|---|
-| only `web/**/*.css` | **no build**; just reports "css" | swaps `<link rel="stylesheet">` **without reloading**, so scroll position, in-progress input and the console survive | ~0.4 s |
-| anything else in `web/` (HTML / JS / images…) | **no build** (files are served from disk, so the next request sees the new one) | full reload | ~0.4 s |
-| anything in `src/` | runs `zig build` to catch type errors | reload on success, keep the last good output on failure | 1–2 s warm |
+| only `web/**/*.css` | **no build**; just reports "css" | swaps `<link rel="stylesheet">` **without reloading**, so scroll position, in-progress input and the console survive | ~0.2 s |
+| anything else in `web/` (HTML / JS / images…) | **no build** (files are served from disk, so the next request sees the new one) | full reload | ~0.2 s |
+| Zig source under `src/` that is part of the build | **`update` on a persistent compiler server** (type-check only, single-digit ms) | reload on success, keep the last good output on failure | ~0.1 s |
+| an unreachable file under `src/` (not imported anywhere) | **nothing** | no change | 0 |
+| `build.zig` / `build.zig.zon`, or files added/removed | **`zig build`** (full build) | reload on success | ~0.8 s |
+
+> **Why a type-check is enough.** `zts dev` serves `web/` from disk and never starts the Zig
+> executable. Zig 0.17 Debug uses the **self-hosted backend, not LLVM** (forcing `-fllvm` is ~4x
+> slower). The generated `build.zig` has a `check` step whose emitted binary nobody asks for, so
+> Zig adds `-fno-emit-bin` and skips codegen, linking and install. `zts dev` goes further and keeps
+> **one Zig compiler process alive**, asking it to re-analyse only what changed (first check ~0.4 s,
+> then a few milliseconds). Passing `-fincremental` to a fresh process every time is *slower*, so
+> it is not used. **The first build of a session and `zts build` are still full builds**, where
+> link errors are caught. "ok" in `zts dev` means the types pass; use `zts build` to validate the
+> real binary. `ZTS_DEV_BUILD=full` forces full builds in the dev loop too.
+>
+> If the persistent server is unavailable (older template without a `check` step, `build.zig`
+> linking native libraries, verbose argv capture or protocol failure), `zts dev` automatically falls back
+> to `zig build check` and then to a full build. It never trades correctness for speed.
 
 > **Why a `web/` change needs no build.** `zts dev` serves `web/` from disk. Regenerating the
 > embedded copy would not change a single byte of the preview. Only Zig (`src/`) needs a build.
@@ -122,8 +141,10 @@ Serves `web/` over HTTP, watches for changes, and does **only the smallest neces
 | Item | Behaviour |
 |---|---|
 | Serving | static files under `web/`; `/` is `index.html`; `Cache-Control: no-store` |
-| Watching | compares **path + mtime + size** of `web/` and `src/` every 250 ms (no inotify / FSEvents, so all three OSes behave identically) |
-| Debounce | after a change, waits 120 ms and rescans, folding a burst of editor writes into one update |
+| Watching | compares **path + mtime + size** of `src/` and `web/`, plus `build.zig` / `build.zig.zon`; Zig sources also get a **content hash** (no inotify / FSEvents, so all three OSes behave identically) |
+| Polling | 250 ms while idle, 50 ms for ~2 s after a change (with a ms-scale check, this is now the dominant latency) |
+| Debounce | after a change, waits 60 ms, rescans and diffs against the **final** scan — folding a burst of editor writes into one update and never dropping an edit that arrived during the wait |
+| Dependency graph | follows relative `@import` / `@embedFile` edges from `src/main.zig`; only reachable files trigger a build. Unresolved imports or added/removed files fall back to a full build |
 | Reload | injects a script just before `</body>` that polls `/__zts_dev__/state` every 700 ms |
 | CSS swap | creates a new `<link>` with `?zts=<v>` beside the old one and removes the old one after load; falls back to a full reload on error |
 | Build failure | keeps serving the last successful output and returns `ok:false` with `v` unchanged |
@@ -135,7 +156,8 @@ curl http://127.0.0.1:5173/__zts_dev__/state    # {"v":3,"ok":true,"hot":"css"}
 ```
 
 `v` increments on **each successful update**; `hot` is `"css"` (swap in place) or `"full"` (reload).
-If `ok` stays `false`, fix the Zig error shown in the terminal.
+If `ok` stays `false`, fix the Zig error shown in the terminal. Design and measurements:
+[`../architecture/incremental-dev-build.md`](../architecture/incremental-dev-build.md).
 
 ## `zts build`
 
@@ -276,6 +298,7 @@ zts help          # same
 |---|---|
 | `ZTS_ZIG` | Path to the `zig` to use. If unset: `PATH` → the checkout's `zig` (release builds stop at `PATH`) |
 | `ZTS_MAINTAINER` | Default for `zts package --maintainer` |
+| `ZTS_DEV_BUILD` | Set to `full` to make `zts dev` do a full build on every Zig edit (link validation, or the baseline side of the benchmark) |
 
 ---
 

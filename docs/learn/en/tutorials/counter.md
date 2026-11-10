@@ -64,14 +64,21 @@ my-app/
 zts dev               # http://127.0.0.1:5173
 ```
 
-`web/` is served, and the files in `web/` and `src/` are rescanned every 250 ms. What happens next
-depends on **what** changed:
+`web/` is served, and `web/`, `src/` and `build.zig*` are polled (250 ms while idle, 50 ms while
+you are actively editing). What happens next depends on **what** changed:
 
 | Changed | What `zts dev` does | Latency |
 |---|---|---|
-| `web/**/*.css` | nothing is rebuilt; the page swaps its stylesheet in place — no reload, so scroll position and console survive | ~0.4 s |
-| any other file in `web/` | nothing is rebuilt (it is served from disk); the page reloads | ~0.4 s |
-| anything in `src/` | runs `zig build` to type-check the Zig side, then reloads on success | 1–2 s warm |
+| `web/**/*.css` | nothing is rebuilt; the page swaps its stylesheet in place — no reload, so scroll position and console survive | ~0.2 s |
+| any other file in `web/` | nothing is rebuilt (it is served from disk); the page reloads | ~0.2 s |
+| Zig source under `src/` | asks the persistent compiler to re-check what changed, then reloads | ~0.1 s |
+| a same-content save / an unused `.zig` file | nothing | 0 |
+| `build.zig` / `build.zig.zon` | full `zig build` | ~0.8 s |
+
+Zig sources are compared by a content hash, and an import graph from `src/main.zig` decides whether
+a changed file can affect the build. The compiler stays alive as one process and re-analyses only
+what changed, so the type-check itself takes a few milliseconds. The first build of a session is
+always a full build; use `zts build` when you want link-time validation too.
 
 `zts dev` previews `web/` in a browser only — it does not run the Zig app, so `invoke()` has no
 counterpart there yet. To exercise a command end to end, `zts build` and run the binary.

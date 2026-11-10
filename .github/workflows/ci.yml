@@ -734,6 +734,17 @@ jobs:
           zig build
           ls -l zig-out/bin/
 
+      # `M5-17`: the incremental dev loop is an end-to-end behaviour, not just a unit test.
+      # Exercise it on Linux (the other two runners cover the same code through `zig build test`).
+      - name: Verify incremental dev-loop invariants
+        if: matrix.os == 'ubuntu-24.04'
+        shell: bash
+        run: |
+          set -o pipefail
+          # Raw Actions logs are redirected to a host the Arena sandbox cannot reach, so keep a
+          # copy that the Check Run publisher below can mirror.
+          python3 scripts/bench-dev-loop.py verify 2>&1 | tee "$GITHUB_WORKSPACE/dev-loop-verify.log"
+
       - name: Scaffold, build, run and doctor a project outside the checkout
         shell: bash
         run: |
@@ -822,8 +833,12 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const path = `${process.env.GITHUB_WORKSPACE}/cli-smoke.log`;
-            const log = fs.existsSync(path) ? fs.readFileSync(path, 'utf8').slice(-60000) : '(no log)';
+            const ws = process.env.GITHUB_WORKSPACE;
+            const files = ['cli-smoke.log', 'dev-loop-verify.log'];
+            const log = files.map(f => `${ws}/${f}`)
+              .filter(p => fs.existsSync(p))
+              .map(p => `### ${p.split('/').pop()}\n` + fs.readFileSync(p, 'utf8'))
+              .join('\n').slice(-60000) || '(no log)';
             const jobs = await github.rest.actions.listJobsForWorkflowRun({
               owner: context.repo.owner,
               repo: context.repo.repo,
