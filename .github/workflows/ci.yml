@@ -741,9 +741,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          # Reuse cli-smoke.log so the existing Check Run publisher mirrors a failure log too:
-          # raw Actions logs are redirected to a host the Arena sandbox cannot reach.
-          python3 scripts/bench-dev-loop.py verify 2>&1 | tee "$GITHUB_WORKSPACE/cli-smoke.log"
+          # Raw Actions logs are redirected to a host the Arena sandbox cannot reach, so keep a
+          # copy that the Check Run publisher below can mirror.
+          python3 scripts/bench-dev-loop.py verify 2>&1 | tee "$GITHUB_WORKSPACE/dev-loop-verify.log"
 
       - name: Scaffold, build, run and doctor a project outside the checkout
         shell: bash
@@ -833,8 +833,12 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const path = `${process.env.GITHUB_WORKSPACE}/cli-smoke.log`;
-            const log = fs.existsSync(path) ? fs.readFileSync(path, 'utf8').slice(-60000) : '(no log)';
+            const ws = process.env.GITHUB_WORKSPACE;
+            const files = ['cli-smoke.log', 'dev-loop-verify.log'];
+            const log = files.map(f => `${ws}/${f}`)
+              .filter(p => fs.existsSync(p))
+              .map(p => `### ${p.split('/').pop()}\n` + fs.readFileSync(p, 'utf8'))
+              .join('\n').slice(-60000) || '(no log)';
             const jobs = await github.rest.actions.listJobsForWorkflowRun({
               owner: context.repo.owner,
               repo: context.repo.repo,
