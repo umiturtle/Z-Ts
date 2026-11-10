@@ -3,7 +3,11 @@
   import { onMount } from 'svelte';
   onMount(() => {
     document.querySelector('[data-zts="status"]').textContent = 'mounted';
-    const zts = window.__ztsPostMessage; if (zts) zts(JSON.stringify({ app: "ready" }));
+    {
+  const zig = window.__ZTS_ZIG__;
+  if (zig && typeof zig.mount === "function") { zig.mount(); }
+  else { const zts = window.__ztsPostMessage; if (zts) zts(JSON.stringify({ app: "ready" })); }
+}
   });
 </script>
 
@@ -33,5 +37,13 @@
       <span data-zts="status">mounted</span>
       <span class="tag">tauri://localhost</span>
     </div>
+  <div class="zigbar" data-zts="zig-panel">
+  <span class="zigbadge" data-zts="zig-state">ZIG OFFLINE</span>
+  <code class="zigseal" data-zts="zig-seal">—</code>
+  <span class="zigcount" data-zts="zig-count">—</span>
+  <button class="zigbtn" data-zts="zig-inc" disabled>＋</button>
+  <button class="zigbtn" data-zts="zig-dec" disabled>−</button>
+  <span class="zighint" data-zts="zig-hint">Zig が必要 / Zig required</span>
+</div>
   </section>
 </div>

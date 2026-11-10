@@ -5,7 +5,11 @@ export default function Page() {
   const [count, setCount] = useState(0);
   useEffect(() => {
     document.querySelector('[data-zts="status"]')!.textContent = 'mounted';
-    const zts = window.__ztsPostMessage; if (zts) zts(JSON.stringify({ app: "ready" }));
+    {
+  const zig = window.__ZTS_ZIG__;
+  if (zig && typeof zig.mount === "function") { zig.mount(); }
+  else { const zts = window.__ztsPostMessage; if (zts) zts(JSON.stringify({ app: "ready" })); }
+}
   }, []);
   return (
     <div className="shell">
@@ -34,6 +38,14 @@ export default function Page() {
           <span data-zts="status">mounted</span>
           <span className="tag">tauri://localhost</span>
         </div>
+      <div className="zigbar" data-zts="zig-panel">
+  <span className="zigbadge" data-zts="zig-state">ZIG OFFLINE</span>
+  <code className="zigseal" data-zts="zig-seal">—</code>
+  <span className="zigcount" data-zts="zig-count">—</span>
+  <button className="zigbtn" data-zts="zig-inc" disabled>＋</button>
+  <button className="zigbtn" data-zts="zig-dec" disabled>−</button>
+  <span className="zighint" data-zts="zig-hint">Zig が必要 / Zig required</span>
+</div>
       </section>
     </div>
   );

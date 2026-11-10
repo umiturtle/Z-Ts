@@ -8,6 +8,9 @@
 //     node scripts/gen-framework-demos.mjs [name ...]
 // - 各デモは「フレームワーク名・バージョン・カウンタ・機能リスト」を同じ DOM 構造で出し、
 //   描画後に `{"app":"ready"}` を `__ztsPostMessage` へ送る。ギャラリーはこれを待って撮影する。
+// - **Zig 専用パネル**: 9 デモすべてが `window.__ZTS_ZIG__` 経由で Zig のコマンドを呼ぶ。
+//   Zig 側の秘密で署名された seal と Zig が保持するカウンタは、静的 HTML だけでは作れない。
+//   ホストが居ない（GitHub Pages の静的デモ）ときは `ZIG OFFLINE` を出してボタンを無効化する。
 //
 // スクリーンショットの OS 間比較を成立させるため、**システムフォントを一切使わない**
 // （`ZTS Sans` / `ZTS Mono` はギャラリーが同一の woff2 を配信する）。
@@ -90,6 +93,32 @@ button.primary { background:#4f46e5; border-color:#4338ca; color:#fff; }
 .meta { margin-top:18px; display:flex; align-items:center; justify-content:space-between;
   font-family:ZTSMono; font-size:12px; color:#64748b; }
 .tag { color:#0f766e; }
+/* Zig-only panel. Shared by all nine builds so the 3-OS comparator still diffs identical DOM.
+   A red badge means the static demo has no Zig host behind it.
+   EVERY box has an explicit width/height (plus box-sizing:border-box): the text swaps between
+   ZIG OFFLINE / an em dash and ZIG ONLINE / a 16-hex seal when the Zig probe resolves, and an
+   intrinsic-size flex item would otherwise reflow by ~100px mid-measurement. Fixed geometry
+   makes the layout fingerprint independent of *when* the probe lands, on all three engines.
+   The small buttons also need -webkit-appearance:none: WebKitGTK and WKWebView ship different
+   UA padding for a bare button, which is a 5px cross-OS difference. */
+.zigbar { box-sizing:border-box; display:flex; align-items:center; gap:10px; flex-wrap:nowrap;
+  width:100%; height:47px; margin-top:14px; padding:12px 0 0; border-top:1px solid #e2e8f0; }
+.zigbadge { box-sizing:border-box; flex:0 0 104px; width:104px; height:34px; line-height:24px;
+  padding:4px 8px; text-align:center; white-space:nowrap; overflow:hidden;
+  font-family:ZTSMono; font-size:11px; letter-spacing:.04em;
+  border-radius:999px; background:#fee2e2; color:#b42318; border:1px solid #fecaca; }
+.zigbadge[data-online="true"] { background:#dcfce7; color:#0f7b3f; border-color:#bbf7d0; }
+.zigseal { box-sizing:border-box; flex:0 0 120px; width:120px; height:24px; line-height:24px;
+  white-space:nowrap; overflow:hidden; font-family:ZTSMono; font-size:12px; color:#0f766e; }
+.zigcount { box-sizing:border-box; flex:0 0 32px; width:32px; height:24px; line-height:24px;
+  text-align:right; font-family:ZTSMono; font-size:14px; color:#0f172a; }
+.zigbtn { box-sizing:border-box; flex:0 0 32px; width:32px; height:30px; margin:0; padding:0;
+  line-height:28px; text-align:center; -webkit-appearance:none; appearance:none;
+  font-family:ZTSMono; font-size:12px; border-radius:8px;
+  border:1px solid #cbd5e1; background:#fff; color:#0f172a; cursor:pointer; }
+.zigbtn:disabled { opacity:.45; cursor:not-allowed; }
+.zighint { box-sizing:border-box; flex:1 1 auto; min-width:0; height:24px; line-height:24px;
+  overflow:hidden; white-space:nowrap; font-family:ZTSMono; font-size:11px; color:#64748b; }
 `;
 
 const HTML_SHELL = (body, script) => `<!doctype html>
@@ -134,10 +163,31 @@ const appBody = (label, version) => `<div class="shell">
       <span data-zts="status">mounted</span>
       <span class="tag">tauri://localhost</span>
     </div>
+  ${ZIG_PANEL_HTML}
   </section>
 </div>`;
 
-const READY_JS = `const zts = window.__ztsPostMessage; if (zts) zts(JSON.stringify({ app: "ready" }));`;
+// Every framework calls this from its own lifecycle hook (useEffect / onMount / onMounted /
+// ngAfterViewInit / <script>). When the native host injected `__ZTS_ZIG__`, `mount()` probes the
+// Zig backend and only then signals `ready`, so screenshots never catch a half-linked panel.
+// Without a host (static Pages demo) we still post `ready` and leave the panel at ZIG OFFLINE.
+const ZIG_READY_JS = `{
+  const zig = window.__ZTS_ZIG__;
+  if (zig && typeof zig.mount === "function") { zig.mount(); }
+  else { const zts = window.__ztsPostMessage; if (zts) zts(JSON.stringify({ app: "ready" })); }
+}`;
+
+// Interpolated into every body template. All nine builds ship byte-identical panel markup.
+// It is deliberately separate from the framework's own local counter: that counter is the idiom
+// demo, while this panel is the part only the Zig host can drive.
+const ZIG_PANEL_HTML = `<div class="zigbar" data-zts="zig-panel">
+  <span class="zigbadge" data-zts="zig-state">ZIG OFFLINE</span>
+  <code class="zigseal" data-zts="zig-seal">—</code>
+  <span class="zigcount" data-zts="zig-count">—</span>
+  <button class="zigbtn" data-zts="zig-inc" disabled>＋</button>
+  <button class="zigbtn" data-zts="zig-dec" disabled>−</button>
+  <span class="zighint" data-zts="zig-hint">Zig が必要 / Zig required</span>
+</div>`;
 
 // ---------------------------------------------------------------- per app
 //
@@ -166,7 +216,7 @@ function App() {
   const [count, setCount] = useState(0);
   useEffect(() => {
     document.querySelector('[data-zts="status"]').textContent = 'mounted';
-    ${READY_JS}
+    ${ZIG_READY_JS}
   }, []);
   return (
     ${reactBody('React', '19')}
@@ -200,7 +250,7 @@ function App() {
   const [count, setCount] = createSignal(0);
   createEffect(() => {
     document.querySelector('[data-zts="status"]').textContent = 'mounted';
-    ${READY_JS}
+    ${ZIG_READY_JS}
   });
   return (
     ${jsxBody('Solid', '1.9')}
@@ -295,7 +345,6 @@ render(() => <App />, document.getElementById('root'));
         angularCompilerOptions: { strictTemplates: true },
         include: ['src/**/*.ts', 'types/**/*.d.ts'],
       });
-      writeGlobalTypes(dir);
       write(join(dir, 'src/index.html'), `<!doctype html>
 <html lang="ja">
 <head>
@@ -323,7 +372,7 @@ export class App {
   inc() { this.count.update((v) => v + 1); }
   dec() { this.count.update((v) => v - 1); }
   ngAfterViewInit() {
-    ${READY_JS}
+    ${ZIG_READY_JS}
   }
 }
 bootstrapApplication(App);
@@ -342,7 +391,14 @@ bootstrapApplication(App);
         private: true,
         scripts: { build: 'next build' },
         dependencies: { next: V.next, react: V.react, 'react-dom': V.reactDom },
-        devDependencies: { typescript: '>=6.0 <6.1', '@types/react': '^19.3.0', '@types/react-dom': '^19.3.0' },
+        // `next build` auto-adds `@types/node` when it is absent; pin it here so a fresh
+        // regeneration produces the exact same committed package.json.
+        devDependencies: {
+          '@types/node': '26.6.6',
+          '@types/react': '^19.3.0',
+          '@types/react-dom': '^19.3.0',
+          typescript: '>=6.0 <6.1',
+        },
       });
       write(join(dir, 'next.config.mjs'), `export default { output: 'export', images: { unoptimized: true }, trailingSlash: true, reactStrictMode: true };\n`);
       writeJson(join(dir, 'tsconfig.json'), {
@@ -357,7 +413,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 `);
       write(join(dir, 'app/globals.css'), APP_CSS);
-      writeGlobalTypes(dir);
       write(join(dir, 'app/page.tsx'), `'use client';
 import { useEffect, useState } from 'react';
 
@@ -365,7 +420,7 @@ export default function Page() {
   const [count, setCount] = useState(0);
   useEffect(() => {
     document.querySelector('[data-zts="status"]')!.textContent = 'mounted';
-    ${READY_JS}
+    ${ZIG_READY_JS}
   }, []);
   return (
     ${reactBody('Next.js', '16')}
@@ -404,7 +459,7 @@ const count = ref(0);
 onMounted(() => {
   if (import.meta.client) {
     document.querySelector('[data-zts="status"]')!.textContent = 'mounted';
-    ${READY_JS}
+    ${ZIG_READY_JS}
   }
 });
 </script>
@@ -437,7 +492,7 @@ const version = '6.4';
 ${astroBody('Astro', '6.4')}
 <script>
   document.querySelector('[data-zts="status"]').textContent = 'mounted';
-  ${READY_JS}
+  ${ZIG_READY_JS}
 </script>
 </body>
 </html>
@@ -544,7 +599,7 @@ export default function Home() {
   const [count, setCount] = createSignal(0);
   onMount(() => {
     document.querySelector('[data-zts="status"]')!.textContent = 'mounted';
-    ${READY_JS}
+    ${ZIG_READY_JS}
   });
   return (
     ${jsxBody('SolidStart', '2.1')}
@@ -552,7 +607,6 @@ export default function Home() {
 }
 `);
       write(join(dir, 'src/app.css'), APP_CSS);
-      writeGlobalTypes(dir);
     },
     build: ['npm', ['install', '--no-audit', '--no-fund'], 'npm', ['run', 'build']],
     dist: 'dist/client',
@@ -610,6 +664,7 @@ function jsxBody(label, version) {
           <span data-zts="status">mounted</span>
           <span className="tag">tauri://localhost</span>
         </div>
+      ${ZIG_PANEL_HTML}
       </section>
     </div>`;
 }
@@ -625,7 +680,7 @@ function svelteBody(label, version) {
   import { onMount } from 'svelte';
   onMount(() => {
     document.querySelector('[data-zts="status"]').textContent = 'mounted';
-    ${READY_JS}
+    ${ZIG_READY_JS}
   });
 </script>
 
@@ -655,6 +710,7 @@ function svelteBody(label, version) {
       <span data-zts="status">mounted</span>
       <span class="tag">tauri://localhost</span>
     </div>
+  ${ZIG_PANEL_HTML}
   </section>
 </div>
 `;
@@ -694,6 +750,7 @@ function angularBody(label, version) {
           <span data-zts="status">mounted</span>
           <span class="tag">tauri://localhost</span>
         </div>
+      ${ZIG_PANEL_HTML}
       </section>
     </div>`;
 }
@@ -725,6 +782,7 @@ function vueBody(label, version) {
       <span data-zts="status">mounted</span>
       <span class="tag">tauri://localhost</span>
     </div>
+  ${ZIG_PANEL_HTML}
   </section>
 </div>`;
 }
@@ -744,13 +802,18 @@ function write(p, text) {
   writeFileSync(p, text);
 }
 
-// `window.__ztsPostMessage` is injected by every Z-Ts backend (GTK / Cocoa / WebView2); TS
-// projects need the declaration to type-check.
+// `window.__ztsPostMessage` and `window.__ZTS_ZIG__` are injected by every Z-Ts backend
+// (GTK / Cocoa / WebView2); TS projects need the declarations to type-check.
 function writeGlobalTypes(dir) {
   write(join(dir, 'types/zts-globals.d.ts'), `export {};
 declare global {
   interface Window {
     __ztsPostMessage?: (message: string) => void;
+    __ZTS_ZIG__?: {
+      mount(): void;
+      probe(): Promise<{ seal: string; count: number }>;
+      step(delta: number): Promise<{ seal: string; count: number }>;
+    };
   }
 }
 `);
@@ -863,6 +926,10 @@ for (const name of names) {
   console.log(`\n=== ${name} (${app.label} ${app.version}) ===`);
   ensureDir(dir);
   app.files(dir);
+  // Every project gets the same declaration. JS-based builds ignore a stray `.d.ts`, while
+  // TS-based ones (Angular / Next / Nuxt / Astro / SolidStart / SvelteKit) need it for the
+  // `__ZTS_ZIG__` bridge that the native host injects at DOCUMENT_START.
+  writeGlobalTypes(dir);
   writeJson(join(dir, 'zts-demo.json'), { framework: app.label, version: app.version, dist: app.dist });
 
   const [installCmd, installArgs, buildCmd, buildArgs] = app.build;

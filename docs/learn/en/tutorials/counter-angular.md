@@ -97,8 +97,10 @@ example). `signal()` with an inline template; the builder injects `<script>` int
         <ul class="features">
 ```
 
-State lives in `signal(0)`. The example deliberately uses **local state only** so the pixel
-comparison across three OSes has no backend dependency. The next chapter connects ziggurats.
+State lives in `signal(0)`. The counter deliberately uses **local state only** so the pixel
+comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
+opposite: it **cannot be filled in unless Zig is running**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
 
 ## 4. Add the Zig command
 
@@ -152,6 +154,29 @@ zig-out/bin/my_app        # a window opens and +1 reaches Zig
 ```
 
 `web/` is embedded with gzip twins and CSP hashes, so no asset directory sits next to the binary.
+
+## Appendix: prove Zig is running from the screen
+
+All nine examples ship the same `.zigbar` panel. This one strip **cannot work without Zig**.
+
+| What you see | What is happening behind it |
+|---|---|
+| red `ZIG OFFLINE`, `+` / `-` disabled | static HTML only (public demo, the `zts dev` browser): no `window.__ZTS_ZIG__` |
+| green `ZIG ONLINE`, a 16-character seal, `+` / `-` enabled | the Zig binary is answering `zig_probe` / `zig_inc` / `zig_dec` |
+
+The seal is the first eight bytes of SHA-256 over **a secret that only the Zig binary holds** and
+Zig's own counter. Neither the secret nor the computation is present in any static file, so
+JavaScript alone cannot manufacture the string. `+` / `-` change **the counter owned by Zig**, not
+the framework's local state, and every press produces a new seal. That single line is the answer to
+"is Zig actually alive back there?".
+
+The real wiring lives in
+[`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
+[`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
+the same `window.__TAURI_INTERNALS__.invoke` that unmodified `@tauri-apps/api` v2 uses, at
+`DOCUMENT_START`, and answers `ipc://localhost/<command>` from Zig. To light the panel up in your
+own app, add those three commands to `rpc.Schema` and inject the same bridge. Chapter
+[5](#5-wire-the-button-to-ipc) shows how to connect the counter itself over IPC.
 
 ## Where next
 

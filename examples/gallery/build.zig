@@ -24,6 +24,9 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "zts_webview", .module = dep.module("zts_webview") },
             .{ .name = "zts_foundation", .module = dep.module("zts_foundation") },
+            // M5-21: the unmodified Tauri v2 `invoke()` bootstrap, so the nine framework demos
+            // call real Zig commands over `ipc://` instead of a JS-only stub.
+            .{ .name = "zts_tauri", .module = dep.module("zts_tauri") },
         },
     });
 

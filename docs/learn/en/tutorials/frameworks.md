@@ -38,6 +38,15 @@ are identical on every branch.
 See [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) for the
 build commands and the 3-OS screenshot comparison.
 
+## Telling whether Zig is running behind the page
+
+The nine published demos are static HTML, so the strip at the bottom of each one reads **`ZIG OFFLINE`**
+in red and its `+` / `-` buttons are disabled. That is the point: a browser alone does not run
+ziggurats. Open the same build in the native gallery (`examples/gallery`) and the strip turns
+**`ZIG ONLINE`** in green, showing a 16-character seal that only Zig can produce and a counter owned
+by Zig. `zig_probe` / `zig_inc` / `zig_dec` are answered over `ipc://` by the Zig binary; no static
+file implements them. Every branch page's appendix links to the real wiring.
+
 ## Next
 
 - Work through one → [Build a counter](counter.md) (plain JS) or any row above
