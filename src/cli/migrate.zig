@@ -266,7 +266,8 @@ pub fn normalizePath(allocator: Allocator, path: []const u8) ParseError![]u8 {
 
 /// Default package name: `productName` → `template.normalizeName`, then the source directory name.
 pub fn packageNameFrom(allocator: Allocator, cfg: Config, src: []const u8) ParseError![]const u8 {
-    const raw = cfg.product_name orelse template.defaultName(src) orelse "app";
+    const src_norm = try normalizePath(allocator, src);
+    const raw = cfg.product_name orelse template.defaultName(src_norm) orelse "app";
     return try template.normalizeName(allocator, raw);
 }
 
@@ -274,10 +275,15 @@ pub fn packageNameFrom(allocator: Allocator, cfg: Config, src: []const u8) Parse
 pub fn defaultOutDir(allocator: Allocator, src: []const u8, name: []const u8) ParseError![]const u8 {
     // `src` is the `src-tauri/` directory; the Tauri project root is its parent, and the new
     // ziggurats project is a *sibling* of that root so the original Rust tree stays untouched.
-    const project_root = std.fs.path.dirname(src) orelse "";
+    const src_norm = try normalizePath(allocator, src);
+    const project_root = std.fs.path.dirname(src_norm) orelse "";
     const parent = std.fs.path.dirname(project_root) orelse "";
     const leaf = try std.fmt.allocPrint(allocator, "{s}-zts", .{name});
-    return if (parent.len == 0) leaf else std.fs.path.join(allocator, &.{ parent, leaf });
+    if (parent.len == 0) return leaf;
+    // `std.fs.path.join` uses `\` on Windows. Generated project paths are POSIX-style so the
+    // plan (and its byte-for-byte snapshot) is identical on all three OSes.
+    const joined = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ parent, leaf });
+    return try normalizePath(allocator, joined);
 }
 
 fn lessThan(_: void, a: SourceFile, b: SourceFile) bool {
@@ -543,6 +549,9 @@ test "P0-5: path safety, name derivation and default output directory" {
     try testing.expectEqualStrings("legacy_app", try packageNameFrom(a, minimal, "Legacy-App"));
     try testing.expectEqualStrings("legacy_app-zts", try defaultOutDir(a, "Legacy-App", "legacy_app"));
     try testing.expectEqualStrings("projects/legacy_app-zts", try defaultOutDir(a, "projects/legacy/src-tauri", "legacy_app"));
+    // Windows-style input must produce the same POSIX path (3-OS parity).
+    try testing.expectEqualStrings("projects/legacy_app-zts", try defaultOutDir(a, "projects\\legacy\\src-tauri", "legacy_app"));
+    try testing.expectEqualStrings("legacy_app", try packageNameFrom(a, minimal, "projects\\Legacy-App"));
 }
 
 test "P0-5: plan is deterministic, copies the frontend and reports the manual work" {

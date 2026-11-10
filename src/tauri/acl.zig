@@ -524,12 +524,28 @@ fn patternOf(value: std.json.Value) ?[]const u8 {
     };
 }
 
+/// Capability globs are written with `/` (`**/hello.txt`). A Windows canonical path uses `\`,
+/// so both sides are normalised before matching: the same capability must grant (or deny) the
+/// same file on all three OSes.
+fn normalizeSeparators(allocator: Allocator, text: []const u8) Allocator.Error![]const u8 {
+    if (std.mem.indexOfScalar(u8, text, '\\') == null) return text;
+    const out = try allocator.dupe(u8, text);
+    for (out) |*c| {
+        if (c.* == '\\') c.* = '/';
+    }
+    return out;
+}
+
 /// Runs the allow/deny arrays attached to this call's granting permissions against `target`.
 /// `null` means "no decision" (no scopes attached); `true` means allowed; `false` means blocked.
 pub fn scopeVerdict(ctx: *const rpc.Ctx, target: []const u8, is_url: bool) ?bool {
     if (ctx.acl_scope_json.len == 0) return null;
     const parsed = std.json.parseFromSliceLeaky(std.json.Value, ctx.scratch, ctx.acl_scope_json, .{}) catch return false;
     if (parsed != .array) return false;
+    const effective_target = if (is_url)
+        target
+    else
+        normalizeSeparators(ctx.scratch, target) catch return false;
 
     var saw_allow = false;
     var matched = false;
@@ -540,7 +556,10 @@ pub fn scopeVerdict(ctx: *const rpc.Ctx, target: []const u8, is_url: bool) ?bool
             if (deny == .array) {
                 for (deny.array.items) |item| {
                     const pattern = patternOf(item) orelse continue;
-                    const hit = if (is_url) urlPatternMatch(pattern, target) else globMatch(pattern, target);
+                    const hit = if (is_url)
+                        urlPatternMatch(pattern, effective_target)
+                    else
+                        globMatch(normalizeSeparators(ctx.scratch, pattern) catch return false, effective_target);
                     if (hit) return false;
                 }
             }
@@ -550,7 +569,10 @@ pub fn scopeVerdict(ctx: *const rpc.Ctx, target: []const u8, is_url: bool) ?bool
                 for (allow.array.items) |item| {
                     const pattern = patternOf(item) orelse continue;
                     saw_allow = true;
-                    const hit = if (is_url) urlPatternMatch(pattern, target) else globMatch(pattern, target);
+                    const hit = if (is_url)
+                        urlPatternMatch(pattern, effective_target)
+                    else
+                        globMatch(normalizeSeparators(ctx.scratch, pattern) catch return false, effective_target);
                     if (hit) matched = true;
                 }
             }
@@ -1031,4 +1053,29 @@ test "P2: side-effecting optional plugins are not granted by any default set" {
     try testing.expect(permissionResolves("opener:allow-open-url", "plugin:opener|open_url", false));
     try testing.expect(permissionResolves("store:allow-get", "plugin:store|get", false));
     try testing.expect(permissionResolves("core:default", "plugin:window|set_title", false));
+}
+
+test "P0-2 fix: capability globs use '/' but a Windows canonical path uses '\\'" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    var ctx = rpc.Ctx.init(testing.io, a);
+    ctx.acl_scope_json =
+        \\[{"identifier":"fs:allow-read-text-file","allow":[{"path":"**/hello.txt"}],"deny":[{"path":"**/private/**"}]}]
+    ;
+    try testing.expect(scopeAllowsPath(&ctx, "C:\\Users\\me\\hello.txt"));
+    try testing.expect(scopeAllowsPath(&ctx, "/home/me/hello.txt"));
+    try testing.expect(!scopeAllowsPath(&ctx, "C:\\Users\\me\\private\\secret.txt"));
+    try testing.expect(!scopeAllowsPath(&ctx, "C:\\Users\\me\\other.txt"));
+
+    // A scope-less call is unrestricted.
+    var plain = rpc.Ctx.init(testing.io, a);
+    try testing.expect(scopeAllowsPath(&plain, "C:\\anything"));
+    // URLs keep their own matching rules (no path-separator rewriting).
+    plain.acl_scope_json =
+        \\[{"identifier":"fs:allow-read-text-file","allow":[{"url":"https://example.com/api/*"}]}]
+    ;
+    try testing.expect(scopeAllowsUrl(&plain, "https://example.com/api/v1"));
+    try testing.expect(!scopeAllowsUrl(&plain, "https://evil.example/api/v1"));
 }
