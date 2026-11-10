@@ -79,6 +79,10 @@ pub const RoutedResponse = struct {
     content_range_len: usize = 0,
     /// `Content-Security-Policy` to send, when the response is HTML.
     csp_header: ?[]const u8 = null,
+    /// `Content-Encoding: gzip` when a pre-compressed twin was selected (P0-4).
+    content_encoding: ?[]const u8 = null,
+    /// Emit `Vary: Accept-Encoding` for assets with both representations.
+    vary_accept_encoding: bool = false,
     /// Response bytes, owned by the response.
     body: core.OwnedBytes = .empty,
 
@@ -99,6 +103,12 @@ pub const RoutedResponse = struct {
         }
         if (self.csp_header) |csp_val| {
             try list.append(scratch, .{ .name = "Content-Security-Policy", .value = csp_val });
+        }
+        if (self.content_encoding) |encoding| {
+            try list.append(scratch, .{ .name = "Content-Encoding", .value = encoding });
+        }
+        if (self.vary_accept_encoding) {
+            try list.append(scratch, .{ .name = "Vary", .value = "Accept-Encoding" });
         }
         return list.toOwnedSlice(scratch);
     }
@@ -405,6 +415,7 @@ pub const ProtocolRouter = struct {
             .range_header = req.header("Range"),
             .spa_fallback = true,
             .html_head_injection = head_inject,
+            .accept_encoding = req.header("Accept-Encoding"),
         }) catch {
             return .{
                 .status_code = 500,
@@ -419,6 +430,8 @@ pub const ProtocolRouter = struct {
             .content_type = resolved.mime_type,
             .accept_ranges = true,
             .csp_header = if (web.mime.isHtml(resolved.mime_type)) self.config.csp else null,
+            .content_encoding = resolved.content_encoding,
+            .vary_accept_encoding = resolved.vary_accept_encoding,
             .body = resolved.body.move(),
         };
         var cr_buf: [64]u8 = undefined;
@@ -827,4 +840,83 @@ test "P0-3: isolation mode decrypts envelopes, rejects plaintext, and serves the
 
     // 5. Windows-style sub-origin URL for the same scheme.
     try testing.expectEqual(SchemeKind.isolation, classifyUri("http://isolation.localhost/index.html").kind);
+}
+
+test "P0-4: Accept-Encoding gzip is served from the embedded twin with Vary and Range coexistence" {
+    var rec = core.RecordingHost.init(testing.allocator);
+    defer rec.deinit();
+    const win = try rec.host().createWindow(.{ .label = "main" });
+
+    const S = rpc.Schema(.{});
+    var bound = S.bind(.{});
+    const raw = "export const bundle = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';\n";
+    const twin = "\x1f\x8bGZIP-TWIN";
+    const entries = [_]web.StaticAsset{.{ .path = "/app.js", .bytes = raw }};
+    const twins = [_]?[]const u8{twin};
+    const assets: web.Assets = .{ .entries = &entries, .gzip_entries = &twins };
+    const router = ProtocolRouter.init(testing.allocator, testing.io, .{
+        .invoke_key = "k",
+        .assets = &assets,
+    }, bound.handler());
+
+    // 1. Negotiated -> twin, Content-Encoding + Vary headers.
+    var zipped = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "GET",
+        .uri = "tauri://localhost/app.js",
+        .headers = &.{.{ .name = "Accept-Encoding", .value = "gzip, deflate" }},
+    });
+    defer zipped.body.deinit();
+    try testing.expectEqual(@as(u16, 200), zipped.status_code);
+    try testing.expectEqualStrings(twin, zipped.body.slice());
+    try testing.expectEqualStrings("gzip", zipped.content_encoding.?);
+    try testing.expect(zipped.vary_accept_encoding);
+    {
+        const hdrs = try zipped.intoHeaderSlice(testing.allocator);
+        defer testing.allocator.free(hdrs);
+        try testing.expect(hasHeader(hdrs, "Content-Encoding", "gzip"));
+        try testing.expect(hasHeader(hdrs, "Vary", "Accept-Encoding"));
+    }
+
+    // 2. No negotiation -> raw bytes, no Content-Encoding.
+    var plain = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "GET",
+        .uri = "tauri://localhost/app.js",
+    });
+    defer plain.body.deinit();
+    try testing.expectEqualStrings(raw, plain.body.slice());
+    try testing.expect(plain.content_encoding == null);
+
+    // 3. Range wins over compression: 206 over the *uncompressed* representation.
+    var ranged = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "GET",
+        .uri = "tauri://localhost/app.js",
+        .headers = &.{
+            .{ .name = "Accept-Encoding", .value = "gzip" },
+            .{ .name = "Range", .value = "bytes=0-5" },
+        },
+    });
+    defer ranged.body.deinit();
+    try testing.expectEqual(@as(u16, 206), ranged.status_code);
+    try testing.expectEqualStrings("export", ranged.body.slice());
+    try testing.expect(ranged.content_encoding == null);
+
+    // 4. `gzip;q=0` is an explicit refusal.
+    var refused = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "GET",
+        .uri = "tauri://localhost/app.js",
+        .headers = &.{.{ .name = "Accept-Encoding", .value = "gzip;q=0" }},
+    });
+    defer refused.body.deinit();
+    try testing.expectEqualStrings(raw, refused.body.slice());
+}
+
+fn hasHeader(hdrs: []const HeaderPair, name: []const u8, value: []const u8) bool {
+    for (hdrs) |h| {
+        if (std.ascii.eqlIgnoreCase(h.name, name) and std.mem.eql(u8, h.value, value)) return true;
+    }
+    return false;
 }

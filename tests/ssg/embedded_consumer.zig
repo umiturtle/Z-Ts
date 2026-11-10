@@ -69,3 +69,28 @@ test "embedded multi-page SSG assets resolve directory indices, MIME & 404 corre
     try testing.expectEqual(web.assets.AssetStatus.ok, js.status);
     try testing.expectEqualStrings("text/javascript; charset=utf-8", js.mime_type);
 }
+
+test "P0-4: generated assets serve the gzip twin on Accept-Encoding" {
+    try testing.expectEqual(frontend.entries.len, frontend.assets.gzip_entries.len);
+
+    var raw = try frontend.assets.resolve(testing.allocator, "/index.html", .{});
+    defer raw.deinit();
+    try testing.expectEqualStrings(frontend.entries[2].bytes, raw.body.slice());
+    try testing.expect(raw.vary_accept_encoding);
+
+    var zipped = try frontend.assets.resolve(testing.allocator, "/index.html", .{
+        .accept_encoding = "gzip, deflate",
+    });
+    defer zipped.deinit();
+    try testing.expectEqualStrings(frontend.gzip_entries[2].?, zipped.body.slice());
+    try testing.expectEqualStrings("gzip", zipped.content_encoding.?);
+    try testing.expect(zipped.body.slice().len < raw.body.slice().len);
+
+    // The tiny JS file has no twin: it stays raw even when gzip is requested.
+    var js = try frontend.assets.resolve(testing.allocator, "/assets/app.js", .{
+        .accept_encoding = "gzip",
+    });
+    defer js.deinit();
+    try testing.expectEqualStrings(frontend.entries[1].bytes, js.body.slice());
+    try testing.expect(js.content_encoding == null);
+}

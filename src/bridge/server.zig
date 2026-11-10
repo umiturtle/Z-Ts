@@ -69,6 +69,8 @@ const ExtractedHeaders = struct {
     cookie: ?[]const u8 = null,
     invoke_key: ?[]const u8 = null,
     range: ?[]const u8 = null,
+    /// `Accept-Encoding` for pre-compressed asset twins (P0-4).
+    accept_encoding: ?[]const u8 = null,
 };
 
 /// The Live Preview server: static assets + `206` range + `ipc://` RPC + SSE, all in pure Zig with no
@@ -330,6 +332,8 @@ pub const BridgeServer = struct {
                 out.invoke_key = try scratch.dupe(u8, h.value);
             } else if (std.ascii.eqlIgnoreCase(h.name, "range")) {
                 out.range = try scratch.dupe(u8, h.value);
+            } else if (std.ascii.eqlIgnoreCase(h.name, "accept-encoding")) {
+                out.accept_encoding = try scratch.dupe(u8, h.value);
             }
         }
         return out;
@@ -477,10 +481,11 @@ pub const BridgeServer = struct {
             .range_header = hdrs.range,
             .spa_fallback = true,
             .html_head_injection = self.bootstrap_html,
+            .accept_encoding = hdrs.accept_encoding,
         });
         defer asset_resp.deinit();
 
-        var hdr_list: [5]http.Header = undefined;
+        var hdr_list: [7]http.Header = undefined;
         var hdr_count: usize = 0;
 
         hdr_list[hdr_count] = .{ .name = "content-type", .value = asset_resp.mime_type };
@@ -500,6 +505,14 @@ pub const BridgeServer = struct {
         var range_buf: [64]u8 = undefined;
         if (asset_resp.contentRangeHeader(&range_buf)) |cr_val| {
             hdr_list[hdr_count] = .{ .name = "content-range", .value = cr_val };
+            hdr_count += 1;
+        }
+        if (asset_resp.content_encoding) |encoding| {
+            hdr_list[hdr_count] = .{ .name = "content-encoding", .value = encoding };
+            hdr_count += 1;
+        }
+        if (asset_resp.vary_accept_encoding) {
+            hdr_list[hdr_count] = .{ .name = "vary", .value = "Accept-Encoding" };
             hdr_count += 1;
         }
 

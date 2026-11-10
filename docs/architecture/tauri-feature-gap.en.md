@@ -53,7 +53,7 @@ compatible with the project's philosophy. §4 states what we deliberately will n
 | 5 | `zts migrate` (convert an existing `src-tauri/` project) | [`migrate-from-tauri.md`](../learn/en/guides/migrate-from-tauri.md) is a manual guide; no CLI command | `config_import` already parses `tauri.conf.json`; file generation extends `src/cli/template.zig` | `src/cli/{args,migrate}.zig` |
 
 
-> **Progress (M5-19 / 2026-10-21)**: P0-2, P0-3 and P0-1 are implemented. See the
+> **Progress (M5-19 / 2026-10-21)**: P0-2, P0-3, P0-1 and P0-4 are implemented. See the
 > [task sheet](../tasks/M5-19-tauri-gap-implementation.md) for the remaining checkpoints, and
 > [Security concepts](../learn/en/concepts/security.md) for per-permission scopes and isolation.
 

@@ -143,6 +143,38 @@ build without a browser — that is how the three artefacts are diff-tested.
 | a subpath (`/app/`) | nothing | every URL is relativised |
 | S3 and friends | an `index.html` of your choosing | turn off `emit_spa_404` and ship your own 404 |
 
+### Serving the embedded gzip twins
+
+`embedFrontend` generates a **deterministic gzip twin** per file (`gzip_entries`) and the generated
+`assets: web.Assets` consumes it. Both the desktop `tauri://` / `isolation://` router and the Live
+Preview HTTP server negotiate `Accept-Encoding` and return the same bytes.
+
+```
+Accept-Encoding: gzip, deflate   →  Content-Encoding: gzip + gzip twin
+Accept-Encoding: gzip;q=0        →  raw bytes (explicit refusal)
+(no header)                      →  raw bytes
+Range: bytes=0-1023              →  206 over the raw bytes (Range disables compression)
+```
+
+| Rule | Why |
+|---|---|
+| always send `Vary: Accept-Encoding` | two representations exist, so caches must key on it |
+| skip twins larger than the original | never make a tiny JS file bigger |
+| no gzip after `<head>` injection | injection changes the bytes, so the pre-computed twin no longer matches |
+| fixed `MTIME=0` / `OS=Unix` | byte-identical on all three OSes; screenshot and hash comparisons stay stable |
+
+```zig
+const frontend = @import("embedded_frontend");
+const app_assets = frontend.assets;  // carries BOTH .entries and .gzip_entries
+
+var res = try app_assets.resolve(allocator, "/index.html", .{
+    .accept_encoding = "gzip",
+});
+defer res.deinit();
+// res.content_encoding == "gzip", res.vary_accept_encoding == true
+```
+
+
 ---
 
 ## 5. Usual traps

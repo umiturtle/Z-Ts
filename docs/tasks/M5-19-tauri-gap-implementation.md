@@ -22,7 +22,7 @@
 - [x] **P0-2** capability の scope を `Policy` → `rpc.Ctx` → `plugin:fs` で実適用する
 - [x] **P0-3** `app.security.pattern: "isolation"`（暗号化 iframe）
 - [x] **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）
-- [ ] **P0-4** 生成済み `gzip_entries` を実際に配信する
+- [x] **P0-4** 生成済み `gzip_entries` を実際に配信する
 - [ ] **P0-5** `zts migrate`
 - [ ] **P1** webview コマンド / ウィンドウイベント / 残り setter / Monitor・DPI / 未適用 config フィールド / `once` / `asset://` scope の実行時更新
 - [ ] **P2** 公式プラグイン群・配布形式のうち理念に反しないもの
@@ -109,5 +109,18 @@
   - テスト: tauri 77 件（+4）、root 8 件（+1）。正常／異常／境界（label 長・重複・
     `javascript:` URL・Host 無し・Runtime 経由の E2E）
   - 日英 `guides/plugins.md` にコマンド表・設定例・capability 注意を追加、gap レポート更新
-- **作業中**: **P0-4** 生成済み `gzip_entries` を実際に配信する。
-- **未着手**: P0-5 / P1 / P2。
+- **完了**: **P0-4** 生成済み `gzip_entries` の配信。
+  - `web.Assets.gzip_entries`（`entries` と index 対応）、`ResolveOptions.accept_encoding`、
+    `AssetResponse.content_encoding` / `vary_accept_encoding`、`pub fn acceptsGzip()`
+    （`q=0` と `*` を RFC 9110 準拠で解釈）
+  - 双子が元より小さい時だけ採用。`<head>` 注入後・`Range` 付き・`gzip;q=0` は非圧縮。
+    `Range` は常に非圧縮表現の 206。`Vary: Accept-Encoding` を付与
+  - `renderManifest` が `assets: web.Assets = .{ .entries = entries, .gzip_entries = gzip_entries }`
+    を出力 → **死にデータを解消**
+  - `protocol.RoutedResponse` と `bridge.BridgeServer` が `Content-Encoding` / `Vary` を送出。
+    デスクトップ 3 OS と Live Preview で同一経路
+  - テスト: `zts_web` 2 本、`zts_tauri` 1 本、`embedded_consumer` 1 本、
+    manifest 検査 1  assertions 追加。`build test` 210/210 緑
+  - 日英 `guides/static-site.md` に交渉表、`decisions/0017` の残課題を解消済みに更新
+- **作業中**: **P0-5** `zts migrate`。
+- **未着手**: P1 / P2。
