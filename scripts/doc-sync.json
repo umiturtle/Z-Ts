@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "2029866",
+    "commit": "960d6e4",
     "zts_version": "0.1.0",
     "zig_version": "0.17.0",
     "checks": [
@@ -24,7 +24,7 @@
       "src/docsite/site.zig",
       "scripts/check-docs.py"
     ],
-    "implementation_sha256": "1cd02c33badbfb19a495429be3f2e0329e01090ab5a2e75f79e6a8478a5b6154"
+    "implementation_sha256": "3e2d297c8f1fa86f436f9c6150646822dbb9a44af3c12e21f0dc48985b4437af"
   },
   "pages": [
     {
@@ -52,15 +52,15 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "2422f77abc0b977f99bf4c2590193582a015a636e55e6595a16b8b0b48b4a7db",
-      "en_sha256": "291330a494a4da981970790105bd88debc16772352766247ba1b44ee341dbe37"
+      "ja_sha256": "eb08acc4433e37c40c776e029b165732fbdf0dc35ddde73b511a9a22333b5f81",
+      "en_sha256": "7eeacb3588685a69eb59138ffb79489ca4a67f145c18a06f8391f823393a0420"
     },
     {
       "ja": "docs/contributing/repository-map.md",
       "en": "docs/contributing/repository-map.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "23c2d8cf366988241bc2f49289f4afea9dddc76b88d125e8937d9968adf4ba69",
-      "en_sha256": "4029fc0018611f5026cc37f6d88bdfb805597a9af77ae1f937e1e952a0cbae15"
+      "ja_sha256": "7b1fc90705c62538b28821fc8ce7eb31be7d2e53bac475428f73c86733295fea",
+      "en_sha256": "7ac8b57343e9d804d72b2dae17cb4e79dd0a3f46aea5ed0565212b1f6afbd7bd"
     },
     {
       "ja": "docs/contributing/troubleshooting.md",
@@ -171,8 +171,8 @@
       "ja": "docs/learn/ja/guides/troubleshooting.md",
       "en": "docs/learn/en/guides/troubleshooting.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "980d72688ac5b8caf293e0ac4a3d5d0d422a8c2c1f197b2de090693580359e6e",
-      "en_sha256": "18e0d2da36a49efed1584aaeee1ac5548dba67ca3cb10b5aed3a856175bd1d70"
+      "ja_sha256": "4d54503573fdb94e5304026c07ad0a4886dae80d8786e593838a46f14c6ce828",
+      "en_sha256": "05e211c26d2472233e9f480cfdf8194805e07f434d09bf9d5ddbb664f0da92c3"
     },
     {
       "ja": "docs/learn/ja/index.md",
@@ -220,15 +220,15 @@
       "ja": "docs/learn/ja/start.md",
       "en": "docs/learn/en/start.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a8d762b6f2140af91d2d8ec993fc1cba7daf3f5ea59a6c34c9f46d8d88daa9b8",
-      "en_sha256": "c7e22e088a50e1d018f7642fe09f7e6213910798086f2899033ee7b0c96032f3"
+      "ja_sha256": "9aeb65c1d21ff96b2a83d07b508469d87acc5960b3e05e54b206274a424b5758",
+      "en_sha256": "72262f7f2f8b2b13f31571be8b1596a30334d6cd42e5a765ff1bbc46a0b8462c"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter.md",
       "en": "docs/learn/en/tutorials/counter.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d7f9b545956cb0807eb0865b357989ce49a97798afc8856d47c57ef025bb34d9",
-      "en_sha256": "5227b48948affad661efcbc1b60b6ec0e91b1b3edbde7de264d94eae7b9a64b8"
+      "ja_sha256": "0107d98b05150dd84f93a27910a4186e0c2afdf1638f9c6bb0f426078f3825ec",
+      "en_sha256": "dfea80e2e984e830ad664e42b4cf94b39ece6fb354dd79e142b0d77292dd883b"
     },
     {
       "ja": "docs/learn/ja/tutorials/index.md",
@@ -255,8 +255,8 @@
       "ja": "docs/reference/cli.md",
       "en": "docs/reference/cli.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "f4b0b02bfcf973599efdef6c843ff2d7204fda3336dbe486a9f8d2276603b4b7",
-      "en_sha256": "20523e8197b1a62514b19cfb64e8f966669cba714f0eee7b946c0d05fa6fce23"
+      "ja_sha256": "dc33ed65e4d17dbccaac5948870be9cff97a17d970b09ff3823d362e0b11b186",
+      "en_sha256": "b470c5c39b70085a1793231040992e9086a5fb1b4904833e63a5ba1e365eebce"
     },
     {
       "ja": "docs/reference/tauri-internals.md",

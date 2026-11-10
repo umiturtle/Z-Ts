@@ -281,8 +281,8 @@ const build_zig =
     \\
     \\    // `zts dev` serves web/ from disk and never runs this executable; between full builds it
     \\    // only needs to know whether the Zig side type-checks. A compile step whose emitted binary
-    \\    // nobody asks for gets `-fno-emit-bin` in Zig 0.17, skipping LLVM codegen, linking and
-    \\    // install. `zts build` still uses the `install` step above for the real binary.
+    \\    // nobody asks for gets `-fno-emit-bin` in Zig 0.17, skipping code generation, linking
+    \\    // and install. `zts build` still uses the `install` step above for the real binary.
     \\    const check_exe = b.addExecutable(.{ .name = "{{NAME}}_check", .root_module = app });
     \\    const check_step = b.step("check", "Type-check the app without emitting a binary");
     \\    check_step.dependOn(&check_exe.step);

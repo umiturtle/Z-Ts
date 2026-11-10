@@ -158,11 +158,13 @@ zts dev --port 5199
 skips both the build and the reload for files it cannot reach — scratch files, notes, test-only
 sources. That is intentional: import the file from `main.zig`, or edit a reachable file instead.
 
-Ordinary Zig edits use **`zig build check`**, a type-check that skips LLVM codegen and linking:
-`zts dev` only serves `web/` and never starts the executable. To validate the real binary (link
-errors, undefined `extern` symbols), run `zts build`, or start the dev loop with
-`ZTS_DEV_BUILD=full zts dev`. Older templates without a `check` step, and `build.zig` files that
-link native libraries, automatically fall back to full builds on every edit.
+Ordinary Zig edits go to **a single persistent Zig compiler as an incremental type-check** (a few
+milliseconds). Zig 0.17 Debug already uses the self-hosted backend rather than LLVM; `zts dev`
+additionally uses `-fno-emit-bin` to skip codegen/linking and re-analyses only changed files. It
+only serves `web/` and never starts the executable. To validate the real binary (link errors,
+undefined `extern` symbols), run `zts build`, or start the dev loop with `ZTS_DEV_BUILD=full zts dev`.
+When the persistent server is unavailable (older template, native linkage, protocol mismatch) it
+falls back to `zig build check` and then to full builds automatically.
 
 ### Caching behaves oddly between reloads
 

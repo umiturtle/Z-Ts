@@ -7,7 +7,9 @@ Two independent measurements, both on a real generated project:
            script sees a new build", comparing full builds (`ZTS_DEV_BUILD=full`, the old cost)
            with the incremental check path. Also times `zig build` vs `zig build check` directly.
   verify   Behavioural regressions: type errors, recovery, no-op saves, unreachable sources,
-           CSS hot swap, build.zig changes, and the debounce window swallowing an edit.
+           CSS hot swap, build.zig changes, the debounce window swallowing an edit, and that the
+           persistent compiler server really re-checks in single-digit milliseconds (so a silent
+           fallback to the slow path is caught).
 
 Usage:
     ./zigw build -Dgtk=false                 # produces zig-out/bin/zts
@@ -296,6 +298,17 @@ def run_verify(args, zts, zig, root):
             scratch.write_text("pub const scratch = 2;\n")
             assert_no_change(session, old, label="edit to a file outside the import graph")
 
+        def fast_recheck():
+            src = project / "src/main.zig"
+            old = session.state()["v"]
+            src.write_text(src.read_text() + "// probe fast recheck\n")
+            _, state = wait_for_change(session, old)
+            assert state["ok"], state
+            body = session.log_text()
+            checks = [int(x) for x in re.findall(r"zts: type-check ok \((\d+) ms\)", body)]
+            assert checks, "no incremental type-check line — the compiler server did not run"
+            assert checks[-1] < 80, f"incremental check took {checks[-1]} ms (slow path?)"
+
         def css_hot_swap():
             css = project / "web/site.css"
             old = session.state()["v"]
@@ -340,7 +353,7 @@ def run_verify(args, zts, zig, root):
             good = src.read_text()
             old = session.state()["v"]
             src.write_text(good + "// probe burst A\n")
-            time.sleep(0.05)
+            time.sleep(0.04)
             src.write_text(good + "// probe burst B\n")
             _, state = wait_for_change(session, old)
             assert state["ok"], state
@@ -348,6 +361,7 @@ def run_verify(args, zts, zig, root):
             time.sleep(1.6)
             assert session.state()["v"] == state["v"], "a burst caused two rebuilds"
 
+        check("compiler server re-checks a Zig edit in milliseconds", fast_recheck)
         check("identical-content rewrite (touch) does not rebuild", noop_save)
         check("edit outside the import graph does not rebuild", unreachable_source)
         check("stylesheet edit hot-swaps without a build", css_hot_swap)

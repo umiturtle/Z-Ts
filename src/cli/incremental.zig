@@ -1,6 +1,7 @@
 //! `M5-17` — incremental rebuild decisions for `zts dev`.
 //!
-//! A Zig edit used to run `zig build` (LLVM codegen + link + install) even though the dev preview
+//! A Zig edit used to run a full `zig build` (semantic analysis, self-hosted codegen, link and
+//! install) even though the dev preview
 //! serves `web/` from disk and never runs that executable. Three cheap mechanisms decide what is
 //! actually needed before a process is spawned:
 //!

@@ -77,6 +77,7 @@
 | `src/ssg/` | `zts_ssg` | 低 |
 | `src/cli/` | `zts` CLI（`init` / `dev` / `build` / `package` / `doctor`） | サブコマンドごとに独立 |
 | `src/cli/incremental.zig` | dev ループの依存グラフ・dirty flag・ビルド種別の決定（`plan()`） | 中（`zts dev` を触るとき） |
+| `src/cli/check_server.zig` | 常駐 Zig コンパイラ（`--listen=-`）とのプロトコル・argv 取得・エラー表示 | 中（`zts dev` の高速経路） |
 | `scripts/bench-dev-loop.py` | dev ループの実時間ベンチと 7 つの不変条件（CI で `verify` を実行） | 低 |
 | `src/docsite/` | このサイトの生成器（Markdown・リンク検査・API 生成） | 中（`main.zig` は大きい） |
 | `src/docsite/learn_path.zig` | 学習パスの 5 ステップ・所要分・**左メニューの章内読み順**（`page_order`） | 中（チュートリアルを足すとき。規約 12 が索引と分を突き合わせる） |

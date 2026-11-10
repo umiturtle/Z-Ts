@@ -47,6 +47,7 @@ translation. Layers ①–③ are fully bilingual, verified by rule 13 in
 | `src/core/`, `src/rpc/`, `src/tauri/`, `src/bridge/`, `src/webview/`, `src/wasm/`, `src/ssg/` | the ten public packages | split by package (highest contention) |
 | `src/cli/` | the `zts` app-author CLI | medium |
 | `src/cli/incremental.zig` | dev-loop import graph, dirty flags and build-mode decisions (`plan()`) | medium when touching `zts dev` |
+| `src/cli/check_server.zig` | persistent Zig compiler (`--listen=-`) protocol, argv capture, error rendering | medium (the fast `zts dev` path) |
 | `scripts/bench-dev-loop.py` | end-to-end dev-loop benchmark + seven invariants (`verify` runs in CI) | low |
 | `src/build_tools/` | the shared frontend embedder | low |
 | `src/docsite/` | the site generator (Markdown, link checks, API generation) | medium (`main.zig` is large) |

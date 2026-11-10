@@ -24,6 +24,7 @@ const template = @import("template.zig");
 const project = @import("project.zig");
 const devserver = @import("devserver.zig");
 const incremental = @import("incremental.zig");
+const check_server = @import("check_server.zig");
 const bundler = @import("zts_bundler");
 
 /// Absolute path of the ziggurats checkout that built this binary, injected by `build.zig`. `zts init`
@@ -314,9 +315,9 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     var previous = try devserver.Snapshot.scan(gpa, io, opts.dir, &watched);
     // `scanAgainst` reuses content hashes whose stat is unchanged.
     defer previous.deinit(gpa);
-    // Adaptive poll (still plain polling on every OS): 250 ms while idle, 100 ms for ~2 s after
-    // an edit. Consecutive saves are what the incremental path is for, so this cuts the fixed
-    // wait before a rebuild without scanning a large `web/` tree too often on an idle session.
+    // Adaptive poll (still plain polling on every OS): 250 ms while idle, 50 ms for ~2 s after
+    // an edit. With the compiler server doing the check in single-digit milliseconds, the poll
+    // and settle windows are now the dominant latency, so both are short while actively editing.
     var fast_polls: u8 = 0;
 
     // Build once so the first page load matches what `zts build` would produce. This stays a FULL
@@ -324,10 +325,25 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     // over for subsequent edits. It runs AFTER all initialisation (and after the baseline
     // snapshot), so a client that sees `v=1` knows the poll loop is ready and no early edit can
     // be swallowed by the baseline scan.
+    // A persistent Zig compiler server makes subsequent type-checks ~3 ms instead of ~400 ms.
+    // It is optional: on any handshake/protocol/argv problem we keep the ordinary check step.
+    var fast: ?*check_server.Server = null;
+    defer if (fast) |srv| srv.close();
+    if (!force_full and check_step and !native_linkage) {
+        fast = check_server.Server.start(gpa, io, arena, opts.dir, zig_path) catch null;
+        if (fast != null) {
+            printOut(io, "     incremental compiler server ready (Zig edits re-check in ms)\n", .{});
+        } else {
+            printOut(io, "     compiler server unavailable — using zig build check\n", .{});
+        }
+    }
+
+    // Publish `v=1` last: a client that sees it knows the full build, the baseline snapshot and
+    // the warmed compiler server are all ready. No startup work can swallow an early edit.
     server.recordBuild(try rebuild(io, gpa, arena, opts.dir, true));
 
     while (true) {
-        const poll_ms: u32 = if (fast_polls > 0) 100 else 250;
+        const poll_ms: u32 = if (fast_polls > 0) 50 else 250;
         if (fast_polls > 0) fast_polls -= 1;
         io.sleep(.fromMilliseconds(poll_ms), .awake) catch return 0;
         var first = try devserver.Snapshot.scanAgainst(gpa, io, opts.dir, &watched, &previous);
@@ -347,8 +363,10 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
         // A save often arrives as several writes (editor temp rename, formatter, fsync). Settle,
         // then rescan and diff against the FINAL scan. Diffing the first scan (the old behaviour)
         // silently swallowed edits that landed during this window; it also split one burst into two
-        // rebuilds. One diff against the final snapshot fixes both.
-        io.sleep(.fromMilliseconds(120), .awake) catch {
+        // rebuilds. One diff against the final snapshot fixes both. 60 ms is enough for the usual
+        // atomic-save pair and, now that a re-check costs milliseconds, splitting a longer burst
+        // is cheap.
+        io.sleep(.fromMilliseconds(60), .awake) catch {
             first.deinit(gpa);
             return 0;
         };
@@ -359,7 +377,7 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
 
         const changed = try previous.changed(diff_arena, &current);
         const structural = try previous.structural(diff_arena, &current);
-        if (changed.len > 0) fast_polls = 20;
+        if (changed.len > 0) fast_polls = 40;
 
         // The import graph and the step list are build-graph state. Refresh them only when a file
         // actually changed (cheap: a handful of source reads), never on an idle poll.
@@ -397,15 +415,51 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
                 printOut(io, "zts: web/ changed — reloading (no rebuild needed)\n", .{});
             },
             .check => {
-                server.recordChange(.source, try checkBuild(io, gpa, arena, opts.dir));
+                const ok = if (fast) |srv|
+                    fastCheck(io, srv) catch blk: {
+                        // Never guess after a protocol error: fall back to a real build, and keep
+                        // using it for the rest of the session rather than flapping.
+                        srv.close();
+                        fast = null;
+                        printErr(io, "zts dev: compiler server stopped — falling back to zig build check\n", .{});
+                        break :blk try checkBuild(io, gpa, arena, opts.dir);
+                    }
+                else
+                    try checkBuild(io, gpa, arena, opts.dir);
+                server.recordChange(.source, ok);
             },
             .full => {
+                // A full build and the server both use the project's Zig cache; do not overlap.
+                if (fast) |srv| {
+                    srv.close();
+                    fast = null;
+                }
                 server.recordChange(.source, try rebuild(io, gpa, arena, opts.dir, false));
+                if (!force_full and check_step and !native_linkage) {
+                    fast = check_server.Server.start(gpa, io, arena, opts.dir, zig_path) catch null;
+                }
             },
         }
         previous.deinit(gpa);
         previous = current;
     }
+}
+
+/// One incremental re-check through the persistent compiler server, with a timing line so the
+/// author (and the benchmark) can see that the build itself is now single-digit milliseconds.
+fn fastCheck(io: Io, srv: *check_server.Server) !bool {
+    const started = Io.Timestamp.now(io, .awake);
+    const ok = try srv.update();
+    const elapsed_ms: i64 = @intCast(@divTrunc(
+        Io.Timestamp.now(io, .awake).nanoseconds - started.nanoseconds,
+        1_000_000,
+    ));
+    if (ok) {
+        printOut(io, "zts: type-check ok ({d} ms)\n", .{elapsed_ms});
+    } else {
+        printErr(io, "zts: type-check failed ({d} ms) — the page keeps the last good build\n", .{elapsed_ms});
+    }
+    return ok;
 }
 
 /// `0.0.0.0` is not an address a browser can open, but it is the right bind address in a
@@ -457,7 +511,7 @@ fn rebuild(io: Io, gpa: Allocator, arena: Allocator, dir: []const u8, first: boo
 }
 
 /// `zig build check`: semantic analysis only. Zig emits `-fno-emit-bin` for a compile step whose
-/// output nobody asks for, so there is no LLVM codegen, no link and no install. `zts dev` serves
+/// output nobody asks for, so there is no code generation, no link and no install. `zts dev` serves
 /// `web/` from disk and never runs the binary — a type-check is exactly what it needs.
 fn checkBuild(io: Io, gpa: Allocator, arena: Allocator, dir: []const u8) !bool {
     return buildWith(io, gpa, arena, dir, &.{ "build", "check", "--summary", "failures" }, "type-check", true);
