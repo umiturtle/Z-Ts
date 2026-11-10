@@ -1345,3 +1345,50 @@ html[data-theme="dark"] .zk-n { color: #d2a8ff; }
 .landing-footer .footer-meta { display: inline-flex; align-items: center; gap: .5rem; }
 
 .api-index-wide { display: flex; flex-wrap: wrap; gap: .35rem; margin: 1rem 0 2rem; }
+
+/* ------------------------------------------------- framework picker (progressive enhancement) */
+
+/* The `<!-- framework-picker -->` directive renders a plain Markdown table. site.js inserts this
+   form immediately before it; with JavaScript disabled the table below is still a complete,
+   bilingual chooser, so nothing is lost. */
+.fw-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.fw-picker label {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.fw-picker select {
+  flex: 1 1 220px;
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+}
+.fw-picker .fw-picker-go {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fw-picker .fw-picker-go:hover { background: var(--accent-hover); }
+.fw-picker select:focus-visible,
+.fw-picker .fw-picker-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

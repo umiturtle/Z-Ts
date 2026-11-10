@@ -105,6 +105,7 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 
 | 目的 | 行き先 |
 |---|---|
+| 好きなライブラリでチュートリアルを進める（9 分岐） | [`learn/ja/tutorials/frameworks.md`](docs/learn/ja/tutorials/frameworks.md) |
 | `zts` を手元に用意する | [`learn/ja/guides/install.md`](docs/learn/ja/guides/install.md) |
 | コマンドの書き方（`invoke`） | [`learn/ja/guides/rpc.md`](docs/learn/ja/guides/rpc.md) |
 | Tauri 標準プラグイン | [`learn/ja/guides/plugins.md`](docs/learn/ja/guides/plugins.md) |

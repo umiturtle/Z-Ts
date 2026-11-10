@@ -51,12 +51,85 @@ var policy = try tauri.acl.Policy.init(allocator, .{
 });
 defer policy.deinit();
 
-if (!policy.allows("main", "plugin:fs|read_text_file")) return error.Forbidden;
+if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) return error.Forbidden;
 ```
 
 > [!WARNING]
 > **scope を空にすると `fs` は常に失敗します。** 「動かない」のではなく「拒否されている」ので、
 > エラーは `forbidden path` になります。`$APPDATA/**` のような glob を必ず書いてください。
+
+### 権限ごとの scope（`@tauri-apps/plugin-fs` 互換）
+
+`permissions[]` の各要素に `allow` / `deny` を付けられます。ziggurats は
+**その呼び出しを許可した capability の scope だけ**を `rpc.Ctx` に載せ、
+`plugin:fs|*` がパスを解決するときに評価します。
+
+```json
+{
+  "identifier": "main-capability",
+  "windows": ["main"],
+  "permissions": [
+    { "identifier": "fs:allow-read-text-file", "allow": [{ "path": "$APPDATA/**" }] },
+    { "identifier": "fs:allow-write-text-file", "allow": ["$APPDATA/**"],
+      "deny": ["$APPDATA/private/**"] }
+  ]
+}
+```
+
+| ルール | 挙動 |
+|---|---|
+| `deny` の glob に一致 | 常に拒否（`allow` より優先） |
+| `allow` が 1 つ以上あり、どれにも一致しない | 拒否（`OutOfScope`） |
+| scope を持たない権限が同じコマンドを許可 | 制限なし（Tauri の `CommandScope` と同じ） |
+| capability 自体がマッチしない | そもそも `Policy.allows()` が `false` |
+
+評価は `src/tauri/acl.zig` の `scopeAllowsPath` / `scopeAllowsUrl`。
+`FsScope`（設定ファイル由来のルート）と**併用**され、片方でも外れれば拒否です。
+
+### isolation パターン（暗号化 iframe）
+
+`app.security.pattern` を `"isolation"` にすると、IPC の本文が **AES-256-GCM** で暗号化されます。
+XSS や開発サーバの改ざんで差し込まれた JavaScript からは、コマンドの引数も結果も読めません。
+CSRF キー（`Tauri-Invoke-Key`）と capability は今までどおり併用されます。
+
+```json
+{
+  "identifier": "com.example.isolated",
+  "app": {
+    "security": {
+      "pattern": {
+        "use": "isolation",
+        "options": { "dir": "../dist-isolation", "keyHex": "<64 hex>" }
+      }
+    }
+  }
+}
+```
+
+| 項目 | ziggurats の挙動 |
+|---|---|
+| 暗号化 | WebView の `crypto.subtle`（WebCrypto）で本文ごと暗号化。nonce はメッセージごとに 12 バイト |
+| 復号 | `src/tauri/isolation.zig` の Pure Zig `std.crypto.aead.aes_gcm`、3 OS 同一 |
+| 鍵 | `keyHex`（64 文字）または `identifier` からの決定論的導出。ビルド成果物に乱数を埋め込まない |
+| 隔離 iframe | `isolation://localhost/` が埋め込みアセットの `/isolation/` を配信 |
+| フック | `window.__TAURI_ISOLATION_HOOK__(message)` で送信前にメッセージを加工できる |
+| 平文の `invoke` | **403 `ForbiddenIsolationEnvelope`**（黙って平文にフォールバックしない） |
+| 未知の `use` | `InvalidConfig` として診断付きで拒否 |
+
+```zig
+var runtime = try DesktopRuntime.create(allocator, io, .{
+    .isolation_key = tauri.isolation.keyFor(
+        imported.config.productName,           // identifier
+        imported.config.app.security.pattern.isolation.key_hex,
+    ),
+});
+```
+
+> [!NOTE]
+> isolation は **IPC の引数を守る**機能です。WebView 内の JavaScript 自体やネットワーク攻撃は
+> 「守らない」欄のとおり対象外です。Live Preview（`zts_bridge`）は三重 CSRF で守り、
+> isolation はデスクトップのカスタムプロトコル経路に適用されます。
+
 
 ## 3. 何を守り、何を守らないか
 

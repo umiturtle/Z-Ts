@@ -27,6 +27,10 @@
 > [!NOTE]
 > **概念を先に読む必要はありません。** むしろ、動かした後に読むほうが速いです。1 度でも
 > `zts dev` を動かしていれば、2 ステップ目の 6 層の図は「そういうことか」で済みます。
+>
+> チュートリアルは [好きなライブラリを選ぶ](tutorials/frameworks.md) から 9 つの実物 example
+> （React / Solid / Svelte / Angular / Next.js / Nuxt / Astro / SvelteKit / SolidStart）＋素の JS の
+> どれでも進められます。Zig 側は共通なので、選んだ 1 本だけ読めば所要時間は変わりません。
 
 ## ziggurats とは（30 秒）
 

@@ -13,6 +13,8 @@
 //! * `zts doctor` — check that the toolchain and the generated project agree with each other.
 //! * `zts package` — wrap the built executable into `.deb` / AppDir / `.app` / `.dmg` / `.exe` /
 //!   `.tar.gz` (`M5-03`). The bytes are produced by `src/bundler/`; this file only moves them.
+//! * `zts migrate` — turn an existing Tauri v2 `src-tauri/` project into a new ziggurats project
+//!   (`M5-19 / P0-5`). `src/cli/migrate.zig` owns the pure planning half; this file only does IO.
 
 const std = @import("std");
 const Io = std.Io;
@@ -25,6 +27,7 @@ const project = @import("project.zig");
 const devserver = @import("devserver.zig");
 const incremental = @import("incremental.zig");
 const check_server = @import("check_server.zig");
+const migrate = @import("migrate.zig");
 const bundler = @import("zts_bundler");
 
 /// Absolute path of the ziggurats checkout that built this binary, injected by `build.zig`. `zts init`
@@ -78,6 +81,7 @@ pub fn main(init: std.process.Init) !u8 {
         .build => |opts| runBuild(io, gpa, arena, opts),
         .doctor => |opts| runDoctor(io, arena, opts.dir),
         .package => |opts| runPackage(io, arena, init.environ_map, opts),
+        .migrate => |opts| runMigrate(io, gpa, arena, init.environ_map, opts),
     };
 }
 
@@ -210,6 +214,172 @@ fn patchFingerprintViaBuild(io: Io, gpa: Allocator, arena: Allocator, dir: []con
     if (std.mem.eql(u8, patched, zon)) return false;
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = zon_path, .data = patched });
     return true;
+}
+
+// ---------------------------------------------------------------------------------------------
+// zts migrate (P0-5)
+// ---------------------------------------------------------------------------------------------
+
+fn sourceFileLess(_: void, a: migrate.SourceFile, b: migrate.SourceFile) bool {
+    return std.mem.lessThan(u8, a.path, b.path);
+}
+
+/// Reads every file under `root` into `arena`, skipping directories and files that cannot be read.
+/// `entry.path` uses `\` on Windows, so paths are normalised to `/` before planning.
+fn collectFiles(io: Io, arena: Allocator, root: []const u8) ![]migrate.SourceFile {
+    const cwd = Io.Dir.cwd();
+    var out: std.ArrayList(migrate.SourceFile) = .empty;
+    const dir = cwd.openDir(io, root, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+
+    var walker = dir.walk(std.heap.page_allocator) catch return &.{};
+    defer walker.deinit();
+    while (true) {
+        const maybe = walker.next(io) catch break;
+        const entry = maybe orelse break;
+        if (entry.kind != .file) continue;
+        const rel = migrate.normalizePath(arena, entry.path) catch continue;
+        if (!migrate.isSafeRelativePath(rel)) continue;
+        const full = try std.fmt.allocPrint(arena, "{s}/{s}", .{ root, rel });
+        const bytes = cwd.readFileAlloc(io, full, arena, .limited(8 * 1024 * 1024)) catch continue;
+        try out.append(arena, .{ .path = rel, .contents = bytes });
+    }
+    const slice = try out.toOwnedSlice(arena);
+    std.mem.sort(migrate.SourceFile, slice, {}, sourceFileLess);
+    return slice;
+}
+
+/// Lists the Rust sources (relative paths only — their contents are never translated).
+fn collectRustFiles(io: Io, arena: Allocator, root: []const u8) ![]const []const u8 {
+    const cwd = Io.Dir.cwd();
+    var out: std.ArrayList([]const u8) = .empty;
+    const dir = cwd.openDir(io, root, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+    var walker = dir.walk(std.heap.page_allocator) catch return &.{};
+    defer walker.deinit();
+    while (true) {
+        const maybe = walker.next(io) catch break;
+        const entry = maybe orelse break;
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.path, ".rs")) continue;
+        try out.append(arena, try migrate.normalizePath(arena, entry.path));
+    }
+    const slice = try out.toOwnedSlice(arena);
+    std.mem.sort([]const u8, slice, {}, struct {
+        fn less(_: void, a: []const u8, b: []const u8) bool {
+            return std.mem.lessThan(u8, a, b);
+        }
+    }.less);
+    return slice;
+}
+
+/// `tauri.conf.json` lives directly in `src-tauri/`, or one level down when the caller points at
+/// the Tauri *project root* instead.
+fn findConfigPath(io: Io, arena: Allocator, src: []const u8) ![]const u8 {
+    const cwd = Io.Dir.cwd();
+    const direct = try std.fmt.allocPrint(arena, "{s}/tauri.conf.json", .{src});
+    if (cwd.access(io, direct, .{})) |_| return direct else |_| {}
+    const nested = try std.fmt.allocPrint(arena, "{s}/src-tauri/tauri.conf.json", .{src});
+    if (cwd.access(io, nested, .{})) |_| return nested else |_| {}
+    return error.ConfigNotFound;
+}
+
+fn runMigrate(
+    io: Io,
+    gpa: Allocator,
+    arena: Allocator,
+    env: *std.process.Environ.Map,
+    opts: args_mod.Migrate,
+) !u8 {
+    const cwd = Io.Dir.cwd();
+    const conf_path = findConfigPath(io, arena, opts.src) catch {
+        printErr(io, "zts migrate: no tauri.conf.json under '{s}' (or '{s}/src-tauri/')\n", .{ opts.src, opts.src });
+        return exit_failure;
+    };
+    const config_json = cwd.readFileAlloc(io, conf_path, arena, .limited(4 * 1024 * 1024)) catch {
+        printErr(io, "zts migrate: cannot read {s}\n", .{conf_path});
+        return exit_failure;
+    };
+    const src_root = std.fs.path.dirname(conf_path) orelse opts.src;
+
+    const cfg = migrate.parseConfig(arena, config_json) catch |err| {
+        printErr(io, "zts migrate: {s} is not valid tauri.conf.json ({s})\n", .{ conf_path, @errorName(err) });
+        return exit_failure;
+    };
+
+    const name = opts.name orelse try migrate.packageNameFrom(arena, cfg, src_root);
+    template.validateName(name) catch |err| {
+        printErr(io, "zts migrate: '{s}' is not a usable package name ({s}) — pass --name <name>\n", .{ name, @errorName(err) });
+        return exit_usage;
+    };
+
+    const out_dir = opts.dir orelse try migrate.defaultOutDir(arena, opts.src, name);
+    const frontend_root = try std.fs.path.join(arena, &.{ src_root, cfg.frontend_dist });
+    const capabilities_root = try std.fmt.allocPrint(arena, "{s}/capabilities", .{src_root});
+    const icons_root = try std.fmt.allocPrint(arena, "{s}/icons", .{src_root});
+    const rust_root = try std.fmt.allocPrint(arena, "{s}/src", .{src_root});
+
+    const source = migrate.Source{
+        .config_json = config_json,
+        .frontend_files = try collectFiles(io, arena, frontend_root),
+        .capability_files = try collectFiles(io, arena, capabilities_root),
+        .icon_files = try collectFiles(io, arena, icons_root),
+        .rust_files = try collectRustFiles(io, arena, rust_root),
+    };
+
+    const zts_path = if (opts.zts_path) |explicit|
+        try relativePath(io, arena, env, out_dir, explicit)
+    else
+        try relativePath(io, arena, env, out_dir, build_options.zts_root);
+
+    const planned = migrate.plan(arena, source, .{
+        .name = name,
+        .zts_path = zts_path,
+        .src = opts.src,
+        .out_dir = out_dir,
+    }) catch |err| {
+        printErr(io, "zts migrate: planning failed ({s})\n", .{@errorName(err)});
+        return exit_failure;
+    };
+
+    printOut(io, "zts migrate: {s} -> {s}\n", .{ opts.src, out_dir });
+    printOut(io, "  productName   {s}\n", .{cfg.product_name orelse "(none)"});
+    printOut(io, "  frontendDist  {s} ({d} files)\n", .{ cfg.frontend_dist, source.frontend_files.len });
+    printOut(io, "  capabilities  {d} files / icons {d} files / rust {d} files\n", .{
+        source.capability_files.len, source.icon_files.len, source.rust_files.len,
+    });
+    printOut(io, "  files to write {d}\n", .{planned.files.len});
+    for (planned.warnings) |warning| printOut(io, "  warning: {s}\n", .{warning});
+
+    if (opts.dry_run) {
+        printOut(io, "zts migrate: --dry-run, nothing written (MIGRATION.md would explain the manual steps)\n", .{});
+        return 0;
+    }
+
+    if (cwd.access(io, out_dir, .{})) |_| {
+        if (!opts.force and !try dirIsScaffoldable(io, cwd, out_dir)) {
+            printErr(io, "zts migrate: '{s}' already has files — pass --force to write into it anyway\n", .{out_dir});
+            return exit_failure;
+        }
+    } else |_| {}
+
+    for (planned.files) |file| {
+        const full = try std.fmt.allocPrint(arena, "{s}/{s}", .{ out_dir, file.path });
+        if (std.fs.path.dirname(full)) |parent| {
+            if (parent.len > 0) try cwd.createDirPath(io, parent);
+        }
+        try cwd.writeFile(io, .{ .sub_path = full, .data = file.contents });
+    }
+    printOut(io, "zts: migrated {s} ({d} files, MIGRATION.md is bilingual)\n", .{ out_dir, planned.files.len });
+
+    const patched = try patchFingerprintViaBuild(io, gpa, arena, out_dir);
+    if (patched) {
+        printOut(io, "zts: patched build.zig.zon with the fingerprint Zig suggested\n", .{});
+    } else {
+        printErr(io, "zts: warning — could not read the fingerprint Zig suggested; `zts build` will write it back.\n", .{});
+    }
+    printOut(io, "\nNext:\n  cd {s}\n  zts dev        # preview web/ in a browser\n  zts build      # single executable in zig-out/bin/\n", .{out_dir});
+    return 0;
 }
 
 // ---------------------------------------------------------------------------------------------

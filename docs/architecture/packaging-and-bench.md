@@ -196,7 +196,7 @@ Linux マトリクス）では ziggurats 側だけを実測し、Check Run Summa
 
 | 項目 | 状態 |
 |---|---|
-| `.icns` 生成 | 未対応。`iconutil` は macOS 専用なので PNG 同梱で代替中 |
+| `.icns` 生成 | **実装済み（M5-19 / P2）**。`src/bundler/icns.zig` が Pure Zig でコンテナを書く。`iconutil` 不要・3 OS 同一バイト列 |
 | macOS のコード署名 / notarytool | 未対応（`zts` は署名しない）。配布手順で `codesign` を案内 |
 | AppImage の実生成 | 未対応。AppDir まで作り `appimagetool` を案内 |
 | MSI / MSIX | 未対応。`.exe` まで |

@@ -42,7 +42,7 @@ const embedded = embedFrontend(b, .{
 | 宣言 | 内容 |
 |---|---|
 | `entries: []const web.StaticAsset` | `@embedFile` された本体（パス昇順・決定論的） |
-| `assets: web.Assets` | そのまま `zts_web` の静的配信に渡せる |
+| `assets: web.Assets` | `entries` と `gzip_entries` を保持したまま `zts_web` の静的配信へ渡せる（[P0-4](../learn/ja/guides/static-site.md)） |
 | `sha256_digests` | 各エントリの SHA-256（ETag / 不変キャッシュ用） |
 | `gzip_entries: []const ?[]const u8` | **gzip 済みの双子**。`null` は「圧縮しない方が小さい」 |
 | `csp_hashes: []const []const u8` | インライン `<script>` / `<style>` の `sha256-<base64>` |

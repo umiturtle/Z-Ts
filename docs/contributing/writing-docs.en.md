@@ -109,6 +109,16 @@ English menu with an English navigation label (`englishNavTitle`).
 so adding a tutorial means updating them. Rule 12 compares the Zig table with four prose totals,
 two step tables, and checks that `GroupKey.order()` has not become language-dependent again.
 
+**Tutorial branches are generated from one catalog.** The ten choices (nine committed framework
+examples plus plain JavaScript) live in `src/docsite/frameworks.json` and nowhere else. A page with
+`<!-- framework-picker -->` gets the bilingual chooser table; `src/docsite/assets/site.js` upgrades
+that table to a `<select>` when JavaScript is on (with it off, the ten links still work).
+`python3 scripts/gen-framework-tutorials.py` writes the nine per-library tutorials from the real
+example sources — never copy framework code into prose by hand. Rule 15 verifies
+catalog ↔ example directory ↔ both translations ↔ embedded snippet ↔ generated page freshness, so
+editing an example without regenerating turns CI red. A branch is an **alternative route, not an
+extra chapter**: `learn_path.steps` minutes do not change.
+
 ## 9. Write in two languages (English and Japanese)
 
 Reader pages exist as **`docs/learn/ja/` + `docs/learn/en/` with identical file names**, and pages
@@ -177,6 +187,8 @@ be regenerated together with the generator when the repository is renamed.
 | `GroupKey.order() takes a language` | the menu was split again | one `order()` for both languages |
 | `missing English counterpart` / `hash mismatch` | half a pair edited, or implementation changed | add the mirror and run `check-docs.py --sync` (rule 13) |
 | `legacy project name … in prose` | the old name survived, or was capitalised | write `ziggurats` (lowercase); only URLs and checkout paths are exempt (rule 14) |
+| `embedded excerpt is not verbatim` / `generated tutorial pages are stale` | an example changed but its branch was not regenerated | run `python3 scripts/gen-framework-tutorials.py` (rule 15) |
+| `missing tutorial branch for 'react'` / `missing '<!-- framework-picker -->'` | a library or tutorial was added without its branch | regenerate, add one row to each index (rules 11, 15) |
 | `doc-tests: 1 of 2 blocks failed` | example is stale | fix the example — or question the API change |
 
 ## Related

@@ -99,6 +99,40 @@ try plugins.windows.setTitle(&win, "Renamed");
 サイズ・位置は **論理 / 物理**の両方を受け付けます（[`WireSize`](../../../api/zts_tauri/window.html#WireSize)）。
 `Xvfb` のようなヘッドレス CI でも同じ値が返るよう、`HeadlessMock` でも同じ経路を通ります。
 
+
+### webview / 複数ウィンドウ — [`Commands`](../../../api/zts_tauri/webview.html#Commands)
+
+`@tauri-apps/api` を**改造せずに** JS から 2 枚目のウィンドウを作れます。上流と同じ
+`plugin:webview|create_webview_window` / `plugin:window|create` がそのまま届きます。
+
+```ts
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { Window } from "@tauri-apps/api/window";
+import { getAllWebviews } from "@tauri-apps/api/webview";
+
+const settings = new WebviewWindow("settings", {
+  url: "settings.html", width: 640, height: 480,
+});
+settings.once("tauri://created", () => console.log("ready"));
+
+const bare = new Window("docs", { title: "Docs" });
+console.log(await getAllWebviews()); // [{ label, windowLabel }, …]
+```
+
+| JS | コマンド | ziggurats の挙動 |
+|---|---|---|
+| `new WebviewWindow(label, opts)` | `plugin:webview\|create_webview_window` | `Host.createWindow()` でネイティブウィンドウを生成。label 専用のブートストラップも注入 |
+| `new Window(label, opts)` | `plugin:window\|create` | 同上（Webview を 1 枚持つウィンドウ） |
+| `new Webview(win, label, opts)` | `plugin:webview\|create_webview` | 親ウィンドウ内に子 `<iframe>` を生成（上流の unstable 機能に相当） |
+| `getAllWebviews()` | `plugin:webview\|get_all_webviews` | `[{ label, windowLabel }]` を返す |
+| `getAllWebviewWindows()` / `getAllWindows()` | `plugin:window\|get_all_windows` | ラベル配列を返す |
+
+ラベルは `a-zA-Z0-9-/:_` のみ（最大 128 文字）。`url` は `http(s)` / `tauri` / `asset` /
+`isolation` / `ipc` のみ通し、相対パスは `tauri://localhost/` に解決します。
+`javascript:` や `file:` は `InvalidUrl`、`label` の重複は `DuplicateLabel` で拒否します。
+未実装の `WindowOptions`（`center` / `skipTaskbar` / `titleBarStyle` など）は無視されるだけで
+呼び出しは失敗しません（前方互換）。
+
 ### event — [`EventBus`](../../../api/zts_tauri/event.html#EventBus)
 
 バックエンド → フロントエンドの通知です。
@@ -185,11 +219,14 @@ var policy = try tauri.acl.Policy.init(allocator, .{
 });
 defer policy.deinit();
 
-if (!policy.allows("main-window", "plugin:fs|read_text_file")) return error.Forbidden;
+if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) return error.Forbidden;
 ```
 
 * **未知のパーミッションは警告**、**型違いはエラー**、そして**既定は拒否**（fail-closed）。
 * `build` 時に `Imported.warnings` を CI で表示しておくと、上流の設定変更に気づけます。
+* **ウィンドウ生成は `core:default` では許可されません。** `core:webview:allow-create-webview-window`
+  / `core:window:allow-create` / `core:webview:allow-create-webview` を明示してください
+  （[セキュリティの権限ごとの scope](../concepts/security.md) も参照）。
 
 ---
 
@@ -204,6 +241,74 @@ if (!policy.allows("main-window", "plugin:fs|read_text_file")) return error.Forb
 | ヘッドレス CI でだけ落ちる | ダイアログ/クリップボードは `Mock` を使う（`Backend` を差し替える）。 |
 
 ---
+
+
+## 6. P1 — 上流と同じ書き方を支えるコマンド
+
+`@tauri-apps/api` を改造せずに使えるコマンドを広げました。すべて
+[`Commands`](../../../api/zts_tauri/window.html#Commands) /
+[`webview`](../../../api/zts_tauri/webview.html#Commands) /
+[`event`](../../../api/zts_tauri/event.html#Commands) に `pub fn` としてあります。
+
+| 分類 | コマンド例 | 挙動 |
+|---|---|---|
+| webview 制御 | `plugin:webview\|eval` / `reload` / `print` / `set_zoom` / `open_devtools` / `close_devtools` / `is_devtools_open` / `internal_toggle_devtools` / `clear_all_browsing_data` | 既存の `Host.evalJs` / `openDevtools` 経由。子 webview は親ウィンドウの `<iframe>` を対象にする |
+| ウィンドウイベント | `plugin:window\|emit_window_event` | `tauri://resize` / `move` / `focus` / `theme-changed` / `file-drop` / `page-load` / `navigation` など**許可リスト制**。setter は自動で emit する |
+| 残りの setter | `set_theme` / `set_skip_taskbar` / `set_progress_bar` / `set_badge_count` / `set_cursor_*` / `center` / `request_user_attention` / `set_content_protected` / `set_visible_on_all_workspaces` / `set_shadow` / `set_effects` / `set_background_color` / `set_icon` / `set_always_on_bottom` / `set_enabled` | 値を `WindowExtras` に記録してイベントを出す。OS 固有の見た目は backend が適用できる範囲で反映 |
+| Monitor / DPI | `available_monitors` / `primary_monitor` / `current_monitor` / `monitor_from_point` / `cursor_position` | 既定は決定論的な 1920×1080 @1.0。実ディスプレイは [`MonitorRegistry`](../../../api/zts_tauri/monitor.html#MonitorRegistry) の provider で差し替える（アプリに OS 分岐を書かない） |
+| config フィールド | `center` / `maximized` / `skipTaskbar` / `titleBarStyle` / `hiddenTitle` / `userAgent` / `alwaysOnBottom` / `focus` / `dragDropEnabled` / `zoomHotkeysEnabled` / `windowEffects` / `contentProtected` / `tabbingIdentifier` / `visibleOnAllWorkspaces` | `tauri.conf.json` から `core.WindowSpec` まで運ぶようにした（以前は警告して破棄）。`windowEffects` は JSON のまま保持 |
+| `once` / webview 単位 `emitTo` | `plugin:event\|once` / `emit_to({kind:"Webview"})` | `once` は初回配送でリスナを自動削除。`Webview` ターゲットは親ウィンドウのラベルへ解決 |
+| `asset://` scope の実行時更新 | `plugin:fs\|asset_scope_add` / `remove` / `clear` / `list` | ファイルダイアログの許可を [`AssetScope`](../../../api/zts_tauri/asset_scope.html#AssetScope) に永続化。`ProtocolConfig.asset_scope` と `FsState.withAssetScope()` で共有 |
+
+> [!WARNING]
+> `plugin:webview|eval`、`clear_all_browsing_data`、`plugin:window|emit_window_event`、
+> `asset_scope_add` / `remove` / `clear` は **`core:default` / `fs:default` では許可されません**。
+> 任意コード実行・イベント偽装・scope 拡大につながるため、capability に
+> `core:webview:allow-eval` などを明示してください（[権限の考え方](../concepts/security.md)）。
+
+
+## 7. P2 — 任意プラグインと macOS アイコン
+
+P2 は **`CorePluginsSchema` に入れません**。使う名前空間だけを `rpc.Schema` に合成するので、
+`store` を使わないアプリには 0 バイトしかリンクされません（未使用モジュールは 0 バイトになる方針）。
+
+```zig
+const S = rpc.Schema(.{
+    .store = tauri.plugins.StoreCommands,
+    .log = tauri.plugins.LogCommands,
+    .os = tauri.plugins.OsCommands,
+});
+var state = try tauri.plugins.PluginState.init(allocator, io, .{ .argv = argv[1..] });
+defer state.deinit();
+var bound = S.bind(.{ .store = &state, .log = &state, .os = &state });
+```
+
+| 名前空間 | 主なコマンド | 中身 |
+|---|---|---|
+| `plugin:store\|*` | `get` / `set` / `delete` / `clear` / `keys` / `has` / `length` / `save` / `load` | JSON KV。`store_path` を渡すと `$APPDATA` の JSON に永続化 |
+| `plugin:log\|*` | `log` / `logs` / `clear` | 上限 256 行のリングバッファ |
+| `plugin:os\|*` | `platform` / `arch` / `family` / `exe_extension` / `version` / `locale` | `builtin` から。**カーネル版数やロケールは読まない**（3 OS パリティを壊すため） |
+| `plugin:process\|*` | `exit` / `pid` | `exit` は `Host.requestQuit()` に委譲。プロセスを実際に殺さない |
+| `plugin:cli\|*` | `args` / `matches` | 起動時 argv のスナップショット |
+| `plugin:window-state\|*` | `save` / `restore` / `clear` | 位置・サイズを `store` の予約キーに保存 |
+| `plugin:opener\|*` | `open_url` / `open_path` | **provider 方式**。未設定なら `Unsupported`。`http(s)` / `mailto` 以外の URL は拒否 |
+| `plugin:single-instance\|*` | `request_lock` / `is_primary` / `release` | 排他ロックファイル（3 OS 同一） |
+| `plugin:notification\|*` | `notify` / `pending` | アプリ内 `zts:event` と上限 64 件のリング。OS 通知センターは**偽らない** |
+| `plugin:positioner\|*` | `move_window` | モニタ矩形とウィンドウサイズからの純粋な座標計算 |
+| `.icns` | `icns.buildAlloc`（`src/bundler/icns.zig` / in `src/bundler/icns.zig`） | Pure Zig の macOS アイコンコンテナ。`iconutil` 不要・3 OS 同一バイト列 |
+
+> [!WARNING]
+> 副作用のあるコマンド（`open_*` / `process|exit` / `request_lock` / `*_clear` / `notify`）は
+> **`*_default` では許可されません**。capability に `opener:allow-open-url` などを明示してください。
+
+### 実装しないもの（理由つき）
+
+| 機能 | 理由 |
+|---|---|
+| `plugin-http` / `websocket` / `upload` / `updater` | TLS スタックの外部依存が必要。Pure Zig `std` には TLS クライアントが無い |
+| `sql` / `stronghold` / モバイル専用プラグイン | DB / 暗号ライブラリの外部依存、または 3 デスクトップ OS 対象外 |
+| `global-shortcut` / OS 通知 / `deep-link` / `autostart` | OS フック・レジストリ・plist・`.desktop` 書き込みが必要。`link_libc = false` と 3 OS 同一挙動を壊す |
+| コード署名 / notarytool / MSI / NSIS / AppImage | 外部ツール呼び出しに留まり、純 Zig で書く価値が無い（[`packaging-and-bench.md`](../../../architecture/packaging-and-bench.md) §5） |
 
 ## 次に読むもの
 

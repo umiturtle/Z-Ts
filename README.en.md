@@ -109,6 +109,7 @@ step 1.
 
 | Goal | Go to |
 |---|---|
+| Follow a tutorial with your own library (9 branches) | [`learn/en/tutorials/frameworks.md`](docs/learn/en/tutorials/frameworks.md) |
 | Get `zts` | [`learn/en/guides/install.md`](docs/learn/en/guides/install.md) |
 | Write a command (`invoke`) | [`learn/en/guides/rpc.md`](docs/learn/en/guides/rpc.md) |
 | Standard Tauri plugins | [`learn/en/guides/plugins.md`](docs/learn/en/guides/plugins.md) |

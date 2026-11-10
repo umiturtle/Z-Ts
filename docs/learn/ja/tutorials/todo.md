@@ -274,6 +274,16 @@ zts build        # zig-out/bin/my_app
 
 ---
 
+## 別のライブラリで読む
+
+Zig 側（`State`・3 つのコマンド・`error{}`・テスト）は**どのライブラリでも同じ**です。
+変わるのは一覧の描画だけなので、上の分岐表の「状態の持ち方」をそのライブラリの流儀に
+読み替えてください（例: React なら `useState`、Svelte なら `let`）。
+
+<!-- framework-picker -->
+
+[選択ハブ](frameworks.md) に実物の example 一覧があります。
+
 ## ここから先
 
 | 次に知りたいこと | 行き先 |

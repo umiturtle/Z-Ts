@@ -51,12 +51,85 @@ var policy = try tauri.acl.Policy.init(allocator, .{
 });
 defer policy.deinit();
 
-if (!policy.allows("main", "plugin:fs|read_text_file")) return error.Forbidden;
+if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) return error.Forbidden;
 ```
 
 > [!WARNING]
 > **An empty scope makes `fs` fail every time.** It is not "broken", it is denied, and the error
 > reads `forbidden path`. Always write a glob such as `$APPDATA/**`.
+
+### Per-permission scopes (`@tauri-apps/plugin-fs` compatible)
+
+Each `permissions[]` entry may carry `allow` / `deny`. ziggurats attaches **only the scopes of the
+capabilities that granted this call** to `rpc.Ctx`, and `plugin:fs|*` evaluates them when resolving
+a path.
+
+```json
+{
+  "identifier": "main-capability",
+  "windows": ["main"],
+  "permissions": [
+    { "identifier": "fs:allow-read-text-file", "allow": [{ "path": "$APPDATA/**" }] },
+    { "identifier": "fs:allow-write-text-file", "allow": ["$APPDATA/**"],
+      "deny": ["$APPDATA/private/**"] }
+  ]
+}
+```
+
+| Rule | Behaviour |
+|---|---|
+| matches a `deny` glob | always rejected (`deny` wins over `allow`) |
+| has one or more `allow` patterns, none match | rejected (`OutOfScope`) |
+| an unscoped permission also grants the command | no restriction (same as Tauri's `CommandScope`) |
+| no capability matches | `Policy.allows()` is already `false` |
+
+Evaluation lives in `src/tauri/acl.zig` (`scopeAllowsPath` / `scopeAllowsUrl`). It is **combined
+with** the config-derived `FsScope` roots: failing either check denies the call.
+
+### Isolation pattern (encrypted iframe)
+
+Setting `app.security.pattern` to `"isolation"` encrypts every IPC body with **AES-256-GCM**.
+JavaScript injected through XSS or a tampered dev server can read neither command arguments nor
+their results. The CSRF key (`Tauri-Invoke-Key`) and capabilities still apply.
+
+```json
+{
+  "identifier": "com.example.isolated",
+  "app": {
+    "security": {
+      "pattern": {
+        "use": "isolation",
+        "options": { "dir": "../dist-isolation", "keyHex": "<64 hex>" }
+      }
+    }
+  }
+}
+```
+
+| Item | ziggurats behaviour |
+|---|---|
+| Encryption | WebView `crypto.subtle` (WebCrypto), whole body, fresh 12-byte nonce per message |
+| Decryption | Pure Zig `std.crypto.aead.aes_gcm` in `src/tauri/isolation.zig`, identical on all 3 OSes |
+| Key | `keyHex` (64 chars) or a deterministic derivation from `identifier`; no randomness in built assets |
+| Isolation iframe | `isolation://localhost/` serves `/isolation/` from the embedded assets |
+| Hook | `window.__TAURI_ISOLATION_HOOK__(message)` may transform the message before sending |
+| Plaintext `invoke` | **403 `ForbiddenIsolationEnvelope`** — never a silent fallback to plaintext |
+| Unknown `use` | rejected as `InvalidConfig` with a diagnostic |
+
+```zig
+var runtime = try DesktopRuntime.create(allocator, io, .{
+    .isolation_key = tauri.isolation.keyFor(
+        imported.config.productName,           // identifier
+        imported.config.app.security.pattern.isolation.key_hex,
+    ),
+});
+```
+
+> [!NOTE]
+> Isolation protects **IPC arguments**. JavaScript inside the WebView and network attacks remain
+> in the "not protected" column. Live Preview (`zts_bridge`) uses triple CSRF; isolation applies to
+> the desktop custom-protocol path.
+
 
 ## 3. What is protected, what is not
 

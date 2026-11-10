@@ -24,6 +24,8 @@ const rpc = @import("zts_rpc");
 const path = @import("../path.zig");
 const resources = @import("../resources.zig");
 const scope_mod = @import("scope.zig");
+const acl = @import("../acl.zig");
+const asset_scope = @import("../asset_scope.zig");
 
 pub const Scope = scope_mod.Scope;
 pub const ScopeRoot = scope_mod.Root;
@@ -51,6 +53,10 @@ pub const FsError = error{
     NegativeOffset,
     OutOfMemory,
     IoFailure,
+    /// P1 #12 — `asset://` runtime scope errors.
+    PersistFailed,
+    InvalidGlob,
+    AssetScopeUnavailable,
 };
 
 fn mapResolveError(err: ResolveError) FsError {
@@ -292,6 +298,8 @@ pub const FsState = struct {
     paths: *path.PathState,
     /// Largest single read/write payload; bigger requests fail with `TooLarge`.
     max_io_bytes: usize = default_max_io_bytes,
+    /// P1 #12 — shared mutable `asset://` grants. `null` = runtime updates are disabled.
+    asset_scope: ?*asset_scope.AssetScope = null,
 
     /// Creates state that resolves through `scope` and offers open files as resources.
     pub fn init(
@@ -308,6 +316,12 @@ pub const FsState = struct {
             .resources = res,
             .paths = paths,
         };
+    }
+
+    /// Attaches the shared `AssetScope` so `plugin:fs|asset_scope_*` can persist dialog grants.
+    pub fn withAssetScope(self: *FsState, scope: *asset_scope.AssetScope) *FsState {
+        self.asset_scope = scope;
+        return self;
     }
 
     /// Releases the scope's roots.
@@ -431,6 +445,15 @@ pub const FsState = struct {
     }
 };
 
+/// Every path-taking `plugin:fs` command funnels through here. Besides the configured `FsScope`
+/// roots, the **capability scope** that granted this specific call is checked too:
+/// `{"identifier":"fs:allow-read","allow":[{"path":"$APPDATA/**"}]}` must not grant `/etc/passwd`.
+fn resolveScoped(ctx: *rpc.Ctx, state: *FsState, raw: []const u8, base_dir: ?u8) FsError![]const u8 {
+    const target = try state.resolve(ctx.scratch, raw, base_dir);
+    if (!acl.scopeAllowsPath(ctx, target)) return error.OutOfScope;
+    return target;
+}
+
 fn joinInRoot(state: *FsState, scratch: Allocator, dir: []const u8, name: []const u8) FsError![]const u8 {
     return path.joinWithStyle(scratch, state.scope.style, &.{ dir, name }) catch |e| return mapIoError(e);
 }
@@ -442,11 +465,49 @@ pub const Commands = struct {
     /// The state type `zts_rpc` resolves per app; identical to `FsState` here.
     pub const RpcState = FsState;
 
+    // ---------------------------------------------------------------- P1 #12: runtime asset scope
+
+    fn scopeOf(state: *FsState) FsError!*asset_scope.AssetScope {
+        return state.asset_scope orelse error.AssetScopeUnavailable;
+    }
+
+    fn mapScopeError(err: asset_scope.AssetScopeError) FsError {
+        return switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            error.InvalidGlob => error.InvalidGlob,
+            error.PersistFailed => error.PersistFailed,
+        };
+    }
+
+    /// `plugin:fs|asset_scope_add` — grants a glob after a file dialog and persists it.
+    pub fn asset_scope_add(_: *rpc.Ctx, state: *FsState, args: struct { glob: []const u8 }) FsError!bool {
+        const scope = try scopeOf(state);
+        return scope.add(args.glob) catch |err| return mapScopeError(err);
+    }
+
+    /// `plugin:fs|asset_scope_remove`.
+    pub fn asset_scope_remove(_: *rpc.Ctx, state: *FsState, args: struct { glob: []const u8 }) FsError!bool {
+        const scope = try scopeOf(state);
+        return scope.remove(args.glob) catch |err| return mapScopeError(err);
+    }
+
+    /// `plugin:fs|asset_scope_clear` — drops every runtime grant (initial config globs stay).
+    pub fn asset_scope_clear(_: *rpc.Ctx, state: *FsState) FsError!void {
+        const scope = try scopeOf(state);
+        scope.clear() catch |err| return mapScopeError(err);
+    }
+
+    /// `plugin:fs|asset_scope_list` — current grants, in insertion order.
+    pub fn asset_scope_list(ctx: *rpc.Ctx, state: *FsState) FsError![]const []const u8 {
+        const scope = try scopeOf(state);
+        return scope.list(ctx.scratch) catch |err| return mapScopeError(err);
+    }
+
     // ---------------------------------------------------------------- metadata
 
     /// `plugin:fs|exists` — whether the path exists.
     pub fn exists(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!bool {
-        const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
+        const target = try resolveScoped(ctx, state, args.path, (args.options orelse BaseOptions{}).base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = false }) catch |err| switch (err) {
             error.FileNotFound, error.NotDir => return false,
             else => return mapIoError(err),
@@ -457,21 +518,21 @@ pub const Commands = struct {
 
     /// `plugin:fs|stat` — metadata, following symlinks.
     pub fn stat(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!FileInfo {
-        const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
+        const target = try resolveScoped(ctx, state, args.path, (args.options orelse BaseOptions{}).base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = true }) catch |err| return mapIoError(err);
         return toFileInfo(st);
     }
 
     /// `plugin:fs|lstat` — metadata of the link itself.
     pub fn lstat(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!FileInfo {
-        const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
+        const target = try resolveScoped(ctx, state, args.path, (args.options orelse BaseOptions{}).base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = false }) catch |err| return mapIoError(err);
         return toFileInfo(st);
     }
 
     /// `plugin:fs|size` — length in bytes.
     pub fn size(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!rpc.SafeInt {
-        const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
+        const target = try resolveScoped(ctx, state, args.path, (args.options orelse BaseOptions{}).base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = true }) catch |err| return mapIoError(err);
         if (st.kind != .directory) return safeU64(st.size);
 
@@ -483,27 +544,27 @@ pub const Commands = struct {
 
     /// `plugin:fs|read_text_file` — reads a file and returns it as a string.
     pub fn read_text_file(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError![]const u8 {
-        const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
+        const target = try resolveScoped(ctx, state, args.path, (args.options orelse BaseOptions{}).base_dir);
         return state.readAlloc(ctx.scratch, target, state.max_io_bytes);
     }
 
     /// `plugin:fs|read_file` — reads a file and returns raw bytes.
     pub fn read_file(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!rpc.Bytes {
-        const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
+        const target = try resolveScoped(ctx, state, args.path, (args.options orelse BaseOptions{}).base_dir);
         return rpc.Bytes.init(try state.readAlloc(ctx.scratch, target, state.max_io_bytes));
     }
 
     /// `plugin:fs|write_text_file` — writes a string, creating or truncating the file.
     pub fn write_text_file(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, data: []const u8, options: ?WriteOptions = null }) FsError!void {
         const opts = args.options orelse WriteOptions{};
-        const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
+        const target = try resolveScoped(ctx, state, args.path, opts.base_dir);
         try state.writeAll(target, args.data, opts);
     }
 
     /// `plugin:fs|write_file` — writes raw bytes.
     pub fn write_file(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, data: rpc.Bytes, options: ?WriteOptions = null }) FsError!void {
         const opts = args.options orelse WriteOptions{};
-        const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
+        const target = try resolveScoped(ctx, state, args.path, opts.base_dir);
         try state.writeAll(target, args.data.slice(), opts);
     }
 
@@ -512,7 +573,7 @@ pub const Commands = struct {
     /// `plugin:fs|mkdir` — creates a directory (`recursive` by option).
     pub fn mkdir(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?MkdirOptions = null }) FsError!void {
         const opts = args.options orelse MkdirOptions{};
-        const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
+        const target = try resolveScoped(ctx, state, args.path, opts.base_dir);
         if (opts.recursive) {
             Io.Dir.cwd().createDirPath(state.io, target) catch |err| return mapIoError(err);
         } else {
@@ -523,7 +584,7 @@ pub const Commands = struct {
     /// `plugin:fs|remove` — deletes a file or directory (`recursive` by option).
     pub fn remove(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?RemoveOptions = null }) FsError!void {
         const opts = args.options orelse RemoveOptions{};
-        const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
+        const target = try resolveScoped(ctx, state, args.path, opts.base_dir);
         const st = Io.Dir.cwd().statFile(state.io, target, .{ .follow_symlinks = false }) catch |err| return mapIoError(err);
         switch (st.kind) {
             .directory => {
@@ -540,16 +601,16 @@ pub const Commands = struct {
     /// `plugin:fs|rename` — moves a file or directory.
     pub fn rename(ctx: *rpc.Ctx, state: *FsState, args: struct { old_path: []const u8, new_path: []const u8, options: ?RenameOptions = null }) FsError!void {
         const opts = args.options orelse RenameOptions{};
-        const from = try state.resolve(ctx.scratch, args.old_path, opts.old_path_base_dir);
-        const to = try state.resolve(ctx.scratch, args.new_path, opts.new_path_base_dir);
+        const from = try resolveScoped(ctx, state, args.old_path, opts.old_path_base_dir);
+        const to = try resolveScoped(ctx, state, args.new_path, opts.new_path_base_dir);
         Io.Dir.cwd().rename(from, Io.Dir.cwd(), to, state.io) catch |err| return mapIoError(err);
     }
 
     /// `plugin:fs|copy_file` — copies one file to another path.
     pub fn copy_file(ctx: *rpc.Ctx, state: *FsState, args: struct { from_path: []const u8, to_path: []const u8, options: ?CopyOptions = null }) FsError!void {
         const opts = args.options orelse CopyOptions{};
-        const from = try state.resolve(ctx.scratch, args.from_path, opts.from_path_base_dir);
-        const to = try state.resolve(ctx.scratch, args.to_path, opts.to_path_base_dir);
+        const from = try resolveScoped(ctx, state, args.from_path, opts.from_path_base_dir);
+        const to = try resolveScoped(ctx, state, args.to_path, opts.to_path_base_dir);
 
         const src = Io.Dir.cwd().openFile(state.io, from, .{ .mode = .read_only, .allow_directory = false }) catch |err| return mapIoError(err);
         defer src.close(state.io);
@@ -569,7 +630,7 @@ pub const Commands = struct {
     /// `plugin:fs|read_dir` — lists a directory, optionally recursively.
     pub fn read_dir(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?ReadDirOptions = null }) FsError![]DirEntry {
         const opts = args.options orelse ReadDirOptions{};
-        const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
+        const target = try resolveScoped(ctx, state, args.path, opts.base_dir);
 
         const dir = Io.Dir.cwd().openDir(state.io, target, .{ .iterate = true }) catch |err| return mapIoError(err);
         defer dir.close(state.io);
@@ -598,7 +659,7 @@ pub const Commands = struct {
 
     /// `plugin:fs|create` — creates a file and returns its resource handle.
     pub fn create(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, options: ?BaseOptions = null }) FsError!u53 {
-        const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
+        const target = try resolveScoped(ctx, state, args.path, (args.options orelse BaseOptions{}).base_dir);
         return state.openHandle(target, .{ .mode = .read_write, .allow_directory = false });
     }
 
@@ -608,7 +669,7 @@ pub const Commands = struct {
         options: ?OpenOptions = null,
     }) FsError!u53 {
         const opts = args.options orelse OpenOptions{};
-        const target = try state.resolve(ctx.scratch, args.path, opts.base_dir);
+        const target = try resolveScoped(ctx, state, args.path, opts.base_dir);
 
         const mode: Io.Dir.OpenFileOptions.Mode = if (opts.write or opts.append or opts.truncate)
             (if (opts.read) .read_write else .write_only)
@@ -691,7 +752,7 @@ pub const Commands = struct {
 
     /// `plugin:fs|truncate` — resizes a file by path.
     pub fn truncate(ctx: *rpc.Ctx, state: *FsState, args: struct { path: []const u8, len: rpc.SafeInt, options: ?BaseOptions = null }) FsError!void {
-        const target = try state.resolve(ctx.scratch, args.path, (args.options orelse BaseOptions{}).base_dir);
+        const target = try resolveScoped(ctx, state, args.path, (args.options orelse BaseOptions{}).base_dir);
         const file = Io.Dir.cwd().openFile(state.io, target, .{ .mode = .read_write, .allow_directory = false }) catch |err| return mapIoError(err);
         defer file.close(state.io);
         if (args.len.get() < 0) return error.NegativeOffset;
@@ -755,10 +816,16 @@ const TestFixture = struct {
     }
 
     fn invoke(self: *TestFixture, command: []const u8, payload: []const u8) !Response {
+        return self.invokeWithScope(command, payload, "");
+    }
+
+    /// Same as `invoke` but with the ACL scope a real `Policy.authorizeCtx` would attach.
+    fn invokeWithScope(self: *TestFixture, command: []const u8, payload: []const u8, scope_json: []const u8) !Response {
         self.resetScratch();
         var router = TestSchema.bind(.{ .fs = &self.state, .resources = &self.resources });
         var handler = router.handler();
         var ctx = rpc.Ctx.init(testing.io, self.arena.allocator());
+        ctx.acl_scope_json = scope_json;
         return .{ .resp = handler.dispatch(testing.allocator, &ctx, command, payload) };
     }
 
@@ -1004,5 +1071,78 @@ test "plugin:fs stream handles: open, write, seek, read, ftruncate, fstat, close
         var r = try f.invoke("plugin:fs|read", payload);
         defer r.deinit();
         try r.expectCode("BadResourceId");
+    }
+}
+
+test "P0-2: a capability scope is enforced end to end by plugin:fs" {
+    var f = try TestFixture.create();
+    defer f.destroy();
+
+    {
+        var r = try f.invoke("plugin:fs|write_text_file", "{\"path\":\"hello.txt\",\"data\":\"scoped\"}");
+        defer r.deinit();
+        try r.expectOk();
+    }
+
+    const scope =
+        \\ [{"identifier":"fs:allow-read-text-file","allow":[{"path":"**/hello.txt"}]}]
+    ;
+    {
+        var r = try f.invokeWithScope("plugin:fs|read_text_file", "{\"path\":\"hello.txt\"}", scope);
+        defer r.deinit();
+        try r.expectOk();
+        try testing.expectEqualStrings("\"scoped\"", r.body());
+    }
+    {
+        var r = try f.invokeWithScope("plugin:fs|write_text_file", "{\"path\":\"other.txt\",\"data\":\"blocked\"}",
+            \\ [{"identifier":"fs:allow-write-text-file","allow":[{"path":"**/allowed.txt"}]}]
+        );
+        defer r.deinit();
+        try r.expectCode("OutOfScope");
+    }
+}
+
+test "P1 #12: plugin:fs asset_scope_* commands update and persist dialog grants" {
+    var scope = try asset_scope.AssetScope.init(testing.allocator, testing.io, &.{"initial/**"}, null);
+    defer scope.deinit();
+
+    const FsSchema = rpc.Schema(.{ .fs = Commands });
+    var f = try TestFixture.create();
+    defer f.destroy();
+    var bound = FsSchema.bind(.{ .fs = &f.state });
+    var handler = bound.handler();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var ctx = rpc.Ctx.init(testing.io, arena.allocator());
+
+    // Without an attached scope the commands fail closed.
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_add", "{\"glob\":\"x/**\"}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
+    }
+
+    _ = f.state.withAssetScope(&scope);
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_add", "{\"glob\":\"picked/**\"}");
+        defer r.deinit();
+        try testing.expectEqualStrings("true", r.body.slice());
+    }
+    try testing.expect(scope.allows("picked/photo.jpg"));
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_list", "{}");
+        defer r.deinit();
+        try testing.expectEqualStrings("[\"initial/**\",\"picked/**\"]", r.body.slice());
+    }
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_remove", "{\"glob\":\"picked/**\"}");
+        defer r.deinit();
+        try testing.expectEqualStrings("true", r.body.slice());
+    }
+    try testing.expect(!scope.allows("picked/photo.jpg"));
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_add", "{\"glob\":\"\"}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
     }
 }

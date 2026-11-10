@@ -78,5 +78,6 @@
 - 生成物に gzip 双子と CSP ハッシュが入り、`tests/ssg/embedded_consumer.zig` が実物を検証する。
 - `examples/counter/web/bindings.gen.ts` は **コミット済み**で、`zig build check-bindings` が
   鮮度を保証する。CI の Linux ジョブは `OK build-tools embed …` マーカーを必須にしている。
-- **残課題**: `zts_web.Assets` はまだ `gzip_entries` を消費しない（配信側で
-  `Content-Encoding: gzip` を選ぶのは `M5-03` のバンドラ / サーバ統合で扱う）。
+- **解消済み（M5-19 / P0-4）**: 生成された `assets: web.Assets` が `gzip_entries` を保持し、
+  `zts_web.Assets.resolve()` が `Accept-Encoding` を解釈して `Content-Encoding: gzip` と
+  `Vary` を返す。デスクトップのカスタムプロトコルと Live Preview の両方で同じ経路。

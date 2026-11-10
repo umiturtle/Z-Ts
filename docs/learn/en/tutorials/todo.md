@@ -272,6 +272,16 @@ Without the id, the page has to re-fetch the whole list after every add. The ret
 
 ---
 
+## Read this with another library
+
+**The Zig side is identical for every library** (`State`, the three commands, `error{}`, the
+tests). Only list rendering changes: read the "State" column above in your library's idiom (React
+`useState`, Svelte `let`, and so on).
+
+<!-- framework-picker -->
+
+The [chooser hub](frameworks.md) lists every real example.
+
 ## Where to go next
 
 | Want to know | Go to |

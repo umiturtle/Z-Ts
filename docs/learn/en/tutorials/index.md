@@ -12,6 +12,16 @@ the [glossary](../../../glossary.md) — you do not have to stop and read a chap
 | 2. [Build a todo list](todo.md) | a list you can add to, complete and remove from | state in one struct, returning failures, testing commands |
 | 3. [Build the screen](ui.md) | a page that distinguishes loading, empty and error | view states, CSS swapping, CSP |
 
+## Work through them with your library
+
+All three share **the same Zig side**. For the frontend, pick any of the nine libraries with a
+committed example, or plain JavaScript. **Read one branch and you are done** — these are
+alternative routes, not extra chapters, so the time budget does not grow.
+
+<!-- framework-picker -->
+
+The [chooser hub](frameworks.md) also links each example's source, build command and live demo.
+
 ## How to work through one
 
 1. **Go in order.** Tutorial 2 reuses tutorial 1's project (it also works in a fresh one).

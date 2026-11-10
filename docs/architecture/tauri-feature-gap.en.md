@@ -52,6 +52,12 @@ compatible with the project's philosophy. §4 states what we deliberately will n
 | 4 | Serving the gzip twins (`Content-Encoding: gzip`) | `embedFrontend` generates `gzip_entries` / `csp_hashes` but `zts_web.Assets` has no consumer — **dead generated data** | One `content_encoding` field on `AssetResponse`; generation is already deterministic | `src/core/assets.zig`, `src/build_tools/assets.zig`, `src/tauri/protocol.zig` |
 | 5 | `zts migrate` (convert an existing `src-tauri/` project) | [`migrate-from-tauri.md`](../learn/en/guides/migrate-from-tauri.md) is a manual guide; no CLI command | `config_import` already parses `tauri.conf.json`; file generation extends `src/cli/template.zig` | `src/cli/{args,migrate}.zig` |
 
+
+> **Progress (M5-19 / 2026-10-21)**: all adopted P0 / P1 / P2 items are implemented. See the
+> [task sheet](../tasks/M5-19-tauri-gap-implementation.md) and
+> [stock plugin guide](../learn/en/guides/plugins.md) (§6 / §7). Features needing TLS, OS hooks or
+> external tools are excluded with reasons in §4.
+
 ### P1 — lets app authors write the same code as Tauri
 
 | # | Feature | Gap | Where |

@@ -304,7 +304,8 @@ pub fn renderManifest(
         \\//!
         \\//! `entries` / `assets` are drop-in compatible with the `zts_ssg` manifest; the extra
         \\//! `gzip_entries` (deterministic twins, `null` when not compressible) and `csp_hashes`
-        \\//! (inline `<script>` / `<style>` bodies) are what `M5-01` adds.
+        \\//! (inline `<script>` / `<style>` bodies) are what `M5-01` adds. `assets` wires the twins
+        \\//! into `zts_web.Assets` so `Accept-Encoding: gzip` is served on every OS (P0-4).
         \\const web = @import("zts_web");
         \\
         \\pub const entries: []const web.StaticAsset = &.{
@@ -364,7 +365,7 @@ pub fn renderManifest(
     try w.writeAll(
         \\};
         \\
-        \\pub const assets: web.Assets = .{ .entries = entries };
+        \\pub const assets: web.Assets = .{ .entries = entries, .gzip_entries = gzip_entries };
         \\
     );
 
@@ -516,6 +517,9 @@ test "manifest is sorted, hashed, compressed and quoted safely" {
     // The single inline script of `z-last.html` made it into the CSP list.
     try testing.expectEqual(@as(usize, 1), out.csp_hashes.len);
     try testing.expect(std.mem.indexOf(u8, first, out.csp_hashes[0]) != null);
+
+    // P0-4: the generated `assets` actually consumes `gzip_entries` (no more dead data).
+    try testing.expect(std.mem.indexOf(u8, first, ".gzip_entries = gzip_entries") != null);
 }
 
 test "duplicate paths are rejected" {

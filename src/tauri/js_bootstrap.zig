@@ -80,6 +80,9 @@ pub const BootstrapOptions = struct {
     protocol_scheme: []const u8 = "http",
     /// Secret per-launch key sent in `Tauri-Invoke-Key` on every IPC call.
     invoke_key: []const u8,
+    /// 64 lowercase hex chars = AES-256-GCM key for `app.security.pattern: "isolation"`.
+    /// Empty means brownfield (no envelope). See `src/tauri/isolation.zig`.
+    isolation_key_hex: []const u8 = "",
 };
 
 /// Writes the raw JavaScript initialization body (without `<script>` wrapper tags) for `addInitScript`.
@@ -93,6 +96,8 @@ pub fn writeScript(writer: *std.Io.Writer, opts: BootstrapOptions) std.Io.Writer
     try html_escape.writeJsonString(writer, opts.protocol_scheme, true);
     try writer.writeAll(",KEY=");
     try html_escape.writeJsonString(writer, opts.invoke_key, true);
+    try writer.writeAll(",ISOKEY=");
+    try html_escape.writeJsonString(writer, opts.isolation_key_hex, true);
     try writer.writeAll(",SEP=");
     try html_escape.writeJsonString(writer, opts.os.pathSep(), true);
     try writer.writeAll(",DELIM=");
@@ -177,6 +182,29 @@ const bootstrap_body_js =
     \\  });
     \\  return { contentType: "application/json", data };
     \\}
+    \\function b64(bytes) {
+    \\  let s = "";
+    \\  for (let i = 0; i < bytes.length; i += 8192) {
+    \\    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    \\  }
+    \\  return btoa(s);
+    \\}
+    \\function isolationHook(message) {
+    \\  if (typeof window.__TAURI_ISOLATION_HOOK__ !== "function") return message;
+    \\  const out = window.__TAURI_ISOLATION_HOOK__(message);
+    \\  return out && typeof out === "object" ? out : message;
+    \\}
+    \\async function isolationEncrypt(data) {
+    \\  const keyBytes = new Uint8Array(ISOKEY.match(/../g).map((h) => parseInt(h, 16)));
+    \\  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
+    \\  const nonce = crypto.getRandomValues(new Uint8Array(12));
+    \\  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+    \\  const ct = new Uint8Array(await crypto.subtle.encrypt({
+    \\    name: "AES-GCM", iv: nonce, tagLength: 128,
+    \\    additionalData: new TextEncoder().encode("ziggurats-isolation-v1")
+    \\  }, key, bytes));
+    \\  return JSON.stringify({ nonce: b64(nonce), ct: b64(ct) });
+    \\}
     \\let customProtocolFailed = false;
     \\function postViaNativeBridge(rawObj) {
     \\  const encoded = JSON.stringify(rawObj);
@@ -191,15 +219,16 @@ const bootstrap_body_js =
     \\  }
     \\}
     \\function sendIpcMessage(message) {
-    \\  const { cmd, callback, error, payload, options } = message;
+    \\  const msg = isolationHook(message);
+    \\  const { cmd, callback, error, options } = msg;
     \\  if (!customProtocolFailed) {
-    \\    const { contentType, data } = processIpcPayload(payload);
+    \\    const { contentType, data } = processIpcPayload(msg.payload);
     \\    const headers = new Headers((options && options.headers) || {});
     \\    headers.set("Content-Type", contentType);
     \\    headers.set("Tauri-Callback", String(callback));
     \\    headers.set("Tauri-Error", String(error));
     \\    headers.set("Tauri-Invoke-Key", KEY);
-    \\    fetch(convertFileSrc(cmd, "ipc"), { method: "POST", body: data, headers })
+    \\    const post = (body) => fetch(convertFileSrc(cmd, "ipc"), { method: "POST", body, headers })
     \\      .then((res) => {
     \\        const isOk = (res.headers.get("Tauri-Response") || (res.ok ? "ok" : "error")) === "ok";
     \\        const cbId = isOk ? callback : error;
@@ -211,16 +240,31 @@ const bootstrap_body_js =
     \\      .then(
     \\        ([cbId, out]) => runCallback(cbId, out),
     \\        () => {
+    \\          if (ISOKEY) {
+    \\            runCallback(error, { code: "IsolationTransportUnavailable" });
+    \\            return;
+    \\          }
     \\          customProtocolFailed = true;
     \\          sendIpcMessage(message);
     \\        }
     \\      );
+    \\    if (ISOKEY) {
+    \\      isolationEncrypt(data).then(post, () => {
+    \\        runCallback(error, { code: "IsolationEncryptionFailed" });
+    \\      });
+    \\    } else {
+    \\      post(data);
+    \\    }
     \\  } else {
+    \\    if (ISOKEY) {
+    \\      runCallback(error, { code: "IsolationTransportUnavailable" });
+    \\      return;
+    \\    }
     \\    postViaNativeBridge({
     \\      cmd,
     \\      callback,
     \\      error,
-    \\      payload,
+    \\      payload: msg.payload,
     \\      __TAURI_INVOKE_KEY__: KEY
     \\    });
     \\  }
@@ -360,4 +404,28 @@ test "js_bootstrap escapes hostile labels against </script> XSS and switches OS 
     try testing.expectEqual(@as(?usize, null), std.mem.indexOf(u8, inner, "</script>"));
     try testing.expect(std.mem.indexOf(u8, inner, "\"windows\"") != null);
     try testing.expect(std.mem.indexOf(u8, inner, "SEP=\"\\\\\"") != null);
+}
+
+test "P0-3: isolation bootstrap embeds the AES key, hook and WebCrypto envelope" {
+    const key_hex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+    const script = try renderScriptAlloc(testing.allocator, .{
+        .invoke_key = "invoke-secret",
+        .isolation_key_hex = key_hex,
+    });
+    defer testing.allocator.free(script);
+
+    try testing.expect(std.mem.indexOf(u8, script, "ISOKEY=\"" ++ key_hex ++ "\"") != null);
+    try testing.expect(std.mem.indexOf(u8, script, "__TAURI_ISOLATION_HOOK__") != null);
+    try testing.expect(std.mem.indexOf(u8, script, "crypto.subtle.encrypt") != null);
+    try testing.expect(std.mem.indexOf(u8, script, "ziggurats-isolation-v1") != null);
+    try testing.expect(std.mem.indexOf(u8, script, "IsolationTransportUnavailable") != null);
+
+    // Brownfield mode still ships the (inert) helpers but no key: `ISOKEY` is the empty string,
+    // so every branch takes the plaintext path and no envelope is produced.
+    const plain = try renderScriptAlloc(testing.allocator, .{
+        .invoke_key = "invoke-secret",
+    });
+    defer testing.allocator.free(plain);
+    try testing.expect(std.mem.indexOf(u8, plain, "ISOKEY=\"\"") != null);
+    try testing.expect(std.mem.indexOf(u8, plain, key_hex) == null);
 }

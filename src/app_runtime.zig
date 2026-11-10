@@ -37,6 +37,11 @@ pub const DesktopConfig = struct {
     extra_allowed_origins: []const []const u8 = &.{},
     /// Fixed invoke key (tests / embedded hosts); random when `null`.
     invoke_key_override: ?[]const u8 = null,
+    /// `app.security.pattern: "isolation"` key. `null` = brownfield (plaintext IPC bodies).
+    /// Build it with `tauri.isolation.keyFor(app.identifier, pattern.isolation.key_hex)`.
+    isolation_key: ?tauri.IsolationKey = null,
+    /// Asset path prefix backing `isolation://localhost/`.
+    isolation_asset_prefix: []const u8 = "/isolation/",
 };
 
 fn noopRpcDispatch(
@@ -94,6 +99,9 @@ pub const DesktopRuntime = struct {
         };
         self.host_adapter = webview_host.WebviewHost.init(&self.engine);
         self.invoke_key = cfg.invoke_key_override orelse self.invoke_key_storage[0..];
+        // JS-created windows must receive the same per-label bootstrap as startup windows, so
+        // commands go through `DesktopRuntime.openWindow` instead of the bare Host vtable.
+        _ = self.plugins.windows.withWindowFactory(self, onOpenWindow);
         self.router = tauri.ProtocolRouter.init(allocator, io, .{
             .invoke_key = self.invoke_key,
             .assets = cfg.assets,
@@ -102,6 +110,8 @@ pub const DesktopRuntime = struct {
             .asset_root_dir = cfg.paths.resource_dir,
             .asset_allow_globs = cfg.asset_allow_globs,
             .extra_allowed_origins = cfg.extra_allowed_origins,
+            .isolation_key = cfg.isolation_key,
+            .isolation_asset_prefix = cfg.isolation_asset_prefix,
         }, .{ .userdata = null, .dispatchFn = noopRpcDispatch });
 
         const scheme_handler: webview.SchemeHandler = .{
@@ -111,6 +121,7 @@ pub const DesktopRuntime = struct {
         try self.engine.registerScheme("tauri", scheme_handler);
         try self.engine.registerScheme("ipc", scheme_handler);
         try self.engine.registerScheme("asset", scheme_handler);
+        try self.engine.registerScheme("isolation", scheme_handler);
         self.engine.setMessageHandler(.{ .userdata = self, .onMessage = onJsMessage });
         self.engine.setCloseHandler(.{ .userdata = self, .onClose = onWindowClosed });
 
@@ -142,9 +153,15 @@ pub const DesktopRuntime = struct {
     /// Creates a window, injects `window.__TAURI_INTERNALS__` at `AT_DOCUMENT_START` with the
     /// window's exact `label` and `invoke_key`, registers it in `WindowRegistry`, and navigates to `initial_url`.
     pub fn openWindow(self: *DesktopRuntime, spec: core.WindowSpec) !core.WindowId {
+        var iso_hex_buf: [64]u8 = undefined;
+        const iso_hex: []const u8 = if (self.router.config.isolation_key) |key| blk: {
+            iso_hex_buf = tauri.isolation.keyHex(key);
+            break :blk &iso_hex_buf;
+        } else "";
         const boot_js = try tauri.js_bootstrap.renderScriptAlloc(self.allocator, .{
             .label = spec.label,
             .invoke_key = self.invoke_key,
+            .isolation_key_hex = iso_hex,
         });
         defer self.allocator.free(boot_js);
 
@@ -164,6 +181,20 @@ pub const DesktopRuntime = struct {
             .devtools = spec.devtools,
             .background_color = spec.background_color,
             .initial_url = spec.initial_url,
+            .center = spec.center,
+            .maximized = spec.maximized,
+            .skip_taskbar = spec.skip_taskbar,
+            .always_on_bottom = spec.always_on_bottom,
+            .focus = spec.focus,
+            .content_protected = spec.content_protected,
+            .drag_drop_enabled = spec.drag_drop_enabled,
+            .zoom_hotkeys_enabled = spec.zoom_hotkeys_enabled,
+            .hidden_title = spec.hidden_title,
+            .title_bar_style = spec.title_bar_style,
+            .user_agent = spec.user_agent,
+            .tabbing_identifier = spec.tabbing_identifier,
+            .visible_on_all_workspaces = spec.visible_on_all_workspaces,
+            .window_effects_json = spec.window_effects_json,
             .init_scripts = &scripts,
         });
         try self.plugins.windows.registerWindow(win_id, spec);
@@ -182,7 +213,17 @@ pub const DesktopRuntime = struct {
 
     fn onWindowClosed(ud: ?*anyopaque, win_id: webview.WindowId) void {
         const self: *DesktopRuntime = @ptrCast(@alignCast(ud.?));
+        self.plugins.webviews.unregisterWindow(win_id);
         self.plugins.windows.unregisterWindow(win_id);
+    }
+
+    /// `WindowRegistry` factory used by `plugin:window|create` / `create_webview_window`.
+    fn onOpenWindow(ud: ?*anyopaque, spec: core.WindowSpec) core.HostError!core.WindowId {
+        const self: *DesktopRuntime = @ptrCast(@alignCast(ud.?));
+        return self.openWindow(spec) catch |err| switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            else => error.PlatformFailure,
+        };
     }
 
     fn onSchemeRequest(ud: ?*anyopaque, req: webview.SchemeRequest) void {
@@ -272,6 +313,7 @@ test "DesktopRuntime + HeadlessMock runs end-to-end Tauri v2 custom commands, Ch
 
     var bound = FullSchema.bind(.{
         .tauri_window = &rt.plugins.windows,
+        .tauri_webview = &rt.plugins.webviews,
         .tauri_event = &rt.plugins.events,
         .tauri_path = &rt.plugins.paths,
         .tauri_app = &rt.plugins.app_state,
@@ -319,4 +361,50 @@ test "DesktopRuntime + HeadlessMock runs end-to-end Tauri v2 custom commands, Ch
     try testing.expectEqualStrings("3", mock.completed_records.items[1].body);
     // 3 indexed message frames + 1 end marker = 4 `evalJs` dispatches!
     try testing.expectEqual(evals_before + 4, mock.windows.getPtr(win_id).?.evaluated_scripts.items.len);
+}
+
+test "P0-1: JS WebviewWindow creation goes through the runtime factory and injects its own bootstrap" {
+    const rt = try DesktopRuntime.create(testing.allocator, testing.io, .{ .backend = .headless_mock });
+    defer rt.destroy();
+
+    var bound = tauri.CorePluginsSchema.bind(.{
+        .tauri_window = &rt.plugins.windows,
+        .tauri_webview = &rt.plugins.webviews,
+        .tauri_event = &rt.plugins.events,
+        .tauri_path = &rt.plugins.paths,
+        .tauri_app = &rt.plugins.app_state,
+        .tauri_resources = &rt.plugins.resources,
+        .tauri_menu = &rt.plugins.menu_state,
+        .tauri_tray = &rt.plugins.tray_state,
+    });
+    rt.setRpcHandler(bound.handler());
+    const main = try rt.openWindow(.{ .label = "main" });
+    const mock = rt.engine.headless_mock;
+    const auth_hdrs = [_]webview.HeaderPair{
+        .{ .name = "Tauri-Invoke-Key", .value = rt.invoke_key },
+    };
+
+    // `new WebviewWindow('settings', { width: 640, height: 480, url: 'settings.html' })`
+    _ = try mock.simulateSchemeRequest(main, "POST", "ipc://localhost/plugin%3Awebview%7Ccreate_webview_window", &auth_hdrs,
+        \\{"options":{"label":"settings","width":640,"height":480,"url":"settings.html"}}
+    );
+    _ = rt.step(.poll);
+    try testing.expectEqual(@as(u16, 200), mock.completed_records.items[0].status_code);
+    try testing.expectEqual(@as(usize, 2), rt.plugins.windows.entries.items.len);
+
+    // The second window really exists in the engine and got a bootstrap with ITS OWN label.
+    const second = rt.plugins.windows.resolveId("settings", core.WindowId.invalid).?;
+    const mock_window = mock.windows.getPtr(second).?;
+    try testing.expect(mock_window.init_scripts.items.len > 0);
+    const boot = mock_window.init_scripts.items[0];
+    try testing.expect(std.mem.indexOf(u8, boot, "LABEL=\"settings\"") != null);
+    try testing.expect(std.mem.indexOf(u8, boot, "LABEL=\"main\"") == null);
+    try testing.expectEqualStrings("tauri://localhost/settings.html", mock_window.current_url);
+
+    // getAllWebviews() reports both the startup window and the JS-created one.
+    _ = try mock.simulateSchemeRequest(main, "POST", "ipc://localhost/plugin%3Awebview%7Cget_all_webviews", &auth_hdrs, "{}");
+    _ = rt.step(.poll);
+    const list = mock.completed_records.items[1].body;
+    try testing.expect(std.mem.indexOf(u8, list, "{\"label\":\"main\",\"windowLabel\":\"main\"}") != null);
+    try testing.expect(std.mem.indexOf(u8, list, "{\"label\":\"settings\",\"windowLabel\":\"settings\"}") != null);
 }

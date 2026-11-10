@@ -158,6 +158,16 @@ not by "what went wrong in Zig" (see [Designing errors](../patterns/errors.md)).
 
 ---
 
+## Read this with another library
+
+State boundaries, CSP and `zts dev`'s CSS swap are **identical for every library**. Only the
+template syntax that distinguishes loading / empty / error changes, so pick a library above and
+translate those three branches into its idiom.
+
+<!-- framework-picker -->
+
+The [chooser hub](frameworks.md) lists every real example.
+
 ## Where to go next
 
 | Want to know | Go to |

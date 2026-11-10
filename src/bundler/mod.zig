@@ -10,6 +10,7 @@
 //! * [`tree`] — materialise a plan into a directory (the only part that writes files).
 //! * [`ico`] / [`pe`] — Windows: parse a `.ico` and append a `.rsrc` section to a finished PE image,
 //!   because Zig 0.17's build system has no Win32 resource embedding step.
+//! * [`icns`] — macOS `.icns` container, written in Pure Zig (no `iconutil`).
 //! * [`binary`] — read the object format and CPU back out of a built executable, so a cross-build
 //!   is labelled with its real architecture.
 //!
@@ -24,6 +25,7 @@ pub const deb = @import("deb.zig");
 pub const tree = @import("tree.zig");
 pub const pe = @import("pe.zig");
 pub const ico = @import("ico.zig");
+pub const icns = @import("icns.zig");
 pub const binary = @import("binary.zig");
 
 pub const App = app.App;
@@ -38,5 +40,6 @@ test {
     _ = tree;
     _ = pe;
     _ = ico;
+    _ = icns;
     _ = binary;
 }

@@ -188,8 +188,33 @@ pub const Config = struct {
         /// `security.capabilities` — either a reference to a capability identifier or an inline
         /// capability object (kept as raw JSON for `acl.zig` to interpret).
         capabilities: []CapabilityEntry = &.{},
+        /// `security.pattern` — `"brownfield"` (default) or the AES-GCM isolation pattern.
+        pattern: Pattern = .brownfield,
         /// Extra response headers, as raw JSON.
         headers_json: ?[]const u8 = null,
+    };
+
+    /// `app.security.pattern`. Upstream Tauri v2 accepts either the string `"brownfield"` /
+    /// `"isolation"` or `{ "use": "isolation", "options": { "dir": "../dist-isolation" } }`.
+    pub const IsolationOptions = struct {
+        /// Directory (relative to the frontend `dist/`) holding the isolation iframe's assets.
+        /// Served from `isolation://localhost/` by `protocol.zig`.
+        dir: []const u8 = "isolation",
+        /// Optional 64-char hex AES-256 key. When empty, `isolation.deriveKey()` builds a
+        /// deterministic key from `identifier` instead — no runtime randomness in built assets.
+        key_hex: []const u8 = "",
+    };
+
+    /// `app.security.pattern` — brownfield or AES-GCM isolation.
+    pub const Pattern = union(enum) {
+        /// Default: the frontend talks to IPC directly (CSRF key + capabilities still apply).
+        brownfield,
+        /// Every IPC body is AES-256-GCM encrypted by the injected bootstrap.
+        isolation: IsolationOptions,
+
+        pub fn isIsolation(self: Pattern) bool {
+            return self == .isolation;
+        }
     };
 
     /// One entry of `security.capabilities`: either a name or an inline object.
@@ -252,6 +277,13 @@ pub const Config = struct {
         title_bar_style: ?[]const u8 = null,
         hidden_title: bool = false,
         user_agent: ?[]const u8 = null,
+        /// P1 #10 — previously reported as "unsupported" and dropped.
+        drag_drop_enabled: bool = true,
+        zoom_hotkeys_enabled: bool = false,
+        content_protected: bool = false,
+        tabbing_identifier: ?[]const u8 = null,
+        visible_on_all_workspaces: bool = false,
+        window_effects_json: ?[]const u8 = null,
 
         /// Maps onto `zts_core.WindowSpec` (ziggurats owns the window lifecycle).
         pub fn toWindowSpec(self: WindowConfig) core.WindowSpec {
@@ -280,6 +312,20 @@ pub const Config = struct {
                 .devtools = self.devtools orelse false,
                 .theme = themeOf(self.theme),
                 .initial_url = self.appUrl(),
+                .center = self.center,
+                .maximized = self.maximized,
+                .skip_taskbar = self.skip_taskbar,
+                .always_on_bottom = self.always_on_bottom,
+                .focus = self.focus,
+                .content_protected = self.content_protected,
+                .drag_drop_enabled = self.drag_drop_enabled,
+                .zoom_hotkeys_enabled = self.zoom_hotkeys_enabled,
+                .hidden_title = self.hidden_title,
+                .title_bar_style = self.title_bar_style orelse "",
+                .user_agent = self.user_agent,
+                .tabbing_identifier = self.tabbing_identifier,
+                .visible_on_all_workspaces = self.visible_on_all_workspaces,
+                .window_effects_json = self.window_effects_json,
             };
         }
 
@@ -545,18 +591,24 @@ fn parseWindow(parser: *Parser, path: []const u8, object: std.json.ObjectMap) Er
     if (try parser.optString(tryPath(parser, path, "theme"), object.get("theme"))) |v| window.theme = v;
     if (try parser.optString(tryPath(parser, path, "titleBarStyle"), object.get("titleBarStyle"))) |v| window.title_bar_style = v;
     if (try parser.optString(tryPath(parser, path, "userAgent"), object.get("userAgent"))) |v| window.user_agent = v;
+    // P1 #10: these used to be dropped. They are now carried on `core.WindowSpec` so the Host
+    // backends can act on them; keys that still need an OS object remain in `unsupported`.
+    if (try parser.optBool(tryPath(parser, path, "dragDropEnabled"), object.get("dragDropEnabled"))) |v| window.drag_drop_enabled = v;
+    if (try parser.optBool(tryPath(parser, path, "zoomHotkeysEnabled"), object.get("zoomHotkeysEnabled"))) |v| window.zoom_hotkeys_enabled = v;
+    if (try parser.optBool(tryPath(parser, path, "contentProtected"), object.get("contentProtected"))) |v| window.content_protected = v;
+    if (try parser.optBool(tryPath(parser, path, "visibleOnAllWorkspaces"), object.get("visibleOnAllWorkspaces"))) |v| window.visible_on_all_workspaces = v;
+    if (try parser.optString(tryPath(parser, path, "tabbingIdentifier"), object.get("tabbingIdentifier"))) |v| window.tabbing_identifier = v;
+    if (object.get("windowEffects")) |effects| {
+        window.window_effects_json = try stringify(parser.allocator, effects);
+    }
 
     // Keys ziggurats cannot honour yet: report them instead of silently dropping the intent.
     const unsupported = [_][]const u8{
-        "windowEffects",
         "trafficLightPosition",
-        "tabbingIdentifier",
         "additionalBrowserArgs",
         "browserExtensionsEnabled",
         "proxyUrl",
         "useHttpsScheme",
-        "contentProtected",
-        "visibleOnAllWorkspaces",
         "dataStoreIdentifier",
         "scrollBarStyle",
         "backgroundThrottling",
@@ -609,6 +661,46 @@ fn parseScope(parser: *Parser, path: []const u8, value: std.json.Value) Error!Co
     }
 }
 
+/// Parses `app.security.pattern`. Both upstream spellings are accepted. An unknown `use` value
+/// fails with a diagnostic rather than silently changing the security posture of a command.
+fn parsePattern(parser: *Parser, path: []const u8, value: std.json.Value) Error!Config.Pattern {
+    switch (value) {
+        .string => |kind| {
+            if (std.mem.eql(u8, kind, "brownfield")) return .brownfield;
+            if (std.mem.eql(u8, kind, "isolation")) return .{ .isolation = .{} };
+            return parser.fail(path, "unknown security pattern `{s}` (expected `brownfield` or `isolation`)", .{kind});
+        },
+        .object => |object| {
+            const use = object.get("use") orelse
+                return parser.fail(path, "missing `use` in security pattern object", .{});
+            const kind = try parser.string(tryPath(parser, path, "use"), use);
+            if (std.mem.eql(u8, kind, "brownfield")) return .brownfield;
+            if (!std.mem.eql(u8, kind, "isolation")) {
+                return parser.fail(path, "unknown security pattern `{s}`", .{kind});
+            }
+            var opts: Config.IsolationOptions = .{};
+            if (object.get("options")) |options| {
+                const options_path = tryPath(parser, path, "options");
+                if (options != .object) return parser.fail(options_path, "expected an object", .{});
+                if (try parser.optString(tryPath(parser, options_path, "dir"), options.object.get("dir"))) |dir| {
+                    opts.dir = dir;
+                }
+                if (try parser.optString(tryPath(parser, options_path, "keyHex"), options.object.get("keyHex"))) |hex| {
+                    opts.key_hex = hex;
+                }
+                // Upstream `cryptoKeys` holds byte arrays; ziggurats accepts one fixed key via
+                // `keyHex` and notes any extra keys instead of silently picking one.
+                if (options.object.get("cryptoKeys")) |_| {
+                    parser.note(tryPath(parser, options_path, "cryptoKeys"), "use `keyHex` (64 hex chars) for a fixed AES-256 key; extra keys are ignored", .{});
+                }
+            }
+            return .{ .isolation = opts };
+        },
+        .null => return .brownfield,
+        else => return parser.fail(path, "expected a string or object, found {s}", .{@tagName(value)}),
+    }
+}
+
 fn parseSecurity(parser: *Parser, path: []const u8, value: std.json.Value) Error!Config.Security {
     if (value != .object) return parser.fail(path, "expected an object", .{});
     const object = value.object;
@@ -617,6 +709,9 @@ fn parseSecurity(parser: *Parser, path: []const u8, value: std.json.Value) Error
     if (object.get("csp")) |csp| security.csp_json = try stringify(parser.allocator, csp);
     if (object.get("devCsp")) |csp| security.dev_csp_json = try stringify(parser.allocator, csp);
     if (object.get("headers")) |headers| security.headers_json = try stringify(parser.allocator, headers);
+    if (object.get("pattern")) |pattern| {
+        security.pattern = try parsePattern(parser, tryPath(parser, path, "pattern"), pattern);
+    }
     if (try parser.optBool(tryPath(parser, path, "freezePrototype"), object.get("freezePrototype"))) |v| {
         security.freeze_prototype = v;
     }
@@ -648,7 +743,7 @@ fn parseSecurity(parser: *Parser, path: []const u8, value: std.json.Value) Error
         security.capabilities = out;
     }
 
-    const unsupported = [_][]const u8{ "pattern", "dangerousDisableAssetCspModification" };
+    const unsupported = [_][]const u8{"dangerousDisableAssetCspModification"};
     for (unsupported) |key| {
         if (object.get(key) == null) continue;
         parser.note(tryPath(parser, path, key), "not supported by ziggurats yet (ignored)", .{});
@@ -857,7 +952,19 @@ const sample_config =
     \\        "decorations": false,
     \\        "alwaysOnTop": true,
     \\        "theme": "Dark",
-    \\        "windowEffects": { "effects": ["blur"] }
+    \\        "windowEffects": { "effects": ["blur"] },
+    \\        "contentProtected": true,
+    \\        "dragDropEnabled": false,
+    \\        "zoomHotkeysEnabled": true,
+    \\        "tabbingIdentifier": "studio",
+    \\        "visibleOnAllWorkspaces": true,
+    \\        "center": true,
+    \\        "maximized": true,
+    \\        "skipTaskbar": true,
+    \\        "hiddenTitle": true,
+    \\        "titleBarStyle": "Overlay",
+    \\        "userAgent": "ziggurats/0.1",
+    \\        "trafficLightPosition": { "x": 10, "y": 10 }
     \\      },
     \\      { "label": "splash", "url": "splash.html", "create": false },
     \\      { "label": "remote", "url": { "url": "https://example.com/app" }, "width": 400, "height": 300 }
@@ -933,8 +1040,18 @@ test "tauri.conf.json parses product/app/build/bundle and maps windows to Window
     try testing.expectEqualStrings("tauri://localhost/", specs[0].initial_url);
     try testing.expectEqualStrings("https://example.com/app", specs[1].initial_url);
 
-    // `app.plugins` etc. survive as text, and unknown/unsupported keys are warnings only.
-    try testing.expect(diags.has("app.windows[0].windowEffects"));
+    // P1 #10: the previously dropped fields now reach `core.WindowSpec` instead of being warnings.
+    try testing.expect(!diags.has("app.windows[0].windowEffects"));
+    try testing.expect(specs[0].center and specs[0].maximized and specs[0].skip_taskbar);
+    try testing.expect(specs[0].content_protected and !specs[0].drag_drop_enabled and specs[0].zoom_hotkeys_enabled);
+    try testing.expect(specs[0].hidden_title and specs[0].visible_on_all_workspaces);
+    try testing.expectEqualStrings("Overlay", specs[0].title_bar_style);
+    try testing.expectEqualStrings("ziggurats/0.1", specs[0].user_agent.?);
+    try testing.expectEqualStrings("studio", specs[0].tabbing_identifier.?);
+    try testing.expect(std.mem.indexOf(u8, specs[0].window_effects_json.?, "blur") != null);
+
+    // `app.plugins` etc. survive as text, and keys that still need an OS object warn instead.
+    try testing.expect(diags.has("app.windows[0].trafficLightPosition"));
     try testing.expectEqualStrings(
         "Z-Ts Studio",
         (cfg.toAppConfig()).name,
@@ -1027,4 +1144,33 @@ test "load reads tauri.conf.json plus capabilities/*.json from a directory" {
     try testing.expectEqualStrings("main.json", imported.capabilities[0].file_name);
     // The unreadable capability is a warning, not a hard failure.
     try testing.expect(imported.warnings.has("capabilities/broken.json"));
+}
+
+test "P0-3: app.security.pattern parses brownfield and isolation options" {
+    var plain = try parse(testing.allocator,
+        \\{"identifier":"x.y","app":{"security":{"freezePrototype":true}}}
+    , null);
+    defer plain.deinit();
+    try testing.expectEqual(Config.Pattern.brownfield, plain.config.app.security.pattern);
+
+    var short = try parse(testing.allocator,
+        \\{"identifier":"x.y","app":{"security":{"pattern":"isolation"}}}
+    , null);
+    defer short.deinit();
+    try testing.expect(short.config.app.security.pattern.isIsolation());
+    try testing.expectEqualStrings("isolation", short.config.app.security.pattern.isolation.dir);
+
+    var full = try parse(testing.allocator,
+        \\{"identifier":"x.y","app":{"security":{"pattern":{"use":"isolation","options":{"dir":"../dist-isolation","keyHex":"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}}}}
+    , null);
+    defer full.deinit();
+    try testing.expectEqualStrings("../dist-isolation", full.config.app.security.pattern.isolation.dir);
+    try testing.expectEqualStrings("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", full.config.app.security.pattern.isolation.key_hex);
+
+    var diags = Diagnostics.init(testing.allocator);
+    defer diags.deinit();
+    try testing.expectError(error.InvalidConfig, parse(testing.allocator,
+        \\{"identifier":"x.y","app":{"security":{"pattern":{"use":"quantum"}}}}
+    , &diags));
+    try testing.expect(diags.items.items.len > 0);
 }

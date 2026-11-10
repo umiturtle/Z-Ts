@@ -199,6 +199,7 @@ test "2. Live BridgeServer + BridgeHost + Node 22 runs unmodified @tauri-apps/ap
     var bound = FullE2eSchema.bind(.{
         .app = &app_state,
         .tauri_window = &plugins.windows,
+        .tauri_webview = &plugins.webviews,
         .tauri_event = &plugins.events,
         .tauri_path = &plugins.paths,
         .tauri_app = &plugins.app_state,
@@ -354,6 +355,7 @@ test "3. Native WebKit2GTK 4.1 DesktopRuntime runs unmodified @tauri-apps/api v2
     var bound = FullE2eSchema.bind(.{
         .app = &app_state,
         .tauri_window = &rt.plugins.windows,
+        .tauri_webview = &rt.plugins.webviews,
         .tauri_event = &rt.plugins.events,
         .tauri_path = &rt.plugins.paths,
         .tauri_app = &rt.plugins.app_state,

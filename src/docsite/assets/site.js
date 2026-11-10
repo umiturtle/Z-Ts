@@ -9,6 +9,8 @@
  *   4. sidebar        — off-canvas on mobile, with a backdrop and Escape
  *   5. table of contents — highlights the section you are reading
  *   6. reading progress bar
+ *   7. framework picker — turns the chooser table into a <select> (the table stays usable
+ *      without JS, and the option labels come from the table's own links)
  */
 (function () {
   "use strict";
@@ -301,4 +303,66 @@
   window.addEventListener("scroll", updateProgress, { passive: true });
   window.addEventListener("resize", updateProgress);
   updateProgress();
+
+  /* ------------------------------------------------- 7. framework picker */
+
+  // `<!-- framework-picker -->` expands to a plain Markdown table whose first header is
+  // "ライブラリ" / "Library" and whose first row links to the framework-free base tutorial.
+  // Progressive enhancement: with JS off the reader still has ten real links; with JS on they
+  // also get a compact selector. The list is read from the DOM, so the framework catalog has
+  // exactly one owner (`src/docsite/frameworks.json`) and this file never duplicates it.
+  var pickerLabel = isJa ? "ライブラリを選ぶ" : "Choose a library";
+  var pickerButton = isJa ? "チュートリアルを開く" : "Open tutorial";
+
+  doc.querySelectorAll(".content table").forEach(function (table) {
+    var head = table.querySelector("thead th:first-child");
+    if (!head) return;
+    var header = (head.textContent || "").trim();
+    if (header !== "ライブラリ" && header !== "Library") return;
+    var firstLink = table.querySelector("tbody tr:first-child td:first-child a");
+    if (!firstLink || !/counter\.html$/.test(firstLink.getAttribute("href") || "")) return;
+
+    var options = [];
+    table.querySelectorAll("tbody tr").forEach(function (row) {
+      var link = row.querySelector("td:first-child a");
+      if (!link) return;
+      var href = link.getAttribute("href");
+      if (!href) return;
+      options.push({ label: (link.textContent || "").trim(), href: href });
+    });
+    if (options.length < 2) return;
+
+    var form = doc.createElement("form");
+    form.className = "fw-picker";
+    form.setAttribute("data-fw-picker", "");
+
+    var label = doc.createElement("label");
+    label.textContent = pickerLabel;
+    label.setAttribute("for", "fw-picker-select");
+
+    var select = doc.createElement("select");
+    select.id = "fw-picker-select";
+    select.setAttribute("aria-label", pickerLabel);
+    options.forEach(function (option) {
+      var el = doc.createElement("option");
+      el.value = option.href;
+      el.textContent = option.label;
+      select.appendChild(el);
+    });
+
+    var button = doc.createElement("button");
+    button.type = "submit";
+    button.className = "fw-picker-go";
+    button.textContent = pickerButton;
+
+    form.appendChild(label);
+    form.appendChild(select);
+    form.appendChild(button);
+    table.parentNode.insertBefore(form, table);
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      if (select.value) window.location.href = select.value;
+    });
+  });
 })();

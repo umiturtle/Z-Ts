@@ -143,6 +143,38 @@ try testing.expectEqualStrings("{\"count\":1,…}", inst.last_response.body.slic
 | サブパス（`/app/`） | なし | すべての URL が相対化される |
 | S3 など | `index.html` の他希望 | `emit_spa_404` を切って自前の 404 を置く |
 
+### 埋め込みアセットの gzip 配信
+
+`embedFrontend` は各ファイルの **決定論的な gzip 双子**（`gzip_entries`）を生成し、生成された
+`assets: web.Assets` がそれを受け取ります。デスクトップの `tauri://` / `isolation://` と
+Live Preview の HTTP サーバは、どちらも `Accept-Encoding` を見て同じバイト列を返します。
+
+```
+Accept-Encoding: gzip, deflate   →  Content-Encoding: gzip + gzip 双子
+Accept-Encoding: gzip;q=0        →  元のバイト列（明示的な拒否）
+（ヘッダ無し）                    →  元のバイト列
+Range: bytes=0-1023              →  元のバイト列の 206（Range は常に非圧縮表現）
+```
+
+| 規則 | 理由 |
+|---|---|
+| `Vary: Accept-Encoding` を常に付与 | 2 つの表現が存在するためキャッシュを分ける |
+| 双子が元より大きい場合は使わない | 小さな JS を逆に太らせない |
+| `<head>` 注入後は gzip を送らない | 注入でバイト列が変わり、事前計算した双子と一致しなくなる |
+| `MTIME=0` / `OS=Unix` 固定 | 3 OS で**同一バイト列**、スクショ・ハッシュ比較が壊れない |
+
+```zig
+const frontend = @import("embedded_frontend");
+const app_assets = frontend.assets;  // .entries と .gzip_entries の両方が入っている
+
+var res = try app_assets.resolve(allocator, "/index.html", .{
+    .accept_encoding = "gzip",
+});
+defer res.deinit();
+// res.content_encoding == "gzip", res.vary_accept_encoding == true
+```
+
+
 ---
 
 ## 5. つまずきどころ
