@@ -66,4 +66,9 @@
   - ローカル検証: `quick-test` 90/3/4/62/86/37/8、`build test` exit 0、`doctest` 20、
     `fmt --check`、`docs-check`（`docsite pages=292 links=1828 api_undoc=0`）、
     `gen-framework-tutorials.py --check`、`node --check site.js` すべて緑
+- **CI 追加修正**: `bench-dev-loop.py verify` の「同一内容の再書込み」不変条件が
+  `Path.write_text()` の truncate→write の隙間を watcher が読んで誤検知する競合を修正。
+  `atomic_write()`（一時ファイル → `os.replace`）に統一し、ローカルで 4 連続すべて
+  `OK: all dev-loop invariants hold`。Docs 作業とは無関係な既存の flake だが、
+  3 OS CI を緑にするため同一 PR で解消。
 - **現在**: PR #19 へ追加コミット済み。3 OS CI の再実行を確認中。

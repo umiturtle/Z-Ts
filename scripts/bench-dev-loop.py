@@ -40,6 +40,26 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 STATE_PATH = "/__zts_dev__/state"
 
 
+def atomic_write(path, data):
+    """Replace a watched file in one step.
+
+    `Path.write_text()` truncates the destination before writing. The dev-server watcher polls
+    `mtime ^ size` and hashes the bytes, so a poll that lands between the truncate and the write
+    sees a *different* file and legitimately rebuilds. For the "identical-content rewrite" check
+    that is a false positive (and it once made CI read a half-written `src/main.zig`). Writing a
+    sibling temp file and renaming it means the watcher only ever sees the old bytes or the new
+    bytes — both identical in the no-op case.
+    """
+    path = pathlib.Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.zts-tmp")
+    try:
+        tmp.write_text(data, encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
 def zig_binary():
     if os.environ.get("ZTS_ZIG"):
         return os.environ["ZTS_ZIG"]
@@ -163,7 +183,7 @@ def source_edits(project, count, prefix):
         if not line.startswith("// probe ")
     ) + "\n"
     for i in range(count):
-        yield i, lambda i=i: src.write_text(base + f"// probe {prefix} {i}\n")
+        yield i, lambda i=i: atomic_write(src, base + f"// probe {prefix} {i}\n")
 
 
 def bench_latency(session, project, iters, label):
@@ -195,14 +215,14 @@ def direct_build_bench(project, zig, iters, label, check):
                    stderr=subprocess.DEVNULL)
     times = []
     for i in range(iters):
-        src.write_text(base + f"// direct {label} {i}\n")
+        atomic_write(src, base + f"// direct {label} {i}\n")
         t0 = time.perf_counter()
         r = subprocess.run(argv, cwd=project, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True)
         if r.returncode != 0:
             raise RuntimeError(f"{label} build failed: {r.stdout[-500:]}")
         times.append(time.perf_counter() - t0)
-    src.write_text(base)
+    atomic_write(src, base)
     return times
 
 
@@ -292,19 +312,19 @@ def run_verify(args, zts, zig, root):
             src = project / "src/main.zig"
             data = src.read_text()
             old = session.state()["v"]
-            src.write_text(data)  # same bytes, new mtime
+            atomic_write(src, data)  # same bytes, new mtime
             assert_no_change(session, old, label="identical-content rewrite")
 
         def unreachable_source():
             scratch = project / "src/scratch.zig"
             old = session.state()["v"]
-            scratch.write_text("pub const scratch = 2;\n")
+            atomic_write(scratch, "pub const scratch = 2;\n")
             assert_no_change(session, old, label="edit to a file outside the import graph")
 
         def fast_recheck():
             src = project / "src/main.zig"
             old = session.state()["v"]
-            src.write_text(src.read_text() + "// probe fast recheck\n")
+            atomic_write(src, src.read_text() + "// probe fast recheck\n")
             _, state = wait_for_change(session, old)
             assert state["ok"], state
             # Correctness first: an environment where the persistent compiler cannot start
@@ -325,14 +345,14 @@ def run_verify(args, zts, zig, root):
         def css_hot_swap():
             css = project / "web/site.css"
             old = session.state()["v"]
-            css.write_text("h1 { color: blue; }\n")
+            atomic_write(css, "h1 { color: blue; }\n")
             _, state = wait_for_change(session, old)
             assert state["ok"] and state["hot"] == "css", state
 
         def web_reload():
             page = project / "web/index.html"
             old = session.state()["v"]
-            page.write_text(page.read_text() + "\n<!-- probe -->\n")
+            atomic_write(page, page.read_text() + "\n<!-- probe -->\n")
             _, state = wait_for_change(session, old)
             assert state["ok"] and state["hot"] == "full", state
 
@@ -344,20 +364,20 @@ def run_verify(args, zts, zig, root):
             # top-level declaration is deliberately lazy in both full and check builds.
             broken = good.replace("embedded.assets.entries.len", "does_not_exist_anywhere")
             assert broken != good, "the generated main.zig no longer contains the probe token"
-            src.write_text(broken)
+            atomic_write(src, broken)
             # The failed check must not advance v; wait past a full poll+settle+build window.
             time.sleep(2.0)
             state = session.state()
             assert state["v"] == old, f"a failed build advanced v: {state}"
             assert state["ok"] is False, f"a failed build reported ok: {state}"
-            src.write_text(good + "// probe recovered\n")
+            atomic_write(src, good + "// probe recovered\n")
             _, state = wait_for_change(session, old)
             assert state["ok"], state
 
         def build_file_change():
             build = project / "build.zig"
             old = session.state()["v"]
-            build.write_text(build.read_text() + "\n// build graph probe\n")
+            atomic_write(build, build.read_text() + "\n// build graph probe\n")
             _, state = wait_for_change(session, old)
             assert state["ok"], state
 
@@ -365,9 +385,9 @@ def run_verify(args, zts, zig, root):
             src = project / "src/main.zig"
             good = src.read_text()
             old = session.state()["v"]
-            src.write_text(good + "// probe burst A\n")
+            atomic_write(src, good + "// probe burst A\n")
             time.sleep(0.04)
-            src.write_text(good + "// probe burst B\n")
+            atomic_write(src, good + "// probe burst B\n")
             _, state = wait_for_change(session, old)
             assert state["ok"], state
             # No second rebuild for the same burst.
