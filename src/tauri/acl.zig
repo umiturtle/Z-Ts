@@ -285,6 +285,14 @@ fn requiresExplicitPermission(command: []const u8) bool {
         "plugin:window|create",
         "plugin:webview|create_webview_window",
         "plugin:webview|create_webview",
+        // P1: these can execute arbitrary JS, wipe browsing data, forge window events or widen
+        // the `asset://` scope. `core:default` / `fs:default` must never grant them implicitly.
+        "plugin:webview|eval",
+        "plugin:webview|clear_all_browsing_data",
+        "plugin:window|emit_window_event",
+        "plugin:fs|asset_scope_add",
+        "plugin:fs|asset_scope_remove",
+        "plugin:fs|asset_scope_clear",
     };
     for (explicit) |c| {
         if (std.mem.eql(u8, command, c)) return true;
@@ -970,4 +978,28 @@ test "P0-1: window/webview creation needs an explicit capability, getters stay i
     try testing.expect(permissionResolves("core:default", "plugin:webview|get_all_webviews", false));
     try testing.expect(permissionResolves("core:default", "plugin:window|get_all_windows", false));
     try testing.expect(permissionResolves("core:default", "plugin:window|set_title", false));
+}
+
+test "P1: eval, browsing-data, forged events and asset-scope changes need explicit grants" {
+    const dangerous = [_][]const u8{
+        "plugin:webview|eval",
+        "plugin:webview|clear_all_browsing_data",
+        "plugin:window|emit_window_event",
+        "plugin:fs|asset_scope_add",
+        "plugin:fs|asset_scope_remove",
+        "plugin:fs|asset_scope_clear",
+    };
+    for (dangerous) |cmd| {
+        try testing.expect(!permissionResolves("core:default", cmd, false));
+        try testing.expect(!permissionResolves("fs:default", cmd, false));
+        try testing.expect(!permissionResolves("core:webview:default", cmd, false));
+    }
+    // The exact identifier still grants it; a deny identifier still overrides.
+    try testing.expect(permissionResolves("core:webview:allow-eval", "plugin:webview|eval", false));
+    try testing.expect(permissionResolves("fs:allow-asset-scope-add", "plugin:fs|asset_scope_add", false));
+    try testing.expect(permissionResolves("core:webview:deny-eval", "plugin:webview|eval", true));
+    // Ordinary getters / setters stay in `core:default`.
+    try testing.expect(permissionResolves("core:default", "plugin:webview|get_all_webviews", false));
+    try testing.expect(permissionResolves("core:default", "plugin:window|set_title", false));
+    try testing.expect(permissionResolves("core:default", "plugin:window|available_monitors", false));
 }

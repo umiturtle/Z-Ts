@@ -25,6 +25,7 @@ const path = @import("../path.zig");
 const resources = @import("../resources.zig");
 const scope_mod = @import("scope.zig");
 const acl = @import("../acl.zig");
+const asset_scope = @import("../asset_scope.zig");
 
 pub const Scope = scope_mod.Scope;
 pub const ScopeRoot = scope_mod.Root;
@@ -52,6 +53,10 @@ pub const FsError = error{
     NegativeOffset,
     OutOfMemory,
     IoFailure,
+    /// P1 #12 — `asset://` runtime scope errors.
+    PersistFailed,
+    InvalidGlob,
+    AssetScopeUnavailable,
 };
 
 fn mapResolveError(err: ResolveError) FsError {
@@ -293,6 +298,8 @@ pub const FsState = struct {
     paths: *path.PathState,
     /// Largest single read/write payload; bigger requests fail with `TooLarge`.
     max_io_bytes: usize = default_max_io_bytes,
+    /// P1 #12 — shared mutable `asset://` grants. `null` = runtime updates are disabled.
+    asset_scope: ?*asset_scope.AssetScope = null,
 
     /// Creates state that resolves through `scope` and offers open files as resources.
     pub fn init(
@@ -309,6 +316,12 @@ pub const FsState = struct {
             .resources = res,
             .paths = paths,
         };
+    }
+
+    /// Attaches the shared `AssetScope` so `plugin:fs|asset_scope_*` can persist dialog grants.
+    pub fn withAssetScope(self: *FsState, scope: *asset_scope.AssetScope) *FsState {
+        self.asset_scope = scope;
+        return self;
     }
 
     /// Releases the scope's roots.
@@ -451,6 +464,44 @@ pub const Commands = struct {
     pub const rpc_prefix = "plugin:fs|";
     /// The state type `zts_rpc` resolves per app; identical to `FsState` here.
     pub const RpcState = FsState;
+
+    // ---------------------------------------------------------------- P1 #12: runtime asset scope
+
+    fn scopeOf(state: *FsState) FsError!*asset_scope.AssetScope {
+        return state.asset_scope orelse error.AssetScopeUnavailable;
+    }
+
+    fn mapScopeError(err: asset_scope.AssetScopeError) FsError {
+        return switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            error.InvalidGlob => error.InvalidGlob,
+            error.PersistFailed => error.PersistFailed,
+        };
+    }
+
+    /// `plugin:fs|asset_scope_add` — grants a glob after a file dialog and persists it.
+    pub fn asset_scope_add(_: *rpc.Ctx, state: *FsState, args: struct { glob: []const u8 }) FsError!bool {
+        const scope = try scopeOf(state);
+        return scope.add(args.glob) catch |err| return mapScopeError(err);
+    }
+
+    /// `plugin:fs|asset_scope_remove`.
+    pub fn asset_scope_remove(_: *rpc.Ctx, state: *FsState, args: struct { glob: []const u8 }) FsError!bool {
+        const scope = try scopeOf(state);
+        return scope.remove(args.glob) catch |err| return mapScopeError(err);
+    }
+
+    /// `plugin:fs|asset_scope_clear` — drops every runtime grant (initial config globs stay).
+    pub fn asset_scope_clear(_: *rpc.Ctx, state: *FsState) FsError!void {
+        const scope = try scopeOf(state);
+        scope.clear() catch |err| return mapScopeError(err);
+    }
+
+    /// `plugin:fs|asset_scope_list` — current grants, in insertion order.
+    pub fn asset_scope_list(ctx: *rpc.Ctx, state: *FsState) FsError![]const []const u8 {
+        const scope = try scopeOf(state);
+        return scope.list(ctx.scratch) catch |err| return mapScopeError(err);
+    }
 
     // ---------------------------------------------------------------- metadata
 
@@ -1048,5 +1099,50 @@ test "P0-2: a capability scope is enforced end to end by plugin:fs" {
         );
         defer r.deinit();
         try r.expectCode("OutOfScope");
+    }
+}
+
+test "P1 #12: plugin:fs asset_scope_* commands update and persist dialog grants" {
+    var scope = try asset_scope.AssetScope.init(testing.allocator, testing.io, &.{"initial/**"}, null);
+    defer scope.deinit();
+
+    const FsSchema = rpc.Schema(.{ .fs = Commands });
+    var f = try TestFixture.create();
+    defer f.destroy();
+    var bound = FsSchema.bind(.{ .fs = &f.state });
+    var handler = bound.handler();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var ctx = rpc.Ctx.init(testing.io, arena.allocator());
+
+    // Without an attached scope the commands fail closed.
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_add", "{\"glob\":\"x/**\"}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
+    }
+
+    _ = f.state.withAssetScope(&scope);
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_add", "{\"glob\":\"picked/**\"}");
+        defer r.deinit();
+        try testing.expectEqualStrings("true", r.body.slice());
+    }
+    try testing.expect(scope.allows("picked/photo.jpg"));
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_list", "{}");
+        defer r.deinit();
+        try testing.expectEqualStrings("[\"initial/**\",\"picked/**\"]", r.body.slice());
+    }
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_remove", "{\"glob\":\"picked/**\"}");
+        defer r.deinit();
+        try testing.expectEqualStrings("true", r.body.slice());
+    }
+    try testing.expect(!scope.allows("picked/photo.jpg"));
+    {
+        var r = handler.dispatch(testing.allocator, &ctx, "plugin:fs|asset_scope_add", "{\"glob\":\"\"}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
     }
 }

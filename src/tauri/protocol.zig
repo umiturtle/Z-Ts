@@ -29,6 +29,7 @@ const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 const js_bootstrap = @import("js_bootstrap.zig");
 const isolation = @import("isolation.zig");
+const asset_scope = @import("asset_scope.zig");
 
 /// A request/response header. Values are borrowed slices, never NUL terminated.
 pub const HeaderPair = struct {
@@ -146,6 +147,9 @@ pub const ProtocolConfig = struct {
     isolation_key: ?isolation.Key = null,
     /// Asset path prefix that backs `isolation://localhost/` (the encrypted iframe).
     isolation_asset_prefix: []const u8 = "/isolation/",
+    /// P1 #12 — mutable grants added at runtime (e.g. after a file dialog). Checked in addition
+    /// to the immutable `asset_allow_globs`.
+    asset_scope: ?*asset_scope.AssetScope = null,
 };
 
 fn constantTimeEql(a: []const u8, b: []const u8) bool {
@@ -499,6 +503,12 @@ pub const ProtocolRouter = struct {
             if (glob.match(pattern, decoded)) {
                 allowed = true;
                 break;
+            }
+        }
+        // P1 #12: a grant picked at runtime (dialog) is honoured on the very next request.
+        if (!allowed) {
+            if (self.config.asset_scope) |scope| {
+                if (scope.allows(decoded)) allowed = true;
             }
         }
         if (!allowed) {
@@ -919,4 +929,60 @@ fn hasHeader(hdrs: []const HeaderPair, name: []const u8, value: []const u8) bool
         if (std.ascii.eqlIgnoreCase(h.name, name) and std.mem.eql(u8, h.value, value)) return true;
     }
     return false;
+}
+
+test "P1 #12: a runtime asset:// grant is honoured on the very next request" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var root_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const root_len = try tmp.dir.realPath(testing.io, &root_buf);
+    const root = root_buf[0..root_len];
+    try tmp.dir.createDirPath(testing.io, "allowed");
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "allowed/pic.png", .data = "PNGDATA" });
+
+    var scope = try asset_scope.AssetScope.init(testing.allocator, testing.io, &.{}, null);
+    defer scope.deinit();
+
+    const S = rpc.Schema(.{});
+    var bound = S.bind(.{});
+    const router = ProtocolRouter.init(testing.allocator, testing.io, .{
+        .invoke_key = "k",
+        .asset_root_dir = root,
+        .asset_allow_globs = &.{},
+        .asset_scope = &scope,
+    }, bound.handler());
+
+    var rec = core.RecordingHost.init(testing.allocator);
+    defer rec.deinit();
+    const win = try rec.host().createWindow(.{ .label = "main" });
+
+    // 1. No grant yet -> 403, even though the file exists on disk.
+    var denied = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "GET",
+        .uri = "asset://localhost/allowed/pic.png",
+    });
+    defer denied.body.deinit();
+    try testing.expectEqual(@as(u16, 403), denied.status_code);
+
+    // 2. Add the grant at runtime -> 200 with the file bytes.
+    try testing.expect(try scope.add("allowed/**"));
+    var granted = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "GET",
+        .uri = "asset://localhost/allowed/pic.png",
+    });
+    defer granted.body.deinit();
+    try testing.expectEqual(@as(u16, 200), granted.status_code);
+    try testing.expectEqualStrings("PNGDATA", granted.body.slice());
+
+    // 3. Removing the grant immediately re-locks the path.
+    try testing.expect(try scope.remove("allowed/**"));
+    var revoked = router.handleRequest(rec.host(), .{
+        .window_id = win,
+        .method = "GET",
+        .uri = "asset://localhost/allowed/pic.png",
+    });
+    defer revoked.body.deinit();
+    try testing.expectEqual(@as(u16, 403), revoked.status_code);
 }

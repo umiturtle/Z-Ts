@@ -24,7 +24,7 @@
 - [x] **P0-1** JS からの `WebviewWindow` 生成（複数ウィンドウ）
 - [x] **P0-4** 生成済み `gzip_entries` を実際に配信する
 - [x] **P0-5** `zts migrate`
-- [ ] **P1** webview コマンド / ウィンドウイベント / 残り setter / Monitor・DPI / 未適用 config フィールド / `once` / `asset://` scope の実行時更新
+- [x] **P1** webview コマンド / ウィンドウイベント / 残り setter / Monitor・DPI / 未適用 config フィールド / `once` / `asset://` scope の実行時更新
 - [ ] **P2** 公式プラグイン群・配布形式のうち理念に反しないもの
 - [ ] 各項目に単体テスト（`std.testing.allocator`、正常系・異常系・境界値）
 - [ ] 日英の読者向け Doc を更新、ルール 11（索引網羅）と規約 13（同期台帳）を維持
@@ -134,6 +134,26 @@
   - テスト: CLI 62 件（+5: 引数・config 正常/異常・パス安全性・plan 決定性）。
     fixture で `zts migrate --dry-run` / 実生成・fingerprint patch まで E2E 確認
   - 日英 `guides/migrate-from-tauri.md` に §0、`reference/cli{,.en}.md` にコマンド節を追加
-- **作業中**: **P1** webview コマンド群・ウィンドウイベント・残り setter・Monitor/DPI・
-  未適用 config フィールド・`once`・`asset://` scope の実行時更新。
-- **未着手**: P2。
+- **完了**: **P1**（7 項目すべて）。
+  - #6 `src/tauri/webview.zig` に `eval` / `reload` / `print` / `set_zoom` /
+    `open_devtools` / `close_devtools` / `is_devtools_open` / `internal_toggle_devtools` /
+    `clear_all_browsing_data`。すべて既存 `Host.evalJs` / `openDevtools` 経由で OS 分岐 0 行
+  - #7 `WindowRegistry.events` と `emitWindowEvent()`。17 個の既存 setter が
+    `tauri://resize` / `move` / `focus` / `close-requested` 等を emit。許可リスト付き
+    `plugin:window|emit_window_event` で `file-drop` / `page-load` / `navigation` も配送
+  - #8 `WindowExtras`（スカラ値のみ・リーク不能）＋ 17 本の残り setter。不正な enum /
+    範囲外の値は 400
+  - #9 `src/tauri/monitor.zig`（`MonitorRegistry` + provider vtable）。既定は決定論的
+    1920×1080 @1.0、実ディスプレイは差し替え。`window.Commands` に 5 コマンド
+  - #10 `core.WindowSpec` / `webview.WindowConfig` に 14 フィールド追加し、
+    `config_import.toWindowSpec()` で**破棄を解消**。`windowEffects` は JSON のまま保持
+  - #11 `plugin:event|once`（初回配送で自動解除）と `emitTo({kind:"Webview"})` の
+    親ウィンドウ解決（`CorePluginStates` が配線）
+  - #12 `src/tauri/asset_scope.zig`（mutex 付き grant + JSON 永続化 + restore）。
+    `ProtocolConfig.asset_scope` と `FsState.withAssetScope()` で共有し、
+    `plugin:fs|asset_scope_*` 4 コマンドから更新
+  - `acl.zig`: `eval` / browsing data / イベント偽装 / scope 変更は `*_default` から除外し
+    明示 permission を要求
+  - テスト: tauri 86 件（+9）、`build test` 緑。日英 `guides/plugins.md` に §6 を追加
+- **作業中**: **P2** 公式プラグイン群・配布形式のうち理念に反しないもの。
+- **未着手**: なし（PR 作成のみ残る）。

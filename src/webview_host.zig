@@ -92,6 +92,20 @@ pub const WebviewHost = struct {
             .devtools = spec.devtools,
             .background_color = spec.background_color,
             .initial_url = spec.initial_url,
+            .center = spec.center,
+            .maximized = spec.maximized,
+            .skip_taskbar = spec.skip_taskbar,
+            .always_on_bottom = spec.always_on_bottom,
+            .focus = spec.focus,
+            .content_protected = spec.content_protected,
+            .drag_drop_enabled = spec.drag_drop_enabled,
+            .zoom_hotkeys_enabled = spec.zoom_hotkeys_enabled,
+            .hidden_title = spec.hidden_title,
+            .title_bar_style = spec.title_bar_style,
+            .user_agent = spec.user_agent,
+            .tabbing_identifier = spec.tabbing_identifier,
+            .visible_on_all_workspaces = spec.visible_on_all_workspaces,
+            .window_effects_json = spec.window_effects_json,
         }) catch |e| mapErr(e);
     }
 

@@ -79,6 +79,23 @@ pub const WindowSpec = struct {
     theme: WindowTheme = .system,
     /// First navigation target. The default is the embedded `dist/` bundle, not a URL.
     initial_url: []const u8 = "tauri://localhost/",
+    /// P1 #10 — `tauri.conf.json` fields that used to be parsed and then dropped.
+    /// They are carried on the spec so every backend can act on them without app-level OS branches.
+    center: bool = false,
+    maximized: bool = false,
+    skip_taskbar: bool = false,
+    always_on_bottom: bool = false,
+    focus: bool = true,
+    content_protected: bool = false,
+    drag_drop_enabled: bool = true,
+    zoom_hotkeys_enabled: bool = false,
+    hidden_title: bool = false,
+    title_bar_style: []const u8 = "",
+    user_agent: ?[]const u8 = null,
+    tabbing_identifier: ?[]const u8 = null,
+    visible_on_all_workspaces: bool = false,
+    /// `windowEffects` kept as raw JSON text (the backend decides what it can apply).
+    window_effects_json: ?[]const u8 = null,
 };
 
 pub const IpcStatus = response.IpcStatus;

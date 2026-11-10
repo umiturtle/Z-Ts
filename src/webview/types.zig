@@ -334,4 +334,19 @@ pub const WindowConfig = struct {
     initial_url: ?[]const u8 = null,
     /// Inline HTML to load first; overrides `initial_url` when set.
     initial_html: ?[]const u8 = null,
+    /// P1 #10 — declarative window options carried from `tauri.conf.json`.
+    center: bool = false,
+    maximized: bool = false,
+    skip_taskbar: bool = false,
+    always_on_bottom: bool = false,
+    focus: bool = true,
+    content_protected: bool = false,
+    drag_drop_enabled: bool = true,
+    zoom_hotkeys_enabled: bool = false,
+    hidden_title: bool = false,
+    title_bar_style: []const u8 = "",
+    user_agent: ?[]const u8 = null,
+    tabbing_identifier: ?[]const u8 = null,
+    visible_on_all_workspaces: bool = false,
+    window_effects_json: ?[]const u8 = null,
 };

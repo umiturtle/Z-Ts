@@ -276,6 +276,13 @@ pub const Config = struct {
         title_bar_style: ?[]const u8 = null,
         hidden_title: bool = false,
         user_agent: ?[]const u8 = null,
+        /// P1 #10 — previously reported as "unsupported" and dropped.
+        drag_drop_enabled: bool = true,
+        zoom_hotkeys_enabled: bool = false,
+        content_protected: bool = false,
+        tabbing_identifier: ?[]const u8 = null,
+        visible_on_all_workspaces: bool = false,
+        window_effects_json: ?[]const u8 = null,
 
         /// Maps onto `zts_core.WindowSpec` (ziggurats owns the window lifecycle).
         pub fn toWindowSpec(self: WindowConfig) core.WindowSpec {
@@ -304,6 +311,20 @@ pub const Config = struct {
                 .devtools = self.devtools orelse false,
                 .theme = themeOf(self.theme),
                 .initial_url = self.appUrl(),
+                .center = self.center,
+                .maximized = self.maximized,
+                .skip_taskbar = self.skip_taskbar,
+                .always_on_bottom = self.always_on_bottom,
+                .focus = self.focus,
+                .content_protected = self.content_protected,
+                .drag_drop_enabled = self.drag_drop_enabled,
+                .zoom_hotkeys_enabled = self.zoom_hotkeys_enabled,
+                .hidden_title = self.hidden_title,
+                .title_bar_style = self.title_bar_style orelse "",
+                .user_agent = self.user_agent,
+                .tabbing_identifier = self.tabbing_identifier,
+                .visible_on_all_workspaces = self.visible_on_all_workspaces,
+                .window_effects_json = self.window_effects_json,
             };
         }
 
@@ -569,18 +590,24 @@ fn parseWindow(parser: *Parser, path: []const u8, object: std.json.ObjectMap) Er
     if (try parser.optString(tryPath(parser, path, "theme"), object.get("theme"))) |v| window.theme = v;
     if (try parser.optString(tryPath(parser, path, "titleBarStyle"), object.get("titleBarStyle"))) |v| window.title_bar_style = v;
     if (try parser.optString(tryPath(parser, path, "userAgent"), object.get("userAgent"))) |v| window.user_agent = v;
+    // P1 #10: these used to be dropped. They are now carried on `core.WindowSpec` so the Host
+    // backends can act on them; keys that still need an OS object remain in `unsupported`.
+    if (try parser.optBool(tryPath(parser, path, "dragDropEnabled"), object.get("dragDropEnabled"))) |v| window.drag_drop_enabled = v;
+    if (try parser.optBool(tryPath(parser, path, "zoomHotkeysEnabled"), object.get("zoomHotkeysEnabled"))) |v| window.zoom_hotkeys_enabled = v;
+    if (try parser.optBool(tryPath(parser, path, "contentProtected"), object.get("contentProtected"))) |v| window.content_protected = v;
+    if (try parser.optBool(tryPath(parser, path, "visibleOnAllWorkspaces"), object.get("visibleOnAllWorkspaces"))) |v| window.visible_on_all_workspaces = v;
+    if (try parser.optString(tryPath(parser, path, "tabbingIdentifier"), object.get("tabbingIdentifier"))) |v| window.tabbing_identifier = v;
+    if (object.get("windowEffects")) |effects| {
+        window.window_effects_json = try stringify(parser.allocator, effects);
+    }
 
     // Keys ziggurats cannot honour yet: report them instead of silently dropping the intent.
     const unsupported = [_][]const u8{
-        "windowEffects",
         "trafficLightPosition",
-        "tabbingIdentifier",
         "additionalBrowserArgs",
         "browserExtensionsEnabled",
         "proxyUrl",
         "useHttpsScheme",
-        "contentProtected",
-        "visibleOnAllWorkspaces",
         "dataStoreIdentifier",
         "scrollBarStyle",
         "backgroundThrottling",
@@ -924,7 +951,19 @@ const sample_config =
     \\        "decorations": false,
     \\        "alwaysOnTop": true,
     \\        "theme": "Dark",
-    \\        "windowEffects": { "effects": ["blur"] }
+    \\        "windowEffects": { "effects": ["blur"] },
+    \\        "contentProtected": true,
+    \\        "dragDropEnabled": false,
+    \\        "zoomHotkeysEnabled": true,
+    \\        "tabbingIdentifier": "studio",
+    \\        "visibleOnAllWorkspaces": true,
+    \\        "center": true,
+    \\        "maximized": true,
+    \\        "skipTaskbar": true,
+    \\        "hiddenTitle": true,
+    \\        "titleBarStyle": "Overlay",
+    \\        "userAgent": "ziggurats/0.1",
+    \\        "trafficLightPosition": { "x": 10, "y": 10 }
     \\      },
     \\      { "label": "splash", "url": "splash.html", "create": false },
     \\      { "label": "remote", "url": { "url": "https://example.com/app" }, "width": 400, "height": 300 }
@@ -1000,8 +1039,18 @@ test "tauri.conf.json parses product/app/build/bundle and maps windows to Window
     try testing.expectEqualStrings("tauri://localhost/", specs[0].initial_url);
     try testing.expectEqualStrings("https://example.com/app", specs[1].initial_url);
 
-    // `app.plugins` etc. survive as text, and unknown/unsupported keys are warnings only.
-    try testing.expect(diags.has("app.windows[0].windowEffects"));
+    // P1 #10: the previously dropped fields now reach `core.WindowSpec` instead of being warnings.
+    try testing.expect(!diags.has("app.windows[0].windowEffects"));
+    try testing.expect(specs[0].center and specs[0].maximized and specs[0].skip_taskbar);
+    try testing.expect(specs[0].content_protected and !specs[0].drag_drop_enabled and specs[0].zoom_hotkeys_enabled);
+    try testing.expect(specs[0].hidden_title and specs[0].visible_on_all_workspaces);
+    try testing.expectEqualStrings("Overlay", specs[0].title_bar_style);
+    try testing.expectEqualStrings("ziggurats/0.1", specs[0].user_agent.?);
+    try testing.expectEqualStrings("studio", specs[0].tabbing_identifier.?);
+    try testing.expect(std.mem.indexOf(u8, specs[0].window_effects_json.?, "blur") != null);
+
+    // `app.plugins` etc. survive as text, and keys that still need an OS object warn instead.
+    try testing.expect(diags.has("app.windows[0].trafficLightPosition"));
     try testing.expectEqualStrings(
         "Z-Ts Studio",
         (cfg.toAppConfig()).name,

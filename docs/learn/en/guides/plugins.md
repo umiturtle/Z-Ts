@@ -246,6 +246,31 @@ if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) ret
 
 ---
 
+
+## 6. P1 — commands that make upstream idioms work
+
+The command surface now covers the remaining `plugin:window` / `plugin:webview` / `plugin:event`
+calls. Every one is a `pub fn` on
+[`Commands`](../../../api/zts_tauri/window.html#Commands),
+[`webview`](../../../api/zts_tauri/webview.html#Commands) or
+[`event`](../../../api/zts_tauri/event.html#Commands).
+
+| Area | Example commands | Behaviour |
+|---|---|---|
+| webview control | `plugin:webview\|eval` / `reload` / `print` / `set_zoom` / `open_devtools` / `close_devtools` / `is_devtools_open` / `internal_toggle_devtools` / `clear_all_browsing_data` | routed through the existing `Host.evalJs` / `openDevtools`; child webviews target the parent window's `<iframe>` |
+| window events | `plugin:window\|emit_window_event` | allowlisted `tauri://resize`, `move`, `focus`, `theme-changed`, `file-drop`, `page-load`, `navigation`, …; setters emit automatically |
+| remaining setters | `set_theme` / `set_skip_taskbar` / `set_progress_bar` / `set_badge_count` / `set_cursor_*` / `center` / `request_user_attention` / `set_content_protected` / `set_visible_on_all_workspaces` / `set_shadow` / `set_effects` / `set_background_color` / `set_icon` / `set_always_on_bottom` / `set_enabled` | recorded in `WindowExtras` and followed by an event; OS-specific visuals are applied where the backend supports them |
+| Monitor / DPI | `available_monitors` / `primary_monitor` / `current_monitor` / `monitor_from_point` / `cursor_position` | deterministic 1920×1080 @1.0 by default; real displays are installed through the [`MonitorRegistry`](../../../api/zts_tauri/monitor.html#MonitorRegistry) provider — no OS branch in app code |
+| config fields | `center` / `maximized` / `skipTaskbar` / `titleBarStyle` / `hiddenTitle` / `userAgent` / `alwaysOnBottom` / `focus` / `dragDropEnabled` / `zoomHotkeysEnabled` / `windowEffects` / `contentProtected` / `tabbingIdentifier` / `visibleOnAllWorkspaces` | carried from `tauri.conf.json` into `core.WindowSpec` instead of being warned about and dropped; `windowEffects` stays as raw JSON |
+| `once` / webview-level `emitTo` | `plugin:event\|once` / `emit_to({kind:"Webview"})` | `once` removes its listener after the first delivery; a `Webview` target resolves to the hosting window label |
+| runtime `asset://` scope | `plugin:fs\|asset_scope_add` / `remove` / `clear` / `list` | file-dialog grants persist in [`AssetScope`](../../../api/zts_tauri/asset_scope.html#AssetScope), shared between `ProtocolConfig.asset_scope` and `FsState.withAssetScope()` |
+
+> [!WARNING]
+> `plugin:webview|eval`, `clear_all_browsing_data`, `plugin:window|emit_window_event` and
+> `asset_scope_add` / `remove` / `clear` are **NOT granted by `core:default` / `fs:default`**.
+> They can execute arbitrary JS, forge events or widen the asset scope; add
+> `core:webview:allow-eval` and friends explicitly (see [Security concepts](../concepts/security.md)).
+
 ## Next
 
 - API: [`zts_tauri`](../../../api/zts_tauri/index.html) /

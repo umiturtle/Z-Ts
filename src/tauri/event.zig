@@ -79,6 +79,8 @@ const JsListener = struct {
     event_name: []u8,
     handler_id: u32,
     filter_label: ?[]u8,
+    /// P1 #11 — removed after the first delivery.
+    once: bool = false,
 
     fn deinit(self: *JsListener, allocator: Allocator) void {
         allocator.free(self.window_label);
@@ -114,6 +116,10 @@ pub const EventBus = struct {
     window_labels: ?*const fn (userdata: ?*anyopaque, Allocator, core.WindowId) Allocator.Error!?[]u8 = null,
     /// Opaque pointer passed to `window_labels`.
     window_labels_ctx: ?*anyopaque = null,
+    /// P1 #11 — maps a webview label onto the window label that hosts it, so `emitTo` with a
+    /// `{ kind: "Webview", label: "sidebar" }` target reaches the parent window's listeners.
+    webview_parent: ?*const fn (?*anyopaque, []const u8) ?[]const u8 = null,
+    webview_parent_ctx: ?*anyopaque = null,
 
     /// Creates a bus with no listeners.
     pub fn init(allocator: Allocator, io: Io) EventBus {
@@ -192,6 +198,19 @@ pub const EventBus = struct {
         if (!isValidEventName(event_name)) return error.IllegalEventName;
         const payload_slice = if (raw_payload.len == 0) "null" else raw_payload;
 
+        // P1 #11: a `Webview` target is delivered to the window that hosts that webview.
+        var effective_target = emit_target;
+        if (emit_target == .Webview) {
+            if (self.webview_parent) |fn_ptr| {
+                if (fn_ptr(self.webview_parent_ctx, emit_target.Webview.label)) |parent| {
+                    effective_target = .{ .Window = .{ .label = parent } };
+                }
+            }
+        }
+
+        var once_ids: std.ArrayList(u32) = .empty;
+        defer once_ids.deinit(scratch);
+
         const ListenerPair = struct {
             handler_id: u32,
             event_id: u32,
@@ -213,18 +232,18 @@ pub const EventBus = struct {
                 }
             }
 
-            if (emit_target != .App) {
+            if (effective_target != .App) {
                 for (self.js_listeners.items) |l| {
                     if (!std.mem.eql(u8, l.event_name, event_name)) continue;
 
                     // Target matching:
                     // 1. Does `emit_target` address this window (`l.window_label`)?
-                    if (emit_target.targetLabel()) |wanted_label| {
+                    if (effective_target.targetLabel()) |wanted_label| {
                         if (!std.mem.eql(u8, l.window_label, wanted_label)) continue;
                     }
                     // 2. Did the listener itself restrict to a specific label?
                     if (l.filter_label) |fl| {
-                        const effective = emit_target.targetLabel() orelse l.window_label;
+                        const effective = effective_target.targetLabel() orelse l.window_label;
                         if (!std.mem.eql(u8, fl, effective)) continue;
                     }
 
@@ -240,6 +259,23 @@ pub const EventBus = struct {
                         found = &deliveries.items[deliveries.items.len - 1];
                     }
                     try found.?.pairs.append(scratch, .{ .handler_id = l.handler_id, .event_id = l.event_id });
+                    if (l.once) try once_ids.append(scratch, l.event_id);
+                }
+            }
+        }
+
+        // One-shot listeners are removed before delivery, so a second emit cannot reach them.
+        if (once_ids.items.len > 0) {
+            self.mu.lockUncancelable(self.io);
+            defer self.mu.unlock(self.io);
+            for (once_ids.items) |id| {
+                var idx: usize = 0;
+                while (idx < self.js_listeners.items.len) : (idx += 1) {
+                    if (self.js_listeners.items[idx].event_id == id) {
+                        var removed = self.js_listeners.swapRemove(idx);
+                        removed.deinit(self.allocator);
+                        break;
+                    }
                 }
             }
         }
@@ -284,7 +320,32 @@ pub const Commands = struct {
             handler: u32,
         },
     ) EventError!u32 {
-        if (!isValidEventName(args.event)) return error.IllegalEventName;
+        return subscribe(ctx, bus, args.event, args.target, args.handler, false);
+    }
+
+    /// `plugin:event|once` — P1 #11. Identical to `listen`, but the listener is dropped after the
+    /// first delivery (the JS `once()` helper otherwise has to call `unlisten` itself).
+    pub fn once(
+        ctx: *rpc.Ctx,
+        bus: *EventBus,
+        args: struct {
+            event: []const u8,
+            target: EventTarget = .Any,
+            handler: u32,
+        },
+    ) EventError!u32 {
+        return subscribe(ctx, bus, args.event, args.target, args.handler, true);
+    }
+
+    fn subscribe(
+        ctx: *rpc.Ctx,
+        bus: *EventBus,
+        event: []const u8,
+        target: EventTarget,
+        handler: u32,
+        one_shot: bool,
+    ) EventError!u32 {
+        if (!isValidEventName(event)) return error.IllegalEventName;
         const call_ctx = ctx.getEnv(core.CallContext) orelse return error.MissingHostContext;
 
         var resolved_label: ?[]u8 = null;
@@ -294,10 +355,10 @@ pub const Commands = struct {
         const win_label = resolved_label orelse try bus.allocator.dupe(u8, "main");
         errdefer bus.allocator.free(win_label);
 
-        const ev_copy = try bus.allocator.dupe(u8, args.event);
+        const ev_copy = try bus.allocator.dupe(u8, event);
         errdefer bus.allocator.free(ev_copy);
 
-        const fl_copy: ?[]u8 = if (args.target.targetLabel()) |lbl|
+        const fl_copy: ?[]u8 = if (target.targetLabel()) |lbl|
             try bus.allocator.dupe(u8, lbl)
         else
             null;
@@ -311,8 +372,9 @@ pub const Commands = struct {
             .window_id = call_ctx.window_id,
             .window_label = win_label,
             .event_name = ev_copy,
-            .handler_id = args.handler,
+            .handler_id = handler,
             .filter_label = fl_copy,
+            .once = one_shot,
         }) catch {
             bus.mu.unlock(bus.io);
             return error.OutOfMemory;
@@ -323,8 +385,8 @@ pub const Commands = struct {
         var aw: std.Io.Writer.Allocating = .init(ctx.scratch);
         defer aw.deinit();
         aw.writer.writeAll("window.__ztsRegisterEvent&&window.__ztsRegisterEvent(") catch return error.OutOfMemory;
-        html_escape.writeJsonString(&aw.writer, args.event, true) catch return error.OutOfMemory;
-        aw.writer.print(",{d},{d},null);", .{ event_id, args.handler }) catch return error.OutOfMemory;
+        html_escape.writeJsonString(&aw.writer, event, true) catch return error.OutOfMemory;
+        aw.writer.print(",{d},{d},null);", .{ event_id, handler }) catch return error.OutOfMemory;
         try call_ctx.host.evalJs(call_ctx.window_id, aw.written());
 
         return event_id;

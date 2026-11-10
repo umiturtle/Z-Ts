@@ -16,6 +16,7 @@ const core = @import("zts_core");
 const rpc = @import("zts_rpc");
 
 pub const acl = @import("acl.zig");
+pub const asset_scope = @import("asset_scope.zig");
 pub const app = @import("app.zig");
 pub const clipboard = @import("clipboard/mod.zig");
 pub const channel = @import("channel.zig");
@@ -30,6 +31,7 @@ pub const path = @import("path.zig");
 pub const protocol = @import("protocol.zig");
 pub const resources = @import("resources.zig");
 pub const tray = @import("tray/mod.zig");
+pub const monitor = @import("monitor.zig");
 pub const webview = @import("webview.zig");
 pub const window = @import("window.zig");
 
@@ -48,6 +50,7 @@ pub const EventTarget = event.EventTarget;
 pub const HeaderPair = protocol.HeaderPair;
 pub const IncomingSchemeRequest = protocol.IncomingSchemeRequest;
 pub const IsolationKey = isolation.Key;
+pub const AssetScope = asset_scope.AssetScope;
 pub const OsTarget = js_bootstrap.OsTarget;
 pub const PathState = path.PathState;
 pub const ProtocolConfig = protocol.ProtocolConfig;
@@ -56,6 +59,7 @@ pub const ResourceTable = resources.ResourceTable;
 pub const RoutedResponse = protocol.RoutedResponse;
 pub const WindowRegistry = window.WindowRegistry;
 pub const WebviewRegistry = webview.WebviewRegistry;
+pub const MonitorRegistry = monitor.MonitorRegistry;
 pub const WirePosition = window.WirePosition;
 pub const WireSize = window.WireSize;
 
@@ -90,6 +94,8 @@ pub const CorePluginStates = struct {
     windows: WindowRegistry,
     /// `plugin:webview` state: child webviews beyond the one each window owns.
     webviews: WebviewRegistry,
+    /// `plugin:window` monitor / DPI provider (P1 #9).
+    monitors: MonitorRegistry,
     /// `plugin:event` state: JS and native listeners.
     events: EventBus,
     /// `plugin:path` state: base directories.
@@ -120,6 +126,7 @@ pub const CorePluginStates = struct {
         self.* = .{
             .windows = WindowRegistry.init(allocator, io),
             .webviews = WebviewRegistry.init(allocator, io, &self.windows),
+            .monitors = try MonitorRegistry.init(allocator, io),
             .events = EventBus.init(allocator, io),
             .paths = effective_paths,
             .app_state = AppState.init(io, app_cfg),
@@ -130,7 +137,11 @@ pub const CorePluginStates = struct {
             .tray_state = undefined, // patched right below: it needs `&self.menu_state`
         };
         self.tray_state = TrayState.init(allocator, io, &self.resources, &self.menu_state);
+        self.windows.monitors = &self.monitors;
+        self.windows.events = &self.events;
         self.events.window_labels = lookupWindowLabel;
+        self.events.webview_parent = lookupWebviewParent;
+        self.events.webview_parent_ctx = &self.webviews;
         self.events.window_labels_ctx = &self.windows;
         return self;
     }
@@ -157,6 +168,7 @@ pub const CorePluginStates = struct {
         self.tray_state.deinit();
         self.events.deinit();
         self.webviews.deinit();
+        self.monitors.deinit();
         self.windows.deinit();
         alloc.destroy(self);
     }
@@ -165,10 +177,17 @@ pub const CorePluginStates = struct {
         const reg: *WindowRegistry = @ptrCast(@alignCast(ud.?));
         return reg.labelForIdAlloc(alloc, wid);
     }
+
+    /// P1 #11 — `emitTo({kind:"Webview",label})` resolves to the hosting window's label.
+    fn lookupWebviewParent(ud: ?*anyopaque, label: []const u8) ?[]const u8 {
+        const reg: *WebviewRegistry = @ptrCast(@alignCast(ud.?));
+        return reg.parentWindowLabel(label);
+    }
 };
 
 test {
     _ = acl;
+    _ = asset_scope;
     _ = isolation;
     _ = app;
     _ = channel;
@@ -185,4 +204,5 @@ test {
     _ = tray;
     _ = window;
     _ = webview;
+    _ = monitor;
 }

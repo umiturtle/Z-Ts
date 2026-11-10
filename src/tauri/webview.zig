@@ -30,15 +30,9 @@ const rpc = @import("zts_rpc");
 const window_mod = @import("window.zig");
 
 /// Errors surfaced as HTTP 400 by `zts_rpc` when a creation command is malformed or unsafe.
-pub const WebviewError = core.HostError || error{
-    OutOfMemory,
-    MissingHostContext,
-    UnknownWindowLabel,
-    InvalidLabel,
-    DuplicateLabel,
-    MalformedOptions,
-    InvalidUrl,
-};
+/// Shares the window plugin's error set: both namespaces call `window.specFromOptions()` /
+/// `window.openWindow()`, so a new diagnostic there must never be silently lost here.
+pub const WebviewError = window_mod.WindowPluginError;
 
 /// `get_all_webviews` wire DTO. `window_label` is encoded as `windowLabel` by `zts_rpc`.
 pub const WebviewDto = struct {
@@ -133,6 +127,18 @@ pub const WebviewRegistry = struct {
         }
     }
 
+    /// Resolves a webview label to the label of the window that hosts it. Primary webviews share
+    /// their window's label; child webviews (`new Webview()`) point at their parent window.
+    pub fn parentWindowLabel(self: *WebviewRegistry, label: []const u8) ?[]const u8 {
+        if (self.windows.resolveId(label, core.WindowId.invalid) != null) return label;
+        self.mu.lockUncancelable(self.io);
+        defer self.mu.unlock(self.io);
+        for (self.children.items) |child| {
+            if (std.mem.eql(u8, child.label, label)) return child.window_label;
+        }
+        return null;
+    }
+
     /// Whether a webview (primary or child) with this label exists.
     pub fn hasLabel(self: *WebviewRegistry, label: []const u8) bool {
         if (self.windows.resolveId(label, core.WindowId.invalid) != null) return true;
@@ -208,6 +214,42 @@ fn iframeScript(
     , .{ lbl, src, css });
 }
 
+/// Resolves a webview label to the parent window and the `Host` that can evaluate JS in it.
+const WebviewHostTarget = struct {
+    host: core.Host,
+    win_id: core.WindowId,
+    label: []const u8,
+    is_child: bool,
+};
+
+fn hostForWebview(ctx: *rpc.Ctx, reg: *WebviewRegistry, label: ?[]const u8) WebviewError!WebviewHostTarget {
+    const wanted = label orelse return error.UnknownWindowLabel;
+    const parent = reg.parentWindowLabel(wanted) orelse return error.UnknownWindowLabel;
+    const win_id = reg.windows.resolveId(parent, core.WindowId.invalid) orelse return error.UnknownWindowLabel;
+    const call = ctx.getEnv(core.CallContext) orelse return error.MissingHostContext;
+    return .{
+        .host = call.host,
+        .win_id = win_id,
+        .label = wanted,
+        .is_child = !std.mem.eql(u8, wanted, parent),
+    };
+}
+
+/// Runs `code` inside the target webview. Child webviews are `<iframe>`s in the parent window, so
+/// the script picks the iframe's `contentWindow` when present and falls back to the window itself.
+fn evalInWebview(ctx: *rpc.Ctx, reg: *WebviewRegistry, label: ?[]const u8, code: []const u8) WebviewError!void {
+    const t = try hostForWebview(ctx, reg, label);
+    const lbl = try jsString(ctx.scratch, t.label);
+    const src = try jsString(ctx.scratch, code);
+    const script = try std.fmt.allocPrint(ctx.scratch,
+        \\(function(){{var f=document.querySelector("[data-zts-webview-label="+JSON.stringify({s})+"]");var w=f&&f.contentWindow?f.contentWindow:window;w.eval({s});}})()
+    , .{ lbl, src });
+    t.host.evalJs(t.win_id, script) catch |err| switch (err) {
+        error.Unsupported, error.WindowNotFound => {},
+        else => return err,
+    };
+}
+
 /// `plugin:webview|*` RPC command namespace (`Schema` key: `.tauri_webview`).
 pub const Commands = struct {
     pub const rpc_prefix = "plugin:webview|";
@@ -264,6 +306,73 @@ pub const Commands = struct {
     pub fn get_all_webviews(ctx: *rpc.Ctx, reg: *WebviewRegistry) Allocator.Error![]const WebviewDto {
         return reg.all(ctx.scratch);
     }
+
+    // ---- P1 #6: webview control ------------------------------------------------------------
+
+    /// `plugin:webview|eval` — evaluate JavaScript inside the addressed webview.
+    pub fn eval(ctx: *rpc.Ctx, reg: *WebviewRegistry, args: struct {
+        label: ?[]const u8 = null,
+        value: []const u8,
+    }) WebviewError!void {
+        try evalInWebview(ctx, reg, args.label, args.value);
+    }
+
+    /// `plugin:webview|reload`.
+    pub fn reload(ctx: *rpc.Ctx, reg: *WebviewRegistry, args: struct { label: ?[]const u8 = null }) WebviewError!void {
+        try evalInWebview(ctx, reg, args.label, "location.reload()");
+    }
+
+    /// `plugin:webview|print`.
+    pub fn print(ctx: *rpc.Ctx, reg: *WebviewRegistry, args: struct { label: ?[]const u8 = null }) WebviewError!void {
+        try evalInWebview(ctx, reg, args.label, "window.print()");
+    }
+
+    /// `plugin:webview|set_zoom` — a CSS zoom factor. Rejects non-finite / absurd values before
+    /// they ever reach `evalJs`.
+    pub fn set_zoom(ctx: *rpc.Ctx, reg: *WebviewRegistry, args: struct {
+        label: ?[]const u8 = null,
+        value: f64,
+    }) WebviewError!void {
+        if (!std.math.isFinite(args.value) or args.value < 0.1 or args.value > 5.0) return error.InvalidValue;
+        const code = try std.fmt.allocPrint(ctx.scratch, "document.body.style.zoom=\"{d}\";", .{args.value});
+        try evalInWebview(ctx, reg, args.label, code);
+    }
+
+    /// `plugin:webview|open_devtools`.
+    pub fn open_devtools(ctx: *rpc.Ctx, reg: *WebviewRegistry, args: struct { label: ?[]const u8 = null }) WebviewError!void {
+        const t = try hostForWebview(ctx, reg, args.label);
+        t.host.openDevtools(t.win_id) catch |err| switch (err) {
+            error.Unsupported, error.WindowNotFound => {},
+            else => return err,
+        };
+        _ = reg.windows.setDevtoolsOpen(args.label, t.win_id, true);
+    }
+
+    /// `plugin:webview|close_devtools` — records the state; WebView2/WebKit/WKWebView expose no
+    /// portable "close inspector" call, so the devtools window itself stays under OS control.
+    pub fn close_devtools(ctx: *rpc.Ctx, reg: *WebviewRegistry, args: struct { label: ?[]const u8 = null }) WebviewError!void {
+        const t = try hostForWebview(ctx, reg, args.label);
+        _ = reg.windows.setDevtoolsOpen(args.label, t.win_id, false);
+    }
+
+    /// `plugin:webview|is_devtools_open`.
+    pub fn is_devtools_open(_: *rpc.Ctx, reg: *WebviewRegistry, args: struct { label: ?[]const u8 = null }) bool {
+        return reg.windows.devtoolsOpen(args.label, core.WindowId.invalid);
+    }
+
+    /// `plugin:webview|internal_toggle_devtools`.
+    pub fn internal_toggle_devtools(ctx: *rpc.Ctx, reg: *WebviewRegistry, args: struct { label: ?[]const u8 = null }) WebviewError!void {
+        if (is_devtools_open(ctx, reg, .{ .label = args.label })) {
+            try close_devtools(ctx, reg, .{ .label = args.label });
+        } else {
+            try open_devtools(ctx, reg, .{ .label = args.label });
+        }
+    }
+
+    /// `plugin:webview|clear_all_browsing_data` — capability-gated no-op. WebKitGTK, WKWebView
+    /// and WebView2 have no identical clearing API, so ziggurats never pretends it wiped data;
+    /// the command exists for wire compatibility and must be allowed explicitly.
+    pub fn clear_all_browsing_data(_: *rpc.Ctx, _: *WebviewRegistry) void {}
 };
 
 // ---------------------------------------------------------------------------
@@ -441,4 +550,177 @@ test "P0-1: new Window and new Webview (child iframe) with error paths" {
         defer r.deinit();
         try testing.expectEqual(@as(u16, 400), r.http_code);
     }
+}
+
+test "P1: window events, scalar setters, monitor/DPI and webview control commands" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+
+    var host = core.RecordingHost.init(testing.allocator);
+    defer host.deinit();
+    var windows = window_mod.WindowRegistry.init(testing.allocator, testing.io);
+    defer windows.deinit();
+    var webviews = WebviewRegistry.init(testing.allocator, testing.io, &windows);
+    defer webviews.deinit();
+    var bus = @import("event.zig").EventBus.init(testing.allocator, testing.io);
+    defer bus.deinit();
+    var monitors = try @import("monitor.zig").MonitorRegistry.init(testing.allocator, testing.io);
+    defer monitors.deinit();
+
+    const win = try host.host().createWindow(.{ .label = "main" });
+    try windows.registerWindow(win, .{ .label = "main" });
+
+    const LabelCtx = struct {
+        id: core.WindowId,
+        fn lookup(ud: ?*anyopaque, alloc: Allocator, wid: core.WindowId) Allocator.Error!?[]u8 {
+            _ = ud;
+            _ = wid;
+            return try alloc.dupe(u8, "main");
+        }
+    };
+    var label_ctx = LabelCtx{ .id = win };
+    bus.window_labels = LabelCtx.lookup;
+    bus.window_labels_ctx = &label_ctx;
+    bus.webview_parent = struct {
+        fn parent(ud: ?*anyopaque, label: []const u8) ?[]const u8 {
+            const reg: *WebviewRegistry = @ptrCast(@alignCast(ud.?));
+            return reg.parentWindowLabel(label);
+        }
+    }.parent;
+    bus.webview_parent_ctx = &webviews;
+    windows.events = &bus;
+    windows.monitors = &monitors;
+
+    const event_mod = @import("event.zig");
+    const P1Schema = rpc.Schema(.{
+        .tauri_window = window_mod.Commands,
+        .tauri_webview = Commands,
+        .tauri_event = event_mod.Commands,
+    });
+    var bound = P1Schema.bind(.{
+        .tauri_window = &windows,
+        .tauri_webview = &webviews,
+        .tauri_event = &bus,
+    });
+    var handler = bound.handler();
+    var ctx = rpc.Ctx.init(testing.io, scratch);
+    var call = core.CallContext{ .host = host.host(), .window_id = win };
+    ctx = ctx.withEnv(&call);
+
+    const invoke = struct {
+        fn dispatch(h: *rpc.Handler, c: *rpc.Ctx, cmd: []const u8, body: []const u8) core.OutgoingResponse {
+            return h.dispatch(testing.allocator, c, cmd, body);
+        }
+    }.dispatch;
+
+    // 1. A setter emits a native→JS window event through Host.evalJs. Register a listener first
+    //    (upstream `listen()` also evaluates a registration snippet, so capture the count).
+    {
+        var r = invoke(&handler, &ctx, "plugin:event|listen", "{\"event\":\"tauri://window-flags-changed\",\"target\":{\"kind\":\"Any\"},\"handler\":11}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    const evals_before_title = host.eval_log.items.len;
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|set_title", "{\"value\":\"P1\"}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    try testing.expect(host.eval_log.items.len > evals_before_title);
+    const last_eval = host.eval_log.items[host.eval_log.items.len - 1];
+    try testing.expect(std.mem.indexOf(u8, last_eval, "tauri://window-flags-changed") != null);
+
+    // 2. Remaining setters record state; invalid enum values are refused.
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|set_progress_bar", "{\"status\":\"normal\",\"progress\":42}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+        try testing.expectEqual(window_mod.ProgressStatus.normal, windows.entries.items[0].extras.progress_status);
+        try testing.expectEqual(@as(u8, 42), windows.entries.items[0].extras.progress_value.?);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|set_progress_bar", "{\"status\":\"normal\",\"progress\":101}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|set_cursor_icon", "{\"value\":\"crosshair\"}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+        try testing.expectEqual(window_mod.CursorIcon.crosshair, windows.entries.items[0].extras.cursor_icon);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|emit_window_event", "{\"event\":\"tauri://file-drop\",\"payload\":{\"paths\":[\"a.png\"]}}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|emit_window_event", "{\"event\":\"evil-event\"}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
+    }
+
+    // 3. Monitor / DPI commands.
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|available_monitors", "{}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+        try testing.expect(std.mem.indexOf(u8, r.body.slice(), "\"default\"") != null);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|monitor_from_point", "{\"x\":100,\"y\":100}");
+        defer r.deinit();
+        try testing.expect(std.mem.indexOf(u8, r.body.slice(), "1920") != null);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:window|cursor_position", "{}");
+        defer r.deinit();
+        try testing.expectEqualStrings("{\"x\":0,\"y\":0}", r.body.slice());
+    }
+
+    // 4. Webview control commands.
+    {
+        var r = invoke(&handler, &ctx, "plugin:webview|eval", "{\"label\":\"main\",\"value\":\"1+1\"}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+        try testing.expect(std.mem.indexOf(u8, host.eval_log.items[host.eval_log.items.len - 1], "1+1") != null);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:webview|open_devtools", "{\"label\":\"main\"}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+        var r2 = invoke(&handler, &ctx, "plugin:webview|is_devtools_open", "{\"label\":\"main\"}");
+        defer r2.deinit();
+        try testing.expectEqualStrings("true", r2.body.slice());
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:webview|set_zoom", "{\"label\":\"main\",\"value\":99}");
+        defer r.deinit();
+        try testing.expectEqual(@as(u16, 400), r.http_code);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:webview|clear_all_browsing_data", "{}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+
+    // 5. `once` delivers exactly one event and then drops the listener.
+    {
+        var r = invoke(&handler, &ctx, "plugin:event|once", "{\"event\":\"p1-once\",\"handler\":7}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    const before = host.eval_log.items.len;
+    {
+        var r = invoke(&handler, &ctx, "plugin:event|emit", "{\"event\":\"p1-once\",\"payload\":1}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    {
+        var r = invoke(&handler, &ctx, "plugin:event|emit", "{\"event\":\"p1-once\",\"payload\":2}");
+        defer r.deinit();
+        try testing.expectEqual(core.IpcStatus.ok, r.status);
+    }
+    try testing.expectEqual(before + 1, host.eval_log.items.len);
 }

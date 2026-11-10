@@ -14,6 +14,8 @@ const testing = std.testing;
 
 const core = @import("zts_core");
 const rpc = @import("zts_rpc");
+const monitor = @import("monitor.zig");
+const event = @import("event.zig");
 
 /// `plugin:window` failures: the host blew up (`core.HostError`) or the request itself was wrong.
 /// `MissingHostContext` means the plugin was used without a `Host` (a unit test forgot `.withHost`),
@@ -28,6 +30,12 @@ pub const WindowPluginError = core.HostError || error{
     MalformedOptions,
     /// `options.url` used a scheme ziggurats never loads (`javascript:`, `file:`, …).
     InvalidUrl,
+    /// A monitor/DPI command was called before a `MonitorRegistry` was attached.
+    MonitorsUnavailable,
+    /// An enum setter received a value Tauri does not define.
+    InvalidValue,
+    /// A native window event name outside the P1 allowlist was requested.
+    IllegalWindowEvent,
 };
 
 /// Maximum label length. Upstream allows `a-zA-Z0-9-/:_`; the cap keeps a hostile frontend from
@@ -236,6 +244,48 @@ pub const SizeConstraintsDto = struct {
 /// The engine's mirror of one OS window. The WebView is the source of truth for pixels; this book
 /// keeping exists because `@tauri-apps/api` can read back properties (`isMaximized()`,
 /// `scaleFactor()`, …) that a WebView API cannot answer synchronously.
+/// P1 #8 — state recorded by the remaining `plugin:window|set_*` commands. Every field is a
+/// scalar or an enum, so no per-command allocation can leak and the state is byte-identical on all
+/// three OSes. Visual effects that need a real OS object are applied by the backend where
+/// available; the command always records the intent and emits the matching event.
+pub const Theme = enum { system, dark, light };
+pub const ProgressStatus = enum { none, normal, indeterminate, paused, @"error" };
+pub const CursorIcon = enum { default, arrow, crosshair, hand, text, move, wait, help, progress, not_allowed, resize_ew, resize_ns, grab, grabbing };
+pub const AttentionType = enum { none, critical, informational };
+pub const Effect = enum { none, blur, acrylic, mica, tabbed };
+
+pub const ProgressUpdate = struct { status: ProgressStatus, progress: ?u8 };
+pub const ColorValue = struct { r: u8, g: u8, b: u8, a: u8 };
+
+pub const WindowExtras = struct {
+    theme: Theme = .system,
+    skip_taskbar: bool = false,
+    progress_status: ProgressStatus = .none,
+    progress_value: ?u8 = null,
+    badge_count: ?u32 = null,
+    cursor_icon: CursorIcon = .default,
+    cursor_x: i32 = 0,
+    cursor_y: i32 = 0,
+    cursor_grab: bool = false,
+    cursor_visible: bool = true,
+    ignore_cursor_events: bool = false,
+    centered: bool = false,
+    user_attention: AttentionType = .none,
+    content_protected: bool = false,
+    visible_on_all_workspaces: bool = false,
+    shadow: bool = true,
+    always_on_bottom: bool = false,
+    enabled: bool = true,
+    effect: Effect = .none,
+    bg_set: bool = false,
+    bg_r: u8 = 0,
+    bg_g: u8 = 0,
+    bg_b: u8 = 0,
+    bg_a: u8 = 255,
+    icon_hash: u64 = 0,
+    devtools_open: bool = false,
+};
+
 pub const TrackedWindow = struct {
     /// Live `WindowId`; `0` once the window is gone.
     id: core.WindowId,
@@ -277,6 +327,8 @@ pub const TrackedWindow = struct {
     drag_count: usize = 0,
     /// Title-bar theme requested for this window.
     theme: []const u8 = "dark",
+    /// P1 #8 setters state.
+    extras: WindowExtras = .{},
 
     fn deinit(self: *TrackedWindow, allocator: Allocator) void {
         allocator.free(self.label);
@@ -300,6 +352,10 @@ pub const WindowRegistry = struct {
     /// command falls back to `ctx.host.createWindow()` (which is what unit-test hosts provide).
     window_factory_ctx: ?*anyopaque = null,
     window_factory: ?*const fn (?*anyopaque, core.WindowSpec) core.HostError!core.WindowId = null,
+    /// P1 #9 — monitor/DPI provider. `null` keeps the old behaviour (scale factor 1.0).
+    monitors: ?*monitor.MonitorRegistry = null,
+    /// P1 #7 — event bus used to emit window lifecycle events to JS listeners.
+    events: ?*event.EventBus = null,
 
     /// Installs a runtime window factory (see the field docs). Returns `self` for chaining.
     pub fn withWindowFactory(
@@ -407,6 +463,25 @@ pub const WindowRegistry = struct {
         return if (self.entries.items.len > 0) self.entries.items[0].id else null;
     }
 
+    /// P1 #6 — devtools state for a window (upstream `isDevtoolsOpen`). The Host vtable has an
+    /// `openDevtools` hook but no portable "close" hook, so the registry owns the boolean and all
+    /// three OSes report the same value after `open_devtools` / `close_devtools`.
+    pub fn setDevtoolsOpen(self: *WindowRegistry, label: ?[]const u8, fallback_id: core.WindowId, value: bool) bool {
+        self.mu.lockUncancelable(self.io);
+        defer self.mu.unlock(self.io);
+        if (self.findLocked(label, fallback_id)) |e| {
+            e.extras.devtools_open = value;
+            return true;
+        }
+        return false;
+    }
+
+    pub fn devtoolsOpen(self: *WindowRegistry, label: ?[]const u8, fallback_id: core.WindowId) bool {
+        self.mu.lockUncancelable(self.io);
+        defer self.mu.unlock(self.io);
+        return if (self.findLocked(label, fallback_id)) |e| e.extras.devtools_open else false;
+    }
+
     /// Returns an owned copy of the label for `id`, or `null` when the window is gone.
     pub fn labelForIdAlloc(self: *WindowRegistry, allocator: Allocator, id: core.WindowId) Allocator.Error!?[]u8 {
         self.mu.lockUncancelable(self.io);
@@ -448,6 +523,67 @@ fn resolveTarget(
     return error.UnknownWindowLabel;
 }
 
+/// P1 #7 — emits a native→JS window event to the target window's listeners. `dispatchRaw` uses
+/// `Host.evalJs`, so the same path works for the real WebView and `RecordingHost` in tests. A
+/// missing event bus (standalone `WindowRegistry` usage) is a no-op, never an error.
+fn emitWindowEvent(
+    ctx: *rpc.Ctx,
+    reg: *WindowRegistry,
+    label: ?[]const u8,
+    event_name: []const u8,
+    payload_json: []const u8,
+) void {
+    const bus = reg.events orelse return;
+    const call = ctx.getEnv(core.CallContext) orelse return;
+    const target: event.EventTarget = if (label) |lbl|
+        .{ .Window = .{ .label = lbl } }
+    else
+        .Any;
+    bus.dispatchRaw(call.host, ctx.scratch, target, event_name, payload_json) catch {};
+}
+
+/// Names native backends / the app may push through `plugin:window|emit_window_event`. Keeping an
+/// allowlist stops a webview from forging unrelated application events.
+pub const window_event_names = [_][]const u8{
+    "tauri://resize",
+    "tauri://move",
+    "tauri://focus",
+    "tauri://blur",
+    "tauri://scale-change",
+    "tauri://theme-changed",
+    "tauri://close-requested",
+    "tauri://file-drop",
+    "tauri://page-load",
+    "tauri://navigation",
+    "tauri://window-created",
+    "tauri://window-destroyed",
+    "tauri://window-flags-changed",
+};
+
+pub fn isWindowEventName(name: []const u8) bool {
+    for (window_event_names) |allowed| {
+        if (std.mem.eql(u8, name, allowed)) return true;
+    }
+    return false;
+}
+
+/// P1 #8 — shared body of the scalar setters. Resolves the window, records the intent under the
+/// registry mutex and emits the matching native→JS event. No allocation, no OS branch.
+fn applyExtras(
+    ctx: *rpc.Ctx,
+    reg: *WindowRegistry,
+    label: ?[]const u8,
+    comptime apply: anytype,
+    value: anytype,
+    event_name: []const u8,
+) WindowPluginError!void {
+    const t = try resolveTarget(ctx, reg, label);
+    reg.mu.lockUncancelable(reg.io);
+    defer reg.mu.unlock(reg.io);
+    if (reg.findLocked(label, t.win_id)) |entry| apply(&entry.extras, value);
+    emitWindowEvent(ctx, reg, label, event_name, "null");
+}
+
 /// Opens a window through the runtime factory (production) or through `ctx.host` (unit tests),
 /// then records it in the registry so `label` based commands can find it immediately.
 pub fn openWindow(
@@ -487,6 +623,257 @@ pub const Commands = struct {
         const call_ctx = ctx.getEnv(core.CallContext);
         const host: ?core.Host = if (call_ctx) |c| c.host else null;
         _ = try openWindow(reg, host, spec);
+    }
+
+    // ---- P1 #9: Monitor / DPI --------------------------------------------------------------
+
+    fn monitorsOf(reg: *WindowRegistry) WindowPluginError!*monitor.MonitorRegistry {
+        return reg.monitors orelse error.MonitorsUnavailable;
+    }
+
+    /// `plugin:window|available_monitors` — all displays in physical pixels.
+    pub fn available_monitors(ctx: *rpc.Ctx, reg: *WindowRegistry) Allocator.Error![]const monitor.Monitor {
+        return (monitorsOf(reg) catch return error.OutOfMemory).all(ctx.scratch);
+    }
+
+    /// `plugin:window|primary_monitor` — the first display.
+    pub fn primary_monitor(_: *rpc.Ctx, reg: *WindowRegistry) WindowPluginError!monitor.Monitor {
+        return (try monitorsOf(reg)).primary();
+    }
+
+    /// `plugin:window|current_monitor` — the display containing the window's centre.
+    pub fn current_monitor(
+        _: *rpc.Ctx,
+        reg: *WindowRegistry,
+        args: struct { label: ?[]const u8 = null },
+    ) WindowPluginError!?monitor.Monitor {
+        const m = try monitorsOf(reg);
+        const fb = core.WindowId.invalid;
+        const found = reg.findLocked(args.label, fb) orelse return m.primary();
+        const cx: i32 = @intFromFloat(@round(found.position.x.v + found.size.width.v / 2));
+        const cy: i32 = @intFromFloat(@round(found.position.y.v + found.size.height.v / 2));
+        return m.fromPoint(cx, cy) orelse m.primary();
+    }
+
+    /// `plugin:window|monitor_from_point` — the display containing a physical pixel.
+    pub fn monitor_from_point(
+        _: *rpc.Ctx,
+        reg: *WindowRegistry,
+        args: struct { x: i32, y: i32 },
+    ) WindowPluginError!?monitor.Monitor {
+        return (try monitorsOf(reg)).fromPoint(args.x, args.y);
+    }
+
+    /// `plugin:window|cursor_position` — the cursor in physical pixels.
+    pub fn cursor_position(_: *rpc.Ctx, reg: *WindowRegistry) WindowPluginError!monitor.Point {
+        return (try monitorsOf(reg)).cursor();
+    }
+
+    // ---- P1 #7 / #8: native events and the remaining setters ----------------------------------
+
+    /// `plugin:window|emit_window_event` — pushes a native window event to JS listeners.
+    /// Only the allowlisted `tauri://…` names are accepted (see `isWindowEventName`), so a
+    /// webview cannot forge arbitrary application events.
+    pub fn emit_window_event(
+        ctx: *rpc.Ctx,
+        reg: *WindowRegistry,
+        args: struct { event: []const u8, label: ?[]const u8 = null, payload: rpc.RawJson = .{} },
+    ) WindowPluginError!void {
+        if (!isWindowEventName(args.event)) return error.IllegalWindowEvent;
+        emitWindowEvent(ctx, reg, args.label, args.event, args.payload.raw);
+    }
+
+    /// `plugin:window|set_theme` — `system` / `dark` / `light`.
+    pub fn set_theme(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: []const u8 }) WindowPluginError!void {
+        const parsed = std.meta.stringToEnum(Theme, args.value) orelse return error.InvalidValue;
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: Theme) void {
+                e.theme = v;
+            }
+        }.f, parsed, "tauri://theme-changed");
+    }
+
+    /// `plugin:window|set_skip_taskbar`.
+    pub fn set_skip_taskbar(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.skip_taskbar = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_progress_bar` — `status` + optional 0..100 percentage.
+    pub fn set_progress_bar(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct {
+        label: ?[]const u8 = null,
+        status: []const u8,
+        progress: ?u8 = null,
+    }) WindowPluginError!void {
+        const parsed = std.meta.stringToEnum(ProgressStatus, args.status) orelse return error.InvalidValue;
+        if (args.progress) |p| if (p > 100) return error.InvalidValue;
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: ProgressUpdate) void {
+                e.progress_status = v.status;
+                e.progress_value = v.progress;
+            }
+        }.f, ProgressUpdate{ .status = parsed, .progress = args.progress }, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_badge_count` — `null` clears the badge.
+    pub fn set_badge_count(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: ?u32 = null }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: ?u32) void {
+                e.badge_count = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_cursor_icon`.
+    pub fn set_cursor_icon(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: []const u8 }) WindowPluginError!void {
+        const parsed = std.meta.stringToEnum(CursorIcon, args.value) orelse return error.InvalidValue;
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: CursorIcon) void {
+                e.cursor_icon = v;
+            }
+        }.f, parsed, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_cursor_position` — physical pixels.
+    pub fn set_cursor_position(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, x: i32, y: i32 }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: monitor.Point) void {
+                e.cursor_x = v.x;
+                e.cursor_y = v.y;
+            }
+        }.f, monitor.Point{ .x = args.x, .y = args.y }, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_cursor_grab`.
+    pub fn set_cursor_grab(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.cursor_grab = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_cursor_visible`.
+    pub fn set_cursor_visible(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.cursor_visible = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_ignore_cursor_events`.
+    pub fn set_ignore_cursor_events(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.ignore_cursor_events = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|center` — records the request; the backend centres the window when it can.
+    pub fn center(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, _: void) void {
+                e.centered = true;
+            }
+        }.f, {}, "tauri://move");
+    }
+
+    /// `plugin:window|request_user_attention` — `none` / `critical` / `informational`.
+    pub fn request_user_attention(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: []const u8 }) WindowPluginError!void {
+        const parsed = std.meta.stringToEnum(AttentionType, args.value) orelse return error.InvalidValue;
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: AttentionType) void {
+                e.user_attention = v;
+            }
+        }.f, parsed, "tauri://focus");
+    }
+
+    /// `plugin:window|set_content_protected`.
+    pub fn set_content_protected(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.content_protected = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_visible_on_all_workspaces`.
+    pub fn set_visible_on_all_workspaces(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.visible_on_all_workspaces = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_shadow`.
+    pub fn set_shadow(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.shadow = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_effects` — one named effect; unknown names are refused.
+    pub fn set_effects(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: []const u8 }) WindowPluginError!void {
+        const parsed = std.meta.stringToEnum(Effect, args.value) orelse return error.InvalidValue;
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: Effect) void {
+                e.effect = v;
+            }
+        }.f, parsed, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_background_color` — RGBA, all four channels 0..255.
+    pub fn set_background_color(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct {
+        label: ?[]const u8 = null,
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8 = 255,
+    }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: ColorValue) void {
+                e.bg_set = true;
+                e.bg_r = v.r;
+                e.bg_g = v.g;
+                e.bg_b = v.b;
+                e.bg_a = v.a;
+            }
+        }.f, ColorValue{ .r = args.r, .g = args.g, .b = args.b, .a = args.a }, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_icon` — records a deterministic hash of the icon bytes/path.
+    pub fn set_icon(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: []const u8 }) WindowPluginError!void {
+        const hash = std.hash.Wyhash.hash(0, args.value);
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: u64) void {
+                e.icon_hash = v;
+            }
+        }.f, hash, "tauri://window-flags-changed");
+    }
+
+    /// `plugin:window|set_always_on_bottom` / `set_enabled` — the last two scalar setters.
+    pub fn set_always_on_bottom(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.always_on_bottom = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
+    }
+
+    pub fn set_enabled(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
+        try applyExtras(ctx, reg, args.label, struct {
+            fn f(e: *WindowExtras, v: bool) void {
+                e.enabled = v;
+            }
+        }.f, args.value, "tauri://window-flags-changed");
     }
 
     /// `plugin:window|get_all_windows` — labels of every open window.
@@ -687,6 +1074,7 @@ pub const Commands = struct {
             reg.allocator.free(e.title);
             e.title = copy;
         }
+        emitWindowEvent(ctx, reg, args.label, "tauri://window-flags-changed", "null");
     }
 
     /// `plugin:window|set_size` — resizes to a `Logical` or `Physical` size.
@@ -704,6 +1092,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| {
             e.size = logical;
         }
+        emitWindowEvent(ctx, reg, args.label, "tauri://resize", "null");
     }
 
     /// `plugin:window|set_min_size` — sets or clears (`null`) the lower resize bound.
@@ -758,6 +1147,7 @@ pub const Commands = struct {
         if (reg.findLocked(args.label, t.win_id)) |e| {
             e.position = logical;
         }
+        emitWindowEvent(ctx, reg, args.label, "tauri://move", "null");
     }
 
     /// `plugin:window|set_fullscreen` — enters or leaves fullscreen.
@@ -772,6 +1162,7 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.fullscreen = args.value;
+        emitWindowEvent(ctx, reg, args.label, "tauri://resize", "null");
     }
 
     /// `plugin:window|minimize` — minimises (iconifies) the window.
@@ -781,6 +1172,7 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.minimized = true;
+        emitWindowEvent(ctx, reg, args.label, "tauri://resize", "null");
     }
 
     /// `plugin:window|unminimize` — restores a minimised window.
@@ -790,6 +1182,7 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.minimized = false;
+        emitWindowEvent(ctx, reg, args.label, "tauri://resize", "null");
     }
 
     /// `plugin:window|maximize` — maximises / zooms the window.
@@ -799,6 +1192,7 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.maximized = true;
+        emitWindowEvent(ctx, reg, args.label, "tauri://resize", "null");
     }
 
     /// `plugin:window|unmaximize` — restores a maximised window.
@@ -808,6 +1202,7 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.maximized = false;
+        emitWindowEvent(ctx, reg, args.label, "tauri://resize", "null");
     }
 
     /// `plugin:window|toggle_maximize` — flips the maximised state.
@@ -828,6 +1223,7 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.visible = true;
+        emitWindowEvent(ctx, reg, args.label, "tauri://window-flags-changed", "null");
     }
 
     /// `plugin:window|hide` — unmaps the window without destroying it.
@@ -837,16 +1233,19 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.visible = false;
+        emitWindowEvent(ctx, reg, args.label, "tauri://window-flags-changed", "null");
     }
 
     /// `plugin:window|close` — asks the window to close (close handlers still run).
     pub fn close(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.closeWindow(t.win_id);
+        emitWindowEvent(ctx, reg, args.label, "tauri://close-requested", "null");
     }
 
     /// `plugin:window|destroy` — closes the window unconditionally, skipping close handlers.
     pub fn destroy(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
+        emitWindowEvent(ctx, reg, args.label, "tauri://window-destroyed", "null");
         return close(ctx, reg, .{ .label = args.label });
     }
 
@@ -861,6 +1260,7 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.decorated = args.value;
+        emitWindowEvent(ctx, reg, args.label, "tauri://window-flags-changed", "null");
     }
 
     /// `plugin:window|set_always_on_top` — keeps the window above (or below) others.
@@ -874,6 +1274,7 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.always_on_top = args.value;
+        emitWindowEvent(ctx, reg, args.label, "tauri://window-flags-changed", "null");
     }
 
     /// `plugin:window|set_resizable` — toggles user resizing.
@@ -887,12 +1288,14 @@ pub const Commands = struct {
         reg.mu.lockUncancelable(reg.io);
         defer reg.mu.unlock(reg.io);
         if (reg.findLocked(args.label, t.win_id)) |e| e.resizable = args.value;
+        emitWindowEvent(ctx, reg, args.label, "tauri://window-flags-changed", "null");
     }
 
     /// `plugin:window|set_focus` — raises and focuses the window.
     pub fn set_focus(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null }) WindowPluginError!void {
         const t = try resolveTarget(ctx, reg, args.label);
         try t.host.setWindowFocus(t.win_id);
+        emitWindowEvent(ctx, reg, args.label, "tauri://focus", "null");
     }
 
     /// `plugin:window|start_dragging` — begins an OS window move from the current cursor position.
@@ -904,6 +1307,7 @@ pub const Commands = struct {
             if (reg.findLocked(args.label, t.win_id)) |e| e.drag_count += 1;
         }
         try t.host.startWindowDrag(t.win_id);
+        emitWindowEvent(ctx, reg, args.label, "tauri://move", "null");
     }
 };
 

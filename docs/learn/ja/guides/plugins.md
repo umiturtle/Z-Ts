@@ -242,6 +242,30 @@ if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) ret
 
 ---
 
+
+## 6. P1 — 上流と同じ書き方を支えるコマンド
+
+`@tauri-apps/api` を改造せずに使えるコマンドを広げました。すべて
+[`Commands`](../../../api/zts_tauri/window.html#Commands) /
+[`webview`](../../../api/zts_tauri/webview.html#Commands) /
+[`event`](../../../api/zts_tauri/event.html#Commands) に `pub fn` としてあります。
+
+| 分類 | コマンド例 | 挙動 |
+|---|---|---|
+| webview 制御 | `plugin:webview\|eval` / `reload` / `print` / `set_zoom` / `open_devtools` / `close_devtools` / `is_devtools_open` / `internal_toggle_devtools` / `clear_all_browsing_data` | 既存の `Host.evalJs` / `openDevtools` 経由。子 webview は親ウィンドウの `<iframe>` を対象にする |
+| ウィンドウイベント | `plugin:window\|emit_window_event` | `tauri://resize` / `move` / `focus` / `theme-changed` / `file-drop` / `page-load` / `navigation` など**許可リスト制**。setter は自動で emit する |
+| 残りの setter | `set_theme` / `set_skip_taskbar` / `set_progress_bar` / `set_badge_count` / `set_cursor_*` / `center` / `request_user_attention` / `set_content_protected` / `set_visible_on_all_workspaces` / `set_shadow` / `set_effects` / `set_background_color` / `set_icon` / `set_always_on_bottom` / `set_enabled` | 値を `WindowExtras` に記録してイベントを出す。OS 固有の見た目は backend が適用できる範囲で反映 |
+| Monitor / DPI | `available_monitors` / `primary_monitor` / `current_monitor` / `monitor_from_point` / `cursor_position` | 既定は決定論的な 1920×1080 @1.0。実ディスプレイは [`MonitorRegistry`](../../../api/zts_tauri/monitor.html#MonitorRegistry) の provider で差し替える（アプリに OS 分岐を書かない） |
+| config フィールド | `center` / `maximized` / `skipTaskbar` / `titleBarStyle` / `hiddenTitle` / `userAgent` / `alwaysOnBottom` / `focus` / `dragDropEnabled` / `zoomHotkeysEnabled` / `windowEffects` / `contentProtected` / `tabbingIdentifier` / `visibleOnAllWorkspaces` | `tauri.conf.json` から `core.WindowSpec` まで運ぶようにした（以前は警告して破棄）。`windowEffects` は JSON のまま保持 |
+| `once` / webview 単位 `emitTo` | `plugin:event\|once` / `emit_to({kind:"Webview"})` | `once` は初回配送でリスナを自動削除。`Webview` ターゲットは親ウィンドウのラベルへ解決 |
+| `asset://` scope の実行時更新 | `plugin:fs\|asset_scope_add` / `remove` / `clear` / `list` | ファイルダイアログの許可を [`AssetScope`](../../../api/zts_tauri/asset_scope.html#AssetScope) に永続化。`ProtocolConfig.asset_scope` と `FsState.withAssetScope()` で共有 |
+
+> [!WARNING]
+> `plugin:webview|eval`、`clear_all_browsing_data`、`plugin:window|emit_window_event`、
+> `asset_scope_add` / `remove` / `clear` は **`core:default` / `fs:default` では許可されません**。
+> 任意コード実行・イベント偽装・scope 拡大につながるため、capability に
+> `core:webview:allow-eval` などを明示してください（[権限の考え方](../concepts/security.md)）。
+
 ## 次に読むもの
 
 - API: [`zts_tauri`](../../../api/zts_tauri/index.html) / [`withCorePlugins`](../../../api/zts_tauri/mod.html#withCorePlugins) /
