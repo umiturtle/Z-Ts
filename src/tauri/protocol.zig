@@ -194,6 +194,7 @@ pub fn percentDecodeRawAlloc(allocator: Allocator, input: []const u8) error{ Out
     return out.toOwnedSlice(allocator);
 }
 
+/// Which custom scheme a request URI belongs to.
 pub const SchemeKind = enum { tauri, ipc, asset, isolation, unknown };
 
 const ParsedSchemeTarget = struct {

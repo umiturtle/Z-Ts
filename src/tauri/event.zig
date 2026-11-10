@@ -119,6 +119,7 @@ pub const EventBus = struct {
     /// P1 #11 — maps a webview label onto the window label that hosts it, so `emitTo` with a
     /// `{ kind: "Webview", label: "sidebar" }` target reaches the parent window's listeners.
     webview_parent: ?*const fn (?*anyopaque, []const u8) ?[]const u8 = null,
+    /// Opaque pointer passed to `webview_parent`.
     webview_parent_ctx: ?*anyopaque = null,
 
     /// Creates a bus with no listeners.

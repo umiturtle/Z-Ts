@@ -17,6 +17,7 @@ const testing = std.testing;
 const foundation = @import("zts_foundation");
 const glob = foundation.glob;
 
+/// Errors raised while adding, removing or persisting a grant.
 pub const AssetScopeError = Allocator.Error || error{
     /// The `persist_path` could not be written / parsed.
     PersistFailed,
@@ -24,17 +25,23 @@ pub const AssetScopeError = Allocator.Error || error{
     InvalidGlob,
 };
 
+/// Maximum length of a single glob pattern.
 pub const max_glob_len = 512;
 
+/// Mutable, mutex-guarded runtime grants for `asset://` requests.
 pub const AssetScope = struct {
+    /// Allocator owning the glob strings.
     allocator: Allocator,
+    /// IO reactor used for mutexes and the persist file.
     io: Io,
+    /// Guards `globs` across threads.
     mu: Io.Mutex = .init,
     /// Owned glob strings, in insertion order (deterministic).
     globs: std.ArrayList([]u8) = .empty,
     /// Optional JSON file that mirrors `globs`. `null` = in-memory only.
     persist_path: ?[]const u8 = null,
 
+    /// Creates a registry, optionally restoring saved grants.
     pub fn init(
         allocator: Allocator,
         io: Io,
@@ -53,6 +60,7 @@ pub const AssetScope = struct {
         return self;
     }
 
+    /// Frees every owned glob string.
     pub fn deinit(self: *AssetScope) void {
         for (self.globs.items) |g| self.allocator.free(g);
         self.globs.deinit(self.allocator);
@@ -93,6 +101,7 @@ pub const AssetScope = struct {
         return false;
     }
 
+    /// Drops every runtime grant.
     pub fn clear(self: *AssetScope) AssetScopeError!void {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);

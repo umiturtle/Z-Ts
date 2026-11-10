@@ -205,6 +205,7 @@ pub const Config = struct {
         key_hex: []const u8 = "",
     };
 
+    /// `app.security.pattern` — brownfield or AES-GCM isolation.
     pub const Pattern = union(enum) {
         /// Default: the frontend talks to IPC directly (CSRF key + capabilities still apply).
         brownfield,

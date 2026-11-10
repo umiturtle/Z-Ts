@@ -23,16 +23,23 @@ pub const Rect = struct { x: i32, y: i32, width: u32, height: u32 };
 
 /// Wire-compatible with `@tauri-apps/api/window`'s `Monitor`.
 pub const Monitor = struct {
+    /// Human-readable display name, when the backend supplies one.
     name: ?[]const u8 = null,
+    /// Device pixel ratio (1.0 = no HiDPI scaling).
     scale_factor: f64 = 1.0,
+    /// Top-left corner in physical pixels.
     position: Point = .{ .x = 0, .y = 0 },
+    /// Full size in physical pixels.
     size: Size = .{ .width = 1920, .height = 1080 },
+    /// Usable area in physical pixels (excludes the menu bar / dock / taskbar).
     work_area: Rect = .{ .x = 0, .y = 0, .width = 1920, .height = 1040 },
 
+    /// Full physical-pixel rectangle of this display.
     pub fn bounds(self: Monitor) Rect {
         return .{ .x = self.position.x, .y = self.position.y, .width = self.size.width, .height = self.size.height };
     }
 
+    /// Whether this physical pixel lies inside the display bounds.
     pub fn contains(self: Monitor, x: i32, y: i32) bool {
         const b = self.bounds();
         return x >= b.x and y >= b.y and
@@ -44,28 +51,36 @@ pub const Monitor = struct {
 /// A live source of monitor information. Both callbacks may be `null`; the built-in deterministic
 /// list / cursor are used then. Native backends install one provider for the whole process.
 pub const Provider = struct {
+    /// Opaque pointer handed back to every provider callback.
     ctx: ?*anyopaque = null,
     /// Returns an **owned** slice. `setProvider` copies it and frees the returned buffer.
     list: ?*const fn (?*anyopaque, Allocator) Allocator.Error![]const Monitor = null,
+    /// Current cursor position in physical pixels.
     cursor: ?*const fn (?*anyopaque) Point = null,
 };
 
 /// Registry of the displays the app can see. Mutable because `setMonitors()` may be called when a
 /// monitor is plugged in; guarded so a command on the event loop cannot race a worker thread.
 pub const MonitorRegistry = struct {
+    /// Allocator that owns this object's strings and buffers.
     allocator: Allocator,
+    /// IO reactor used for filesystem access and mutexes.
     io: Io,
+    /// Guards mutable state; commands may arrive from any thread.
     mu: Io.Mutex = .init,
     /// Owned copy of the current monitor list.
     monitors: []Monitor = &.{},
+    /// Optional native source of live display information.
     provider: Provider = .{},
 
+    /// Creates an empty, deterministic instance.
     pub fn init(allocator: Allocator, io: Io) Allocator.Error!MonitorRegistry {
         const one = try allocator.alloc(Monitor, 1);
         one[0] = .{ .name = "default" };
         return .{ .allocator = allocator, .io = io, .monitors = one };
     }
 
+    /// Frees every owned buffer and poisons the value.
     pub fn deinit(self: *MonitorRegistry) void {
         self.allocator.free(self.monitors);
         self.monitors = &.{};

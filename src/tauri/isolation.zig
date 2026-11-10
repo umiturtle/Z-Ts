@@ -30,8 +30,11 @@ pub const associated_data = "ziggurats-isolation-v1";
 /// seed (or the per-launch CSRF invoke key, which every message still has to present).
 pub const domain_seed = "ziggurats/isolation/aes-256-gcm/v1";
 
+/// AES-256-GCM key (32 bytes).
 pub const Key = [Aes256Gcm.key_length]u8;
+/// AES-GCM nonce (12 bytes), fresh per message.
 pub const Nonce = [Aes256Gcm.nonce_length]u8;
+/// AES-GCM authentication tag (16 bytes).
 pub const Tag = [Aes256Gcm.tag_length]u8;
 
 /// Errors returned while opening an envelope. All of them map to HTTP 403 in `protocol.zig`.

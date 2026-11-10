@@ -48,16 +48,24 @@ pub const PluginError = error{
 /// Maximum number of log lines / notifications retained, so a long-running app cannot grow
 /// without bound. Deterministic on all three OSes.
 pub const max_log_lines = 256;
+/// Max notifications exposed by this module.
 pub const max_notifications = 64;
 
+/// One retained log line.
 pub const LogLine = struct {
+    /// Severity string (`trace` / `debug` / `info` / `warn` / `error`).
     level: []const u8,
+    /// Rendered log message.
     message: []const u8,
 };
 
+/// One retained in-app notification.
 pub const Notification = struct {
+    /// Monotonically increasing notification id.
     id: u32,
+    /// Notification title shown in the in-app event.
     title: []const u8,
+    /// Optional notification body.
     body: []const u8,
 };
 
@@ -65,10 +73,13 @@ pub const Notification = struct {
 /// `error.Unsupported` instead of silently spawning a process. Native backends can supply it
 /// without any `if (windows)` branch in application code.
 pub const OpenerProvider = struct {
+    /// Opaque pointer handed back to every provider callback.
     ctx: ?*anyopaque = null,
+    /// Optional callback that opens a URL or path in the host application.
     open: ?*const fn (?*anyopaque, []const u8) void = null,
 };
 
+/// Construction options shared by every P2 namespace.
 pub const Options = struct {
     /// Snapshot of `argv[1..]` for `plugin:cli`.
     argv: []const []const u8 = &.{},
@@ -76,25 +87,39 @@ pub const Options = struct {
     store_path: ?[]const u8 = null,
     /// Advisory lock file for `single-instance`. `null` = in-memory only.
     lock_path: ?[]const u8 = null,
+    /// Optional provider for `plugin:opener` / `shell`.
     opener: OpenerProvider = .{},
 };
 
 /// One state object can back every P2 namespace. All owned strings live in `allocator`; a HashMap
 /// entry owns both its key and its (raw JSON) value.
 pub const PluginState = struct {
+    /// Allocator that owns this object's strings and buffers.
     allocator: Allocator,
+    /// IO reactor used for filesystem access and mutexes.
     io: Io,
+    /// Raw JSON values keyed by string.
     store: std.StringHashMapUnmanaged([]u8) = .empty,
+    /// Optional JSON file the store is persisted to.
     store_path: ?[]const u8 = null,
+    /// Returns every retained log line in insertion order.
     logs: std.ArrayList(LogLine) = .empty,
+    /// Bounded ring buffer of recent in-app notifications.
     notifications: std.ArrayList(Notification) = .empty,
+    /// Monotonically increasing id for the next notification.
     next_notification_id: u32 = 1,
+    /// Snapshot of `argv[1..]` used by `plugin:cli`.
     argv: []const []const u8 = &.{},
+    /// Optional provider for `plugin:opener` / `shell`.
     opener: OpenerProvider = .{},
+    /// Optional advisory lock file; `null` means in-memory only.
     lock_path: ?[]const u8 = null,
+    /// Whether this process currently owns the single-instance lock.
     lock_held: bool = false,
+    /// Exit code recorded by `plugin:process|exit`, or `null`.
     requested_exit_code: ?i32 = null,
 
+    /// Creates an empty, deterministic instance.
     pub fn init(allocator: Allocator, io: Io, options: Options) PluginError!PluginState {
         var self: PluginState = .{
             .allocator = allocator,
@@ -109,6 +134,7 @@ pub const PluginState = struct {
         return self;
     }
 
+    /// Frees every owned buffer and poisons the value.
     pub fn deinit(self: *PluginState) void {
         var it = self.store.iterator();
         while (it.next()) |entry| {
@@ -177,6 +203,7 @@ pub const PluginState = struct {
         Io.Dir.cwd().writeFile(self.io, .{ .sub_path = path, .data = bytes }) catch return error.PersistFailed;
     }
 
+    /// Loads previously persisted state from disk; a missing file is not an error.
     pub fn restore(self: *PluginState) PluginError!void {
         const path = self.store_path orelse return;
         const bytes = Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(8 * 1024 * 1024)) catch
@@ -211,6 +238,7 @@ pub const PluginState = struct {
         return true;
     }
 
+    /// Releases the lock and removes the lock file.
     pub fn releaseLock(self: *PluginState) PluginError!void {
         if (!self.lock_held) return;
         if (self.lock_path) |path| {
@@ -224,19 +252,25 @@ pub const PluginState = struct {
 // plugin:store|* — JSON key/value store
 // ---------------------------------------------------------------------------
 
+/// `plugin:store|*` — JSON key/value store.
 pub const StoreCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:store|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
+    /// Returns the raw JSON stored under `key`, or `null`.
     pub fn get(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8 }) ?rpc.RawJson {
         if (state.store.get(args.key)) |raw| return .{ .raw = raw };
         return null;
     }
 
+    /// Stores raw JSON under `key`.
     pub fn set(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8, value: rpc.RawJson }) PluginError!void {
         try state.setRaw(args.key, args.value.raw);
     }
 
+    /// Removes `key`; returns whether it existed.
     pub fn delete(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8 }) bool {
         if (state.store.fetchRemove(args.key)) |entry| {
             state.allocator.free(entry.key);
@@ -246,6 +280,7 @@ pub const StoreCommands = struct {
         return false;
     }
 
+    /// Drops every entry and writes the empty state back to disk.
     pub fn clear(_: *rpc.Ctx, state: *PluginState) void {
         var it = state.store.iterator();
         while (it.next()) |entry| {
@@ -255,14 +290,17 @@ pub const StoreCommands = struct {
         state.store.clearRetainingCapacity();
     }
 
+    /// Whether `key` is present.
     pub fn has(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8 }) bool {
         return state.store.contains(args.key);
     }
 
+    /// Number of stored keys (JS-safe `u32`).
     pub fn length(_: *rpc.Ctx, state: *PluginState) u32 {
         return @intCast(state.store.count());
     }
 
+    /// Sorted snapshot of all keys.
     pub fn keys(ctx: *rpc.Ctx, state: *PluginState) PluginError![]const []const u8 {
         const out = try ctx.scratch.alloc([]const u8, state.store.count());
         var it = state.store.keyIterator();
@@ -276,10 +314,12 @@ pub const StoreCommands = struct {
         return out;
     }
 
+    /// Persists the current state as deterministic JSON.
     pub fn save(_: *rpc.Ctx, state: *PluginState) PluginError!void {
         try state.save();
     }
 
+    /// Reloads the store from `store_path`.
     pub fn load(_: *rpc.Ctx, state: *PluginState) PluginError!void {
         try state.restore();
     }
@@ -289,10 +329,14 @@ pub const StoreCommands = struct {
 // plugin:log|* — bounded in-memory log
 // ---------------------------------------------------------------------------
 
+/// `plugin:log|*` — bounded in-memory log.
 pub const LogCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:log|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
+    /// Appends one line to the bounded ring buffer.
     pub fn log(_: *rpc.Ctx, state: *PluginState, args: struct {
         level: []const u8 = "info",
         message: []const u8,
@@ -300,10 +344,12 @@ pub const LogCommands = struct {
         try state.appendLog(args.level, args.message);
     }
 
+    /// Returns every retained log line in insertion order.
     pub fn logs(_: *rpc.Ctx, state: *PluginState) []const LogLine {
         return state.logs.items;
     }
 
+    /// Drops every entry and writes the empty state back to disk.
     pub fn clear(_: *rpc.Ctx, state: *PluginState) void {
         for (state.logs.items) |line| {
             state.allocator.free(line.level);
@@ -317,10 +363,14 @@ pub const LogCommands = struct {
 // plugin:os|* — compile-time target facts (no runtime OS calls)
 // ---------------------------------------------------------------------------
 
+/// `plugin:os|*` — compile-time target facts.
 pub const OsCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:os|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
+    /// Target OS name (`linux` / `macos` / `windows`).
     pub fn platform(_: *rpc.Ctx, _: *PluginState) []const u8 {
         return switch (builtin.os.tag) {
             .windows => "windows",
@@ -329,10 +379,12 @@ pub const OsCommands = struct {
         };
     }
 
+    /// Target CPU architecture, from `builtin.cpu.arch`.
     pub fn arch(_: *rpc.Ctx, _: *PluginState) []const u8 {
         return @tagName(builtin.cpu.arch);
     }
 
+    /// OS family (`unix` / `windows`).
     pub fn family(_: *rpc.Ctx, _: *PluginState) []const u8 {
         return switch (builtin.os.tag) {
             .windows => "windows",
@@ -340,6 +392,7 @@ pub const OsCommands = struct {
         };
     }
 
+    /// Executable suffix on this target (`exe` or empty).
     pub fn exe_extension(_: *rpc.Ctx, _: *PluginState) []const u8 {
         return if (builtin.os.tag == .windows) "exe" else "";
     }
@@ -360,8 +413,11 @@ pub const OsCommands = struct {
 // plugin:process|* — exit is recorded and delegated to Host.requestQuit
 // ---------------------------------------------------------------------------
 
+/// `plugin:process|*` — exit request and deterministic pid.
 pub const ProcessCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:process|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
     /// Records the exit code and asks the host loop to stop. Never calls `std.process.exit`:
@@ -381,14 +437,19 @@ pub const ProcessCommands = struct {
 // plugin:cli|* — argv snapshot and simple flag matching
 // ---------------------------------------------------------------------------
 
+/// `plugin:cli|*` — argv snapshot and flag matching.
 pub const CliCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:cli|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
+    /// The startup argv snapshot.
     pub fn args(_: *rpc.Ctx, state: *PluginState) []const []const u8 {
         return state.argv;
     }
 
+    /// Whether `--flag` or `--flag=value` appeared on the command line.
     pub fn matches(_: *rpc.Ctx, state: *PluginState, request: struct { flag: []const u8 }) bool {
         for (state.argv) |arg| {
             if (std.mem.eql(u8, arg, request.flag)) return true;
@@ -402,10 +463,14 @@ pub const CliCommands = struct {
 // plugin:window-state|* — geometry persisted in the store under a reserved key
 // ---------------------------------------------------------------------------
 
+/// `plugin:window-state|*` — persisted window geometry.
 pub const WindowStateCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:window-state|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
+    /// Statedto exposed by this module.
     pub const StateDto = struct {
         label: []const u8,
         width: f64,
@@ -418,6 +483,7 @@ pub const WindowStateCommands = struct {
         return std.fmt.allocPrint(allocator, "__zts_window_state__{s}", .{label}) catch error.OutOfMemory;
     }
 
+    /// Persists the current state as deterministic JSON.
     pub fn save(ctx: *rpc.Ctx, state: *PluginState, args: struct { value: StateDto }) PluginError!void {
         const key = try keyFor(ctx.scratch, args.value.label);
         const raw = rpc.encodeAlloc(ctx.scratch, args.value) catch return error.OutOfMemory;
@@ -425,12 +491,14 @@ pub const WindowStateCommands = struct {
         try state.save();
     }
 
+    /// Loads previously persisted state from disk; a missing file is not an error.
     pub fn restore(ctx: *rpc.Ctx, state: *PluginState, args: struct { label: []const u8 }) ?StateDto {
         const key = keyFor(ctx.scratch, args.label) catch return null;
         const raw = state.store.get(key) orelse return null;
         return rpc.decodeLeaky(StateDto, ctx.scratch, raw) catch null;
     }
 
+    /// Drops every entry and writes the empty state back to disk.
     pub fn clear(ctx: *rpc.Ctx, state: *PluginState, args: struct { label: []const u8 }) bool {
         const key = keyFor(ctx.scratch, args.label) catch return false;
         if (state.store.fetchRemove(key)) |entry| {
@@ -446,8 +514,11 @@ pub const WindowStateCommands = struct {
 // plugin:opener|* — capability-gated external open, behind a provider
 // ---------------------------------------------------------------------------
 
+/// `plugin:opener|*` — capability-gated external open.
 pub const OpenerCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:opener|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
     fn open(state: *PluginState, target: []const u8) PluginError!void {
@@ -455,6 +526,7 @@ pub const OpenerCommands = struct {
         fn_ptr(state.opener.ctx, target);
     }
 
+    /// Opens an `http(s)` / `mailto` URL through the installed provider.
     pub fn open_url(_: *rpc.Ctx, state: *PluginState, args: struct { url: []const u8 }) PluginError!void {
         if (!std.mem.startsWith(u8, args.url, "https://") and !std.mem.startsWith(u8, args.url, "http://") and !std.mem.startsWith(u8, args.url, "mailto:")) {
             return error.InvalidValue;
@@ -462,6 +534,7 @@ pub const OpenerCommands = struct {
         try open(state, args.url);
     }
 
+    /// Opens a filesystem path through the installed provider.
     pub fn open_path(_: *rpc.Ctx, state: *PluginState, args: struct { path: []const u8 }) PluginError!void {
         try open(state, args.path);
     }
@@ -471,18 +544,24 @@ pub const OpenerCommands = struct {
 // plugin:single-instance|* — advisory lock file, identical on all 3 OSes
 // ---------------------------------------------------------------------------
 
+/// `plugin:single-instance|*` — advisory lock file.
 pub const SingleInstanceCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:single-instance|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
+    /// Claims the single-instance lock; `false` means another instance holds it.
     pub fn request_lock(_: *rpc.Ctx, state: *PluginState) PluginError!bool {
         return state.requestLock();
     }
 
+    /// Whether this process owns the single-instance lock.
     pub fn is_primary(_: *rpc.Ctx, state: *PluginState) bool {
         return state.lock_held;
     }
 
+    /// Releases the single-instance lock.
     pub fn release(_: *rpc.Ctx, state: *PluginState) PluginError!void {
         try state.releaseLock();
     }
@@ -492,10 +571,14 @@ pub const SingleInstanceCommands = struct {
 // plugin:notification|* — in-app event + ring buffer (not the OS notification center)
 // ---------------------------------------------------------------------------
 
+/// `plugin:notification|*` — in-app event and ring buffer.
 pub const NotificationCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:notification|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
+    /// Records a notification and dispatches an in-app `zts:event`.
     pub fn notify(ctx: *rpc.Ctx, state: *PluginState, args: struct {
         title: []const u8,
         body: []const u8 = "",
@@ -531,6 +614,7 @@ pub const NotificationCommands = struct {
         return id;
     }
 
+    /// Returns the bounded notification ring.
     pub fn pending(_: *rpc.Ctx, state: *PluginState) []const Notification {
         return state.notifications.items;
     }
@@ -540,20 +624,33 @@ pub const NotificationCommands = struct {
 // plugin:positioner|* — pure geometry, no OS call
 // ---------------------------------------------------------------------------
 
+/// Where `plugin:positioner` places a window relative to its monitor.
 pub const Position = enum {
+    /// Top-left corner of the monitor.
     top_left,
+    /// Top edge, horizontally centred.
     top_center,
+    /// Top-right corner of the monitor.
     top_right,
+    /// Window centred on its monitor.
     center,
+    /// Bottom-left corner of the monitor.
     bottom_left,
+    /// Bottom edge, horizontally centred.
     bottom_center,
+    /// Bottom-right corner of the monitor.
     bottom_right,
+    /// Left edge, vertically centred.
     left_center,
+    /// Right edge, vertically centred.
     right_center,
 };
 
+/// `plugin:positioner|*` — pure monitor-relative geometry.
 pub const PositionerCommands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:positioner|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = PluginState;
 
     /// Computes a window origin from a monitor rectangle and a window size. Same arithmetic on

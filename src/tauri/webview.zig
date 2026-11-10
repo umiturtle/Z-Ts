@@ -71,10 +71,12 @@ pub const WebviewRegistry = struct {
     /// Webviews attached to an existing window by `new Webview()`.
     children: std.ArrayList(ChildWebview) = .empty,
 
+    /// Creates an empty registry bound to `WindowRegistry`.
     pub fn init(allocator: Allocator, io: Io, windows: *window_mod.WindowRegistry) WebviewRegistry {
         return .{ .allocator = allocator, .io = io, .windows = windows };
     }
 
+    /// Frees every owned child-webview label and URL.
     pub fn deinit(self: *WebviewRegistry) void {
         for (self.children.items) |*child| child.deinit(self.allocator);
         self.children.deinit(self.allocator);
@@ -252,7 +254,9 @@ fn evalInWebview(ctx: *rpc.Ctx, reg: *WebviewRegistry, label: ?[]const u8, code:
 
 /// `plugin:webview|*` RPC command namespace (`Schema` key: `.tauri_webview`).
 pub const Commands = struct {
+    /// Wire prefix shared by every command in this namespace (`plugin:…|`).
     pub const rpc_prefix = "plugin:webview|";
+    /// State type `zts_rpc` resolves for this namespace.
     pub const RpcState = WebviewRegistry;
 
     /// `plugin:webview|create_webview_window` — `new WebviewWindow(label, options)`.

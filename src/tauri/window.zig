@@ -59,6 +59,7 @@ pub fn isValidLabel(label: []const u8) bool {
 /// value so the dozens of upstream `WindowOptions` / `WebviewOptions` keys we do not act on are
 /// simply ignored instead of failing the whole command.
 pub const JsonHelpers = struct {
+    /// Looks up the first present key in a JSON object.
     pub fn field(value: std.json.Value, names: []const []const u8) ?std.json.Value {
         if (value != .object) return null;
         for (names) |name| {
@@ -70,11 +71,13 @@ pub const JsonHelpers = struct {
         return null;
     }
 
+    /// Extracts a string field, or `null`.
     pub fn string(value: std.json.Value, names: []const []const u8) ?[]const u8 {
         const v = field(value, names) orelse return null;
         return if (v == .string) v.string else null;
     }
 
+    /// Extracts a numeric field, or `null`.
     pub fn number(value: std.json.Value, names: []const []const u8) ?f64 {
         const v = field(value, names) orelse return null;
         return switch (v) {
@@ -85,6 +88,7 @@ pub const JsonHelpers = struct {
         };
     }
 
+    /// Extracts a boolean field, or `null`.
     pub fn boolean(value: std.json.Value, names: []const []const u8) ?bool {
         const v = field(value, names) orelse return null;
         return if (v == .bool) v.bool else null;
@@ -249,43 +253,77 @@ pub const SizeConstraintsDto = struct {
 /// three OSes. Visual effects that need a real OS object are applied by the backend where
 /// available; the command always records the intent and emits the matching event.
 pub const Theme = enum { system, dark, light };
+/// Taskbar progress-bar state accepted by `set_progress_bar`.
 pub const ProgressStatus = enum { none, normal, indeterminate, paused, @"error" };
+/// Cursor shapes accepted by `set_cursor_icon`.
 pub const CursorIcon = enum { default, arrow, crosshair, hand, text, move, wait, help, progress, not_allowed, resize_ew, resize_ns, grab, grabbing };
+/// User-attention levels accepted by `request_user_attention`.
 pub const AttentionType = enum { none, critical, informational };
+/// Named background effects accepted by `set_effects`.
 pub const Effect = enum { none, blur, acrylic, mica, tabbed };
 
+/// Pair of progress state and percentage used by `set_progress_bar`.
 pub const ProgressUpdate = struct { status: ProgressStatus, progress: ?u8 };
+/// RGBA background colour used by `set_background_color`.
 pub const ColorValue = struct { r: u8, g: u8, b: u8, a: u8 };
 
+/// State recorded by the remaining `plugin:window|set_*` commands.
 pub const WindowExtras = struct {
+    /// Requested title-bar theme.
     theme: Theme = .system,
+    /// Hide the window from the taskbar / dock.
     skip_taskbar: bool = false,
+    /// Progress-bar state.
     progress_status: ProgressStatus = .none,
+    /// Progress percentage (0..100), or `null`.
     progress_value: ?u8 = null,
+    /// Dock / taskbar badge count, or `null` to clear it.
     badge_count: ?u32 = null,
+    /// Current cursor shape.
     cursor_icon: CursorIcon = .default,
+    /// Cursor X position in physical pixels.
     cursor_x: i32 = 0,
+    /// Cursor Y position in physical pixels.
     cursor_y: i32 = 0,
+    /// Whether the cursor is grabbed (confined to the window).
     cursor_grab: bool = false,
+    /// Whether the cursor is drawn.
     cursor_visible: bool = true,
+    /// Let mouse events pass through the window.
     ignore_cursor_events: bool = false,
+    /// Whether `plugin:window|center` was requested.
     centered: bool = false,
+    /// Last requested user-attention type.
     user_attention: AttentionType = .none,
+    /// Prevent screenshots / screen capture of this window.
     content_protected: bool = false,
+    /// Show the window on every virtual desktop.
     visible_on_all_workspaces: bool = false,
+    /// Whether the window draws a drop shadow.
     shadow: bool = true,
+    /// Keep the window below every other window.
     always_on_bottom: bool = false,
+    /// Whether the window accepts input.
     enabled: bool = true,
+    /// Requested background effect.
     effect: Effect = .none,
+    /// Whether a background colour was set.
     bg_set: bool = false,
+    /// Background red channel.
     bg_r: u8 = 0,
+    /// Background green channel.
     bg_g: u8 = 0,
+    /// Background blue channel.
     bg_b: u8 = 0,
+    /// Background alpha channel.
     bg_a: u8 = 255,
+    /// Deterministic hash of the icon bytes supplied to `set_icon`.
     icon_hash: u64 = 0,
+    /// Devtools open of this record.
     devtools_open: bool = false,
 };
 
+/// One live window in the registry, with its label and last known state.
 pub const TrackedWindow = struct {
     /// Live `WindowId`; `0` once the window is gone.
     id: core.WindowId,
@@ -351,6 +389,7 @@ pub const WindowRegistry = struct {
     /// receives the *same* per-label bootstrap injection as one created at startup. Without it the
     /// command falls back to `ctx.host.createWindow()` (which is what unit-test hosts provide).
     window_factory_ctx: ?*anyopaque = null,
+    /// Optional runtime hook that injects a per-label bootstrap into new windows.
     window_factory: ?*const fn (?*anyopaque, core.WindowSpec) core.HostError!core.WindowId = null,
     /// P1 #9 — monitor/DPI provider. `null` keeps the old behaviour (scale factor 1.0).
     monitors: ?*monitor.MonitorRegistry = null,
@@ -476,6 +515,7 @@ pub const WindowRegistry = struct {
         return false;
     }
 
+    /// Whether devtools are recorded as open for this window.
     pub fn devtoolsOpen(self: *WindowRegistry, label: ?[]const u8, fallback_id: core.WindowId) bool {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
@@ -560,6 +600,7 @@ pub const window_event_names = [_][]const u8{
     "tauri://window-flags-changed",
 };
 
+/// Whether a name is on the allowlist of native window events.
 pub fn isWindowEventName(name: []const u8) bool {
     for (window_event_names) |allowed| {
         if (std.mem.eql(u8, name, allowed)) return true;
@@ -868,6 +909,7 @@ pub const Commands = struct {
         }.f, args.value, "tauri://window-flags-changed");
     }
 
+    /// Enables or disables window input and emits a flags-changed event.
     pub fn set_enabled(ctx: *rpc.Ctx, reg: *WindowRegistry, args: struct { label: ?[]const u8 = null, value: bool }) WindowPluginError!void {
         try applyExtras(ctx, reg, args.label, struct {
             fn f(e: *WindowExtras, v: bool) void {

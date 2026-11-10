@@ -336,17 +336,30 @@ pub const WindowConfig = struct {
     initial_html: ?[]const u8 = null,
     /// P1 #10 — declarative window options carried from `tauri.conf.json`.
     center: bool = false,
+    /// Start the window maximised.
     maximized: bool = false,
+    /// Hide the window from the taskbar / dock.
     skip_taskbar: bool = false,
+    /// Keep the window below every other window.
     always_on_bottom: bool = false,
+    /// Give the window keyboard focus at creation.
     focus: bool = true,
+    /// Prevent screenshots / screen capture of this window.
     content_protected: bool = false,
+    /// Accept file drops in the webview.
     drag_drop_enabled: bool = true,
+    /// Enable the browser zoom shortcuts.
     zoom_hotkeys_enabled: bool = false,
+    /// Hide the title text while keeping the title bar.
     hidden_title: bool = false,
+    /// Requested title-bar appearance (`Overlay` / `Transparent` / …).
     title_bar_style: []const u8 = "",
+    /// Override the WebView user-agent string.
     user_agent: ?[]const u8 = null,
+    /// Native window tabbing group identifier (macOS).
     tabbing_identifier: ?[]const u8 = null,
+    /// Show the window on every virtual desktop.
     visible_on_all_workspaces: bool = false,
+    /// `windowEffects` kept as raw JSON text for the backend to interpret.
     window_effects_json: ?[]const u8 = null,
 };
