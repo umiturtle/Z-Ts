@@ -5,7 +5,7 @@
 //! CI). The gallery serves them from the root of a custom scheme (`tauri://localhost/fw/react/`),
 //! so their asset URLs are absolute (`/assets/…`, `/_next/…`, `/zts/fonts/…`).
 //!
-//! GitHub Pages serves this site from a sub-path (`/Z-Ts/`), so absolute URLs would escape the
+//! GitHub Pages serves this site from a sub-path (`/ZigguraTs/`), so absolute URLs would escape the
 //! repository and 404. [`rewriteAbsoluteUrls`] rewrites them to be relative to the demo directory —
 //! the fonts move up one level (`../fonts/`) because all nine demos share a single copy.
 //!

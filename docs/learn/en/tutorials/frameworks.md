@@ -25,15 +25,15 @@ are identical on every branch.
 
 | Example | Version | Build | Output | Tutorial | Live demo |
 |---|---|---|---|---|---|
-| [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | 19.3 | `vite build` | `dist` | [Tutorial](counter-react.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/react/index.html) |
-| [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | 1.9 | `vite build` | `dist` | [Tutorial](counter-solid.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/solid/index.html) |
-| [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | 5.57 | `vite build` | `dist` | [Tutorial](counter-svelte.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/svelte/index.html) |
-| [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | 22.2 | `ng build` | `dist/browser` | [Tutorial](counter-angular.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/angular/index.html) |
-| [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | 16.4 | `next build` | `out` | [Tutorial](counter-next.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/next/index.html) |
-| [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | 4.6 | `nuxt generate` | `.output/public` | [Tutorial](counter-nuxt.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/nuxt/index.html) |
-| [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | 6.4 | `astro build` | `dist` | [Tutorial](counter-astro.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/astro/index.html) |
-| [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | 3.1 | `vite build` | `build` | [Tutorial](counter-sveltekit.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/sveltekit/index.html) |
-| [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | 2.1 | `vite build` | `dist/client` | [Tutorial](counter-solidstart.md) | [Open](https://umiturtle.github.io/Z-Ts/examples/frameworks/solidstart/index.html) |
+| [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | 19.3 | `vite build` | `dist` | [Tutorial](counter-react.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
+| [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | 1.9 | `vite build` | `dist` | [Tutorial](counter-solid.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
+| [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | 5.57 | `vite build` | `dist` | [Tutorial](counter-svelte.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
+| [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | 22.2 | `ng build` | `dist/browser` | [Tutorial](counter-angular.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
+| [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | 16.4 | `next build` | `out` | [Tutorial](counter-next.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) |
+| [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | 4.6 | `nuxt generate` | `.output/public` | [Tutorial](counter-nuxt.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
+| [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | 6.4 | `astro build` | `dist` | [Tutorial](counter-astro.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
+| [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | 3.1 | `vite build` | `build` | [Tutorial](counter-sveltekit.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) |
+| [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | 2.1 | `vite build` | `dist/client` | [Tutorial](counter-solidstart.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) |
 
 See [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) for the
 build commands and the 3-OS screenshot comparison.

@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CATALOG = ROOT / "src" / "docsite" / "frameworks.json"
 TUTORIALS = ROOT / "docs" / "learn"
 
-PAGES_URL = "https://umiturtle.github.io/Z-Ts/examples/frameworks/{id}/index.html"
+PAGES_URL = "https://umiturtle.github.io/ZigguraTs/examples/frameworks/{id}/index.html"
 TREE_URL = "https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/{id}"
 
 FENCE = {

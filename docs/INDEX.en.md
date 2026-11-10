@@ -3,7 +3,7 @@
 > **Audience**: anyone deciding which page to read next, or looking a name up.
 > **Time**: 30 seconds as a table of contents.
 
-This is the map of the published site (<https://umiturtle.github.io/Z-Ts/>), in **the same order as
+This is the map of the published site (<https://umiturtle.github.io/ZigguraTs/>), in **the same order as
 the sidebar**. Press `/` for full-text search; the `日本語 / English` control in the top right
 switches language on every reader page, including this one.
 

@@ -172,7 +172,7 @@ const window = @import("zts_tauri").window;
 | フォント | `examples/gallery/src/web/fonts/*.woff2` | `examples/frameworks/fonts/` に 1 部だけ |
 
 ギャラリーはカスタムスキームのルート（`tauri://localhost/fw/react/`）で配信するため、各デモの
-HTML は `/assets/…` `/zts/fonts/…` のような**絶対パス**を持つ。GitHub Pages は `/Z-Ts/` という
+HTML は `/assets/…` `/zts/fonts/…` のような**絶対パス**を持つ。GitHub Pages は `/ZigguraTs/` という
 サブパスで配信するので、そのままではリポジトリの外を指して 404 になる。`demos.zig` は
 
 * `="/…`・`:"/…`・`url(/…` の先頭スラッシュを落とし、
@@ -198,7 +198,7 @@ push to main ──> build ──> ./zigw build docs            (リンク検査
   （＝ページが 0 枚でも「成功」しない）。
 * `.nojekyll` を置くので Jekyll の処理は走らない（`_zts/` のようなアンダースコア始まりの
   ディレクトリもそのまま配信される）。
-* サイトは `https://umiturtle.github.io/Z-Ts/` に公開される。
+* サイトは `https://umiturtle.github.io/ZigguraTs/` に公開される。
 * **初回の有効化は「あれば使う / 無ければ作ってみる / 作れなければ警告」**の 3 段構え
   （`.github/workflows/pages.yml` の `Check whether GitHub Pages is enabled`）:
 

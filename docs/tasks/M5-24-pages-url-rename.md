@@ -1,6 +1,6 @@
 # Task M5-24: 公開サイトの URL を改名後のリポジトリ名へ寄せる
 
-- **Status**: `in_progress` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/14e12855-z-ts`（main `a5b9d73` = PR #22 マージ後）
 - **Scope**: `src/docsite/{main,frameworks,demos}.zig`, `scripts/gen-framework-tutorials.py`,
   `docs/learn/{ja,en}/tutorials/*.md`（生成物）, `README.md`, `README.en.md`, `AGENTS.md`,
@@ -11,9 +11,8 @@
 - **Upstream Reference**: [`M5-23-ci-rename-safe-check-runs.md`](M5-23-ci-rename-safe-check-runs.md)
   （リネーム発覚の経緯）、[`../architecture/documentation-site.md`](../architecture/documentation-site.md)
   （Pages サブパスの設計）、規約 14（旧リポジトリ URL / パス名の扱い）
-- **Next Step**: `umiturtle.github.io/Z-Ts/` を `umiturtle.github.io/ZigguraTs/` へ一括置換し、
-  `python3 scripts/gen-framework-tutorials.py` で 20 ページを再生成する。その後、規約 19 を
-  追加して再発を機械検査し、`--sync --date 2026-10-21` で同期台帳を更新して PR を 1 本作る。
+- **Next Step**: 実装を push して PR を 1 本作り、3 OS CI が 7/7 緑になることを確認して
+  `gh pr merge` で `main` へマージする（マージ後の Pages デプロイも確認）。
 
 ---
 
@@ -21,18 +20,18 @@
 
 > 「公開サイト内の `site_url` / sitemap / llms.txt などを新名へ寄せる必要があれば、別タスクで一括更新します」→「お願い」
 
-- [ ] `https://umiturtle.github.io/Z-Ts/` を**公開面**（Doc・生成器・ワークフローのコメント）から
-      `https://umiturtle.github.io/ZigguraTs/` へ一括更新する
-- [ ] `src/docsite/main.zig` の `site_url`（sitemap.xml / llms.txt / llms-full.txt）、
+- [x] `https://umiturtle.github.io/Z-Ts/` を**公開面**（Doc・生成器・ワークフローのコメント）から
+      `https://umiturtle.github.io/ZigguraTs/` へ一括更新する（31 ファイル・101 箇所）
+- [x] `src/docsite/main.zig` の `site_url`（sitemap.xml / llms.txt / llms-full.txt）、
       `src/docsite/frameworks.zig` のライブデモ URL、
       `scripts/gen-framework-tutorials.py` の `PAGES_URL` を新名に揃える
-- [ ] 生成済みの日英チュートリアル 20 ページを再生成し、
+- [x] 生成済みの日英チュートリアル 20 ページを再生成し、
       `python3 scripts/gen-framework-tutorials.py --check` が緑
-- [ ] `github.com/umiturtle/Z-Ts/...` とチェックアウトのパス名（`cd Z-Ts` / `/path/to/Z-Ts` 等）は
+- [x] `github.com/umiturtle/Z-Ts/...` とチェックアウトのパス名（`cd Z-Ts` / `/path/to/Z-Ts` 等）は
       **規約 14 どおり据え置き**。`github.com` はリダイレクトされ、パス名は利用者のローカル名だから
-- [ ] 履歴資料（`docs/tasks/*.md` / `docs/decisions/*.md`）は他エージェント・追記専用のため非編集
-- [ ] 規約 19 を追加し、公開面に旧 Pages URL が残らないことを機械検査する
-- [ ] 日英 Doc と同期台帳を更新、`learn_path.steps` / `AGENTS.md` と
+- [x] 履歴資料（`docs/tasks/*.md` / `docs/decisions/*.md`）は他エージェント・追記専用のため非編集
+- [x] 規約 19 を追加し、公開面に旧 Pages URL が残らないことを機械検査する
+- [x] 日英 Doc と同期台帳を更新、`learn_path.steps` / `AGENTS.md` と
       `docs/roadmap/milestones.md` の**チェックボックスは非編集**
 - [ ] `quick-test` / `build test` / `doctest` / `docs-check` / `fmt --check` / 3 OS CI が緑、PR は 1 本だけ
 
@@ -60,8 +59,15 @@
 
 ## Current State / Next Step
 
-- **現在**: 調査完了。30 秒ルーチン（`quick-test` / `check-docs.py` / `fmt --check`）は緑。
-  現ブランチは `main a5b9d73` 起点で clean、Open PR は別ブランチの #9 のみ。
-  旧 Pages URL は 32 ファイル・101 箇所、旧 `github.com` URL は 43 ファイル・124 箇所（後者は据え置き）。
-- **次の 1 手**: 分散ロック（この票）を push した後、3 定数と公開面の Pages URL を置換し、
-  チュートリアル 20 ページを再生成する。
+- **現在**: 実装・ローカル検証まで完了。31 ファイルの Pages URL と 3 箇所のサブパスコメントを
+  新名へ置換、チュートリアル 20 ページ再生成、規約 19、同期台帳
+  （`--sync --date 2026-10-21`）まで反映済み。生成 `sitemap.xml` の `<loc>` は
+  `https://umiturtle.github.io/ZigguraTs/...` に変わった。
+- **ローカル緑**: `quick-test`（37 / 10）、`build test` exit 0、`doctest blocks=20`、
+  `docs-check`（86 tests + `OK docsite pages=297 … api_undoc=0`）、`fmt --check`、
+  `check-docs.py`（177 md / 34 読者ページ × 2 言語、規約 19 含む）、
+  `gen-framework-tutorials.py --check`（20 pages）、`node --test`（7/7）。
+- **残る旧 URL**: `docs/tasks/` / `docs/decisions/` の歴史的記述のみ（コードスパンでリンクではない）。
+  `github.com` リンクとチェックアウトパスは規約 14 どおり据え置き。
+- **次の 1 手**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
+  `main` の CI / Pages デプロイが緑になったらタスク票を `done` にする。

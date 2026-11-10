@@ -5,7 +5,7 @@ name: Documentation site
 #      the single source of truth, so a broken link fails this workflow instead of shipping.
 #   2. The pre-built example bundles: the counter SSG export (`zig build dist`) and the nine
 #      committed framework demos, with their absolute `/assets/…` URLs rewritten for the
-#      `/Z-Ts/` sub-path.
+#      `/ZigguraTs/` sub-path.
 #
 # Publishing needs the repository's Pages site to exist. `GITHUB_TOKEN` can *deploy* to Pages but
 # cannot *create* the site (creating one needs administrative rights — measured:
