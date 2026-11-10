@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "960d6e4",
+    "commit": "1d04c7a",
     "zts_version": "0.1.0",
     "zig_version": "0.17.0",
     "checks": [
@@ -24,7 +24,7 @@
       "src/docsite/site.zig",
       "scripts/check-docs.py"
     ],
-    "implementation_sha256": "3e2d297c8f1fa86f436f9c6150646822dbb9a44af3c12e21f0dc48985b4437af"
+    "implementation_sha256": "93c738526c2b3274bf2493d2967cbb6e87ca9dfa7a167faf4d5eba899c34d5e0"
   },
   "pages": [
     {
@@ -52,8 +52,8 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "eb08acc4433e37c40c776e029b165732fbdf0dc35ddde73b511a9a22333b5f81",
-      "en_sha256": "7eeacb3588685a69eb59138ffb79489ca4a67f145c18a06f8391f823393a0420"
+      "ja_sha256": "256f22797dba84cbad098e0e2b1a2f91df49b1d57af0b765ccf52f5a730e15bc",
+      "en_sha256": "47dffe3dab39c747e0478105fc33f999646ee0eaf0c09ea229951c89bf798a5f"
     },
     {
       "ja": "docs/contributing/repository-map.md",

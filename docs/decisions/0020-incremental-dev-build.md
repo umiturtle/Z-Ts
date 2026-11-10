@@ -91,10 +91,10 @@ Zig 0.17.0 の Debug は自前バックエンドを使う。同一モジュー�
 ## 4. 結果
 
 ```text
-旧バイナリ（変更前リビジョン） 1096.1 ms → 新バイナリ 115.5 ms  = 9.49x
-同一バイナリ full vs fast check 827.4 ms → 115.5 ms  = 7.17x
+旧バイナリ（変更前リビジョン） 1135.9 ms → 新バイナリ 116.2 ms  = 9.77x
+同一バイナリ full vs fast check 845.2 ms → 116.2 ms  = 7.27x
 コンパイルそのもの             4 ms（初回 update 440 ms）
-zig build vs zig build check  727.6 ms → 385.6 ms  = 1.89x
+zig build vs zig build check  747.0 ms → 396.0 ms  = 1.89x
 単体テスト 57 件 / quick-test 7 件 / build test / fmt / docs-check すべて緑
 ```
 

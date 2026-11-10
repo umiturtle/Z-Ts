@@ -75,15 +75,15 @@
 
 ```text
 End-to-end: edit src/main.zig -> new build visible to the browser
-  legacy binary (pre-change)           median 1096.1 ms
-  full builds (ZTS_DEV_BUILD=full)     median  827.4 ms
-  incremental compiler server         median  115.5 ms   (compiler 4 ms)
-  speedup vs legacy binary             9.49x
-  same-binary full vs fast check       7.17x
+  legacy binary (pre-change)           median 1135.9 ms
+  full builds (ZTS_DEV_BUILD=full)     median  845.2 ms
+  incremental compiler server         median  116.2 ms   (compiler 4 ms)
+  speedup vs legacy binary             9.77x
+  same-binary full vs fast check       7.27x
 
 Direct compiler step (no dev server, no polling)
-  zig build       median  727.6 ms
-  zig build check median  385.6 ms
+  zig build       median  747.0 ms
+  zig build check median  396.0 ms
   speedup         1.89x
 
 Persistent compiler server: first update 440 ms -> 3 ms, type error 11 ms

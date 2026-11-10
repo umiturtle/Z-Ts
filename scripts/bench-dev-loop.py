@@ -315,7 +315,7 @@ def run_verify(args, zts, zig, root):
             if "incremental compiler server ready" not in body:
                 print("      note: compiler server unavailable here; fallback path verified")
                 for line in body.splitlines():
-                    if "compiler server" in line or "argv capture" in line:
+                    if "compiler server" in line:
                         print("      dev:", line.strip())
                 return
             checks = [int(x) for x in re.findall(r"zts: type-check ok \((\d+) ms\)", body)]
@@ -374,7 +374,7 @@ def run_verify(args, zts, zig, root):
             time.sleep(1.6)
             assert session.state()["v"] == state["v"], "a burst caused two rebuilds"
 
-        check("compiler server re-checks a Zig edit in milliseconds", fast_recheck)
+        check("a Zig edit is type-checked in ms when the compiler server is available", fast_recheck)
         check("identical-content rewrite (touch) does not rebuild", noop_save)
         check("edit outside the import graph does not rebuild", unreachable_source)
         check("stylesheet edit hot-swaps without a build", css_hot_swap)

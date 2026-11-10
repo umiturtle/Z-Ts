@@ -172,15 +172,15 @@ zig build-exe ... -Mroot=src/main.zig ... -fno-emit-bin ... --listen=-
 
 ```text
 End-to-end: edit src/main.zig -> new build visible to the browser
-  legacy binary (pre-change)           median 1096.1 ms
-  full builds (ZTS_DEV_BUILD=full)     median  827.4 ms
-  incremental compiler server         median  115.5 ms   (compiler 4 ms)
-  speedup vs legacy binary             9.49x
-  same-binary full vs fast check       7.17x
+  legacy binary (pre-change)           median 1135.9 ms
+  full builds (ZTS_DEV_BUILD=full)     median  845.2 ms
+  incremental compiler server         median  116.2 ms   (compiler 4 ms)
+  speedup vs legacy binary             9.77x
+  same-binary full vs fast check       7.27x
 
 Direct compiler step (no dev server, no polling)
-  zig build       median  727.6 ms
-  zig build check median  385.6 ms
+  zig build       median  747.0 ms
+  zig build check median  396.0 ms
   speedup         1.89x
 
 Persistent compiler server (direct protocol probe)
@@ -224,6 +224,9 @@ python3 scripts/check-docs.py → OK（--sync で台帳を更新）
 * 常駐サーバは `--verbose` 出力から引数を取る。Zig の出力形式が変わったら
   `parseArgv` が失敗して `zig build check` に落ちる（遅くなるだけで壊れない）。
   `--listen=-` プロトコルもバージョン依存なので、`zig_version` ハンドシェイクで弾く。
+  当初は `-M…=` のパス実在も検証していたが、GitHub Actions では生成物がグローバル
+  キャッシュ側に置かれて誤爆（`ModulePathMissing`）したため削除した。引数の正当性は
+  ハンドシェイクと起動時の `update` が実際にコンパイルすることで保証する方が確実。
 * サーバは `web/` の変更を追わない（生成済み `assets_manifest.zig` のパスを保持する）。
   型検査には影響しないが、`web/` を大幅に変えた後に完全ビルドが走れば再起動する。
 * `src/main.zig` を根に固定している。別のエントリポイントを使うプロジェクトでは
