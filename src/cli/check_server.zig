@@ -49,7 +49,7 @@ pub const Server = struct {
         defer gpa.free(captured.stderr);
         if (!captured.term.success()) return error.CaptureFailed;
 
-        const argv = try parseArgv(arena, io, captured.stdout, captured.stderr, dir);
+        const argv = try parseArgv(arena, captured.stdout, captured.stderr);
 
         const self = try gpa.create(Server);
         errdefer gpa.destroy(self);
@@ -130,13 +130,12 @@ pub const Server = struct {
 /// Extracts the `zig build-exe … -fno-emit-bin … --listen=-` command from `--verbose` output and
 /// adds the flags the incremental self-hosted backend needs. Verbose output goes to stderr in
 /// Zig 0.17, but both streams are searched so a future version that moves it to stdout still works.
-pub fn parseArgv(
-    arena: Allocator,
-    io: Io,
-    stdout: []const u8,
-    stderr: []const u8,
-    dir: []const u8,
-) ![]const []const u8 {
+///
+/// Module paths are deliberately NOT checked for existence here: Zig's generated files can live in
+/// the global cache or be rewritten by a cached step, so a stat against the project dir produces
+/// false negatives (it did on GitHub Actions). A bogus argv is caught instead by the handshake
+/// and the warm `update`, which fail and trigger the ordinary `zig build check` fallback.
+pub fn parseArgv(arena: Allocator, stdout: []const u8, stderr: []const u8) ![]const []const u8 {
     const line = findLine(stdout) orelse findLine(stderr) orelse return error.NoVerboseLine;
     const colon = std.mem.indexOf(u8, line, ": ") orelse return error.NoVerbosePrefix;
     const command = std.mem.trimStart(u8, line[colon + 2 ..], " \t");
@@ -154,17 +153,6 @@ pub fn parseArgv(
         }
         if (!found) return error.MissingArgvToken;
     }
-    // Every `-M…=<path>` must point at a real file relative to the project. This catches a broken
-    // whitespace split (a path containing a space) instead of spawning a bogus compiler.
-    for (tokens.items) |tok| {
-        if (!std.mem.startsWith(u8, tok, "-M")) continue;
-        const eq = std.mem.indexOfScalar(u8, tok, '=') orelse continue;
-        const path = tok[eq + 1 ..];
-        if (path.len == 0) continue;
-        const full = try std.fmt.allocPrint(arena, "{s}/{s}", .{ dir, path });
-        Io.Dir.cwd().access(io, full, .{}) catch return error.ModulePathMissing;
-    }
-
     // `-fno-llvm` (the Debug default) plus `-fincremental` is the combination that keeps the
     // analysed module graph in memory and re-checks only changed files on the next `update`.
     var out: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -202,7 +190,7 @@ test "parseArgv extracts the check command and adds incremental flags" {
         "-Mroot=src/cli/main.zig -fno-emit-bin --cache-dir .zig-cache " ++
         "--global-cache-dir /home/user/.cache/zig --name app_check " ++
         "--zig-lib-dir /tmp/zig/lib/ --listen=-\n", .{});
-    const argv = try parseArgv(arena, testing.io, "", verbose, ".");
+    const argv = try parseArgv(arena, "", verbose);
     try testing.expectEqualStrings("build-exe", argv[1]);
     try testing.expectEqualStrings("-fno-llvm", argv[2]);
     try testing.expectEqualStrings("-fincremental", argv[3]);
@@ -220,5 +208,5 @@ test "parseArgv extracts the check command and adds incremental flags" {
 test "parseArgv rejects output without a compiler command" {
     var arena_state = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena_state.deinit();
-    try testing.expectError(error.NoVerboseLine, parseArgv(arena_state.allocator(), testing.io, "", "OK build-tools embed files=1\n", "."));
+    try testing.expectError(error.NoVerboseLine, parseArgv(arena_state.allocator(), "", "OK build-tools embed files=1\n"));
 }
