@@ -195,6 +195,13 @@ CI は必ず `OK …` を grep する（無言スキップを成功と誤認し�
 sharingType / collectionBehavior / ignoresMouseEvents」「Win32: EnableWindow /
 SetWindowDisplayAffinity / WS_EX_TOOLWINDOW / HWND_BOTTOM」を適用します。
 
+埋め込み（`parent_native_handle`）ウィンドウには `GtkWindow` が無いため、GTK バックエンドは
+`setFocus` / `applyWindowExtras` / `hiddenTitle` の OS 呼び出しをスキップし、スカラ状態だけを
+記録します。ホストがフォーカスとウィンドウフラグを所有するので、C ABI の
+`zts_webview_window_create()` は `ZTS_WEBVIEW_OK` のままです（規約 17 がこのガードを検査）。
+`center: true` を埋め込みに指定した場合だけ、位置を決められないため `error.Unsupported` で
+fail-closed になります。
+
 `Engine.createWindow()` はネイティブウィンドウ生成後に、`maximized` / `center` / `focus` /
 `skipTaskbar` / `alwaysOnBottom` / `contentProtected` / `visibleOnAllWorkspaces` を
 **1 箇所**で適用します（アプリ側にターゲット分岐は 0 行）。`hiddenTitle` /

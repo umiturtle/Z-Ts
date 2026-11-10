@@ -1049,7 +1049,7 @@ pub const LinuxGtkBackend = struct {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         w.creation = types.creationOptions(cfg);
         if (cfg.hidden_title) {
-            c.gtk_window_set_title(try self.requireGtkWindow(win_id), "");
+            if (w.toplevel) |top| c.gtk_window_set_title(@ptrCast(top), "");
         }
         if (cfg.user_agent) |ua| {
             const z = self.allocator.dupeSentinel(u8, ua, 0) catch return error.OutOfMemory;
@@ -1058,22 +1058,24 @@ pub const LinuxGtkBackend = struct {
         }
     }
 
-    /// apply the GTK 3 flags we can honour, keep the full snapshot for determinism.
-    /// Embedded webviews have no `GtkWindow`, so those fail-closed with `error.Unsupported`.
+    /// apply the GTK 3 flags we can honour, keep the full snapshot for determinism. Embedded
+    /// webviews have no `GtkWindow`; the host owns those OS flags, so only the snapshot is kept.
     pub fn applyWindowExtras(self: *LinuxGtkBackend, win_id: types.WindowId, extras: types.WindowExtrasSnapshot) types.WebviewError!void {
         const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
         w.extras = extras;
-        const win = try self.requireGtkWindow(win_id);
+        const top = w.toplevel orelse return;
+        const win: *c.GtkWindow = @ptrCast(top);
         c.gtk_window_set_skip_taskbar_hint(win, if (extras.skip_taskbar) 1 else 0);
         c.gtk_window_set_keep_below(win, if (extras.always_on_bottom) 1 else 0);
         c.gtk_widget_set_sensitive(@ptrCast(win), if (extras.enabled) 1 else 0);
         if (extras.visible_on_all_workspaces) c.gtk_window_stick(win) else c.gtk_window_unstick(win);
     }
 
-    /// Calls `gtk_window_present`.
+    /// Calls `gtk_window_present` for a toplevel. An embedded webview has no `GtkWindow` and its
+    /// host owns focus, so the C ABI overlay path stays `ZTS_WEBVIEW_OK` instead of `Unsupported`.
     pub fn setFocus(self: *LinuxGtkBackend, win_id: types.WindowId) types.WebviewError!void {
-        const gtk_win = try self.requireGtkWindow(win_id);
-        c.gtk_window_present(gtk_win);
+        const w = self.windows.getPtr(win_id) orelse return error.WindowNotFound;
+        if (w.toplevel) |top| c.gtk_window_present(@ptrCast(top));
     }
 
     /// Calls `gtk_window_begin_move_drag`, so GTK runs the drag.

@@ -1246,6 +1246,12 @@ r17_require(
 r17_require(
     "src/app_runtime.zig", "onWindowState", "setWindowStateHandler", "applyNativeState",
 )
+# `createWindow()` now applies options on EVERY window, including C-ABI overlay embeds which have
+# no `GtkWindow`. GTK must guard those calls or `zts_webview_window_create` returns Unsupported.
+r17_require(
+    "src/webview/linux.zig", "const top = w.toplevel orelse return;",
+    "if (w.toplevel) |top| c.gtk_window_present",
+)
 r17_require(
     "src/webview/mod.zig", "setWindowStateHandler", "applyWindowExtras",
     "centerWindow", "applyWindowCreationOptions", "cfg.maximized", "cfg.center", "cfg.focus",
