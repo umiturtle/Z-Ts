@@ -34,9 +34,9 @@ ziggurats は、Tauri v2 の **IPC プロトコル・プラグイン・設定フ
 
 ```bash
 # 1) GitHub Releases から自分の OS の zts を落として PATH に置く
-curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
-chmod +x zts-0.1.0-linux-x86_64
-mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
+curl -LO https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/zts-0.1.1-linux-x86_64
+chmod +x zts-0.1.1-linux-x86_64
+mv zts-0.1.1-linux-x86_64 ~/.local/bin/zts
 
 # 2) プロジェクトを作る
 zts init my-app && cd my-app
@@ -49,7 +49,7 @@ zts doctor                        # 環境とプロジェクトの点検
 clone は要りません（初回ビルドで Zig が取得し、以降はキャッシュ）。
 
 ```zig
-.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+.z_ts = .{ .url = "https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz", .hash = "z_ts-0.1.1-…" },
 ```
 
 > ソースから `zts` を作る場合: `git clone … && cd Z-Ts && zig build`（Zig 0.17 系が `PATH` に

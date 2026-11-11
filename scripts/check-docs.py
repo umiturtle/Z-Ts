@@ -74,6 +74,13 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       framework demos, generated tutorials, README/index links) must use the
                       *current* repository name. The old `/Z-Ts/` Pages path 404s after a rename;
                       `github.com` links and checkout paths stay as rule 14 prescribes.
+20. Version          — `build.zig.zon` is the single source of the release version. The CLI's
+                      `SemanticVersion`, release URLs, archive names and the sync ledger must all
+                      say the same `vX.Y.Z`. A stale `v0.1.0` in an install command ships a 404.
+21. Branch model     — CI must accept `main` / `develop` / `feature/**` / `release/**` /
+                      `hotfix/**` / `arena/**`, the naming validator must run in CI, and both
+                      language guides plus the PR template must name the same bases. Agents never
+                      create branches, so the validator must not either.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -1407,6 +1414,123 @@ for path in sorted(set(R19_SCAN)):
     text = open(path, encoding="utf-8").read()
     if R19_OLD in text:
         errors.append(f"{path}: stale published Pages URL {R19_OLD!r} (rule 19)")
+
+# ---------------------------------------------------------------------------
+# 20. One release version, everywhere it is published
+# ---------------------------------------------------------------------------
+#
+# `build.zig.zon` is the source of truth; `release.yml` reads it with `sed` and the sync ledger
+# mirrors it. The remaining copies are the CLI's own `SemanticVersion` and the URLs a reader is
+# told to fetch. A stale `v0.1.0` in an install command is a 404 that no link checker catches
+# because GitHub URLs are external and therefore skipped.
+#
+# The `0.1.0` in a *scaffolded project's* `build.zig.zon` (src/cli/template.zig, project.zig,
+# `my_app_0.1.0_amd64.deb` in the CLI reference) is a different version and is deliberately not
+# scanned: it is the app author's first release, not ours.
+
+R20_SURFACES = (
+    "README.md", "README.en.md",
+    "docs/learn/ja/guides/install.md", "docs/learn/en/guides/install.md",
+    "docs/reference/cli.md", "docs/reference/cli.en.md",
+    "src/cli/template.zig",
+)
+R20_STALE = ("v0.1.0", "zts-0.1.0", "z_ts-0.1.0", "zts 0.1.0")
+
+def r20_read(path):
+    if not os.path.isfile(path):
+        errors.append(f"{path}: missing (rule 20)")
+        return None
+    return open(path, encoding="utf-8").read()
+
+
+version = zon_versions()[0]
+for path in R20_SURFACES:
+    text = r20_read(path)
+    if text is None:
+        continue
+    if f"z_ts-{version}" not in text:
+        errors.append(f"{path}: missing z_ts-{version} archive name (rule 20)")
+    for stale in R20_STALE:
+        if stale in text:
+            errors.append(f"{path}: stale release version {stale!r} (rule 20)")
+
+for path in ("README.md", "README.en.md", "docs/learn/ja/guides/install.md",
+             "docs/learn/en/guides/install.md", "docs/reference/cli.md",
+             "docs/reference/cli.en.md", "src/cli/template.zig"):
+    text = open(path, encoding="utf-8").read() if os.path.isfile(path) else ""
+    if f"v{version}" not in text:
+        errors.append(f"{path}: missing v{version} release tag (rule 20)")
+
+cli_args = open("src/cli/args.zig", encoding="utf-8").read() if os.path.isfile("src/cli/args.zig") else ""
+m = re.search(
+    r"pub const version = std\.SemanticVersion\{\s*\.major = (\d+),\s*\.minor = (\d+),\s*\.patch = (\d+)\s*\}",
+    cli_args,
+)
+if not m:
+    errors.append("src/cli/args.zig: cannot parse the CLI SemanticVersion (rule 20)")
+else:
+    cli_version = f"{m.group(1)}.{m.group(2)}.{m.group(3)}"
+    if cli_version != version:
+        errors.append(
+            f"src/cli/args.zig: CLI version {cli_version} != build.zig.zon {version} (rule 20)"
+        )
+
+release = open(".github/workflows/release.yml", encoding="utf-8").read() if os.path.isfile(".github/workflows/release.yml") else ""
+if "build.zig.zon" not in release or ".version" not in release:
+    errors.append(".github/workflows/release.yml: must read the version from build.zig.zon (rule 20)")
+
+# CI builds its smoke archive from the same single source of truth; a hardcoded `z_ts-0.1.1`
+# there would rot on the next release.
+ci = open(".github/workflows/ci.yml", encoding="utf-8").read() if os.path.isfile(".github/workflows/ci.yml") else ""
+for stale in R20_STALE:
+    if stale in ci:
+        errors.append(f".github/workflows/ci.yml: stale release version {stale!r} (rule 20)")
+if "build.zig.zon" not in ci or "z_ts-$version" not in ci:
+    errors.append(".github/workflows/ci.yml: the smoke archive must derive its name from build.zig.zon (rule 20)")
+if "verify-library-consumer.sh" not in ci:
+    errors.append(".github/workflows/ci.yml: missing library-consumer gate (rule 20)")
+
+# ---------------------------------------------------------------------------
+# 21. gitflow intake: CI triggers, naming validator, bilingual guide, PR template
+# ---------------------------------------------------------------------------
+#
+# The repository owner creates the branches; Arena agents are pinned to one `arena/*` ref per
+# session. This rule keeps the *intake* honest: every gitflow branch gets the same 3-OS CI, the
+# validator is exercised in CI, and both languages tell the reader the same PR bases.
+
+R21_BRANCHES = ("develop", '"feature/**"', '"release/**"', '"hotfix/**"', '"arena/**"')
+R21_CI = open(".github/workflows/ci.yml", encoding="utf-8").read() if os.path.isfile(".github/workflows/ci.yml") else ""
+for branch in R21_BRANCHES:
+    if branch not in R21_CI:
+        errors.append(f".github/workflows/ci.yml: missing push branch {branch} (rule 21)")
+if "scripts/gitflow.sh --self-test" not in R21_CI:
+    errors.append(".github/workflows/ci.yml: gitflow naming validator is not run in CI (rule 21)")
+
+R21_SCRIPT = open("scripts/gitflow.sh", encoding="utf-8").read() if os.path.isfile("scripts/gitflow.sh") else ""
+if not R21_SCRIPT:
+    errors.append("scripts/gitflow.sh: missing (rule 21)")
+else:
+    for token in ("--self-test", "feature/*", "release/*", "hotfix/*", "arena/*", "develop"):
+        if token not in R21_SCRIPT:
+            errors.append(f"scripts/gitflow.sh: missing {token!r} (rule 21)")
+    # An agent must never create/switch/push a branch: the owner owns the branch model.
+    for forbidden in ("git checkout -b", "git switch -c", "git branch -m", "git push origin"):
+        if forbidden in R21_SCRIPT:
+            errors.append(f"scripts/gitflow.sh: must not create branches ({forbidden!r}) (rule 21)")
+
+for path in ("docs/contributing/gitflow.md", "docs/contributing/gitflow.en.md"):
+    text = r20_read(path)
+    if text is None:
+        continue
+    for token in ("develop", "feature/", "release/", "hotfix/", "arena/", "--base develop", f"v{version}"):
+        if token not in text:
+            errors.append(f"{path}: missing {token!r} (rule 21)")
+
+pr_template = open(".github/PULL_REQUEST_TEMPLATE.md", encoding="utf-8").read() if os.path.isfile(".github/PULL_REQUEST_TEMPLATE.md") else ""
+if not pr_template:
+    errors.append(".github/PULL_REQUEST_TEMPLATE.md: missing (rule 21)")
+elif "develop" not in pr_template or "gitflow.sh --check" not in pr_template:
+    errors.append(".github/PULL_REQUEST_TEMPLATE.md: must name develop and the validator (rule 21)")
 
 if warnings:
     for w in warnings:

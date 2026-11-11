@@ -19,24 +19,24 @@ What we distribute is **one `zts` binary**. It carries no compiler, so put a 0.1
 ## 1. Install the binary
 
 Download one file for your OS from [GitHub Releases](https://github.com/umiturtle/Z-Ts/releases)
-(named like `zts-0.1.0-linux-x86_64`). About 300 KB, **a single binary with no libc dependency** —
+(named like `zts-0.1.1-linux-x86_64`). About 300 KB, **a single binary with no libc dependency** —
 nothing to put beside it.
 
 ```bash
 # Linux / macOS (pick the name that matches your machine, e.g. `linux-aarch64`)
-curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
-chmod +x zts-0.1.0-linux-x86_64
+curl -LO https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/zts-0.1.1-linux-x86_64
+chmod +x zts-0.1.1-linux-x86_64
 mkdir -p ~/.local/bin
-mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
+mv zts-0.1.1-linux-x86_64 ~/.local/bin/zts
 export PATH="$HOME/.local/bin:$PATH"
-zts version             # → zts 0.1.0
+zts version             # → zts 0.1.1
 ```
 
 ```powershell
 # Windows (PowerShell)
 New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
 Invoke-WebRequest `
-  https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-windows-x86_64.exe `
+  https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/zts-0.1.1-windows-x86_64.exe `
   -OutFile "$HOME\bin\zts.exe"
 $env:PATH = "$HOME\bin;$env:PATH"
 zts version
@@ -77,13 +77,13 @@ The **first** `zts build` fetches the ziggurats source archive, because the gene
 contains this line (baked into the binary — you never type it):
 
 ```zig
-.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+.z_ts = .{ .url = "https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz", .hash = "z_ts-0.1.1-…" },
 ```
 
 Zig caches what it fetched, so later builds work offline. **You do not need a checkout of ziggurats.**
 
 > You can inspect the archive yourself:
-> `zig fetch https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz`
+> `zig fetch https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz`
 
 ## 4. Building `zts` from a checkout
 

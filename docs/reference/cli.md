@@ -22,7 +22,7 @@ zts <command> [options]
   version  Print the version
 ```
 
-`zts help` はこの一覧を、`zts version` は `zts 0.1.0` のような 1 行を出力します。
+`zts help` はこの一覧を、`zts version` は `zts 0.1.1` のような 1 行を出力します。
 引数なしで実行した場合も `help` と同じです。
 
 終了コードは `0`（成功）と `1`（失敗）。`dev` は Ctrl-C まで動き続けます。
@@ -70,7 +70,7 @@ zts init my-app --force           # 既存ファイルがあっても書く
 **release としてビルドされた `zts`**（GitHub Releases のバイナリ）は公開アーカイブを指します。
 
 ```zig
-.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+.z_ts = .{ .url = "https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz", .hash = "z_ts-0.1.1-…" },
 ```
 
 チェックアウトから `zig build` した `zts` は、そのチェックアウトへの相対パスを書きます。
@@ -291,7 +291,7 @@ zts migrate: --dry-run, nothing written (MIGRATION.md would explain the manual s
 
 ```text
 $ zts doctor                     # ソースからビルドした zts
-zts 0.1.0
+zts 0.1.1
   checkout     /home/you/Z-Ts
   z_ts         present
   zig          /tmp/zts-toolchains/zig-0.17.0/ziglang/zig
@@ -304,11 +304,11 @@ all checks passed
 
 ```text
 $ zts doctor                     # release の zts（チェックアウトを持たない）
-zts 0.1.0
+zts 0.1.1
   checkout     (none — release build)
   zig          /usr/local/bin/zig
   package      my_app
-  dependency   https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz (fetched by zig)
+  dependency   https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz (fetched by zig)
   web/         present
 
 all checks passed

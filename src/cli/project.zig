@@ -308,7 +308,7 @@ test "dependencyUrl reads the published-archive form" {
     const zon =
         \\.{
         \\    .dependencies = .{
-        \\        .z_ts = .{ .url = "https://example.invalid/z_ts.tar.gz", .hash = "z_ts-0.1.0-AAAA" },
+        \\        .z_ts = .{ .url = "https://example.invalid/z_ts.tar.gz", .hash = "z_ts-0.1.1-AAAA" },
         \\    },
         \\}
         \\

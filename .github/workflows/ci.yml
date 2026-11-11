@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+      - develop
+      - "feature/**"
+      - "release/**"
+      - "hotfix/**"
+      # Arena's parallel agents work here. They cannot create gitflow branches themselves, so
+      # their `arena/*` ref coexists with the human-owned branch model above.
       - "arena/**"
   pull_request:
   workflow_dispatch:
@@ -65,6 +71,7 @@ jobs:
           chmod +x ./zigw
           {
             python3 scripts/check-docs.py
+            bash scripts/gitflow.sh --self-test
             node --test tests/ci/publish-check-run-summary.test.cjs
             ./zigw doctest
             node scripts/check-font-coverage.mjs
@@ -799,21 +806,24 @@ jobs:
 
       # `M5-03` slice C / distribution: a **release** `zts` must not depend on the checkout it was
       # built from. Baking a published archive (`.url` + `.hash`) into the binary makes `zts init`
-      # emit a fetchable dependency, so a machine that only has the archive can build. Linux only:
-      # `file://` URLs and `mktemp -d` paths do not translate to the Windows runners.
-      - name: Release build resolves ziggurats from an archive, not the checkout
+      # emit a fetchable dependency, so a machine that only has the archive can build. The very
+      # same archive is then imported by a separate Zig package via `b.dependency("z_ts", ...)`.
+      # Linux only: `file://` URLs and `mktemp -d` paths do not translate to the Windows runners.
+      - name: Release archive works as a CLI dependency and as a library
         if: matrix.os == 'ubuntu-24.04'
         shell: bash
         run: |
           set -eo pipefail
+          version="$(sed -n 's/^    \.version = "\(.*\)",/\1/p' build.zig.zon | head -1)"
           work="$(mktemp -d "$GITHUB_WORKSPACE/../zts-release.XXXXXX")"
+          archive="$work/z_ts-$version.tar.gz"
           # The same archive a published release would ship: the tracked files, nothing built.
-          git archive --format=tar.gz --prefix=z_ts-0.1.0/ -o "$work/z_ts-0.1.0.tar.gz" HEAD
-          hash="$(zig fetch "file://$work/z_ts-0.1.0.tar.gz" 2>/dev/null)"
+          git archive --format=tar.gz --prefix="z_ts-$version/" -o "$archive" HEAD
+          hash="$(zig fetch "file://$archive" 2>/dev/null)"
           echo "archive hash: $hash"
-          case "$hash" in z_ts-0.1.0-*) ;; *) echo "unexpected hash: $hash"; exit 1 ;; esac
+          case "$hash" in "z_ts-$version-"*) ;; *) echo "unexpected hash: $hash"; exit 1 ;; esac
           zig build -Doptimize=ReleaseSmall \
-            -Dzts-pkg-url="file://$work/z_ts-0.1.0.tar.gz" \
+            -Dzts-pkg-url="file://$archive" \
             -Dzts-pkg-hash="$hash" \
             --prefix "$work/release"
           cd "$work"
@@ -832,6 +842,12 @@ jobs:
           "$out" | tee run.log
           grep -q "1 embedded assets" run.log
           echo "cli-release: OK"
+          # A completely separate Zig package imports the same archive through
+          # `b.dependency("z_ts", ...)` with a cold global cache. The release must be a library,
+          # not just something the `zts` CLI knows how to download.
+          ZTS_ZIG="$(command -v zig)" bash "$GITHUB_WORKSPACE/scripts/verify-library-consumer.sh" "$archive" \
+            | tee "$GITHUB_WORKSPACE/library-consumer.log"
+          grep -q 'OK library consumer modules=4' "$GITHUB_WORKSPACE/library-consumer.log"
       # `gh run view --log` cannot reach the URL the raw logs redirect to from the Arena sandbox,
       # but the Check Run summary is served by api.github.com, so mirror the log there.
       - name: Mirror the smoke log into the Check Run summary
@@ -859,7 +875,7 @@ jobs:
               github, context, core,
               title: 'CLI smoke',
               jobName: 'CLI smoke (${{ matrix.os }})',
-              logFiles: ['cli-smoke.log', 'dev-loop-verify.log', 'bench.log'],
+              logFiles: ['cli-smoke.log', 'dev-loop-verify.log', 'bench.log', 'library-consumer.log'],
             });
 
   ci-parity:

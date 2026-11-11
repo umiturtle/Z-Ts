@@ -6,7 +6,7 @@
 
 const std = @import("std");
 
-pub const version = std.SemanticVersion{ .major = 0, .minor = 1, .patch = 0 };
+pub const version = std.SemanticVersion{ .major = 0, .minor = 1, .patch = 1 };
 
 pub const Command = union(enum) {
     /// `zts init` — scaffold a project.
@@ -427,12 +427,12 @@ test "`init --dir` and `--zts-path` are independent of the positional form" {
 }
 
 test "`init --zts-url` requires the matching hash" {
-    const cmd = try parse(&.{ "init", "app", "--zts-url", "https://example.invalid/z_ts.tar.gz", "--zts-hash", "z_ts-0.1.0-AAAA" });
+    const cmd = try parse(&.{ "init", "app", "--zts-url", "https://example.invalid/z_ts.tar.gz", "--zts-hash", "z_ts-0.1.1-AAAA" });
     try testing.expectEqualStrings("https://example.invalid/z_ts.tar.gz", cmd.init.zts_url.?);
-    try testing.expectEqualStrings("z_ts-0.1.0-AAAA", cmd.init.zts_hash.?);
+    try testing.expectEqualStrings("z_ts-0.1.1-AAAA", cmd.init.zts_hash.?);
 
     try testing.expectError(error.IncompleteZtsRelease, parse(&.{ "init", "app", "--zts-url", "https://example.invalid/z_ts.tar.gz" }));
-    try testing.expectError(error.IncompleteZtsRelease, parse(&.{ "init", "app", "--zts-hash", "z_ts-0.1.0-AAAA" }));
+    try testing.expectError(error.IncompleteZtsRelease, parse(&.{ "init", "app", "--zts-hash", "z_ts-0.1.1-AAAA" }));
 }
 
 test "`init` rejects two positional directories" {
