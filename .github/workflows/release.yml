@@ -57,6 +57,16 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
 
+      # A release is a *library* before it is a CLI. Prove the exact archive we are about to
+      # publish can be imported by an unrelated Zig package, with a cold global cache.
+      - name: The archive works as a library dependency
+        shell: bash
+        run: |
+          set -eo pipefail
+          version="${{ steps.meta.outputs.version }}"
+          bash scripts/verify-library-consumer.sh "z_ts-$version.tar.gz" | tee library-consumer.log
+          grep -q 'OK library consumer modules=4' library-consumer.log
+
       - uses: actions/upload-artifact@v4
         with:
           name: source-archive
@@ -182,7 +192,9 @@ jobs:
           Install: download \`zts-<version>-<os>-<arch>\`, make it executable, put it on \`PATH\`.
           Zig 0.17 is the only other requirement (\`zts\` runs it; it does not bundle it).
 
-          Projects scaffolded by this binary depend on the archive below:
+          Projects scaffolded by this binary depend on the archive below. You can also use it
+          directly with \`b.dependency("z_ts", ...)\` — see the library guide:
+          https://umiturtle.github.io/ZigguraTs/docs/learn/en/guides/library.html
 
           \`\`\`zig
           .z_ts = .{ .url = "https://github.com/$REPO/releases/download/$TAG/z_ts-$VERSION.tar.gz", .hash = "$HASH" },

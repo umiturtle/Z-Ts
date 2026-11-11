@@ -28,11 +28,11 @@ pub const Options = struct {
     name: []const u8,
     /// Path to the ziggurats checkout that `build.zig.zon` depends on. Ignored when [`zts_url`] is set.
     zts_path: []const u8 = "../Z-Ts",
-    /// Published ziggurats archive (`https://…/z_ts-0.1.0.tar.gz`). When both this and [`zts_hash`]
+    /// Published ziggurats archive (`https://…/z_ts-0.1.1.tar.gz`). When both this and [`zts_hash`]
     /// are set, the generated project depends on the *release* and needs no checkout on disk —
     /// which is what a `zts` installed from a release archive emits.
     zts_url: ?[]const u8 = null,
-    /// `zig fetch` hash of [`zts_url`] (`z_ts-0.1.0-…`).
+    /// `zig fetch` hash of [`zts_url`] (`z_ts-0.1.1-…`).
     zts_hash: ?[]const u8 = null,
     /// Value written for `.fingerprint`; `0` means "patch it after the first build".
     fingerprint: u64 = 0,
@@ -449,8 +449,8 @@ test "a release dependency replaces the checkout path" {
     // never seen the ziggurats checkout.
     const files = try scaffold(testing.allocator, .{
         .name = "demo_app",
-        .zts_url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz",
-        .zts_hash = "z_ts-0.1.0-AAAA",
+        .zts_url = "https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz",
+        .zts_hash = "z_ts-0.1.1-AAAA",
     });
     // One defer, contents before the array: two separate defers would free the array first and
     // then read its (freed) elements.
@@ -460,7 +460,7 @@ test "a release dependency replaces the checkout path" {
     }
 
     const zon = files[3].contents;
-    try testing.expect(std.mem.indexOf(u8, zon, ".z_ts = .{ .url = \"https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz\", .hash = \"z_ts-0.1.0-AAAA\" }") != null);
+    try testing.expect(std.mem.indexOf(u8, zon, ".z_ts = .{ .url = \"https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz\", .hash = \"z_ts-0.1.1-AAAA\" }") != null);
     try testing.expect(std.mem.indexOf(u8, zon, ".path =") == null);
 
     // A half-specified release (url without hash) falls back to the path form rather than emitting

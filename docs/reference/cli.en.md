@@ -21,7 +21,7 @@ zts <command> [options]
   version  Print the version
 ```
 
-`zts help` prints this list; `zts version` prints one line such as `zts 0.1.0`. Running `zts` with
+`zts help` prints this list; `zts version` prints one line such as `zts 0.1.1`. Running `zts` with
 no arguments is the same as `help`. Exit codes are `0` (success) and `1` (failure); `dev` keeps
 running until Ctrl-C.
 
@@ -66,7 +66,7 @@ zts init my-app --force           # overwrite existing files
 A **`zts` built as a release** (the binary from GitHub Releases) points at the published archive:
 
 ```zig
-.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+.z_ts = .{ .url = "https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz", .hash = "z_ts-0.1.1-…" },
 ```
 
 A `zts` built from a checkout writes a relative path to that checkout:
@@ -279,7 +279,7 @@ checkout**, so the `checkout` / `z_ts` lines disappear and `(none — release bu
 
 ```text
 $ zts doctor                     # zts built from source
-zts 0.1.0
+zts 0.1.1
   checkout     /home/you/Z-Ts
   z_ts         present
   zig          /tmp/zts-toolchains/zig-0.17.0/ziglang/zig
@@ -292,11 +292,11 @@ all checks passed
 
 ```text
 $ zts doctor                     # release zts (no checkout)
-zts 0.1.0
+zts 0.1.1
   checkout     (none — release build)
   zig          /usr/local/bin/zig
   package      my_app
-  dependency   https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz (fetched by zig)
+  dependency   https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz (fetched by zig)
   web/         present
 
 all checks passed

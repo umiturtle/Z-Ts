@@ -2,8 +2,8 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "d27c291",
-    "zts_version": "0.1.0",
+    "commit": "f9bcd8a",
+    "zts_version": "0.1.1",
     "zig_version": "0.17.0",
     "checks": [
       "python3 scripts/check-docs.py",
@@ -30,22 +30,22 @@
       "scripts/check-docs.py",
       "scripts/gen-framework-tutorials.py"
     ],
-    "implementation_sha256": "c915562f9ff6d601c4f984ac87c6ee40c7425aac5628c6e8fc53fac6f14fe4c1"
+    "implementation_sha256": "70c700bbfaed71a17f1e656b2c50c3b6a5aa7bcb2b7e1dacd3a3ffdf72a3b9e0"
   },
   "pages": [
     {
       "ja": "README.md",
       "en": "README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "811caf77cb3a00e7f6d28aa2e29764d512969e8b01daf2e47794801882da1ff6",
-      "en_sha256": "9ad0098e1732a7d1cb65cca31016c3a21feb574d78a43422e4065e9890cad0eb"
+      "ja_sha256": "4dfe16b5b116f1ba0f84e6fc1b10b4cd05cbb4d2ab324e13034108d2037f747e",
+      "en_sha256": "7f31c48fbe0e7ac0e3edd759693da89ef8a22aa622ffc733081ae8bd39328dc4"
     },
     {
       "ja": "docs/INDEX.md",
       "en": "docs/INDEX.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d93de044f37c88bad09e10cc2e310406500137835d26a05ea06b91cf6bedaf29",
-      "en_sha256": "5fde47d3cce959c7b99a6b8f4b896b4d02d2d678c710c9fc0b53891b66ca4f68"
+      "ja_sha256": "9f52f268ce4ea4e6b093d3fc7fe95244c1fb456e16f044b8464b4d1fe944d5c6",
+      "en_sha256": "9bc62824d55b6603fa2a88adaad8f44f4d67b9ffdb73bdf2c570c6b3d4b99efb"
     },
     {
       "ja": "docs/contributing/README.md",
@@ -58,8 +58,15 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "cda794ed6e5bc781506748eb204b92781cac84c297bcb30a5456fbbfd541835e",
-      "en_sha256": "fe90dec2a6fadf4f88fb56301ea58830efbb8bf369b719fe22a081c26a800583"
+      "ja_sha256": "5b4d026b1fcf91edff7bf60274b97a1a21ab29a10e2628ecfe2574bfb4c19331",
+      "en_sha256": "ebaa1b8ba653bcf66197b642bfecb8de2efa0a97aa550ee68f48ab77f9d11c7b"
+    },
+    {
+      "ja": "docs/contributing/gitflow.md",
+      "en": "docs/contributing/gitflow.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "0e497f69fa82792e6bff2fea83a421e810d37993e595a3b6d72b0996a60e7bf9",
+      "en_sha256": "d21c00cbc0df02013cc74e1cae8b7e2b20e305fafa479fe72b637eea2f5886d8"
     },
     {
       "ja": "docs/contributing/repository-map.md",
@@ -128,15 +135,22 @@
       "ja": "docs/learn/ja/guides/index.md",
       "en": "docs/learn/en/guides/index.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "0539f72d63eb6e2875085a33b9d8e60566b20d431d00599915c368bfcbcce00c",
-      "en_sha256": "ff7cb2ed709cae049749e656f3132d36bc45ad9af8bae420558468dd2552c5a5"
+      "ja_sha256": "d15c52916f404071a46df5b468c2c755a5d68cfad27c2c6c9c057c720d33f2d0",
+      "en_sha256": "2c113909a6d4f1c7850729be0d23a5e6232ef20434ee8cf790378e68ce08bbc9"
     },
     {
       "ja": "docs/learn/ja/guides/install.md",
       "en": "docs/learn/en/guides/install.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "3fa5e5abd9550892cd49ded1f72e2deddd115ed7804ba1f3439fcbe8d52ce185",
-      "en_sha256": "7996be75a48e28ac14965d7bccbe32e3fc47cd7f599571215c06af58428a8383"
+      "ja_sha256": "49a6224ce6570472582de69ac35e0504a69ee75421ed6c7d9c929747e1dbf1d4",
+      "en_sha256": "700e16be77bccef0bcfe56c619598c0388dcb38d72019484d400c05d64a18906"
+    },
+    {
+      "ja": "docs/learn/ja/guides/library.md",
+      "en": "docs/learn/en/guides/library.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "94062b3a34bd1412552502cfd5ea354f664f02882a101f2772fefcf636fdfffa",
+      "en_sha256": "f02fe95c43dd82408694dd1897760cc6762ddceeaef2b19c5e9ac3aff45cb1e4"
     },
     {
       "ja": "docs/learn/ja/guides/migrate-from-tauri.md",
@@ -331,8 +345,8 @@
       "ja": "docs/reference/cli.md",
       "en": "docs/reference/cli.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "99efa95d1f410e2239ece5108e29497dd7ec6e817ad5914c41b7127b1f63c679",
-      "en_sha256": "223ecdbfc53f211f810f0277811208d3d61bcc59127862b6b0f1b471d852b75d"
+      "ja_sha256": "7fafedc036d60d6f71ee56c6677454d8236b5292fe130cf4d609490114f893fa",
+      "en_sha256": "c693cecde603bff500b8724cc5d7759030398d44b466091536e0a01570d76ad1"
     },
     {
       "ja": "docs/reference/tauri-internals.md",

@@ -15,11 +15,11 @@
 
 ## 確認したバージョン
 
-- **確認バージョン**: `ziggurats 0.1.0` / Zig `0.17.0`
+- **確認バージョン**: `ziggurats 0.1.1` / Zig `0.17.0`
 - **確認日**: `2026-10-21`
-- **基準コミット**: `d27c291`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）
+- **基準コミット**: `f9bcd8a`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）
 - **確認コマンド**: `python3 scripts/check-docs.py` · `python3 scripts/gen-framework-tutorials.py --check` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
-- **実装ハッシュ**: `c915562f9ff6d601c4f984ac87c6ee40c7425aac5628c6e8fc53fac6f14fe4c1`
+- **実装ハッシュ**: `70c700bbfaed71a17f1e656b2c50c3b6a5aa7bcb2b7e1dacd3a3ffdf72a3b9e0`
 
 実装として突き合わせたファイル: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `src/docsite/frameworks.zig`, `src/docsite/frameworks.json`, `src/docsite/assets/site.js`, `src/docsite/assets/site.css`, `scripts/check-docs.py`, `scripts/gen-framework-tutorials.py`
 
@@ -27,55 +27,57 @@
 
 | 日本語 | English | 最終書き換え | 確認バージョン |
 |---|---|---|---|
-| `README.md` | `README.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/INDEX.md` | `docs/INDEX.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/contributing/README.md` | `docs/contributing/README.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/contributing/doc-sync.md` | `docs/contributing/doc-sync.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/contributing/repository-map.md` | `docs/contributing/repository-map.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/contributing/troubleshooting.md` | `docs/contributing/troubleshooting.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/contributing/writing-docs.md` | `docs/contributing/writing-docs.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/glossary.md` | `docs/glossary.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/concepts/architecture.md` | `docs/learn/en/concepts/architecture.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/concepts/commands.md` | `docs/learn/en/concepts/commands.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/concepts/index.md` | `docs/learn/en/concepts/index.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/concepts/plugins.md` | `docs/learn/en/concepts/plugins.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/concepts/security.md` | `docs/learn/en/concepts/security.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/guides/index.md` | `docs/learn/en/guides/index.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/guides/install.md` | `docs/learn/en/guides/install.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/guides/migrate-from-tauri.md` | `docs/learn/en/guides/migrate-from-tauri.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/guides/package.md` | `docs/learn/en/guides/package.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/guides/plugins.md` | `docs/learn/en/guides/plugins.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/guides/rpc.md` | `docs/learn/en/guides/rpc.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/guides/static-site.md` | `docs/learn/en/guides/static-site.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/guides/troubleshooting.md` | `docs/learn/en/guides/troubleshooting.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/index.md` | `docs/learn/en/index.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/patterns/boundaries.md` | `docs/learn/en/patterns/boundaries.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/patterns/commands.md` | `docs/learn/en/patterns/commands.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/patterns/errors.md` | `docs/learn/en/patterns/errors.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/patterns/index.md` | `docs/learn/en/patterns/index.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/patterns/state.md` | `docs/learn/en/patterns/state.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/start.md` | `docs/learn/en/start.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-angular.md` | `docs/learn/en/tutorials/counter-angular.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-astro.md` | `docs/learn/en/tutorials/counter-astro.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-next.md` | `docs/learn/en/tutorials/counter-next.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-nuxt.md` | `docs/learn/en/tutorials/counter-nuxt.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-react.md` | `docs/learn/en/tutorials/counter-react.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-solid.md` | `docs/learn/en/tutorials/counter-solid.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-solidstart.md` | `docs/learn/en/tutorials/counter-solidstart.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-svelte.md` | `docs/learn/en/tutorials/counter-svelte.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter-sveltekit.md` | `docs/learn/en/tutorials/counter-sveltekit.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/counter.md` | `docs/learn/en/tutorials/counter.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/frameworks.md` | `docs/learn/en/tutorials/frameworks.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/index.md` | `docs/learn/en/tutorials/index.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/todo.md` | `docs/learn/en/tutorials/todo.md` | 2026-10-21 | 0.1.0 |
-| `docs/learn/ja/tutorials/ui.md` | `docs/learn/en/tutorials/ui.md` | 2026-10-21 | 0.1.0 |
-| `docs/reference/cli.md` | `docs/reference/cli.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/reference/tauri-internals.md` | `docs/reference/tauri-internals.en.md` | 2026-10-21 | 0.1.0 |
-| `docs/reference/tauri-usage.md` | `docs/reference/tauri-usage.en.md` | 2026-10-21 | 0.1.0 |
-| `examples/c_embed/README.md` | `examples/c_embed/README.en.md` | 2026-10-21 | 0.1.0 |
-| `examples/counter/README.md` | `examples/counter/README.en.md` | 2026-10-21 | 0.1.0 |
-| `examples/frameworks/README.md` | `examples/frameworks/README.en.md` | 2026-10-21 | 0.1.0 |
-| `examples/gallery/README.md` | `examples/gallery/README.en.md` | 2026-10-21 | 0.1.0 |
+| `README.md` | `README.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/INDEX.md` | `docs/INDEX.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/contributing/README.md` | `docs/contributing/README.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/contributing/doc-sync.md` | `docs/contributing/doc-sync.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/contributing/gitflow.md` | `docs/contributing/gitflow.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/contributing/repository-map.md` | `docs/contributing/repository-map.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/contributing/troubleshooting.md` | `docs/contributing/troubleshooting.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/contributing/writing-docs.md` | `docs/contributing/writing-docs.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/glossary.md` | `docs/glossary.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/concepts/architecture.md` | `docs/learn/en/concepts/architecture.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/concepts/commands.md` | `docs/learn/en/concepts/commands.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/concepts/index.md` | `docs/learn/en/concepts/index.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/concepts/plugins.md` | `docs/learn/en/concepts/plugins.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/concepts/security.md` | `docs/learn/en/concepts/security.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/index.md` | `docs/learn/en/guides/index.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/install.md` | `docs/learn/en/guides/install.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/library.md` | `docs/learn/en/guides/library.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/migrate-from-tauri.md` | `docs/learn/en/guides/migrate-from-tauri.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/package.md` | `docs/learn/en/guides/package.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/plugins.md` | `docs/learn/en/guides/plugins.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/rpc.md` | `docs/learn/en/guides/rpc.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/static-site.md` | `docs/learn/en/guides/static-site.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/guides/troubleshooting.md` | `docs/learn/en/guides/troubleshooting.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/index.md` | `docs/learn/en/index.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/patterns/boundaries.md` | `docs/learn/en/patterns/boundaries.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/patterns/commands.md` | `docs/learn/en/patterns/commands.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/patterns/errors.md` | `docs/learn/en/patterns/errors.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/patterns/index.md` | `docs/learn/en/patterns/index.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/patterns/state.md` | `docs/learn/en/patterns/state.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/start.md` | `docs/learn/en/start.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-angular.md` | `docs/learn/en/tutorials/counter-angular.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-astro.md` | `docs/learn/en/tutorials/counter-astro.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-next.md` | `docs/learn/en/tutorials/counter-next.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-nuxt.md` | `docs/learn/en/tutorials/counter-nuxt.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-react.md` | `docs/learn/en/tutorials/counter-react.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-solid.md` | `docs/learn/en/tutorials/counter-solid.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-solidstart.md` | `docs/learn/en/tutorials/counter-solidstart.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-svelte.md` | `docs/learn/en/tutorials/counter-svelte.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter-sveltekit.md` | `docs/learn/en/tutorials/counter-sveltekit.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/counter.md` | `docs/learn/en/tutorials/counter.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/frameworks.md` | `docs/learn/en/tutorials/frameworks.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/index.md` | `docs/learn/en/tutorials/index.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo.md` | `docs/learn/en/tutorials/todo.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui.md` | `docs/learn/en/tutorials/ui.md` | 2026-10-21 | 0.1.1 |
+| `docs/reference/cli.md` | `docs/reference/cli.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/reference/tauri-internals.md` | `docs/reference/tauri-internals.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/reference/tauri-usage.md` | `docs/reference/tauri-usage.en.md` | 2026-10-21 | 0.1.1 |
+| `examples/c_embed/README.md` | `examples/c_embed/README.en.md` | 2026-10-21 | 0.1.1 |
+| `examples/counter/README.md` | `examples/counter/README.en.md` | 2026-10-21 | 0.1.1 |
+| `examples/frameworks/README.md` | `examples/frameworks/README.en.md` | 2026-10-21 | 0.1.1 |
+| `examples/gallery/README.md` | `examples/gallery/README.en.md` | 2026-10-21 | 0.1.1 |
 
 ## 更新のしかた
 

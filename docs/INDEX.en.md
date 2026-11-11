@@ -100,6 +100,7 @@ pair, so a page added in one language fails CI.
 |---|---|
 | [Guides](learn/en/guides/index.md) | The job-to-page index. You do not have to read all of it |
 | [Get `zts`](learn/en/guides/install.md) | Release binaries, `PATH`, `ZTS_ZIG`, building from source |
+| [Use it as a library](learn/en/guides/library.md) | Import `zts_*` modules with `b.dependency("z_ts", …)` |
 | [Write a command](learn/en/guides/rpc.md) | `zts_rpc`: command → `Schema` → `bind` → `dispatch` → TypeScript generation |
 | [Standard Tauri plugins](learn/en/guides/plugins.md) | window / event / path / fs / dialog / clipboard / menu / tray and capabilities |
 | [Export a static site](learn/en/guides/static-site.md) | `exportStaticSite` and WASM; a `dist/` with no server |
@@ -151,6 +152,7 @@ All four are built on three OSes in CI, with their screenshots compared pixel by
 | Page | One line |
 |---|---|
 | [Developing ziggurats](contributing/README.en.md) | Toolchain, `zig build` steps, change etiquette, CI |
+| [Branch model (gitflow)](contributing/gitflow.en.md) | `main` / `develop` / `feature` / `release` / `hotfix`, PR bases, cutting a release |
 | [Repository map](contributing/repository-map.en.md) | Which file does what and how often it changes (the parallel-work unit) |
 | [Repository troubleshooting](contributing/troubleshooting.en.md) | Toolchain, cold builds, 0.17 API differences, Pages |
 | [Documentation sync ledger](contributing/doc-sync.en.md) | When each page was last rewritten and which version was verified |

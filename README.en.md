@@ -35,9 +35,9 @@ The distribution is **one `zts` binary** (about 300 KB, libc-free). All you need
 
 ```bash
 # 1) download the zts binary for your OS from GitHub Releases and put it on PATH
-curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
-chmod +x zts-0.1.0-linux-x86_64
-mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
+curl -LO https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/zts-0.1.1-linux-x86_64
+chmod +x zts-0.1.1-linux-x86_64
+mv zts-0.1.1-linux-x86_64 ~/.local/bin/zts
 
 # 2) create a project
 zts init my-app && cd my-app
@@ -50,7 +50,7 @@ The `build.zig.zon` written by `zts init` points at **the published archive's `.
 no clone is needed (Zig fetches it on the first build, then caches it).
 
 ```zig
-.z_ts = .{ .url = "https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz", .hash = "z_ts-0.1.0-…" },
+.z_ts = .{ .url = "https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz", .hash = "z_ts-0.1.1-…" },
 ```
 
 > To build `zts` from source: `git clone … && cd Z-Ts && zig build` (Zig 0.17 on `PATH` is enough).

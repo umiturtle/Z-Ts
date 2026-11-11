@@ -1,0 +1,10 @@
+.{
+    .name = .library_consumer,
+    .version = "0.0.1",
+    .fingerprint = 0x56f8c6332a0520a7,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .z_ts = .{ .path = "../.." },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}

@@ -1,6 +1,6 @@
 .{
     .name = .z_ts,
-    .version = "0.1.0",
+    .version = "0.1.1",
     .fingerprint = 0xc0796a1d8117ad4c,
     .minimum_zig_version = "0.17.0",
     .paths = .{

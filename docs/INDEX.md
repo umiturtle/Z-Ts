@@ -100,6 +100,7 @@ ziggurats には読者が 3 種類いて、使うコマンドもページも別�
 |---|---|
 | [ガイド](learn/ja/guides/index.md) | やりたいことから引く索引。全部読む必要はない |
 | [`zts` を手元に用意する](learn/ja/guides/install.md) | 配布バイナリ・`PATH`・`ZTS_ZIG`・ソースからのビルド |
+| [他プロジェクトからライブラリとして使う](learn/ja/guides/library.md) | `b.dependency("z_ts", …)` で `zts_*` モジュールを import する |
 | [コマンドを書く](learn/ja/guides/rpc.md) | `zts_rpc`: コマンド定義 → `Schema` → `bind` → `dispatch` → TypeScript 生成 |
 | [Tauri 標準プラグイン](learn/ja/guides/plugins.md) | window / event / path / fs / dialog / clipboard / menu / tray と capability |
 | [静的サイトを書き出す](learn/ja/guides/static-site.md) | `exportStaticSite` と WASM。サーバ不要の `dist/` |
@@ -151,6 +152,7 @@ ziggurats には読者が 3 種類いて、使うコマンドもページも別�
 | ページ | 1 文でいうと |
 |---|---|
 | [ziggurats 自体を開発する](contributing/README.md) | ツールチェーン・`zig build` のステップ・変更の作法・CI |
+| [ブランチ運用（gitflow）](contributing/gitflow.md) | `main` / `develop` / `feature` / `release` / `hotfix` と PR の base・リリース手順 |
 | [リポジトリの地図](contributing/repository-map.md) | どのファイルが何で、どのくらい触るか（並列開発の分割単位） |
 | [トラブルシューティング（リポジトリ開発）](contributing/troubleshooting.md) | ツールチェーン・コールドビルド・0.17 API 差分・Pages |
 | [ドキュメント同期台帳](contributing/doc-sync.md) | いつ最終書き換えか・どのバージョンまで実装と無矛盾を確認したか |

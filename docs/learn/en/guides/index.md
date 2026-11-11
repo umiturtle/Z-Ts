@@ -12,6 +12,7 @@ already have something working.
 | Job | Page | Minutes |
 |---|---|---|
 | get `zts` on this machine | [Install](install.md) | 5 |
+| add it to an existing Zig project | [Use it as a library](library.md) | 5 |
 | call a Zig function from a button | [Commands (RPC)](rpc.md) | 10 |
 | use windows, files, menus | [Plugins](plugins.md) | 8 |
 | ship a site with no server | [Static sites](static-site.md) | 8 |
