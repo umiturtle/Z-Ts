@@ -10,7 +10,7 @@
 - **Upstream Reference**: [`M5-20-framework-tutorial-variants.md`](M5-20-framework-tutorial-variants.md),
   [`../learn/ja/tutorials/todo.md`](../learn/ja/tutorials/todo.md),
   [`../learn/ja/tutorials/ui.md`](../learn/ja/tutorials/ui.md),
-  [`../../examples/gallery/src/main.zig`](../../../examples/gallery/src/main.zig)
+  [`../../examples/gallery/src/main.zig`](../../examples/gallery/src/main.zig)
 - **Next Step**: 調査完了後、生成器にライブラリ別プロファイル（状態プリミティブ・Zig 同期・SSR ガード・
   Todo/UI の読み替え・落とし穴・コード断片）を追加し、counter / todo / ui の 3 テンプレートから
   9×3×2 = 54 分岐ページを生成する。規約 22 で完全性を機械検査し、PR 1 本にまとめる。
