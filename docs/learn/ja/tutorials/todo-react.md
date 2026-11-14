@@ -172,6 +172,8 @@ zig-out/bin/my_app        # ウィンドウが開き、Todo の追加が Zig ま
 | 同じライブラリの画面状態 | [React で画面を作る](ui-react.md) |
 | 素の JS 版（分岐の元） | [Todo リストを作る](todo.md) |
 | ライブラリを選び直す | [選択ハブ](frameworks.md) |
-| `React` の実物ソース | [`examples/frameworks/react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) |
+| `React` の実物ソース | [`examples/frameworks/react/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/react) |
 | コマンドの引数・エラー・型生成 | [ガイド: コマンド](../guides/rpc.md) |
 | 3 本の設計判断 | [実用パターン](../patterns/index.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

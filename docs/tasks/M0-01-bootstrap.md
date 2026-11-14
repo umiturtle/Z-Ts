@@ -32,3 +32,5 @@
 
 - `@toolchain-bin/sysroot-linux-x64` 内の `.so` に含まれる GNU ld `INPUT(...)` テキストスタブは `scripts/setup-toolchains.sh --sysroot` で自動的に POSIX シンボリックリンクへ修復済み。
 - Zig `0.17.0` では `@cImport` が廃止されているうえ、`gtk/gtk.h` 等の `addTranslateC` はコールド時に +50 秒かかるため、OS 境界は `extern fn ... callconv(.c)` 直宣言で管理する方針を確立（[`0001`](../decisions/0001-zig-017-and-sharded-agent-workflow.md)）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

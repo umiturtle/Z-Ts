@@ -280,7 +280,7 @@ pub const StoreCommands = struct {
         return false;
     }
 
-    /// Drops every entry and writes the empty state back to disk.
+    /// Drops every stored key from memory. Call `save` to persist; this does not write.
     pub fn clear(_: *rpc.Ctx, state: *PluginState) void {
         var it = state.store.iterator();
         while (it.next()) |entry| {
@@ -349,7 +349,7 @@ pub const LogCommands = struct {
         return state.logs.items;
     }
 
-    /// Drops every entry and writes the empty state back to disk.
+    /// Drops every buffered log line from memory.
     pub fn clear(_: *rpc.Ctx, state: *PluginState) void {
         for (state.logs.items) |line| {
             state.allocator.free(line.level);
@@ -498,7 +498,7 @@ pub const WindowStateCommands = struct {
         return rpc.decodeLeaky(StateDto, ctx.scratch, raw) catch null;
     }
 
-    /// Drops every entry and writes the empty state back to disk.
+    /// Removes the entry for `label`; returns whether it existed.
     pub fn clear(ctx: *rpc.Ctx, state: *PluginState, args: struct { label: []const u8 }) bool {
         const key = keyFor(ctx.scratch, args.label) catch return false;
         if (state.store.fetchRemove(key)) |entry| {

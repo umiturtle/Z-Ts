@@ -178,3 +178,5 @@ EventSource（SSE）の接続が開いている間は仮想時間が進まず、
 | HTML を JS で SVG 化して `toDataURL()` | 外部フォント・画像で CORS に落ち、`backdrop-filter` 等が再現しない |
 | ギャラリーを E2E テストに同居させる | テストランナー内で実ウィンドウを回すと exit code 3 で落ちる既知の罠がある。独立バイナリにする |
 | 画素比較を全画像で行う | フォントレンダリングは OS で必ず差が出る。比較は「同一 OS 内のテーマ・非空白・中心画素」に限定する |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

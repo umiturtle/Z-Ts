@@ -75,3 +75,5 @@
   `python3 scripts/build-fonts.py` でサブセットを作り直す。
 - **インライン化は失敗した**: フレームワークの出力は複数チャンクの ES モジュールに分かれることがあり、`import "./chunk.js"` はインライン `<script type="module">` から解決できない（SvelteKit の `bundleStrategy:'single'` でも動的 import が残る）。→ 実際の `dist/` を埋め込んでスキームで配信する方式に変更（本物のアプリと同じ経路）。
 - **Nuxt の `/_payload.json`**: 静的生成物が payload を fetch する。カスタムスキームでは 404 になるが、SSR 済み HTML はそのまま描画される（hydration の警告のみ）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

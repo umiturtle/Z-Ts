@@ -54,3 +54,5 @@ Arena コンテナから直接通信可能なホストは以下の 6 ドメイ�
    - Linux ネイティブリンクが必要なときだけ `bash scripts/setup-toolchains.sh --sysroot`、Rust FFI が必要なときだけ `--rust` を実行する。
 3. **C ライブラリ境界は `addTranslateC` ではなく手動 `extern fn ... callconv(.c)` モジュールにする**:
    - `@toolchain-bin/sysroot-linux-x64` 内の `.so` に含まれる GNU ld `INPUT(...)` テキストスタブは、`scripts/setup-toolchains.sh --sysroot` が自動的に POSIX シンボリックリンクへ変換し `ldconfig` を通します。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

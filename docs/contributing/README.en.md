@@ -125,3 +125,5 @@ differences, screenshot parity and Pages deployment.
 | Design decisions | [`../decisions/`](../decisions/0001-zig-017-and-sharded-agent-workflow.md) (Japanese, internal) |
 | Doc conventions | [Writing the docs](writing-docs.en.md) |
 | Verification record | [Documentation sync ledger](doc-sync.en.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

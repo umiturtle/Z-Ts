@@ -91,3 +91,5 @@ Wave 5 [仕上げ] ── M5: ビルド統合・CLI・インストーラ・対�
 | **`M5-01`** | `build.zig` ヘルパー (`embedFrontend` / `tsgen`) | W5 | `M2-02` | `src/build_tools/` | 実 Vite 出力バンドル検証 |
 | **`M5-02`** | `zts` CLI (`init` / `dev` / `build`) | W5 | `M5-01` | `src/cli/` | スキャフォールド E2E |
 | **`M5-03`** | 3-OS パッケージャ & 対 Rust Tauri ベンチマーク | W5 | `M3-01`, `M3-02`, `M5-01` | `src/bundler/`, `bench/` | 3-OS Actions ベンチ完走 |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -81,3 +81,5 @@
 - **解消済み（M5-19 / P0-4）**: 生成された `assets: web.Assets` が `gzip_entries` を保持し、
   `zts_web.Assets.resolve()` が `Accept-Encoding` を解釈して `Content-Encoding: gzip` と
   `Vary` を返す。デスクトップのカスタムプロトコルと Live Preview の両方で同じ経路。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

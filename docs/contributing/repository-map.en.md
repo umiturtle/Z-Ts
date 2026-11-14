@@ -65,3 +65,5 @@ translation. Layers ①–③ are fully bilingual, verified by rule 13 in
 4. Share `build.zig` / `src/root.zig` as one alphabetical line, nothing more.
 5. A doc edit touches **both languages, both indexes, and the sync ledger**. Rules 8, 11 and 13 are
    what make that mechanical rather than a matter of memory.
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

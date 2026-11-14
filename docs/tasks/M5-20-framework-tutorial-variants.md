@@ -72,3 +72,5 @@
   `OK: all dev-loop invariants hold`。Docs 作業とは無関係な既存の flake だが、
   3 OS CI を緑にするため同一 PR で解消。
 - **現在**: PR #19 へ追加コミット済み。3 OS CI の再実行を確認中。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

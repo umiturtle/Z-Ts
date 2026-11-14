@@ -9,6 +9,11 @@ for ziggurats's public API and compatibility decisions. For the internal anatomy
 [the implementation autopsy](tauri-internals.en.md); for the ziggurats side, start with
 [concepts](../learn/en/concepts/index.md).
 
+> [!NOTE]
+> **Writing the same call is not the same as getting the same behaviour.** For the places that need
+> native wiring, the APIs returning fixed values, and the default path / monitor values, see
+> [the compatibility scope](compatibility.en.md).
+
 ---
 
 ## 1. A standard Tauri v2 project
@@ -165,3 +170,5 @@ reflected too. Subscribe with `listen()` to `tauri://resize` / `tauri://move` /
 - [Guide: standard plugins](../learn/en/guides/plugins.md) — the same plugins in Zig
 - [Migrating from Tauri v2](../learn/en/guides/migrate-from-tauri.md) — a side-by-side table
 - [ziggurats API reference](../api/index.html) — the public declarations, generated from `///`
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

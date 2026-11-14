@@ -137,3 +137,5 @@ var dialog_state = tauri.dialog.DialogState
 - **GTK 実機**: `DISPLAY` がある場合のみ実行し、無ければ `error.SkipZigTest`（CI は Xvfb 前提にしない）。
 - **コンパイル検証**: `./zigw build test -Dgtk=true` が GTK バックエンドの C シンボル解決まで行う。
   macOS / Windows は CI の 3 OS マトリクスでコンパイルされる。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

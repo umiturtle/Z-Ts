@@ -83,3 +83,5 @@ python3 scripts/check-docs.py
 生成 HTML の `<nav class="nav-groups">` を全ページ走査し、**構造は日本語版・英語版の
 2 種類だけ**（どちらも 48 エントリ・11 グループ、先頭 6 つが学習パス + 番号付き 5 ステップ）
 であることを確認。ランディングの `tutorials/index.html` は全 `counter.html` より前。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -86,3 +86,5 @@ Knowing **Pack** and **Host** first makes the rest read faster.
 - Started writing and unsure → [Patterns](../patterns/index.md)
 - Just write it → [Guide: commands](../guides/rpc.md)
 - Lost in terminology → [Glossary](../../../glossary.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

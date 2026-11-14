@@ -42,3 +42,5 @@
   プレビューは 1 バイトも変わらない。ビルドの目的は Zig の型検査だけ。
 - **`zts dev` はアプリを起動しない**（既知の制約）。`invoke` の往復を見るには
   `zts build` して実行ファイルを起動する。CLI リファレンスに明記した。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -80,3 +80,5 @@ python3 scripts/check-docs.py --sync             → 39 pairs を再同期
 
 旧称の字面は、チェックアウトのパス・GitHub/Pages の URL・テストデータ・デモの
 可視テキストにだけ残ります。リポジトリ改名時にまとめて更新してください。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

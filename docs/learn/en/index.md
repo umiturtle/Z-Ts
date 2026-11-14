@@ -107,3 +107,5 @@ Once you have finished the path, most reading is one page at a time.
 - Stuck on a design choice → [Patterns](patterns/index.md)
 - Lost in terminology → [Glossary](../../glossary.md)
 - Every page in one place → [Documentation index](../../INDEX.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

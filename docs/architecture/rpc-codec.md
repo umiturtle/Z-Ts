@@ -40,3 +40,5 @@
 | `union(enum)` | デフォルト `{ "kind": "...", ... }` | 判別共用体 (`\|`) | `.internal`（末尾 `kind` ゼロコピー対応）・`.adjacent`・`.external`・`.untagged` の 4 モード |
 | **`core.Handle(Tag)` (`rpc.Handle(Tag)`)** | 53-bit 非負整数 (`<= 2^53 - 1`) | Branded `number & { readonly __brand: Tag }` | **`core.WindowId == rpc.Handle(.window)` 単一名目型**。世代 `0` 等の不正 ID はデコード境界で `error.InvalidHandle` |
 | カスタム `jsonParse` / `jsonStringify` 型 | 型定義に委譲 | 型定義に委譲 | `Channel(T)` のように内部に `*anyopaque` や `usize` を持つランタイム型もそのまま透過サポート |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

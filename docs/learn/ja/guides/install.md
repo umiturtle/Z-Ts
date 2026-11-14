@@ -19,7 +19,7 @@
 
 ## 1. `zts` を置く
 
-[GitHub Releases](https://github.com/umiturtle/Z-Ts/releases) から、使う OS のバイナリを
+[GitHub Releases](https://github.com/umiturtle/ZigguraTs/releases) から、使う OS のバイナリを
 1 つ落とします（`zts-0.1.1-linux-x86_64` のような名前）。約 300 KB、**libc に依存しない
 単体ファイル**で、隣に置くものはありません。
 
@@ -94,7 +94,7 @@ ziggurats 本体を直したい人、公開バイナリを使わずに済ませ�
 `zig` は自分で用意してください。
 
 ```bash
-git clone https://github.com/umiturtle/Z-Ts.git
+git clone https://github.com/umiturtle/ZigguraTs.git
 cd Z-Ts
 zig build                # → zig-out/bin/zts（Zig 0.17 が PATH に必要）
 ```
@@ -134,3 +134,5 @@ zig build                # → zig-out/bin/zts（Zig 0.17 が PATH に必要）
 - 最初のアプリ: [`counter.md`](../tutorials/counter.md)
 - 全コマンドと全オプション: [`reference/cli.md`](../../../reference/cli.md)
 - 動かないとき: [`troubleshooting.md`](troubleshooting.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

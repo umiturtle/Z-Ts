@@ -59,7 +59,7 @@ pub const Framework = struct {
     /// Source tree on GitHub. External links are skipped by the Markdown link checker, which is
     /// exactly right: the site does not publish `.tsx` / `.vue` sources as pages.
     pub fn treeUrl(self: Framework, arena: Allocator) Allocator.Error![]const u8 {
-        return std.fmt.allocPrint(arena, "https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/{s}", .{self.id});
+        return std.fmt.allocPrint(arena, "https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/{s}", .{self.id});
     }
 };
 

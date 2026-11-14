@@ -25,15 +25,15 @@ are identical on every branch.
 
 | Example | Version | Build | Output | Counter | Todo | UI | Live demo |
 |---|---|---|---|---|---|---|---|
-| [`react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) | 19.3 | `vite build` | `dist` | [counter](counter-react.md) | [todo](todo-react.md) | [ui](ui-react.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
-| [`solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) | 1.9 | `vite build` | `dist` | [counter](counter-solid.md) | [todo](todo-solid.md) | [ui](ui-solid.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
-| [`svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) | 5.57 | `vite build` | `dist` | [counter](counter-svelte.md) | [todo](todo-svelte.md) | [ui](ui-svelte.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
-| [`angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) | 22.2 | `ng build` | `dist/browser` | [counter](counter-angular.md) | [todo](todo-angular.md) | [ui](ui-angular.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
-| [`next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) | 16.4 | `next build` | `out` | [counter](counter-next.md) | [todo](todo-next.md) | [ui](ui-next.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) |
-| [`nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) | 4.6 | `nuxt generate` | `.output/public` | [counter](counter-nuxt.md) | [todo](todo-nuxt.md) | [ui](ui-nuxt.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
-| [`astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) | 6.4 | `astro build` | `dist` | [counter](counter-astro.md) | [todo](todo-astro.md) | [ui](ui-astro.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
-| [`sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) | 3.1 | `vite build` | `build` | [counter](counter-sveltekit.md) | [todo](todo-sveltekit.md) | [ui](ui-sveltekit.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) |
-| [`solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) | 2.1 | `vite build` | `dist/client` | [counter](counter-solidstart.md) | [todo](todo-solidstart.md) | [ui](ui-solidstart.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) |
+| [`react/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/react) | 19.3 | `vite build` | `dist` | [counter](counter-react.md) | [todo](todo-react.md) | [ui](ui-react.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
+| [`solid/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/solid) | 1.9 | `vite build` | `dist` | [counter](counter-solid.md) | [todo](todo-solid.md) | [ui](ui-solid.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
+| [`svelte/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/svelte) | 5.57 | `vite build` | `dist` | [counter](counter-svelte.md) | [todo](todo-svelte.md) | [ui](ui-svelte.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
+| [`angular/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/angular) | 22.2 | `ng build` | `dist/browser` | [counter](counter-angular.md) | [todo](todo-angular.md) | [ui](ui-angular.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
+| [`next/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/next) | 16.4 | `next build` | `out` | [counter](counter-next.md) | [todo](todo-next.md) | [ui](ui-next.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) |
+| [`nuxt/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/nuxt) | 4.6 | `nuxt generate` | `.output/public` | [counter](counter-nuxt.md) | [todo](todo-nuxt.md) | [ui](ui-nuxt.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
+| [`astro/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/astro) | 6.4 | `astro build` | `dist` | [counter](counter-astro.md) | [todo](todo-astro.md) | [ui](ui-astro.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
+| [`sveltekit/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/sveltekit) | 3.1 | `vite build` | `build` | [counter](counter-sveltekit.md) | [todo](todo-sveltekit.md) | [ui](ui-sveltekit.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) |
+| [`solidstart/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/solidstart) | 2.1 | `vite build` | `dist/client` | [counter](counter-solidstart.md) | [todo](todo-solidstart.md) | [ui](ui-solidstart.md) | [Open](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) |
 
 See [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) for the
 build commands and the 3-OS screenshot comparison.
@@ -53,3 +53,5 @@ file implements them. Every branch page's appendix links to the real wiring.
 - Back to the chapter hub → [Tutorials](index.md)
 - Concepts first → [Concepts](../concepts/index.md)
 - Shaping commands → [Patterns](../patterns/index.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

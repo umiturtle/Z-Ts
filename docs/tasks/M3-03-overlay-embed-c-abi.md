@@ -68,3 +68,5 @@
 | `type '**windows.WinWindow' does not support field access` | `HandlePool.getPtr()` は `?*const T` を返す（値型が `*WinWindow` なので二重参照） | `w.*.parent` / `w.*.hwnd`（`@constCast` でも可） |
 | `usleep` が `-std=c99` で未宣言 | glibc の機能テストマクロ | GTK は `g_usleep`、Cocoa は `objc_msgSend` 経由の `+[NSThread sleepForTimeInterval:]`（POSIX マクロを持ち込まない） |
 | ヘッドレス機で `zig build test` が落ちる | `zts_c_embed` が 77 で終了 | `EXIT_SKIP = 0` + `SKIP c-embed …` を出力し、**CI は `OK c-embed` マーカーで判定** |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

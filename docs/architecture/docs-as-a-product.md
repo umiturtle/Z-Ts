@@ -763,3 +763,5 @@ OK docsite pages=221 links=731 assets=16158 words=495012 bytes=6757466 demos=60
 
 Diátaxis（Tutorial / How-to / Reference / Explanation の 4 分類）は、3 サイトの情報設計を
 整理する枠組みとして参照した一般に知られた分類です（この文書では §3 P9 でのみ使用）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

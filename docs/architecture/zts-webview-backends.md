@@ -209,3 +209,5 @@ fail-closed になります。
 `applyWindowCreationOptions()` で適用しつつ、全項目を `WindowCreationOptions`（スカラ＋
 文字列ハッシュ）として 4 バックエンドすべてに記録します。OS が表現できない項目を
 黙って「成功」とはせず、状態として保持した上で capability を Doc に明示します。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

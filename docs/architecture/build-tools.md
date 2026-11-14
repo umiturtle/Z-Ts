@@ -104,3 +104,5 @@ const gen = tsgenBindings(b, .{
 | 生成モジュールが実際に使えるか | `tests/ssg/embedded_consumer.zig`（実 `@embedFile` + `zts_web.Assets`） |
 | `bindings.gen.ts` の鮮度 | `zig build check-bindings`（`zig build test` に組み込み済み） |
 | エンベッダが実際に走ったか | CI の `OK build-tools embed files=… raw=… gzip=… csp=… gz=…` マーカー |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -42,3 +42,5 @@ ziggurats 自体の設計（なぜこの構成なのか、どのマイルスト�
 - 全体像から → [概念の索引](../concepts/index.md)
 - 用語 → [用語集](../../../glossary.md)
 - リポジトリの操作（ビルド・CI・テスト） → [`docs/contributing/README.md`](../../../contributing/README.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

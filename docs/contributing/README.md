@@ -199,8 +199,8 @@ Linux では加えて、**公開アーカイブを焼き込んだ release ビル
 
 ```bash
 ./zigw build -Doptimize=ReleaseSmall \
-  -Dzts-pkg-url="https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/z_ts-0.1.0.tar.gz" \
-  -Dzts-pkg-hash="z_ts-0.1.0-…"      # zig fetch <そのアーカイブ> が返す値
+  -Dzts-pkg-url="https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/z_ts-0.1.1.tar.gz" \
+  -Dzts-pkg-hash="z_ts-0.1.1-…"      # zig fetch <そのアーカイブ> が返す値
 ```
 
 こうしてできた `zts` は `.url` + `.hash` を書くので、利用者は clone を持たずに `zig build` できます。
@@ -225,3 +225,5 @@ Linux では加えて、**公開アーカイブを焼き込んだ release ビル
 | 全体アーキテクチャ | [`../architecture/00-overview.md`](../architecture/00-overview.md) |
 | 設計判断の記録 | [`../decisions/`](../decisions/) |
 | エージェント運用ルール | [`../../AGENTS.md`](../../AGENTS.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

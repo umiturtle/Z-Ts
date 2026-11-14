@@ -76,3 +76,5 @@ AppKit のメニューバーはアプリ全体で 1 本だが、`NSWindow.menu` 
 - 変換ロジック（ニーモニック・キー表・ID 採番）は Linux の `quick-test` でも検証できる。
 - トレードオフ: Win32 のショートカットは表示のみ（§2.5）、
   macOS / Win32 のトレイと画像アイコンは未実装のまま `error.Unavailable`。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

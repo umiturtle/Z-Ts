@@ -59,3 +59,5 @@
 
 - `embedFrontendDir: embedded 3 files (451 bytes)` が 3 OS すべてで決定論的に成功（Windows でも `\` パスで同一結果）。
 - ReleaseFast でも Wasm 上の `@tauri-apps/api` v2 スイートが Debug と同一の 45 チェックを通過（`Channel<T>` 8 フレーム、`once` 1 回、`listen` 2 回）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

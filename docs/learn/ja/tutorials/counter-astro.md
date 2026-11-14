@@ -6,7 +6,7 @@
 
 これは [カウンターを作る](counter.md) の **`Astro 6.4` 版**です。Zig 側のコードは
 元のチュートリアルと **1 文字も変わりません**。違うのは `web/` の中身だけで、そこに
-[`examples/frameworks/astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) の実物をそのまま使います。
+[`examples/frameworks/astro/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/astro) の実物をそのまま使います。
 [ライブラリを選び直す](frameworks.md) といつでも別の分岐へ移れます。
 
 <!-- framework-picker -->
@@ -222,7 +222,9 @@ Astro はデフォルトで JS を送りません。`<script>` はビルド時�
 | 読み込み中 / 空 / エラーの画面 | [画面を作る](ui.md) |
 | `Astro` 版の Todo | [Todo を Astro で](todo-astro.md) |
 | `Astro` 版の画面 | [画面を Astro で](ui-astro.md) |
-| `Astro` の実物ソース | [`examples/frameworks/astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) |
+| `Astro` の実物ソース | [`examples/frameworks/astro/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/astro) |
 | `Astro` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
 | 9 つの example の比較 | [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) |
 | コマンドの引数・エラー・型生成 | [ガイド: コマンド](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

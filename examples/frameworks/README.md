@@ -116,3 +116,5 @@ Zig 側のカウンタを増減し、押すたびに seal が変わります。�
    HTML を得る方法と、SPA モードで `index.html` を自前生成する方法があり、本リポジトリは後者。
 4. **Nuxt の payload**: 静的生成物は `/_payload.json` を fetch する。カスタムスキームでは 404 だが
    SSR 済み DOM はそのまま表示される（コンソール警告のみ）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

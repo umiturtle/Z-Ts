@@ -137,3 +137,5 @@ dist/
   導入時に `State.deinit` と `app.zig` の初期化へ追加します。
 - 定量ベンチマーク（冷間ビルド時間・バイナリサイズ・起動時間・RSS・IPC レイテンシ）は `M5-03` の
   `bench/` で本家 Rust Tauri と比較します。このサンプルはその **同一機能アプリ** を提供します。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -49,3 +49,5 @@
   3. 24 バイトの値型 `Cursor` にしたことで、`.internal` / `.adjacent` Union で `"kind"` キーが末尾にあるオブジェクトや、`.untagged` Union のバリアント試行バックトラックが `O(1)` の構造体コピー（ヒープ確保ゼロ）で実現できた。
 - **`std.json` 標準フックとの共存**:
   - `M1-07` の `Channel(T)`（`"__CHANNEL__:<id>"` 形式）など、`pub fn jsonParse` / `pub fn jsonStringify` を持つ型も `codec.zig` からそのまま呼び出せるよう統合済み。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

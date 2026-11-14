@@ -134,3 +134,5 @@ Build Summary: 41/41 steps succeeded; 96/96 tests passed   (macOS arm64)
   `didReceiveData:` の分割送出へ拡張する（`M3-03` 以降）。
 - macOS の E2E は GitHub Actions `macos-latest` でしか実走できない（ローカル Arena は Linux のみ）。
   そのため CI に `OK macos-wk checks=...` の **痕跡検証ステップ**を置き、無言スキップを防いでいる。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

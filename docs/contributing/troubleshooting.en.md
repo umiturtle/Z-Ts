@@ -94,3 +94,5 @@ memory; use `embedFrontend` and check the CSP hashes of inline scripts.
 - App-author troubleshooting: [`../learn/en/guides/troubleshooting.md`](../learn/en/guides/troubleshooting.md)
 - Tutorials: [`../learn/en/tutorials/index.md`](../learn/en/tutorials/index.md)
 - [`../../AGENTS.md`](../../AGENTS.md) and [`../../scripts/ci-logs.sh`](../../scripts/ci-logs.sh)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

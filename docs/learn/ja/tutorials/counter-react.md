@@ -6,7 +6,7 @@
 
 これは [カウンターを作る](counter.md) の **`React 19.3` 版**です。Zig 側のコードは
 元のチュートリアルと **1 文字も変わりません**。違うのは `web/` の中身だけで、そこに
-[`examples/frameworks/react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) の実物をそのまま使います。
+[`examples/frameworks/react/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/react) の実物をそのまま使います。
 [ライブラリを選び直す](frameworks.md) といつでも別の分岐へ移れます。
 
 <!-- framework-picker -->
@@ -217,7 +217,9 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 | 読み込み中 / 空 / エラーの画面 | [画面を作る](ui.md) |
 | `React` 版の Todo | [Todo を React で](todo-react.md) |
 | `React` 版の画面 | [画面を React で](ui-react.md) |
-| `React` の実物ソース | [`examples/frameworks/react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) |
+| `React` の実物ソース | [`examples/frameworks/react/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/react) |
 | `React` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
 | 9 つの example の比較 | [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) |
 | コマンドの引数・エラー・型生成 | [ガイド: コマンド](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

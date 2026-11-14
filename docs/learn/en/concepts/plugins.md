@@ -93,3 +93,5 @@ add the functionality as your own commands with `rpc.merge`.
 - [Security](security.md) — `fs` scopes are decided there
 - [Guide: plugins](../guides/plugins.md) — real code and the usual traps
 - API → [`zts_tauri`](../../../api/zts_tauri/index.html)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

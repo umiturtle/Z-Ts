@@ -124,3 +124,5 @@ node scripts/check-font-coverage.mjs      # 同梱フォントに無い文字（
   （`layout` はページが投稿した JSON を文字列のまま保存したもの）
 
 `index.html`（コンタクトシート）は検証スクリプトが生成します。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -42,3 +42,5 @@ ziggurats は以下の 2 つの一見相反する要件を同時に満たす必�
    - WebKit2GTK 4.1 では `webkit_uri_scheme_response_set_http_headers(resp, soup_hdrs)` を使用すると、JS `fetch()` の `res.headers.get("content-type")` は `soup_hdrs` テーブルを参照する。`soup_hdrs` に `"Content-Type"` を明示 `soup_message_headers_append` しないと `res.headers.get("content-type")` が空になり、Tauri v2 `ipc-protocol.js` が全レスポンスを `res.arrayBuffer()` 分岐で処理してしまうため、`soup_hdrs` 側にも必ず `Content-Type` を格納する。
 2. **GObject 同期 `"destroy"` シグナルと RAII 逆順破棄 (`DesktopRuntime.destroy`)**:
    - `gtk_widget_destroy(toplevel)` は呼び出しスレッド上で同期的に `"destroy"` シグナルを発火する。`DesktopRuntime.destroy` では必ず先に `setCloseHandler(null)` / `setMessageHandler(null)` でコールバックを切り離し、`engine.deinit()` 完了後に `plugins.destroy()` を解放する。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -246,3 +246,5 @@ so **do not forget `deinit()`** (`defer` is enough).
   [`docs/decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md`](../../../decisions/0004-tauri-v2-wire-and-deterministic-tsgen.md)
 - The transport side: [Plugins](plugins.md) and [Static sites](static-site.md) (the same schema
   running in WASM)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

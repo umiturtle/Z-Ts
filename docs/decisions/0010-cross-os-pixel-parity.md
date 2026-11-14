@@ -100,3 +100,5 @@ Angular / Solid / Svelte / SolidStart / Next.js / Nuxt / Astro / SvelteKit / Rea
 | スクリーンショットを目視だけにする | 回帰を検出できない（`M5-04` の白紙 PNG がまさにそれ） |
 | フレームワーク出力を 1 枚の HTML にインライン化する | 複数チャンクの ES モジュールはインライン `<script>` から相対 import できない（実測で SvelteKit / SolidStart が壊れた） |
 | 9 フレームワークを CI で毎回ビルドする | `npm install` が 1.3 GB / 数分。毎チャットのコールドスタート制約に反する |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

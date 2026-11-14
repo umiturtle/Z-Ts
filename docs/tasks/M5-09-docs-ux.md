@@ -349,3 +349,5 @@ CI ゲートは `OK docsite` マーカーの拡張（U16）で行い、**数値�
 - **再開するとき**: Wave 2（U8 概念 → U9 チュートリアル → U12 ACL → U13 API の例）から。
   各ページは `docs/contributing/writing-docs.md` の骨格（`# 見出し` + 対象読者 + 所要時間）で書き、
   例には `zig check` を付ける。1 ページ書いたら `./zigw docs-check` を回す。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

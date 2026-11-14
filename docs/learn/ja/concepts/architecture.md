@@ -95,3 +95,5 @@ src/
 - [コマンドが届くまで](commands.md) — この構成の上で実際にコードを書く話
 - [API: zts_core](../../../api/zts_core/index.html) — `Host` の全体
 - [パッケージを自分で組む](../guides/static-site.md) — 実際の `build.zig`
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

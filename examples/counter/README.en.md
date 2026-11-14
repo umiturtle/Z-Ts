@@ -76,3 +76,5 @@ Linux, macOS and Windows and compares the screenshots.
 See [the tutorials](../../docs/learn/en/tutorials/index.md) to build a smaller version yourself,
 [static-site guide](../../docs/learn/en/guides/static-site.md) for `exportStaticSite`, and
 [the API reference](../../docs/api/index.html) for the declarations.
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

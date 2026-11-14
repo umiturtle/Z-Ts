@@ -95,3 +95,5 @@ GitHub Pages のサブパス（`/Z-Ts/`）では 404 になる。`demos.zig` が
 - 検索はサーバ無し（`search-index.js` を読み込むだけ）。
 - **残課題**: サイト内の画像（スクリーンショット）はまだ無い。`M5-04` の PNG を
   Pages に載せるには、CI の artifact をサイトへ取り込む工程が必要（次の増分）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

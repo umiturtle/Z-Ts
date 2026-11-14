@@ -135,3 +135,5 @@ ziggurats も同じ規則（`1`, `2`, ...）で採番する。ユーザー指定
      アクティベーションは `WM_COMMAND`（`LOWORD(wParam)` に採番したコマンド ID）。
      トレイは `Shell_NotifyIconW` + `TrackPopupMenu`。
 3. どちらも「`Snapshot` → ウィジェット」の純粋変換に留め、コアの wire 層は変更しない。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

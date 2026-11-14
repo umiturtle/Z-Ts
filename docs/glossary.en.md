@@ -182,3 +182,5 @@ link and fails the build.
 - [Your first ten minutes](learn/en/start.md) — running in ten minutes
 - [Documentation index](INDEX.en.md) — the site map, in sidebar order
 - [Documentation sync ledger](contributing/doc-sync.en.md) — which version was verified when
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

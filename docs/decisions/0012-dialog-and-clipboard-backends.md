@@ -99,3 +99,5 @@ Zig 側は `extern "c"` 宣言 + `std.json` パースのみを行う。
 - トレードオフ: 実 OS のダイアログ / クリップボードはテストできない（`DISPLAY` 不在時は `error.SkipZigTest`）。
   代わりに **OS 非依存の純関数（`native_win32.zig`）と wire 層** を全 OS でテストし、
   ネイティブ層は CI のコンパイル検証に留める。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

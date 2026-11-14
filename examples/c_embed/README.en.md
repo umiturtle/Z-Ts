@@ -48,3 +48,5 @@ time.
 - [Concepts: package layout](../../docs/learn/en/concepts/architecture.md)
 - [C API reference](../../docs/api/zts_webview/index.html) (generated from `///`)
 - [The overlay embedding ADR](../../docs/decisions/0008-overlay-embedding-and-c-abi.md) (Japanese, internal)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

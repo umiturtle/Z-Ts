@@ -43,3 +43,5 @@
 - **404 は 5 本**。迷った人にグループを選ばせない。最初の一歩・道順・全体の索引・辞書で十分。
 - **サイドバーの番号は表から引く**。`groupHeading` の `switch` に番号を直書きしたのが今回の
   バグの原因。`learn_path.steps` の位置から引く形にし、`patterns` / `guides` の両方をテストで固定。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

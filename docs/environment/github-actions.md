@@ -186,3 +186,5 @@ Arena サンドボックスからは Actions の生ログを置いてある Blob
 > 旧リポジトリ URL とチェックアウトのパス名は規約 14 により据え置きです。
 > `github.com` 側はリダイレクトされますが、GitHub Pages のサブパスは変わるので、
 > 公開サイトの URL を変更する場合は別タスクで扱います。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -115,6 +115,7 @@ pair, so a page added in one language fails CI.
 | [Glossary](glossary.en.md) | Definitions of the words used throughout the text |
 | [`zts` command reference](reference/cli.en.md) | Every command and every flag of the app author's CLI |
 | [Tauri v2 API map](reference/tauri-usage.en.md) | Upstream Rust/JS API, config and Capabilities, mapped |
+| [Scope of Tauri v2 compatibility](reference/compatibility.en.md) | Same call vs same behaviour: defaults, placeholders and unwired backends |
 | [Error index](reference/errors.html) | From an `error{…}` name back to where it is declared (generated) |
 
 ### API
@@ -198,3 +199,5 @@ when you are looking for why the implementation looks the way it does.
 > in `README.md`, and in both learning hubs. **Rule 14** keeps the full name `ziggurats` (lowercase)
 > consistent in prose while leaving the legacy name in repository URLs/paths and the `zts` /
 > `z_ts` / `zts_*` identifiers alone.
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

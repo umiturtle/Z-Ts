@@ -190,3 +190,5 @@ The [chooser hub](frameworks.md) lists every real example.
 | `invoke` arguments, types, TypeScript | [Guide: commands](../guides/rpc.md) |
 | windows, dialogs, files | [Guide: plugins](../guides/plugins.md) |
 | installers (`.deb` / `.dmg` / `.exe`) | [Guide: packaging](../guides/package.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

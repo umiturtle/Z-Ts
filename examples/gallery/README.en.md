@@ -90,3 +90,5 @@ zig-out/gallery/
 See [the framework demos](../frameworks/README.en.md) and
 [the capture ADR](../../docs/decisions/0009-screenshot-capture-and-ci-gallery.md) (Japanese,
 internal).
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

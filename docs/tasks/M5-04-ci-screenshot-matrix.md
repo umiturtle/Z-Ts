@@ -83,3 +83,5 @@
 - **`Capture` の所有権**: バックエンドが `allocator` で確保し、`takeCapture` が所有権を呼び出し側へ移す。`closeWindow` / `deinit` 時に未回収分は必ず解放する（`std.testing.allocator` でリーク検査）。
 - **既知の罠（M3-02 の再発防止）**: `CapturePreview` は完了ハンドラの `Invoke` が来るまでストリームを読んではならない。`SHCreateMemStream` のストリームは `Seek(0)` してから `Read` する。GTK の `webkit_web_view_get_snapshot` は `GAsyncResult` を `webkit_web_view_get_snapshot_finish` に渡す必要があり、返る `cairo_surface_t*` は呼び出し側が `cairo_surface_destroy` する。
 - **CI のスクショは「見た目」だけでは合格にしない**: マーカー + Node 検証（寸法・非空白・パターン間差分）で機械的に判定する。画像は artifact として保存し、`index.html` のコンタクトシートを同梱する。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -203,3 +203,5 @@ Linux マトリクス）では ziggurats 側だけを実測し、Check Run Summa
 | ベンチ 6 指標 | **実装済み**（`bench/`、CI の Linux ジョブ）。Rust 側は toolchain が無い環境で `skipped` |
 | `zts package` の `--arch` | 意図的に作らない（§2.2） |
 | Linux aarch64 / macOS x86_64 のバイナリ | 未対応。`release.yml` は runner のアーキテクチャで名付ける（`uname -m`）。arm ランナーが用意できたら matrix に足すだけ |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

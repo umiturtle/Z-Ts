@@ -97,3 +97,5 @@
 4. **学習ページは ja と en を同じ PR で**。片方だけだと規約 8 で CI が落ちる（落ちる場所で
    気づけるようにしてある）。
 5. **生成物はコミットしない**。`docs/api/**`・`zig-out/**` は `zig build docs` の出力。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

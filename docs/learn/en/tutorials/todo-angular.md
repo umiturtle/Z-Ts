@@ -173,6 +173,8 @@ The `zts dev` browser alone cannot deliver `invoke`; always verify with the `zts
 | Screen states in the same library | [Screen with Angular](ui-angular.md) |
 | Plain-JS original | [Build a Todo list](todo.md) |
 | Pick another library | [Chooser hub](frameworks.md) |
-| Real `Angular` source | [`examples/frameworks/angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) |
+| Real `Angular` source | [`examples/frameworks/angular/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/angular) |
 | Command arguments, errors, TS generation | [Commands guide](../guides/rpc.md) |
 | Why these three are shaped this way | [Patterns](../patterns/index.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -191,3 +191,5 @@ WebResourceRequested (STA)
 - E2E は standalone exe（`zig build test` の `run` ステップ）。Zig のテストランナーに
   COM/ブラウザコールバックを同居させるとクラッシュが「1 crash」に丸められて原因が消えるため、
   意図的にテストブロックへ戻さない。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

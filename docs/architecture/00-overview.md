@@ -84,3 +84,5 @@ ziggurats の下位レイヤは、デスクトップ WebView フレームワー�
    - ❌ 動的 `PluginStore` VTable への全プラグイン一括登録（未使用コードが DCE されずバイナリが肥大化するため禁止 → **`zts_rpc.merge` による `comptime` 静的合成** を使う）
    - ❌ 世代番号なしの連番 `ResourceId: u32` と `Any` ダウンキャストマップ（ABA バグの温床になるため禁止 → **`zts_core.HandlePool(T)`（IEEE 754 安全な 53-bit 世代ハンドル）** を使う）
    - ❌ メインスレッドを乗っ取って戻らない `run()` 強制（`defer` リーク検査と外部ゲームループ統合を壊すため禁止 → **`step(.blocking / .non_blocking)` を基礎プリミティブ** にする）
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

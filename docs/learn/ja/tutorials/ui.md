@@ -195,3 +195,5 @@ Zig の `error{}` は「画面の対応が変わる単位」で切ります（[�
 | `invoke` の引数・型・TypeScript 生成 | [ガイド: コマンド](../guides/rpc.md) |
 | ウィンドウ・ダイアログ・ファイル | [ガイド: プラグイン](../guides/plugins.md) |
 | 配布物（`.deb` / `.dmg` / `.exe`） | [ガイド: 配布物](../guides/package.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

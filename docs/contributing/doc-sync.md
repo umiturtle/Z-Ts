@@ -17,9 +17,9 @@
 
 - **確認バージョン**: `ziggurats 0.1.1` / Zig `0.17.0`
 - **確認日**: `2026-10-21`
-- **基準コミット**: `07b6a3e`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）
+- **基準コミット**: `e7e8cd9`（確認開始時点の HEAD。実装の同一性は下のハッシュで判定）
 - **確認コマンド**: `python3 scripts/check-docs.py` · `python3 scripts/gen-framework-tutorials.py --check` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
-- **実装ハッシュ**: `2a54bd074275041c8f55a06862676fe0f87cbfd2b793cb0e294e916f681726cb`
+- **実装ハッシュ**: `c94c6622b6abe95396470495da107e665ea547a190f512c6a9d39c616488cec6`
 
 実装として突き合わせたファイル: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `src/docsite/frameworks.zig`, `src/docsite/frameworks.json`, `src/docsite/assets/site.js`, `src/docsite/assets/site.css`, `scripts/check-docs.py`, `scripts/gen-framework-tutorials.py`
 
@@ -90,6 +90,7 @@
 | `docs/learn/ja/tutorials/ui-sveltekit.md` | `docs/learn/en/tutorials/ui-sveltekit.md` | 2026-10-21 | 0.1.1 |
 | `docs/learn/ja/tutorials/ui.md` | `docs/learn/en/tutorials/ui.md` | 2026-10-21 | 0.1.1 |
 | `docs/reference/cli.md` | `docs/reference/cli.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/reference/compatibility.md` | `docs/reference/compatibility.en.md` | 2026-10-21 | 0.1.1 |
 | `docs/reference/tauri-internals.md` | `docs/reference/tauri-internals.en.md` | 2026-10-21 | 0.1.1 |
 | `docs/reference/tauri-usage.md` | `docs/reference/tauri-usage.en.md` | 2026-10-21 | 0.1.1 |
 | `examples/c_embed/README.md` | `examples/c_embed/README.en.md` | 2026-10-21 | 0.1.1 |
@@ -108,9 +109,13 @@ python3 scripts/check-docs.py                             # 検査のみ（CI �
 
 `--sync` は本文が変わったページの `last_rewritten` だけを更新し、変わっていないページの
 日付は保持します。内部資料（ADR・設計メモ・タスク票）は日本語専用なので台帳の対象外です。
+全ページの末尾には `<!-- zts-doc-meta: ... -->` を 1 行書き、対応バージョン・確認日・
+最終書き換え日を記録します（規約 23）。メタ自身は本文に数えません。
 
 ## 関連
 
 - [ドキュメントの書き方](writing-docs.md) — 規約 13 と 2 言語の規約
 - [リポジトリの地図](repository-map.md) — ファイル配置
 - [ドキュメント索引](../INDEX.md) — サイトの並び
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

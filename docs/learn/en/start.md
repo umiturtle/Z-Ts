@@ -24,12 +24,12 @@ libc dependency); you bring Zig.
 zig version             # → 0.17.0
 
 # 2) download the zts binary for your OS and put it on PATH
-curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
-chmod +x zts-0.1.0-linux-x86_64
+curl -LO https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/zts-0.1.1-linux-x86_64
+chmod +x zts-0.1.1-linux-x86_64
 mkdir -p ~/.local/bin
-mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
+mv zts-0.1.1-linux-x86_64 ~/.local/bin/zts
 export PATH="$HOME/.local/bin:$PATH"
-zts version             # → zts 0.1.0
+zts version             # → zts 0.1.1
 ```
 
 **No clone, and no repository tooling.** `zts` only spawns `zig`. The PowerShell command, `ZTS_ZIG`,
@@ -140,7 +140,7 @@ means shipping one file. Stop `zts dev` before running the binary.
 ## What you have now
 
 ```text
-✔ zts version             → zts 0.1.0
+✔ zts version             → zts 0.1.1
 ✔ zts doctor              → all checks passed
 ✔ zts init my-app         → six files + a filled-in fingerprint
 ✔ zts dev                 → my_app visible in the browser
@@ -162,3 +162,5 @@ rather build first**, jump straight to the tutorial and come back when a word st
 
 Stuck on a word? [Glossary](../../glossary.md). Stuck on an error?
 [Troubleshooting](guides/troubleshooting.md) and the [error index](../../reference/errors.html).
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

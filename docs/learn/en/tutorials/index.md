@@ -59,3 +59,5 @@ gets you a page in a browser.
 - After all three: design → [Patterns](../patterns/index.md) (how to shape commands, state and errors)
 - Design first → [Concepts](../concepts/index.md)
 - One specific job → [Guides](../guides/index.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -94,3 +94,5 @@ Tauri のドキュメントに書いてあるコードが、そのまま動き�
 - [セキュリティ](security.md) — `fs` の scope はここで決まる
 - [ガイド: プラグイン](../guides/plugins.md) — 実際のコードとつまずきどころ
 - API → [`zts_tauri`](../../../api/zts_tauri/index.html)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

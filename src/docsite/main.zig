@@ -566,8 +566,8 @@ pub fn generate(arena: Allocator, io: Io, out_path: []const u8, publish_demos: b
     return report;
 }
 
-const repo_blob_base = "https://github.com/umiturtle/Z-Ts/blob/main/";
-const repo_tree_base = "https://github.com/umiturtle/Z-Ts/tree/main/";
+const repo_blob_base = "https://github.com/umiturtle/ZigguraTs/blob/main/";
+const repo_tree_base = "https://github.com/umiturtle/ZigguraTs/tree/main/";
 
 /// A path that exists in the working tree, as a file (`blob`) or a directory (`tree`).
 const RepoPath = enum { missing, file, directory };
@@ -1722,7 +1722,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\      <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9" /></svg>
         \\      <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" /></svg>
         \\    </button>
-        \\    <a class="icon-btn gh" href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener" aria-label="{s}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" /></svg></a>
+        \\    <a class="icon-btn gh" href="https://github.com/umiturtle/ZigguraTs" target="_blank" rel="noopener" aria-label="{s}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" /></svg></a>
         \\  </div>
         \\</header>
         \\<main class="landing-main">
@@ -1734,7 +1734,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
         \\      <a class="button primary" href="{s}{s}/start.html">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
         \\      <a class="button" href="{s}{s}/tutorials/index.html">{s}</a>
         \\      <a class="button ghost" href="{s}docs/api/index.html">{s}</a>
-        \\      <a class="button ghost" href="https://github.com/umiturtle/Z-Ts/releases/latest" target="_blank" rel="noopener">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" /></svg></a>
+        \\      <a class="button ghost" href="https://github.com/umiturtle/ZigguraTs/releases/latest" target="_blank" rel="noopener">{s}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" /></svg></a>
         \\    </div>
         \\    <p class="hero-meta">{s}</p>
         \\  </section>
@@ -1953,7 +1953,7 @@ fn renderLanding(arena: Allocator, lang: i18n.Lang, groups: []const site.Group, 
     try w.writeAll("</nav></details></section>");
     try w.writeAll("</main>");
     try w.print(
-        \\<footer class="footer landing-footer"><span>© ziggurats — {s}</span><span class="footer-meta"><a href="https://github.com/umiturtle/Z-Ts" target="_blank" rel="noopener">{s}</a></span></footer>
+        \\<footer class="footer landing-footer"><span>© ziggurats — {s}</span><span class="footer-meta"><a href="https://github.com/umiturtle/ZigguraTs" target="_blank" rel="noopener">{s}</a></span></footer>
         \\<script src="{s}assets/site.js"></script>
         \\</body>
         \\</html>
@@ -2094,7 +2094,7 @@ fn renderErrorsBody(arena: Allocator, errors: []const ErrorEntry) ![]const u8 {
         try w.writeAll("<p class=\"error-files\">");
         for (entry.files, 0..) |file, i| {
             if (i > 0) try w.writeAll(" · ");
-            try w.print("<a href=\"https://github.com/umiturtle/Z-Ts/blob/main/{s}\">{s}</a>", .{ file, file });
+            try w.print("<a href=\"https://github.com/umiturtle/ZigguraTs/blob/main/{s}\">{s}</a>", .{ file, file });
         }
         try w.writeAll("</p>\n</section>\n");
     }

@@ -142,3 +142,5 @@ Linux ジョブの `Verify the build-tools embedder and the generated bindings (
 > `csp=0` はフィクスチャにインライン `<script>` / `<style>` が無いため 0 が正しい値。
 > CSP 抽出そのものは `assets.zig` の 7 テスト（外部 script 除外 / 引用符内の `>` / 大文字タグ /
 > 重複除去 / 空 body）で検証している。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

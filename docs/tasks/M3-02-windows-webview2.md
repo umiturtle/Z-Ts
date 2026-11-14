@@ -143,3 +143,5 @@ E2E はページ側で 3 本のプローブを回し、結果を `e2e: report={�
 | `probeGet=200\|…` | cross-origin **単純リクエスト**（プリフライト無し）が CORS を通る |
 | `probePlain=200\|…` | `text/plain` POST（CORS-safelisted）が deferral 経路で完了する |
 | `request OPTIONS http://ipc.localhost/ping` の次に `request POST …/ping` | プリフライトが受理され本リクエストが発行された（片方だけなら ACAO 二重化を疑う） |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

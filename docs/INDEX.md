@@ -115,6 +115,7 @@ ziggurats には読者が 3 種類いて、使うコマンドもページも別�
 | [用語集](glossary.md) | Pack・Host・Capability など、本文に出てくる言葉の定義 |
 | [`zts` コマンドリファレンス](reference/cli.md) | アプリ作者が使う CLI の全コマンドと全フラグ |
 | [Tauri v2 の使い方](reference/tauri-usage.md) | 上流 Rust/JS API・設定・Capabilities の対応 |
+| [Tauri v2 互換の範囲](reference/compatibility.md) | 「同じ書き方」と「同じ実機能・挙動」の境界、既定値と未配線の一覧 |
 | [エラー索引](reference/errors.html) | `error{…}` の名前から定義元へ（自動生成） |
 
 ### API
@@ -199,3 +200,5 @@ ziggurats には読者が 3 種類いて、使うコマンドもページも別�
 > 実装と無矛盾を確認したか」を日英 1 組ずつ記録し、本文・実装のハッシュのズレを落とします。
 > **規約 14** が、フルネーム `ziggurats`（小文字）と、リポジトリ URL / パスにだけ残る旧称の
 > 使い分けを検査します。`zts` / `z_ts` / `zts_*` は識別子なので対象外です。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

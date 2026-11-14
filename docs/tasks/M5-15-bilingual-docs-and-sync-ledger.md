@@ -131,3 +131,5 @@ python3 scripts/check-docs.py --sync     → 39 bilingual pairs（2 回連続で
 生成 HTML の全ページ走査: サイドバーは **全ページ 11 グループ**、
 英語ミラー 15 ページすべてに `hreflang="ja"` の切替と `data-lang="en"`、
 英語サイドバーに日本語ラベルは 0 件、404 も日英 2 枚。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

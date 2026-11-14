@@ -6,7 +6,7 @@
 
 This is the **Solid 1.9** branch of [Build a counter](counter.md). The Zig side is
 **identical, character for character**; only `web/` changes, and it uses the real example from
-[`examples/frameworks/solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid). [Pick another library](frameworks.md) at any time.
+[`examples/frameworks/solid/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/solid). [Pick another library](frameworks.md) at any time.
 
 <!-- framework-picker -->
 
@@ -215,7 +215,9 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | loading / empty / error views | [Build the screen](ui.md) |
 | the Todo branch for Solid | [Todo with Solid](todo-solid.md) |
 | the screen branch for Solid | [Screen with Solid](ui-solid.md) |
-| the real Solid source | [`examples/frameworks/solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) |
+| the real Solid source | [`examples/frameworks/solid/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/solid) |
 | the live Solid demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
 | arguments, errors, generated types | [Guide: commands](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

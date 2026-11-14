@@ -99,3 +99,5 @@ Windows（Win32）にも広げ、「Linux だけメニューが出る」状態�
   `F1`..`F24` の名前はファイルスコープの comptime テーブルにした。
 - **CI ゲート**: `OK menu-cocoa checks=` / `OK menu-win32 checks=` が無ければ fail。
   「黙ってスタブにフォールバックした」状態を通さないための仕掛け。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

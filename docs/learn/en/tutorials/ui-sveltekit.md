@@ -172,3 +172,5 @@ and a framework-generated `<script type="module">` is handled the same way.
 | Live `SvelteKit` demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) |
 | CSP and shipping | [Static sites guide](../guides/static-site.md) |
 | Command and error design | [Patterns](../patterns/index.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

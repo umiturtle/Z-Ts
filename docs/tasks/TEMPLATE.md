@@ -30,3 +30,5 @@
 ## 3. 設計判断・技術メモ・ハマりどころ
 
 - ...
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

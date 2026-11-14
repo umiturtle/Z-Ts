@@ -167,3 +167,5 @@ zig-out/bin/my_app        # ウィンドウが開き、3 状態が切り替わ�
 | `Solid` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
 | CSP と配布 | [ガイド: 静的サイト](../guides/static-site.md) |
 | コマンドとエラーの設計 | [実用パターン](../patterns/index.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

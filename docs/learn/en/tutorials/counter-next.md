@@ -6,7 +6,7 @@
 
 This is the **Next.js 16.4** branch of [Build a counter](counter.md). The Zig side is
 **identical, character for character**; only `web/` changes, and it uses the real example from
-[`examples/frameworks/next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next). [Pick another library](frameworks.md) at any time.
+[`examples/frameworks/next/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/next). [Pick another library](frameworks.md) at any time.
 
 <!-- framework-picker -->
 
@@ -216,7 +216,9 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | loading / empty / error views | [Build the screen](ui.md) |
 | the Todo branch for Next.js | [Todo with Next.js](todo-next.md) |
 | the screen branch for Next.js | [Screen with Next.js](ui-next.md) |
-| the real Next.js source | [`examples/frameworks/next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) |
+| the real Next.js source | [`examples/frameworks/next/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/next) |
 | the live Next.js demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/next/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
 | arguments, errors, generated types | [Guide: commands](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

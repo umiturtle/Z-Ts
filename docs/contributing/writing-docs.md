@@ -328,3 +328,5 @@ TypeScript の `tsconfig` リファレンスに倣い、**1 項目 = 既定値 +
 - 改善の作業計画と成功指標: [`../tasks/M5-09-docs-ux.md`](../tasks/M5-09-docs-ux.md)
 - なぜこの設計か（12 サイトの調査）: [`../architecture/docs-as-a-product.md`](../architecture/docs-as-a-product.md)
 - リポジトリの操作全般: [`README.md`](README.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

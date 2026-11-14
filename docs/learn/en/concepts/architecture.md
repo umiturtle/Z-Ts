@@ -94,3 +94,5 @@ If you find yourself wanting "a different code path on desktop", that is usually
 - [How a command travels](commands.md) — writing code on top of this layout
 - [API: zts_core](../../../api/zts_core/index.html) — the whole `Host` surface
 - [Assembling the packages yourself](../guides/static-site.md) — a real `build.zig`
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

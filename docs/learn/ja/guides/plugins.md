@@ -149,8 +149,8 @@ console.log(await getAllWebviews()); // [{ label, windowLabel }, …]
 ラベルは `a-zA-Z0-9-/:_` のみ（最大 128 文字）。`url` は `http(s)` / `tauri` / `asset` /
 `isolation` / `ipc` のみ通し、相対パスは `tauri://localhost/` に解決します。
 `javascript:` や `file:` は `InvalidUrl`、`label` の重複は `DuplicateLabel` で拒否します。
-未実装の `WindowOptions`（`center` / `skipTaskbar` / `titleBarStyle` など）は無視されるだけで
-呼び出しは失敗しません（前方互換）。
+`center` / `skipTaskbar` / `titleBarStyle` などの `WindowOptions` は `createWindow()` で
+バックエンドへ渡され、適用可能な範囲が反映されます（未対応の項目は状態として記録のみ）。
 
 ### event — [`EventBus`](../../../api/zts_tauri/event.html#EventBus)
 
@@ -213,8 +213,10 @@ const file = await open({ multiple: false });
 
 ### menu / tray — [`menu`](../../../api/zts_tauri/menu/mod.html) / [`tray`](../../../api/zts_tauri/tray/mod.html)
 
-デスクトップでは **ネイティブ**（macOS は `NSApp setMainMenu:`、Windows は `CreateMenu` +
-`WM_COMMAND`）、それ以外は `StubBackend` です。バックエンドは差し替え可能なので、
+ネイティブ実装は **GTK / Cocoa / Win32 の 3 つ** にあります（macOS は `NSApp setMainMenu:`、
+Windows は `CreateMenu` + `WM_COMMAND`、Linux は GTK）。ただし既定の `CorePluginStates` は
+`StubBackend` で初期化されるため、**アプリ側で明示的な差し込みが必要**です。
+[互換性の範囲](../../../reference/compatibility.md) も参照してください。バックエンドは差し替え可能なので、
 テストでは [`Mock`](../../../api/zts_tauri/menu/mod.html#Mock) で「どの項目が押されたか」を再現できます。
 
 ```zig
@@ -254,7 +256,7 @@ if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) ret
 | 症状 | 原因と対処 |
 |---|---|
 | `invoke("plugin:window\|set_title")` が `command not found` | `withCorePlugins` を経由せず `rpc.Schema` だけを使っている。 |
-| メニューが何も出ない | Linux では `StubBackend`。ネイティブが必要なら `native.menuBackend()` を挿す（対応 OS のみ）。 |
+| メニューが何も出ない | 既定は `StubBackend`。`native.menuBackend()` で GTK / Cocoa / Win32 の実装を差し込む（Linux にも実装あり）。 |
 | `path` が `$APPDATA` を解決しない | `PathState.app_identifier` が既定値のまま。`app_config.identifier` と揃える。 |
 | `fs` が常に `forbidden path` | capability の `scope` が空。`{ "path": "$APPDATA/**" }` のように glob で許可する。 |
 | ヘッドレス CI でだけ落ちる | ダイアログ/クリップボードは `Mock` を使う（`Backend` を差し替える）。 |
@@ -340,3 +342,5 @@ var bound = S.bind(.{ .store = &state, .log = &state, .os = &state });
 - 内部資料: [`../architecture/tauri-menu-tray.md`](../../../architecture/tauri-menu-tray.md) /
   [`../architecture/tauri-dialog-clipboard.md`](../../../architecture/tauri-dialog-clipboard.md) /
   [`../decisions/0014-config-import-and-acl.md`](../../../decisions/0014-config-import-and-acl.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->
