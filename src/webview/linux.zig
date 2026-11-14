@@ -1043,6 +1043,48 @@ pub const LinuxGtkBackend = struct {
         (self.windows.getPtr(win_id) orelse return error.WindowNotFound).creation.center = true;
     }
 
+    /// Physical-pixel display list from GDK: multi-monitor, work area and HiDPI scale.
+    pub fn screens(self: *LinuxGtkBackend, allocator: Allocator) Allocator.Error![]types.ScreenInfo {
+        _ = self;
+        const display = c.gdk_display_get_default() orelse return allocator.alloc(types.ScreenInfo, 0);
+        const n = c.gdk_display_get_n_monitors(display);
+        if (n <= 0) return allocator.alloc(types.ScreenInfo, 0);
+        const out = try allocator.alloc(types.ScreenInfo, @intCast(n));
+        var i: c_int = 0;
+        while (i < n) : (i += 1) {
+            const slot: usize = @intCast(i);
+            const mon = c.gdk_display_get_monitor(display, i) orelse {
+                out[slot] = .{};
+                continue;
+            };
+            var geo: c.GdkRectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
+            var work: c.GdkRectangle = geo;
+            c.gdk_monitor_get_geometry(mon, &geo);
+            c.gdk_monitor_get_workarea(mon, &work);
+            out[slot] = .{
+                .x = geo.x,
+                .y = geo.y,
+                .width = @intCast(@max(0, geo.width)),
+                .height = @intCast(@max(0, geo.height)),
+                .work_height = @intCast(@max(0, work.height)),
+                .scale = @floatFromInt(@max(1, c.gdk_monitor_get_scale_factor(mon))),
+            };
+        }
+        return out;
+    }
+
+    /// Physical-pixel cursor position from the default GDK seat.
+    pub fn cursorPosition(self: *LinuxGtkBackend) types.CursorInfo {
+        _ = self;
+        const display = c.gdk_display_get_default() orelse return .{};
+        const seat = c.gdk_display_get_default_seat(display) orelse return .{};
+        const pointer = c.gdk_seat_get_pointer(seat) orelse return .{};
+        var x: c_int = 0;
+        var y: c_int = 0;
+        c.gdk_device_get_position(pointer, null, &x, &y);
+        return .{ .x = @intCast(x), .y = @intCast(y) };
+    }
+
     /// GTK 3 honours `hiddenTitle` (empty title) and `userAgent`. The other string
     /// options have no GTK equivalent; they stay in the scalar record instead of being dropped.
     pub fn applyWindowCreationOptions(self: *LinuxGtkBackend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {

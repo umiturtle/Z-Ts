@@ -25,8 +25,19 @@ pub const DesktopConfig = struct {
     backend: webview.BackendKind = .auto,
     /// Identity reported by `plugin:app`.
     app: tauri.AppConfig = .{},
-    /// Base directories used by `plugin:path`.
+    /// Base directories used by `plugin:path`. Overridden by `providers.path` when present.
     paths: tauri.PathState = .{},
+    /// Every provider (path / monitor / menu / tray / dialog / clipboard / process liveness).
+    /// `.{}` still auto-detects real user directories from `environ` and keeps the rest on
+    /// deterministic defaults. `zts_tauri_native.providers()` fills in all native backends.
+    providers: tauri.RuntimeProviders = .{},
+    /// Process environment, supplied by the app's `std.process.Init.environ_map`.
+    /// `null` keeps the deterministic path fallbacks (headless tests / CI).
+    environ: ?*const std.process.Environ.Map = null,
+    /// Directory containing the running executable (from `argv[0]`), when the app has it.
+    exe_dir: ?[]const u8 = null,
+    /// Real working directory, when the app has it.
+    cwd: ?[]const u8 = null,
     /// Frontend to serve over `asset://`.
     assets: ?*const web.Assets = null,
     /// CSP applied to served HTML.
@@ -43,6 +54,46 @@ pub const DesktopConfig = struct {
     /// Asset path prefix backing `isolation://localhost/`.
     isolation_asset_prefix: []const u8 = "/isolation/",
 };
+
+/// Converts `webview.Engine.screens()` into the `tauri.monitor` provider contract.
+/// `ctx` is the runtime's own engine, so the provider stays valid for the whole runtime.
+fn monitorList(ctx: ?*anyopaque, allocator: Allocator) Allocator.Error![]const tauri.monitor.Monitor {
+    const engine: *webview.Engine = @ptrCast(@alignCast(ctx orelse
+        return deterministicMonitor(allocator)));
+    const screens = engine.screens(allocator) catch
+        return deterministicMonitor(allocator);
+    defer allocator.free(screens);
+    const out = try allocator.alloc(tauri.monitor.Monitor, screens.len);
+    for (screens, 0..) |screen, i| {
+        out[i] = .{
+            .name = "display",
+            .scale_factor = screen.scale,
+            .position = .{ .x = screen.x, .y = screen.y },
+            .size = .{ .width = screen.width, .height = screen.height },
+            .work_area = .{
+                .x = screen.x,
+                .y = screen.y,
+                .width = screen.width,
+                .height = screen.work_height,
+            },
+        };
+    }
+    return out;
+}
+
+/// One 1920x1080 @1.0 fallback so `availableMonitors()` is never empty when the OS has no
+/// display yet (Xvfb startup / headless CI). Keeps the E2E wire contract stable.
+fn deterministicMonitor(allocator: Allocator) Allocator.Error![]const tauri.monitor.Monitor {
+    const one = try allocator.alloc(tauri.monitor.Monitor, 1);
+    one[0] = .{ .name = "default" };
+    return one;
+}
+
+fn monitorCursor(ctx: ?*anyopaque) tauri.monitor.Point {
+    const engine: *webview.Engine = @ptrCast(@alignCast(ctx orelse return .{ .x = 0, .y = 0 }));
+    const cursor = engine.cursorPosition();
+    return .{ .x = cursor.x, .y = cursor.y };
+}
 
 fn noopRpcDispatch(
     _: ?*anyopaque,
@@ -83,7 +134,15 @@ pub const DesktopRuntime = struct {
         var eng = try webview.Engine.init(allocator, io, cfg.backend);
         errdefer eng.deinit();
 
-        const plugins = try tauri.CorePluginStates.create(allocator, io, cfg.app, cfg.paths);
+        // One place resolves the environment-backed paths and applies every provider.
+        var providers = cfg.providers;
+        // Only auto-detect when the app supplied its environment. Headless tests, wasm and
+        // embedded hosts keep their explicit cfg.paths (the asset:// root).
+        if (cfg.environ != null) {
+            try providers.detectPath(allocator, cfg.environ, cfg.exe_dir, cfg.cwd, cfg.app.identifier);
+        }
+        const effective_paths = providers.path orelse cfg.paths;
+        const plugins = try tauri.CorePluginStates.create(allocator, io, cfg.app, effective_paths, providers);
         errdefer plugins.destroy();
 
         const key_buf = tauri.ProtocolRouter.generateInvokeKeyHex(io);
@@ -99,6 +158,16 @@ pub const DesktopRuntime = struct {
         };
         self.host_adapter = webview_host.WebviewHost.init(&self.engine);
         self.invoke_key = cfg.invoke_key_override orelse self.invoke_key_storage[0..];
+        // Task 2: unless the app supplied its own provider, install the engine-backed one here.
+        // This is the same single wiring point as paths / menu / tray (task 6).
+        if (providers.monitor == null) {
+            providers.monitor = .{
+                .ctx = &self.engine,
+                .list = monitorList,
+                .cursor = monitorCursor,
+            };
+        }
+        try self.plugins.monitors.setProvider(providers.monitor.?);
         // JS-created windows must receive the same per-label bootstrap as startup windows, so
         // commands go through `DesktopRuntime.openWindow` instead of the bare Host vtable.
         _ = self.plugins.windows.withWindowFactory(self, onOpenWindow);
@@ -107,7 +176,7 @@ pub const DesktopRuntime = struct {
             .assets = cfg.assets,
             .inject_bootstrap_into_html = false,
             .csp = cfg.csp,
-            .asset_root_dir = cfg.paths.resource_dir,
+            .asset_root_dir = effective_paths.resource_dir,
             .asset_allow_globs = cfg.asset_allow_globs,
             .extra_allowed_origins = cfg.extra_allowed_origins,
             .isolation_key = cfg.isolation_key,

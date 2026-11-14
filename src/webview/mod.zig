@@ -317,6 +317,27 @@ pub const Engine = union(enum) {
         };
     }
 
+    /// Physical-pixel display list from the active backend. `DesktopRuntime` converts this into
+    /// the `tauri.monitor` provider; no backend leaves the registry on its synthetic default.
+    pub fn screens(self: *Engine, allocator: Allocator) Allocator.Error![]types.ScreenInfo {
+        return switch (self.*) {
+            .headless_mock => |m| m.screens(allocator),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.screens(allocator) else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.screens(allocator) else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.screens(allocator) else unreachable,
+        };
+    }
+
+    /// Physical-pixel cursor position from the active backend.
+    pub fn cursorPosition(self: *Engine) types.CursorInfo {
+        return switch (self.*) {
+            .headless_mock => |m| m.cursorPosition(),
+            .linux_gtk => |b| if (comptime has_native_gtk) b.cursorPosition() else unreachable,
+            .macos_wk => |b| if (comptime has_native_macos) b.cursorPosition() else unreachable,
+            .windows_webview2 => |b| if (comptime has_native_windows) b.cursorPosition() else unreachable,
+        };
+    }
+
     /// target-specific creation options (`hiddenTitle`, `titleBarStyle`,
     /// `userAgent`, `tabbingIdentifier`, …). Every backend stores the scalar record and applies
     /// what its OS supports; unsupported flags stay recorded and are documented, never silently

@@ -137,4 +137,45 @@ layout, HiDPI and the real cursor position are unavailable until you register a 
 - [`zts` command reference](cli.en.md)
 - [API reference](../api/index.html)
 
+## 8. The follow-up work is implemented
+
+Every item previously listed as a weakness has since been implemented. The sections above remain
+as **background**; the current behaviour is:
+
+| Former weakness | Current behaviour |
+|---|---|
+| `PathState` returned `/home/user` and other fixed paths | `PathState.fromEnvironment()` reads `HOME` / `USERPROFILE` / `XDG_*` / `APPDATA` / `LOCALAPPDATA` / `TMPDIR`; `DesktopConfig` auto-detects when unspecified. Only headless/CI without an `environ` map keeps deterministic fallbacks |
+| Monitors were a fixed 1920x1080 with no provider | All four `zts_webview` backends expose `screens()` / `cursorPosition()`, and `DesktopRuntime.create()` registers the `tauri.monitor` provider automatically. Linux: every GDK monitor with HiDPI; macOS: `NSScreen`; Windows: primary + system DPI; Mock: one deterministic display |
+| `set` / `delete` / `clear` did not persist | `PluginState.Options.autosave` (default true) calls `save()` after every mutation; a no-op without `store_path`. The explicit `save` command still exists |
+| `catch {}` silently ignored a corrupt save file | `RestoreDiagnostics` records `ok` / `missing` / `unreadable` / `malformed` plus the restored key count, so the app can detect why state started empty |
+| A crash left a stale lock behind | The lock file records `zts-lock-v2 <pid>`; a `process_alive` provider proving the owner dead lets it be removed and retried once. **No timestamps** (determinism). Without a provider the lock is kept (fail-closed) |
+| `zts dev` had no RPC at all | The `zts init` template ships `State` / `Commands.increment` / `rpc.Schema` and an `invoke("increment")` call; `zts dev` prints "browser preview only — Zig commands need `zts build`" |
+| Native backend wiring was scattered | `zts_tauri`'s `RuntimeProviders` gathers path / monitor / menu / tray / dialog / clipboard / pid, applied in one place by `DesktopRuntime.create()`; `applyToPluginOptions()` configures the P2 state too |
+| GTK tray depended on deprecated `GtkStatusIcon` | `libayatana-appindicator3`'s `AppIndicator` is now the primary backend (already a CI dependency). `GtkStatusIcon` is demoted to a compatibility fallback, keeping the click emitter identical on all three OSes |
+
+> [!NOTE]
+> This does **not** mean every Tauri feature now exists. The placeholders in §2 (`pid=0`,
+> `os.version`, `locale=null`, in-app notifications, `Unsupported` from `opener`) and the unsupported
+> HTTP / Updater / SQL plugins remain **deliberate design choices**.
+
+### Wiring it once, in the app
+
+```zig
+var providers: tauri.RuntimeProviders = .{
+    .menu = tauri_native.menuBackend(),
+    .tray = tauri_native.trayBackend(),
+    .dialog = tauri_native.dialogBackend(),
+    .clipboard = tauri_native.clipboardBackend(),
+    .current_pid = tauri_native.currentPid,
+    .process_alive = tauri_native.processAlive,
+};
+providers.detectPath(allocator, init.environ_map, exe_dir, cwd, app.identifier);
+const runtime = try tauri.app_runtime.DesktopRuntime.create(allocator, init.io, .{
+    .providers = providers,
+    .environ = init.environ_map,
+});
+var plugin_options: tauri.plugins.Options = .{ .store_path = "state.json" };
+providers.applyToPluginOptions(&plugin_options);
+```
+
 <!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

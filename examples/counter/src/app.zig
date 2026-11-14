@@ -236,7 +236,7 @@ fn dispatchJson(
 }
 
 test "counter: getState defaults, increment/decrement honour step, reset zeroes the count" {
-    const plugins = try tauri.CorePluginStates.create(testing.allocator, testing.io, app_config, path_config);
+    const plugins = try tauri.CorePluginStates.create(testing.allocator, testing.io, app_config, path_config, .{});
     defer plugins.destroy();
     var state = newTestState(testing.allocator, plugins);
     defer state.deinit();
@@ -305,7 +305,7 @@ test "counter: getState defaults, increment/decrement honour step, reset zeroes 
 }
 
 test "counter: setStep rejects 0/101 and leaves state untouched; equal step does not emit" {
-    const plugins = try tauri.CorePluginStates.create(testing.allocator, testing.io, app_config, path_config);
+    const plugins = try tauri.CorePluginStates.create(testing.allocator, testing.io, app_config, path_config, .{});
     defer plugins.destroy();
     var state = newTestState(testing.allocator, plugins);
     defer state.deinit();
@@ -344,7 +344,7 @@ test "counter: setStep rejects 0/101 and leaves state untouched; equal step does
 }
 
 test "counter: i53 overflow is rejected instead of trapping" {
-    const plugins = try tauri.CorePluginStates.create(testing.allocator, testing.io, app_config, path_config);
+    const plugins = try tauri.CorePluginStates.create(testing.allocator, testing.io, app_config, path_config, .{});
     defer plugins.destroy();
     var state = newTestState(testing.allocator, plugins);
     defer state.deinit();
@@ -386,7 +386,7 @@ test "counter: i53 overflow is rejected instead of trapping" {
 }
 
 test "counter: unknown command is rejected and every mutation emits `counter:changed`" {
-    const plugins = try tauri.CorePluginStates.create(testing.allocator, testing.io, app_config, path_config);
+    const plugins = try tauri.CorePluginStates.create(testing.allocator, testing.io, app_config, path_config, .{});
     defer plugins.destroy();
     var state = newTestState(testing.allocator, plugins);
     defer state.deinit();

@@ -43,6 +43,31 @@ pub const PluginError = error{
     InvalidValue,
     /// The store / lock file could not be written.
     PersistFailed,
+    /// `restore()` found no saved file (normal on first launch).
+    StoreMissing,
+    /// The saved file exists but cannot be read.
+    StoreUnreadable,
+    /// The saved file is not a JSON object of raw values.
+    StoreMalformed,
+};
+
+/// Result of the store restore attempted at startup. The app can inspect this instead of an
+/// empty state appearing silently after an unreadable or corrupt file.
+pub const RestoreDiagnostics = struct {
+    pub const Status = enum {
+        /// The saved file was read and every key restored.
+        ok,
+        /// No saved file exists yet (normal on first launch).
+        missing,
+        /// The saved file exists but could not be read.
+        unreadable,
+        /// The saved file is not a JSON object of raw values.
+        malformed,
+    };
+    /// What happened to the saved file.
+    status: Status = .ok,
+    /// How many keys were restored (0 unless `status == .ok`).
+    restored_keys: usize = 0,
 };
 
 /// Maximum number of log lines / notifications retained, so a long-running app cannot grow
@@ -85,10 +110,22 @@ pub const Options = struct {
     argv: []const []const u8 = &.{},
     /// JSON file the store is persisted to. `null` = in-memory only.
     store_path: ?[]const u8 = null,
-    /// Advisory lock file for `single-instance`. `null` = in-memory only.
+    /// Advisory lock file for `single-instance`. `null` = in-memory only (always primary).
     lock_path: ?[]const u8 = null,
     /// Optional provider for `plugin:opener` / `shell`.
     opener: OpenerProvider = .{},
+    /// Persist after every mutating store command. `false` restores the explicit-`save`-only
+    /// behaviour; `store_path == null` makes this a no-op.
+    autosave: bool = true,
+    /// Where startup restore diagnostics are recorded (may be `null`).
+    restore_diagnostics: ?*RestoreDiagnostics = null,
+    /// Returns this process's id. Required, together with `process_alive`, for stale-lock
+    /// recovery. Supplied by `zts_tauri_native.providers()`; Pure Zig callers leave it `null`.
+    current_pid: ?*const fn () u32 = null,
+    /// Whether `pid` still names a live process. `null` = fail-closed (keep the lock).
+    process_alive: ?*const fn (u32, ?*anyopaque) bool = null,
+    /// Opaque pointer handed to `process_alive`.
+    process_alive_ctx: ?*anyopaque = null,
 };
 
 /// One state object can back every P2 namespace. All owned strings live in `allocator`; a HashMap
@@ -118,6 +155,18 @@ pub const PluginState = struct {
     lock_held: bool = false,
     /// Exit code recorded by `plugin:process|exit`, or `null`.
     requested_exit_code: ?i32 = null,
+    /// Persist after every mutating store command (see `Options.autosave`).
+    autosave: bool = true,
+    /// Where startup restore diagnostics are recorded.
+    restore_diagnostics: ?*RestoreDiagnostics = null,
+    /// True while `restore()` is replaying a file: do not write it back on every key.
+    restoring: bool = false,
+    /// OS process-id provider for the single-instance lock.
+    current_pid: ?*const fn () u32 = null,
+    /// OS liveness provider for stale-lock recovery.
+    process_alive: ?*const fn (u32, ?*anyopaque) bool = null,
+    /// Opaque pointer handed to `process_alive`.
+    process_alive_ctx: ?*anyopaque = null,
 
     /// Creates an empty, deterministic instance.
     pub fn init(allocator: Allocator, io: Io, options: Options) PluginError!PluginState {
@@ -128,9 +177,16 @@ pub const PluginState = struct {
             .argv = options.argv,
             .opener = options.opener,
             .lock_path = options.lock_path,
+            .autosave = options.autosave,
+            .restore_diagnostics = options.restore_diagnostics,
+            .current_pid = options.current_pid,
+            .process_alive = options.process_alive,
+            .process_alive_ctx = options.process_alive_ctx,
         };
         errdefer self.deinit();
-        if (options.store_path) |_| self.restore() catch {};
+        if (options.store_path) |_| {
+            self.restore() catch {};
+        }
         return self;
     }
 
@@ -165,6 +221,14 @@ pub const PluginState = struct {
             self.allocator.free(entry.key);
             self.allocator.free(entry.value);
         }
+        try self.autoSave();
+    }
+
+    /// Writes the store back after a mutation when `autosave` is on. No-op during `restore()`
+    /// and when there is no `store_path`.
+    fn autoSave(self: *PluginState) PluginError!void {
+        if (!self.autosave or self.restoring or self.store_path == null) return;
+        try self.save();
     }
 
     fn appendLog(self: *PluginState, level: []const u8, message: []const u8) PluginError!void {
@@ -203,39 +267,100 @@ pub const PluginState = struct {
         Io.Dir.cwd().writeFile(self.io, .{ .sub_path = path, .data = bytes }) catch return error.PersistFailed;
     }
 
-    /// Loads previously persisted state from disk; a missing file is not an error.
+    /// Records a restore outcome for the app. A missing/corrupt file still starts empty, but it
+    /// is no longer swallowed by `catch {}`: `RestoreDiagnostics` says why.
+    fn recordRestore(self: *PluginState, status: RestoreDiagnostics.Status, keys: usize) void {
+        if (self.restore_diagnostics) |d| {
+            d.status = status;
+            d.restored_keys = keys;
+        }
+    }
+
+    /// Loads previously persisted state from disk, reporting why it failed when it does.
     pub fn restore(self: *PluginState) PluginError!void {
         const path = self.store_path orelse return;
-        const bytes = Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(8 * 1024 * 1024)) catch
-            return error.PersistFailed;
+        const bytes = Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(8 * 1024 * 1024)) catch |err| {
+            const status: RestoreDiagnostics.Status = switch (err) {
+                error.FileNotFound => .missing,
+                else => .unreadable,
+            };
+            self.recordRestore(status, 0);
+            return switch (err) {
+                error.FileNotFound => error.StoreMissing,
+                else => error.StoreUnreadable,
+            };
+        };
         defer self.allocator.free(bytes);
         var arena = std.heap.ArenaAllocator.init(self.allocator);
         defer arena.deinit();
-        const parsed = std.json.parseFromSliceLeaky(std.json.Value, arena.allocator(), bytes, .{}) catch
-            return error.PersistFailed;
-        if (parsed != .object) return error.PersistFailed;
+        const parsed = std.json.parseFromSliceLeaky(std.json.Value, arena.allocator(), bytes, .{}) catch {
+            self.recordRestore(.malformed, 0);
+            return error.StoreMalformed;
+        };
+        if (parsed != .object) {
+            self.recordRestore(.malformed, 0);
+            return error.StoreMalformed;
+        }
+        // Replaying the file must not immediately write it back on every key.
+        self.restoring = true;
+        defer self.restoring = false;
+        var count: usize = 0;
         var it = parsed.object.iterator();
         while (it.next()) |entry| {
             const raw = std.json.Stringify.valueAlloc(arena.allocator(), entry.value_ptr.*, .{}) catch continue;
             try self.setRaw(entry.key_ptr.*, raw);
+            count += 1;
         }
+        self.recordRestore(.ok, count);
+    }
+
+    /// The lock file records the owning pid so a crash can be detected without a timestamp.
+    pub const lock_magic = "zts-lock-v2";
+
+    /// Removes a lock file only when it belongs to a process that is demonstrably gone.
+    /// Without both OS providers this is fail-closed: the lock is kept and `false` is returned.
+    fn reclaimStaleLock(self: *PluginState, path: []const u8) bool {
+        const pid_fn = self.current_pid orelse return false;
+        const alive_fn = self.process_alive orelse return false;
+        const bytes = Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(256)) catch return false;
+        defer self.allocator.free(bytes);
+        var it = std.mem.splitScalar(u8, std.mem.trim(u8, bytes, " \t\r\n"), ' ');
+        const magic = it.next() orelse return false;
+        if (!std.mem.eql(u8, magic, lock_magic)) return false;
+        const pid_text = it.next() orelse return false;
+        const pid = std.fmt.parseInt(u32, pid_text, 10) catch return false;
+        if (pid == 0 or pid == pid_fn()) return false;
+        if (alive_fn(pid, self.process_alive_ctx)) return false;
+        Io.Dir.cwd().deleteFile(self.io, path) catch return false;
+        return true;
     }
 
     /// Tries an exclusive lock file. `true` means this process is the primary instance.
+    /// A leftover file from a dead process is reclaimed once; an unknown/live owner keeps it.
     pub fn requestLock(self: *PluginState) PluginError!bool {
         if (self.lock_held) return true;
         const path = self.lock_path orelse {
-            if (self.lock_held) return true;
             self.lock_held = true;
             return true;
         };
-        const file = Io.Dir.cwd().createFile(self.io, path, .{ .exclusive = true }) catch |err| switch (err) {
-            error.PathAlreadyExists => return false,
-            else => return error.PersistFailed,
-        };
-        file.close(self.io);
-        self.lock_held = true;
-        return true;
+        var attempt: usize = 0;
+        while (attempt < 2) : (attempt += 1) {
+            const file = Io.Dir.cwd().createFile(self.io, path, .{ .exclusive = true }) catch |err| switch (err) {
+                error.PathAlreadyExists => {
+                    if (self.reclaimStaleLock(path)) continue;
+                    return false;
+                },
+                else => return error.PersistFailed,
+            };
+            var buf: [64]u8 = undefined;
+            const pid: u32 = if (self.current_pid) |f| f() else 0;
+            const content = std.fmt.bufPrint(&buf, lock_magic ++ " {d}\n", .{pid}) catch lock_magic ++ " 0\n";
+            file.writeStreamingAll(self.io, content) catch {};
+            file.close(self.io);
+            self.lock_held = true;
+            return true;
+        }
+        return false;
     }
 
     /// Releases the lock and removes the lock file.
@@ -271,23 +396,25 @@ pub const StoreCommands = struct {
     }
 
     /// Removes `key`; returns whether it existed.
-    pub fn delete(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8 }) bool {
+    pub fn delete(_: *rpc.Ctx, state: *PluginState, args: struct { key: []const u8 }) PluginError!bool {
         if (state.store.fetchRemove(args.key)) |entry| {
             state.allocator.free(entry.key);
             state.allocator.free(entry.value);
+            try state.autoSave();
             return true;
         }
         return false;
     }
 
-    /// Drops every stored key from memory. Call `save` to persist; this does not write.
-    pub fn clear(_: *rpc.Ctx, state: *PluginState) void {
+    /// Drops every stored key and persists the empty state when `autosave` is on.
+    pub fn clear(_: *rpc.Ctx, state: *PluginState) PluginError!void {
         var it = state.store.iterator();
         while (it.next()) |entry| {
             state.allocator.free(entry.key_ptr.*);
             state.allocator.free(entry.value_ptr.*);
         }
         state.store.clearRetainingCapacity();
+        try state.autoSave();
     }
 
     /// Whether `key` is present.
@@ -910,4 +1037,99 @@ test "P2: store persistence and single-instance lock file are deterministic acro
         try testing.expect(try second.requestLock());
         try second.releaseLock();
     }
+}
+
+test "M6-04: autosave persists mutations and restore diagnostics report a corrupt file" {
+    const store_path = "zts-m6-04-store.json";
+    defer std.Io.Dir.cwd().deleteFile(testing.io, store_path) catch {};
+
+    var diagnostics = RestoreDiagnostics{};
+    {
+        // A valid saved file restores cleanly; a first launch with no file reports `.missing`.
+        try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = store_path, .data = "{}\n" });
+        var state = try PluginState.init(testing.allocator, testing.io, .{
+            .store_path = store_path,
+            .autosave = true,
+            .restore_diagnostics = &diagnostics,
+        });
+        defer state.deinit();
+        try state.setRaw("answer", "42");
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(testing.io, store_path, testing.allocator, .limited(4096));
+        defer testing.allocator.free(bytes);
+        try testing.expect(std.mem.indexOf(u8, bytes, "\"answer\":42") != null);
+        try testing.expectEqual(RestoreDiagnostics.Status.ok, diagnostics.status);
+    }
+    {
+        // A corrupt file must not be swallowed silently: the app sees `.malformed`.
+        try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = store_path, .data = "not-json" });
+        var broken = RestoreDiagnostics{};
+        var state = try PluginState.init(testing.allocator, testing.io, .{
+            .store_path = store_path,
+            .restore_diagnostics = &broken,
+        });
+        defer state.deinit();
+        try testing.expectEqual(RestoreDiagnostics.Status.malformed, broken.status);
+        try testing.expectEqual(@as(usize, 0), broken.restored_keys);
+    }
+    {
+        // `autosave = false` restores the explicit-save-only contract.
+        try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = store_path, .data = "{}\n" });
+        var state = try PluginState.init(testing.allocator, testing.io, .{
+            .store_path = store_path,
+            .autosave = false,
+        });
+        defer state.deinit();
+        try state.setRaw("later", "1");
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(testing.io, store_path, testing.allocator, .limited(4096));
+        defer testing.allocator.free(bytes);
+        try testing.expectEqualStrings("{}\n", bytes);
+        try state.save();
+        const saved = try std.Io.Dir.cwd().readFileAlloc(testing.io, store_path, testing.allocator, .limited(4096));
+        defer testing.allocator.free(saved);
+        try testing.expect(std.mem.indexOf(u8, saved, "\"later\":1") != null);
+    }
+}
+
+test "M6-04: a lock file owned by a dead process is reclaimed once" {
+    const lock_path = "zts-m6-04.lock";
+    defer std.Io.Dir.cwd().deleteFile(testing.io, lock_path) catch {};
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = lock_path,
+        .data = "zts-lock-v2 999999\n",
+    });
+
+    const Helpers = struct {
+        fn pid() u32 {
+            return 111;
+        }
+        fn dead(process_id: u32, _: ?*anyopaque) bool {
+            return process_id == 111;
+        }
+        fn allAlive(_: u32, _: ?*anyopaque) bool {
+            return true;
+        }
+    };
+
+    var state = try PluginState.init(testing.allocator, testing.io, .{
+        .lock_path = lock_path,
+        .current_pid = Helpers.pid,
+        .process_alive = Helpers.dead,
+    });
+    defer state.deinit();
+    try testing.expect(try state.requestLock());
+    try testing.expect(state.lock_held);
+    try state.releaseLock();
+
+    // A live owner keeps the lock, and no provider means fail-closed.
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = lock_path,
+        .data = "zts-lock-v2 999999\n",
+    });
+    var guarded = try PluginState.init(testing.allocator, testing.io, .{
+        .lock_path = lock_path,
+        .current_pid = Helpers.pid,
+        .process_alive = Helpers.allAlive,
+    });
+    defer guarded.deinit();
+    try testing.expect(!(try guarded.requestLock()));
 }

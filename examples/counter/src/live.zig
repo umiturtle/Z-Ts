@@ -63,7 +63,7 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    const plugins = try tauri.CorePluginStates.create(gpa, io, app.app_config, app.path_config);
+    const plugins = try tauri.CorePluginStates.create(gpa, io, app.app_config, app.path_config, .{});
     // `plugins` / `state` / `bound` / `srv` / `bh` はプロセス終了まで生存させる（サーバ常駐）。
     var state = Impl.State.init(gpa, plugins);
     var bound = Impl.Spec.bindAll(tauri.withCorePlugins(Impl.Schema), &state, plugins);

@@ -1,10 +1,9 @@
-//! Linux system-tray icons via GTK3 `GtkStatusIcon`.
+//! Linux system-tray icons via `libayatana-appindicator3` (GTK4-safe) with a GTK3 fallback.
 //!
-//! `GtkStatusIcon` is deprecated (GTK4 removed it) but it is still shipped by every GTK 3.24
-//! desktop and — unlike `libayatana-appindicator` — needs **no extra system dependency**, which
-//! keeps `zig build -Dgtk=true` working on a bare runner. Upstream `tauri` uses
-//! `libappindicator`; the wire layer above is identical either way, so swapping the widget later
-//! does not touch the plugin.
+//! `AppIndicator` is the primary, supported backend and matches upstream `tauri`'s
+//! `libappindicator`. `GtkStatusIcon` (removed in GTK 4) survives only as a compatibility
+//! fallback so a host without the indicator library keeps the same click emitter. The wire layer
+//! above is identical either way.
 //!
 //! Each tray is one `GtkStatusIcon` plus a `GtkMenu` built from the tray's menu snapshot with the
 //! same builder as the menu bar (`menu/native_gtk.zig`).
@@ -24,6 +23,8 @@ const gpa = std.heap.page_allocator;
 const Entry = struct {
     id: []const u8, // owned
     icon: ?*gtk.GtkStatusIcon = null,
+    /// Preferred GTK4-safe tray representation.
+    indicator: ?*gtk.AppIndicator = null,
     menu: ?*gtk.GtkWidget = null,
     visible: bool = true,
     tooltip: ?[]const u8 = null, // owned
@@ -111,6 +112,16 @@ fn createIcon(options: tray.TrayIconOptions) Error!?*gtk.GtkStatusIcon {
     return gtk.gtk_status_icon_new_from_icon_name(z);
 }
 
+/// Creates the preferred AppIndicator. A missing library simply returns `null` and leaves the
+/// `GtkStatusIcon` fallback in charge.
+fn createIndicator(options: tray.TrayIconOptions) ?*gtk.AppIndicator {
+    const id_z = cstr.allocZ(gpa, options.id orelse "zts-tray") catch return null;
+    defer gpa.free(id_z);
+    const icon_z = cstr.allocZ(gpa, "image-missing") catch return null;
+    defer gpa.free(icon_z);
+    return gtk.app_indicator_new(id_z, icon_z, gtk.APP_INDICATOR_CATEGORY_APPLICATION_STATUS);
+}
+
 fn freeEntry(entry: *Entry) void {
     gpa.free(entry.id);
     if (entry.tooltip) |t| gpa.free(t);
@@ -130,6 +141,7 @@ fn buildMenu(snapshot: menu.Snapshot) Error!*gtk.GtkWidget {
 fn apply(entry: *Entry, options: tray.TrayIconOptions, snapshot: ?menu.Snapshot) Error!void {
     const icon = entry.icon orelse (try createIcon(options)) orelse return error.Unavailable;
     entry.icon = icon;
+    if (entry.indicator == null) entry.indicator = createIndicator(options);
 
     if (options.tooltip) |tooltip| {
         if (entry.tooltip) |old| gpa.free(old);
@@ -137,6 +149,7 @@ fn apply(entry: *Entry, options: tray.TrayIconOptions, snapshot: ?menu.Snapshot)
         const z = cstr.allocZ(gpa, tooltip) catch return error.OutOfMemory;
         defer gpa.free(z);
         gtk.gtk_status_icon_set_tooltip_text(icon, z);
+        if (entry.indicator) |ind| gtk.app_indicator_set_title(ind, z);
     }
     if (options.title) |title| {
         if (entry.title) |old| gpa.free(old);
@@ -144,12 +157,20 @@ fn apply(entry: *Entry, options: tray.TrayIconOptions, snapshot: ?menu.Snapshot)
         const z = cstr.allocZ(gpa, title) catch return error.OutOfMemory;
         defer gpa.free(z);
         gtk.gtk_status_icon_set_title(icon, z);
+        if (entry.indicator) |ind| gtk.app_indicator_set_title(ind, z);
     }
     if (snapshot) |menu_snapshot| {
         if (entry.menu) |old| gtk.gtk_widget_destroy(old);
         entry.menu = try buildMenu(menu_snapshot);
+        if (entry.indicator) |ind| gtk.app_indicator_set_menu(ind, entry.menu.?);
     }
     gtk.gtk_status_icon_set_visible(icon, @intFromBool(entry.visible));
+    if (entry.indicator) |ind| {
+        gtk.app_indicator_set_status(ind, if (entry.visible)
+            gtk.APP_INDICATOR_STATUS_ACTIVE
+        else
+            gtk.APP_INDICATOR_STATUS_PASSIVE);
+    }
 }
 
 fn create(_: ?*anyopaque, id: []const u8, options: tray.TrayIconOptions, snapshot: ?menu.Snapshot) Error!void {
@@ -181,6 +202,7 @@ fn remove(_: ?*anyopaque, id: []const u8) Error!void {
     for (icons.items, 0..) |entry, i| {
         if (!std.mem.eql(u8, entry.id, id)) continue;
         if (entry.icon) |icon| gtk.g_object_unref(@ptrCast(icon));
+        if (entry.indicator) |ind| gtk.g_object_unref(@ptrCast(ind));
         if (entry.menu) |popup_menu| gtk.gtk_widget_destroy(popup_menu);
         freeEntry(entry);
         gpa.destroy(entry);
@@ -194,6 +216,12 @@ fn setVisible(_: ?*anyopaque, id: []const u8, visible: bool) Error!void {
     const entry = find(id) orelse return error.NotFound;
     entry.visible = visible;
     if (entry.icon) |icon| gtk.gtk_status_icon_set_visible(icon, @intFromBool(visible));
+    if (entry.indicator) |ind| {
+        gtk.app_indicator_set_status(ind, if (visible)
+            gtk.APP_INDICATOR_STATUS_ACTIVE
+        else
+            gtk.APP_INDICATOR_STATUS_PASSIVE);
+    }
 }
 
 fn setEmitterImpl(_: ?*anyopaque, next: tray.Emitter) void {
@@ -212,15 +240,22 @@ pub fn backend() tray.Backend {
     return .{ .vtable = &vtable };
 }
 
-/// Test helper: the live `GtkStatusIcon` for `id`.
+/// Test helper: the live `GtkStatusIcon` for `id` (compatibility fallback).
 pub fn statusIconFor(id: []const u8) ?*gtk.GtkStatusIcon {
     const entry = find(id) orelse return null;
     return entry.icon;
 }
 
+/// Test helper: the preferred AppIndicator for `id`, when the library is available.
+pub fn indicatorFor(id: []const u8) ?*gtk.AppIndicator {
+    const entry = find(id) orelse return null;
+    return entry.indicator;
+}
+
 pub fn resetForTesting() void {
     menu_gtk.popdown();
     for (icons.items) |entry| {
+        if (entry.indicator) |ind| gtk.g_object_unref(@ptrCast(ind));
         freeEntry(entry);
         gpa.destroy(entry);
     }

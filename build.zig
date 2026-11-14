@@ -251,6 +251,8 @@ pub fn build(b: *std.Build) void {
         tauri_native_mod.linkSystemLibrary("gtk+-3.0", .{});
         tauri_native_mod.linkSystemLibrary("gdk-3.0", .{});
         tauri_native_mod.linkSystemLibrary("glib-2.0", .{});
+        // GTK4-safe tray backend; `GtkStatusIcon` stays only as a compatibility fallback.
+        tauri_native_mod.linkSystemLibrary("ayatana-appindicator3-0.1", .{});
     }
     if (native_macos) {
         tauri_native_mod.addCSourceFile(.{

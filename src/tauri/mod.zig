@@ -29,6 +29,8 @@ pub const js_bootstrap = @import("js_bootstrap.zig");
 pub const menu = @import("menu/mod.zig");
 pub const path = @import("path.zig");
 pub const plugins = @import("plugins.zig");
+/// One bundle for every runtime provider (paths, monitors, native backends, pid).
+pub const providers = @import("providers.zig");
 pub const protocol = @import("protocol.zig");
 pub const resources = @import("resources.zig");
 pub const tray = @import("tray/mod.zig");
@@ -54,6 +56,8 @@ pub const IsolationKey = isolation.Key;
 pub const AssetScope = asset_scope.AssetScope;
 pub const OsTarget = js_bootstrap.OsTarget;
 pub const PathState = path.PathState;
+/// Provider bundle applied once by `DesktopRuntime.create()`.
+pub const RuntimeProviders = providers.RuntimeProviders;
 pub const ProtocolConfig = protocol.ProtocolConfig;
 pub const ProtocolRouter = protocol.ProtocolRouter;
 pub const ResourceTable = resources.ResourceTable;
@@ -118,9 +122,10 @@ pub const CorePluginStates = struct {
         io: Io,
         app_cfg: AppConfig,
         path_cfg: PathState,
+        provider_bundle: RuntimeProviders,
     ) Allocator.Error!*CorePluginStates {
         const self = try allocator.create(CorePluginStates);
-        var effective_paths = path_cfg;
+        var effective_paths = provider_bundle.path orelse path_cfg;
         if (std.mem.eql(u8, effective_paths.app_identifier, "com.zts.app")) {
             effective_paths.app_identifier = app_cfg.identifier;
         }
@@ -144,6 +149,11 @@ pub const CorePluginStates = struct {
         self.events.webview_parent = lookupWebviewParent;
         self.events.webview_parent_ctx = &self.webviews;
         self.events.window_labels_ctx = &self.windows;
+        // The single wiring point: monitor provider, native menu and native tray all arrive
+        // together. Without a bundle every backend stays on its deterministic Stub.
+        if (provider_bundle.monitor) |provider| try self.monitors.setProvider(provider);
+        if (provider_bundle.menu) |backend| _ = self.withMenuBackend(backend);
+        if (provider_bundle.tray) |backend| _ = self.withTrayBackend(backend);
         return self;
     }
 
@@ -162,6 +172,7 @@ pub const CorePluginStates = struct {
     /// Frees the bundle after tearing every plugin down.
     pub fn destroy(self: *CorePluginStates) void {
         const alloc = self.windows.allocator;
+        self.paths.deinit(alloc);
         // Menu nodes are owned by `resources`; closing the table detaches them from `menu_state`
         // first, so the bookkeeping maps must be freed afterwards.
         self.resources.deinit();

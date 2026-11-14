@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "e7e8cd9",
+    "commit": "9d7363a",
     "zts_version": "0.1.1",
     "zig_version": "0.17.0",
     "checks": [
@@ -30,7 +30,7 @@
       "scripts/check-docs.py",
       "scripts/gen-framework-tutorials.py"
     ],
-    "implementation_sha256": "c94c6622b6abe95396470495da107e665ea547a190f512c6a9d39c616488cec6"
+    "implementation_sha256": "cf9126648b915cf06607b61fc78190e6b5a830c721ad790102abd0cac15e7a4a"
   },
   "pages": [
     {
@@ -64,10 +64,10 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_body_sha256": "1d05ec2edee7e4198504d1deb36e01d3412d0eb482b8cbda70dad8bb155505b8",
-      "en_body_sha256": "1f7f012129ca73ad9b9ac5ea89008a15beb300aebf2c149bfba78032ab82dcdb",
-      "ja_sha256": "bea64b5cc914fd343cf16aa1ef4527f0c351e4bb823e5fedb77f700005cfc0b0",
-      "en_sha256": "6882f35a2e8ecc6b7e9ba909b52abe19a6d3921b0985dbd590961637b532b993"
+      "ja_body_sha256": "6437c5ac1fe902853ca69c35a38f2a1f9ad4a891cf3961841fb4e85368f76079",
+      "en_body_sha256": "86e63cb6b75bab7fceac1aadfe88f218543e1ca7631fca4e36ac3088f9b67009",
+      "ja_sha256": "b93fa6e9ad33ef8cd788341abc0cc6bfad8f149bd0f2225555500088a66ef11a",
+      "en_sha256": "f9e4500651faa8cddb5905bad53f8b804d0c0e30cdd4dff58b4c8aa98b3d0e1d"
     },
     {
       "ja": "docs/contributing/gitflow.md",
@@ -298,10 +298,10 @@
       "ja": "docs/learn/ja/start.md",
       "en": "docs/learn/en/start.md",
       "last_rewritten": "2026-10-21",
-      "ja_body_sha256": "5c22e27c49a40d3839b4f69f0aee872cf0ce2b1868827d62d2f2b9155c33782c",
-      "en_body_sha256": "56a353579a5d307c619dc7b0df24cb486c3ad1f1bbffd6c84249105f76868efe",
-      "ja_sha256": "62cd4e70265a93a048012f0cfe10b639c0814ffec5ed3afba8461802b687af5a",
-      "en_sha256": "90f1e7f2672998d0e9bea73878fcc74acc9b31051213406699c1f41c0216a6a6"
+      "ja_body_sha256": "81a14c2787d2ce6ba843066ed2931bae0b70c21e57fb3a758a4675d3bc4dc77b",
+      "en_body_sha256": "da6c52796ffb7a15c863ca533d13a31cf3f52996e86f4a0638e73c526e11ddef",
+      "ja_sha256": "262d52eca21a5295943ca62e318acb2ebcf56b3acbca95f45b6e5013250165b7",
+      "en_sha256": "e51578bb3a84b0d69bb54671a4c5efc65792b39906a602cbe3deb9627c6f67a9"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-angular.md",
@@ -604,10 +604,10 @@
       "ja": "docs/reference/compatibility.md",
       "en": "docs/reference/compatibility.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_body_sha256": "9c98b0cac12936c7391cb6b173d97d6e4ae64c065f97c02870d05d6c42b4c452",
-      "en_body_sha256": "be9df5762a173dd558af264b9a9542cbf399f59814340e0a065db8a1ff144922",
-      "ja_sha256": "7341baf06dfbd7182ee51f9e62cfb0f5de678f57d11325156b17df6c904984b5",
-      "en_sha256": "dbf9b17d8771908a30c0fbfc275dc34794455b15f2c853ebe9b0df0f9fba9e02"
+      "ja_body_sha256": "265d0cb9aa7e8ff8bcd0f3dd29258e2db26f884f0485a5fcc75696d6c50964ba",
+      "en_body_sha256": "990a8427e293cc500ac8c0b14d4933e20b3d6abf4be9c11c19240b337434a85d",
+      "ja_sha256": "8b65c0720960deb5ba9b20e8ae5142e9958b9f4f325290f8afda96bb343702c4",
+      "en_sha256": "9bcfe7d5f70b8738c698c2baf7b71669038d9be97d1ff25e4208c2e0d909bd8f"
     },
     {
       "ja": "docs/reference/tauri-internals.md",

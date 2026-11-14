@@ -465,3 +465,29 @@ pub fn creationOptions(cfg: WindowConfig) WindowCreationOptions {
         .window_effects_hash = if (cfg.window_effects_json) |j| std.hash.Wyhash.hash(0, j) else 0,
     };
 }
+
+/// Physical-pixel display information shared by all four backends. `zts_tauri_native` converts
+/// this into `tauri.monitor.Monitor`; keeping the primitive here means `zts_webview` still depends
+/// only on `zts_foundation`.
+pub const ScreenInfo = struct {
+    /// Left edge in physical pixels.
+    x: i32 = 0,
+    /// Top edge in physical pixels.
+    y: i32 = 0,
+    /// Full width in physical pixels.
+    width: u32 = 1920,
+    /// Full height in physical pixels.
+    height: u32 = 1080,
+    /// Usable height (excludes the menu bar / dock / taskbar).
+    work_height: u32 = 1040,
+    /// Device pixel ratio.
+    scale: f64 = 1.0,
+};
+
+/// Physical-pixel cursor position.
+pub const CursorInfo = struct {
+    /// Horizontal position in physical pixels.
+    x: i32 = 0,
+    /// Vertical position in physical pixels.
+    y: i32 = 0,
+};

@@ -166,4 +166,6 @@ my_app: 1 embedded assets
 用語で迷ったら [用語集](../../glossary.md)、動かないときは
 [トラブルシューティング](guides/troubleshooting.md) と [エラー索引](../../reference/errors.html) へ。
 
+> `zts dev` は `web/` をブラウザで配信する開発サーバーです。Zig 側のコマンドを確認するには `zts build` の実行ファイルを使ってください（[互換性の範囲](../../reference/compatibility.md)）。
+
 <!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

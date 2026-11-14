@@ -169,6 +169,7 @@ pub const COLOR_WINDOW = 5;
 
 pub const CW_USEDEFAULT: i32 = @bitCast(@as(u32, 0x8000_0000));
 pub const SM_CXSCREEN = 0;
+/// Primary display height in pixels (`GetSystemMetrics`).
 pub const SM_CYSCREEN = 1;
 
 pub const HTCLIENT = 1;
@@ -332,6 +333,8 @@ pub extern "user32" fn AdjustWindowRectEx(out: *RECT, style: DWORD, menu: BOOL, 
 pub extern "user32" fn GetDpiForWindow(hwnd: HWND) callconv(CC) UINT;
 pub extern "user32" fn SetProcessDpiAwarenessContext(ctx: isize) callconv(CC) BOOL;
 pub extern "user32" fn GetSystemMetrics(index: i32) callconv(CC) i32;
+pub extern "user32" fn GetCursorPos(point: *POINT) callconv(CC) BOOL;
+pub extern "user32" fn GetDpiForSystem() callconv(CC) UINT;
 pub extern "user32" fn LoadCursorW(instance: ?HINSTANCE, name: usize) callconv(CC) ?HCURSOR;
 pub extern "user32" fn SetCursor(cursor: ?HCURSOR) callconv(CC) ?HCURSOR;
 pub extern "user32" fn SetFocus(hwnd: HWND) callconv(CC) ?HWND;

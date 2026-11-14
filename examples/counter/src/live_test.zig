@@ -24,7 +24,7 @@ test "Live Preview: embedded frontend + counter RPC + SSE over real TCP" {
     const io = testing.io;
     const allocator = testing.allocator;
 
-    const plugins = try tauri.CorePluginStates.create(allocator, io, app.app_config, app.path_config);
+    const plugins = try tauri.CorePluginStates.create(allocator, io, app.app_config, app.path_config, .{});
     defer plugins.destroy();
 
     var state = Impl.State.init(allocator, plugins);
