@@ -115,7 +115,7 @@ fn createIcon(options: tray.TrayIconOptions) Error!?*gtk.GtkStatusIcon {
 /// Creates the preferred AppIndicator. A missing library simply returns `null` and leaves the
 /// `GtkStatusIcon` fallback in charge.
 fn createIndicator(options: tray.TrayIconOptions) ?*gtk.AppIndicator {
-    const id_z = cstr.allocZ(gpa, options.id) catch return null;
+    const id_z = cstr.allocZ(gpa, options.id orelse "zts-tray") catch return null;
     defer gpa.free(id_z);
     const icon_z = cstr.allocZ(gpa, "image-missing") catch return null;
     defer gpa.free(icon_z);
