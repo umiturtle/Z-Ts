@@ -163,4 +163,6 @@ rather build first**, jump straight to the tutorial and come back when a word st
 Stuck on a word? [Glossary](../../glossary.md). Stuck on an error?
 [Troubleshooting](guides/troubleshooting.md) and the [error index](../../reference/errors.html).
 
+> `zts dev` is a browser dev server for `web/`; verify Zig commands with the `zts build` executable (see [the compatibility scope](../../reference/compatibility.en.md)).
+
 <!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

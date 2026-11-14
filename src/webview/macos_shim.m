@@ -1205,3 +1205,31 @@ void zts_macos_window_capture(void *h, unsigned long long ident, void *userdata,
                                  }];
     }
 }
+
+// ---------------------------------------------------------------- monitor / cursor
+int zts_macos_screen_count(void) { return (int)[[NSScreen screens] count]; }
+
+void zts_macos_screen_at(int idx, double *x, double *y, double *w, double *h,
+                         double *work_h, double *scale) {
+    NSArray<NSScreen *> *screens = [NSScreen screens];
+    if (idx < 0 || idx >= (int)screens.count) {
+        *x = *y = *w = *h = *work_h = 0;
+        *scale = 1;
+        return;
+    }
+    NSScreen *s = screens[idx];
+    NSRect f = s.frame;
+    NSRect v = s.visibleFrame;
+    *x = f.origin.x;
+    *y = f.origin.y;
+    *w = f.size.width;
+    *h = f.size.height;
+    *work_h = v.size.height;
+    *scale = s.backingScaleFactor;
+}
+
+void zts_macos_cursor(double *x, double *y) {
+    NSPoint p = [NSEvent mouseLocation];
+    *x = p.x;
+    *y = p.y;
+}

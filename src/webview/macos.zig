@@ -81,6 +81,9 @@ const shim = struct {
         state_cb: StateCb,
     ) void;
     extern fn zts_macos_screen_visible_frame(h: ?*anyopaque, x: ?*f64, y: ?*f64, w: ?*f64, ht: ?*f64) void;
+    extern fn zts_macos_screen_count() c_int;
+    extern fn zts_macos_screen_at(idx: c_int, x: *f64, y: *f64, w: *f64, h: *f64, work_h: *f64, scale: *f64) void;
+    extern fn zts_macos_cursor(x: *f64, y: *f64) void;
 
     extern fn zts_macos_register_scheme(h: ?*anyopaque, scheme: [*:0]const u8, userdata: ?*anyopaque, cb: SchemeCb) void;
     extern fn zts_macos_scheme_respond(
@@ -845,6 +848,43 @@ pub const MacOsBackend = struct {
             (screen.height - size.height.v) / 2.0,
         ));
         (try self.requireWindow(win_id)).creation.center = true;
+    }
+
+    /// Physical-pixel display list from `NSScreen.screens` (multi-monitor + backingScaleFactor).
+    pub fn screens(self: *MacOsBackend, allocator: Allocator) Allocator.Error![]types.ScreenInfo {
+        _ = self;
+        const n = shim.zts_macos_screen_count();
+        if (n <= 0) return allocator.alloc(types.ScreenInfo, 0);
+        const out = try allocator.alloc(types.ScreenInfo, @intCast(n));
+        var i: c_int = 0;
+        while (i < n) : (i += 1) {
+            var x: f64 = 0;
+            var y: f64 = 0;
+            var w: f64 = 0;
+            var h: f64 = 0;
+            var work: f64 = 0;
+            var scale: f64 = 1;
+            shim.zts_macos_screen_at(i, &x, &y, &w, &h, &work, &scale);
+            const slot: usize = @intCast(i);
+            out[slot] = .{
+                .x = @intFromFloat(x),
+                .y = @intFromFloat(y),
+                .width = @intFromFloat(@max(0, w)),
+                .height = @intFromFloat(@max(0, h)),
+                .work_height = @intFromFloat(@max(0, work)),
+                .scale = if (scale > 0) scale else 1,
+            };
+        }
+        return out;
+    }
+
+    /// Physical-pixel cursor position from `NSEvent.mouseLocation`.
+    pub fn cursorPosition(self: *MacOsBackend) types.CursorInfo {
+        _ = self;
+        var x: f64 = 0;
+        var y: f64 = 0;
+        shim.zts_macos_cursor(&x, &y);
+        return .{ .x = @intFromFloat(x), .y = @intFromFloat(y) };
     }
 
     /// Cocoa honours `hiddenTitle`, `titleBarStyle`, `userAgent` and

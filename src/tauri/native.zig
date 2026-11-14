@@ -156,3 +156,67 @@ test "the active backend for this target is reported and constructible" {
         try std.testing.expectError(error.Unavailable, clipboardBackend().readText(arena.allocator()));
     }
 }
+
+// ---------------------------------------------------------------------------
+// One-call provider bundle (task 6) + OS process-id helpers (task 4)
+// ---------------------------------------------------------------------------
+
+/// POSIX process-id / liveness helpers. Compiled only for the GTK / Cocoa builds, which link libc.
+const posix_proc = if (is_gtk or is_macos) struct {
+    extern "c" fn getpid() c_int;
+    extern "c" fn kill(pid: c_int, sig: c_int) c_int;
+
+    pub fn pid() u32 {
+        return @intCast(getpid());
+    }
+    /// `kill(pid, 0)` performs no signal delivery — it only asks whether the process exists.
+    pub fn alive(process_id: u32, _: ?*anyopaque) bool {
+        return kill(@intCast(process_id), 0) == 0;
+    }
+} else struct {
+    pub fn pid() u32 {
+        return 0;
+    }
+    /// Unknown host: keep the lock (fail-closed) rather than reclaiming it by accident.
+    pub fn alive(_: u32, _: ?*anyopaque) bool {
+        return true;
+    }
+};
+
+const win_proc = if (is_win32) struct {
+    extern "kernel32" fn GetCurrentProcessId() callconv(.winapi) u32;
+    extern "kernel32" fn OpenProcess(access: u32, inherit: i32, pid: u32) callconv(.winapi) ?*anyopaque;
+    extern "kernel32" fn CloseHandle(handle: ?*anyopaque) callconv(.winapi) i32;
+
+    pub fn pid() u32 {
+        return GetCurrentProcessId();
+    }
+    /// `PROCESS_QUERY_LIMITED_INFORMATION` (0x1000) is enough to prove the process exists.
+    pub fn alive(process_id: u32, _: ?*anyopaque) bool {
+        const handle = OpenProcess(0x1000, 0, process_id) orelse return false;
+        _ = CloseHandle(handle);
+        return true;
+    }
+} else struct {
+    pub fn pid() u32 {
+        return posix_proc.pid();
+    }
+    pub fn alive(process_id: u32, ctx: ?*anyopaque) bool {
+        return posix_proc.alive(process_id, ctx);
+    }
+};
+
+/// This process's id, or `0` on a host without a provider.
+pub fn currentPid() u32 {
+    return if (is_win32) win_proc.pid() else posix_proc.pid();
+}
+
+/// Whether `pid` still names a live process. Always fail-closed when unknown.
+pub fn processAlive(process_id: u32, ctx: ?*anyopaque) bool {
+    return if (is_win32) win_proc.alive(process_id, ctx) else posix_proc.alive(process_id, ctx);
+}
+
+// The four backend accessors above plus `currentPid` / `processAlive` are the complete native set.
+// Applications put them into a `tauri.RuntimeProviders` once; `DesktopRuntime.create()` applies
+// the whole bundle. `native.zig` deliberately does not `@import("zts_tauri")`: its own subtree
+// shares files with that module, and Zig 0.17 rejects a file belonging to two modules at once.

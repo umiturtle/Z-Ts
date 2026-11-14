@@ -160,6 +160,17 @@ pub extern "c" fn gtk_widget_get_scale_factor(widget: *GtkWidget) c_int;
 pub extern "c" fn gtk_window_get_screen(window: *GtkWindow) ?*GdkScreen;
 pub extern "c" fn gdk_screen_get_primary_monitor(screen: *GdkScreen) ?*GdkMonitor;
 pub extern "c" fn gdk_monitor_get_geometry(monitor: *GdkMonitor, geometry: *GdkRectangle) void;
+pub const GdkDisplay = opaque {};
+pub const GdkSeat = opaque {};
+pub const GdkDevice = opaque {};
+pub extern "c" fn gdk_display_get_default() ?*GdkDisplay;
+pub extern "c" fn gdk_display_get_n_monitors(display: *GdkDisplay) c_int;
+pub extern "c" fn gdk_display_get_monitor(display: *GdkDisplay, index: c_int) ?*GdkMonitor;
+pub extern "c" fn gdk_monitor_get_workarea(monitor: *GdkMonitor, area: *GdkRectangle) void;
+pub extern "c" fn gdk_monitor_get_scale_factor(monitor: *GdkMonitor) c_int;
+pub extern "c" fn gdk_display_get_default_seat(display: *GdkDisplay) ?*GdkSeat;
+pub extern "c" fn gdk_seat_get_pointer(seat: *GdkSeat) ?*GdkDevice;
+pub extern "c" fn gdk_device_get_position(device: *GdkDevice, screen: ?*?*anyopaque, x: *c_int, y: *c_int) void;
 pub extern "c" fn webkit_settings_set_user_agent(settings: *WebKitSettings, user_agent: [*:0]const gchar) void;
 
 pub extern "c" fn g_object_new(object_type: GType, first_property_name: [*:0]const gchar, ...) *anyopaque;

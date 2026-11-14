@@ -179,6 +179,7 @@ test "2. Live BridgeServer + BridgeHost + Node 22 runs unmodified @tauri-apps/ap
         testing.io,
         .{ .name = "Z-Ts Studio", .version = "2.7.0", .identifier = "jp.zts.studio" },
         .{ .resource_dir = "/opt/zts/resources", .data_dir = "/var/tmp/zts-data" },
+        .{},
     );
     defer plugins.destroy();
 

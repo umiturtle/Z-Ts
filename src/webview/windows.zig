@@ -1833,6 +1833,31 @@ pub const WindowsWebView2Backend = struct {
         w.creation.center = true;
     }
 
+    /// Primary display metrics plus system DPI. `EnumDisplayMonitors` enumeration is a future
+    /// extension; the provider is registered on every OS so the API shape stays identical.
+    pub fn screens(self: *WindowsWebView2Backend, allocator: Allocator) Allocator.Error![]types.ScreenInfo {
+        _ = self;
+        const out = try allocator.alloc(types.ScreenInfo, 1);
+        const w = @max(1, win32.GetSystemMetrics(win32.SM_CXSCREEN));
+        const h = @max(1, win32.GetSystemMetrics(win32.SM_CYSCREEN));
+        const dpi = @max(96, win32.GetDpiForSystem());
+        out[0] = .{
+            .width = @intCast(w),
+            .height = @intCast(h),
+            .work_height = @intCast(h),
+            .scale = @as(f64, @floatFromInt(dpi)) / 96.0,
+        };
+        return out;
+    }
+
+    /// Physical-pixel cursor position from `GetCursorPos`.
+    pub fn cursorPosition(self: *WindowsWebView2Backend) types.CursorInfo {
+        _ = self;
+        var pt: win32.POINT = .{};
+        if (win32.GetCursorPos(&pt) == 0) return .{};
+        return .{ .x = pt.x, .y = pt.y };
+    }
+
     /// Win32 honours `hiddenTitle` by clearing the window caption. WebView2 settings
     /// that need a newer COM interface (`userAgent`, zoom hotkeys) stay in the scalar record.
     pub fn applyWindowCreationOptions(self: *WindowsWebView2Backend, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {

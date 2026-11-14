@@ -93,6 +93,9 @@ pub const PathError = error{
 pub const PathState = struct {
     /// Which separator conventions `normalize`/`join` follow.
     style: PathStyle = PathStyle.current(),
+    /// `true` when the caller left the paths unspecified: `RuntimeProviders.detectPath()`
+    /// replaces the deterministic fallbacks with the real environment.
+    auto_detect: bool = true,
     /// Bundle id used for the per-app subdirectories.
     app_identifier: []const u8 = "com.zts.app",
     /// `$HOME` (override in tests).
@@ -115,6 +118,101 @@ pub const PathState = struct {
     temp_dir: []const u8 = if (builtin.os.tag == .windows) "C:\\Temp" else "/tmp",
     /// `resolve('cwd')` — the process working directory.
     cwd: []const u8 = "/",
+    /// Strings allocated by `fromEnvironment`; freed by `deinit`.
+    owned_strings: []const []u8 = &.{},
+
+    /// Copies `value` into `owned` so `deinit` can release it.
+    fn own(allocator: Allocator, owned: *std.ArrayListUnmanaged([]u8), value: []const u8) Allocator.Error![]const u8 {
+        const copy = try allocator.dupe(u8, value);
+        errdefer allocator.free(copy);
+        try owned.append(allocator, copy);
+        return copy;
+    }
+
+    /// Inputs `zts_tauri` can read without libc: the process environment plus hints the host
+    /// already has. All are optional — a missing one keeps the deterministic fallback.
+    pub const EnvironmentHints = struct {
+        /// Process environment (`init.environ_map`), when the host has one.
+        environ: ?*const std.process.Environ.Map = null,
+        /// Directory containing the running executable (from `argv[0]`).
+        exe_dir: ?[]const u8 = null,
+        /// Real working directory, when the host has one.
+        cwd: ?[]const u8 = null,
+    };
+
+    /// Builds a `PathState` from the real user environment (`HOME` / `USERPROFILE`,
+    /// `XDG_*`, `APPDATA`, `LOCALAPPDATA`, `TEMP`). Pure Zig: no libc, no `getenv` global.
+    /// When `environ` is missing the deterministic defaults are returned unchanged so headless
+    /// tests and CI stay reproducible.
+    pub fn fromEnvironment(allocator: Allocator, identifier: []const u8, hints: EnvironmentHints) Allocator.Error!PathState {
+        const env = hints.environ orelse return .{ .auto_detect = false, .app_identifier = identifier };
+        var out: PathState = .{ .auto_detect = false, .app_identifier = identifier };
+        var owned: std.ArrayListUnmanaged([]u8) = .empty;
+        errdefer {
+            for (owned.items) |x| allocator.free(x);
+            owned.deinit(allocator);
+        }
+        const style = PathStyle.current();
+        const windows = style == .windows;
+        const macos = builtin.os.tag == .macos;
+
+        const home_raw = env.get("HOME") orelse env.get("USERPROFILE") orelse out.home_dir;
+        const home = try own(allocator, &owned, home_raw);
+        out.home_dir = home;
+
+        const cfg_parts: []const []const u8 = if (macos)
+            &.{ home, "Library", "Application Support" }
+        else if (windows)
+            &.{ home, "AppData", "Roaming" }
+        else
+            &.{ home, ".config" };
+        out.config_dir = try own(allocator, &owned, env.get("XDG_CONFIG_HOME") orelse env.get("APPDATA") orelse
+            try joinWithStyle(allocator, style, cfg_parts));
+
+        const data_parts: []const []const u8 = if (macos)
+            &.{ home, "Library", "Application Support" }
+        else if (windows)
+            &.{ home, "AppData", "Roaming" }
+        else
+            &.{ home, ".local", "share" };
+        out.data_dir = try own(allocator, &owned, env.get("XDG_DATA_HOME") orelse env.get("APPDATA") orelse
+            try joinWithStyle(allocator, style, data_parts));
+
+        const local_parts: []const []const u8 = if (windows)
+            &.{ home, "AppData", "Local" }
+        else
+            &.{ home, ".local", "share" };
+        out.local_data_dir = try own(allocator, &owned, env.get("LOCALAPPDATA") orelse
+            try joinWithStyle(allocator, style, local_parts));
+
+        const cache_parts: []const []const u8 = if (macos)
+            &.{ home, "Library", "Caches" }
+        else if (windows)
+            &.{ home, "AppData", "Local" }
+        else
+            &.{ home, ".cache" };
+        out.cache_dir = try own(allocator, &owned, env.get("XDG_CACHE_HOME") orelse env.get("LOCALAPPDATA") orelse
+            try joinWithStyle(allocator, style, cache_parts));
+
+        out.runtime_dir = try own(allocator, &owned, env.get("XDG_RUNTIME_DIR") orelse out.runtime_dir);
+        out.temp_dir = try own(allocator, &owned, env.get("TMPDIR") orelse env.get("TEMP") orelse out.temp_dir);
+
+        if (hints.exe_dir) |dir| {
+            out.executable_dir = try own(allocator, &owned, dir);
+            out.resource_dir = try own(allocator, &owned, try joinWithStyle(allocator, style, &.{ dir, "resources" }));
+        }
+        if (hints.cwd) |dir| out.cwd = try own(allocator, &owned, dir);
+
+        out.owned_strings = try owned.toOwnedSlice(allocator);
+        return out;
+    }
+
+    /// Frees strings allocated by `fromEnvironment`. Safe on a default-constructed state.
+    pub fn deinit(self: *PathState, allocator: Allocator) void {
+        for (self.owned_strings) |value| allocator.free(value);
+        if (self.owned_strings.len > 0) allocator.free(@constCast(self.owned_strings));
+        self.owned_strings = &.{};
+    }
 
     /// Maps a `BaseDirectory` tag to its absolute path, appending the identifier where needed.
     pub fn resolveBaseAlloc(self: *const PathState, scratch: Allocator, raw_dir: u8) PathError![]const u8 {

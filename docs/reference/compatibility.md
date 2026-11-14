@@ -139,4 +139,45 @@ Windows の `%APPDATA%` や各 OS の実際のユーザーディレクトリは�
 - [`zts` コマンドリファレンス](cli.md)
 - [API リファレンス](../api/index.html)
 
+## 8. 後続タスクの実装（弱点は解消済み）
+
+導入時の弱点として挙げていた項目は、その後すべて実装されました。上の各節は**問題の背景**として
+残していますが、現在の挙動は次のとおりです。
+
+| かつての弱点 | 現在の挙動 |
+|---|---|
+| `PathState` が `/home/user` などの固定値 | `PathState.fromEnvironment()` が `HOME` / `USERPROFILE` / `XDG_*` / `APPDATA` / `LOCALAPPDATA` / `TMPDIR` を読み、`DesktopConfig` は未指定なら自動で検出する。`environ` が無いヘッドレス/CI だけ決定論的フォールバック |
+| monitor が 1920×1080 の固定値・provider 未登録 | `zts_webview` の 4 バックエンドが `screens()` / `cursorPosition()` を提供し、`DesktopRuntime.create()` が `tauri.monitor` provider を自動登録。Linux は GDK の全モニターと HiDPI、macOS は `NSScreen`、Windows はプライマリとシステム DPI、Mock は決定論的 1 台 |
+| `set` / `delete` / `clear` が保存しない | `PluginState.Options.autosave`（既定 true）が全変更後に `save()` を呼ぶ。`store_path` が無いヘッドレスでは no-op。明示的な `save` コマンドも残る |
+| 初期化の `catch {}` が壊れたファイルを黙って無視 | `RestoreDiagnostics` が `ok` / `missing` / `unreadable` / `malformed` と復元キー数を記録。空で起動してもアプリが理由を検出できる |
+| クラッシュ後の古いロックが残る | ロックファイルに `zts-lock-v2 <pid>` を書き、`process_alive` provider が死んだ所有者を判定したときだけ 1 回削除して再試行。**時刻は使わない**（決定性）。provider 未登録は fail-closed でロック維持 |
+| `zts dev` がブラウザ配信だけで RPC が無い | `zts init` テンプレートに `State` / `Commands.increment` / `rpc.Schema` と `invoke("increment")` を同梱。`zts dev` は 「browser preview only — Zig commands need `zts build`」 と明示する |
+| ネイティブ backend の配線が分散 | `zts_tauri` の `RuntimeProviders` に path / monitor / menu / tray / dialog / clipboard / pid を集約し、`DesktopRuntime.create()` の 1 箇所で適用。`applyToPluginOptions()` が P2 側も一度に設定する |
+| GTK トレイが deprecated `GtkStatusIcon` に依存 | `libayatana-appindicator3` の `AppIndicator` を主経路に採用（CI に既に存在）。`GtkStatusIcon` はライブラリ不在ホスト向けの互換フォールバックに格下げし、click emitter の 3 OS 同一挙動を維持 |
+
+> [!NOTE]
+> これらは「Tauri と同じ実機能がすべてある」という意味ではありません。§2 のプレースホルダー
+> （`pid=0` / `os.version` / `locale=null`、通知はアプリ内イベント、`opener` の `Unsupported`）と
+> HTTP / Updater / SQL の不対応は、引き続き**設計上の明示的な選択**です。
+
+### アプリ側の配線（1 箇所）
+
+```zig
+var providers: tauri.RuntimeProviders = .{
+    .menu = tauri_native.menuBackend(),
+    .tray = tauri_native.trayBackend(),
+    .dialog = tauri_native.dialogBackend(),
+    .clipboard = tauri_native.clipboardBackend(),
+    .current_pid = tauri_native.currentPid,
+    .process_alive = tauri_native.processAlive,
+};
+providers.detectPath(allocator, init.environ_map, exe_dir, cwd, app.identifier);
+const runtime = try tauri.app_runtime.DesktopRuntime.create(allocator, init.io, .{
+    .providers = providers,
+    .environ = init.environ_map,
+});
+var plugin_options: tauri.plugins.Options = .{ .store_path = "state.json" };
+providers.applyToPluginOptions(&plugin_options);
+```
+
 <!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

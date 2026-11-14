@@ -572,6 +572,20 @@ pub const HeadlessMock = struct {
         w.creation.center = true;
     }
 
+    /// Deterministic single 1920x1080 @1.0 display, matching `tauri.monitor`'s default.
+    pub fn screens(self: *HeadlessMock, allocator: Allocator) Allocator.Error![]types.ScreenInfo {
+        _ = self;
+        const out = try allocator.alloc(types.ScreenInfo, 1);
+        out[0] = .{};
+        return out;
+    }
+
+    /// Deterministic origin, so headless/CI behaviour never depends on a real mouse.
+    pub fn cursorPosition(self: *HeadlessMock) types.CursorInfo {
+        _ = self;
+        return .{};
+    }
+
     /// records the full creation option set for parity assertions.
     pub fn applyWindowCreationOptions(self: *HeadlessMock, win_id: types.WindowId, cfg: types.WindowConfig) types.WebviewError!void {
         (try self.requireWin(win_id)).creation = types.creationOptions(cfg);

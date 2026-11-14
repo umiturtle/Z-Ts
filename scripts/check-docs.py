@@ -88,6 +88,10 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
 23. Page provenance  — every published Markdown page ends with one `zts-doc-meta` comment naming
                       the source version, the verification day and its own last rewrite. Match the
                       zon version and the sync ledger so a stale page can be detected mechanically.
+24. Follow-ups wired  — the seven implementation tasks (environment paths, OS monitor providers,
+                      store autosave/diagnostics, stale single-instance locks, RPC scaffold,
+                      one-place provider wiring, AppIndicator tray) must all be present. A doc that
+                      claims a fix without the code turning up in CI is exactly what this prevents.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -1691,6 +1695,36 @@ for path in R23_SITE:
         errors.append(
             f"{path}: last-rewritten {last} != ledger {R23_DATES[path]} (rule 23)"
         )
+
+# ---------------------------------------------------------------------------
+# 24. All seven follow-up implementations exist (doc/code drift guard)
+# ---------------------------------------------------------------------------
+R24_TOKENS = {
+    "src/tauri/path.zig": ("fromEnvironment", "auto_detect", "owned_strings"),
+    "src/tauri/providers.zig": ("RuntimeProviders", "detectPath", "applyToPluginOptions"),
+    "src/tauri/plugins.zig": ("autosave", "RestoreDiagnostics", "lock_magic", "reclaimStaleLock"),
+    "src/tauri/mod.zig": ("provider_bundle", "self.paths.deinit"),
+    "src/tauri/native.zig": ("currentPid", "processAlive"),
+    "src/tauri/native_gtk.zig": ("app_indicator_new", "APP_INDICATOR_STATUS_ACTIVE"),
+    "src/tauri/tray/native_gtk.zig": ("createIndicator", "indicatorFor"),
+    "src/webview/mod.zig": ("pub fn screens", "pub fn cursorPosition"),
+    "src/webview/linux.zig": ("pub fn screens",),
+    "src/webview/macos.zig": ("pub fn screens",),
+    "src/webview/windows.zig": ("pub fn screens",),
+    "src/webview/mock.zig": ("pub fn screens",),
+    "src/app_runtime.zig": ("providers: tauri.RuntimeProviders", "monitorList", "detectPath"),
+    "src/cli/template.zig": ("rpc.Schema", "ZIG OFFLINE"),
+    "src/cli/main.zig": ("browser preview only",),
+    "build.zig": ("ayatana-appindicator3-0.1",),
+}
+for path, tokens in R24_TOKENS.items():
+    if not os.path.isfile(path):
+        errors.append(f"{path}: missing (rule 24)")
+        continue
+    text = open(path, encoding="utf-8").read()
+    for token in tokens:
+        if token not in text:
+            errors.append(f"{path}: missing {token!r} (rule 24)")
 
 if warnings:
     for w in warnings:

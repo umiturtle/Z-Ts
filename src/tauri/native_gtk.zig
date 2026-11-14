@@ -237,6 +237,26 @@ pub extern "c" fn gtk_status_icon_set_title(icon: *GtkStatusIcon, title: [*:0]co
 pub extern "c" fn gtk_status_icon_set_visible(icon: *GtkStatusIcon, visible: gboolean) void;
 pub extern "c" fn gtk_status_icon_get_visible(icon: *GtkStatusIcon) gboolean;
 
+// ------------------------------------------------------- AppIndicator (GTK4-safe tray)
+//
+// `GtkStatusIcon` was removed in GTK 4. `libayatana-appindicator3` is already a CI dependency,
+// so a native tray prefers the supported AppIndicator path and keeps the deprecated widget only
+// as a compatibility fallback for hosts without the library. Both are kept in sync so the tray
+// click emitter behaves identically on all three OSes.
+/// Opaque `libayatana-appindicator3` indicator handle.
+pub const AppIndicator = opaque {};
+/// `APP_INDICATOR_CATEGORY_APPLICATION_STATUS`.
+pub const APP_INDICATOR_CATEGORY_APPLICATION_STATUS: c_int = 0;
+/// `APP_INDICATOR_STATUS_PASSIVE`: hidden indicator.
+pub const APP_INDICATOR_STATUS_PASSIVE: c_int = 0;
+/// `APP_INDICATOR_STATUS_ACTIVE`: visible indicator.
+pub const APP_INDICATOR_STATUS_ACTIVE: c_int = 1;
+pub extern "c" fn app_indicator_new(id: [*:0]const u8, icon_name: [*:0]const u8, category: c_int) ?*AppIndicator;
+pub extern "c" fn app_indicator_set_status(indicator: *AppIndicator, status: c_int) void;
+pub extern "c" fn app_indicator_set_icon(indicator: *AppIndicator, icon_name: [*:0]const u8) void;
+pub extern "c" fn app_indicator_set_title(indicator: *AppIndicator, title: [*:0]const u8) void;
+pub extern "c" fn app_indicator_set_menu(indicator: *AppIndicator, menu: *GtkWidget) void;
+
 var gtk_ready: ?bool = null;
 
 /// Initializes GTK once. Returns `false` when there is no display (headless CI without Xvfb).

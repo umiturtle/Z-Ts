@@ -461,6 +461,7 @@ fn runDev(io: Io, gpa: Allocator, arena: Allocator, opts: args_mod.Dev) !u8 {
     const url = try std.fmt.allocPrint(arena, "http://{s}:{d}/", .{ displayHost(opts.host), server.port() });
     printOut(io, "zts: {s} — serving {s} at {s}\n", .{ name, web_dir, url });
     printOut(io, "     watching src/ and web/ — Ctrl+C to stop\n", .{});
+    printOut(io, "     browser preview only — Zig commands need `zts build` (see compatibility.md)\n", .{});
     if (opts.browser) try openBrowser(io, arena, url);
 
     const zig_path = resolveZig(io, arena, build_options.zts_root);
