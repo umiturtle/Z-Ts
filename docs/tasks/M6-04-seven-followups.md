@@ -80,3 +80,5 @@ M6-03 §4 に記録した 7 件を**すべて実装**する。Doc に弱点を�
   `RuntimeProviders` を `zts_tauri` に置く共通設計を確定。分散ロック（この票）を push した直後。
 - **次の 1 手**: `src/tauri/providers.zig` と `PathState.fromEnvironment()` を実装し、
   `DesktopRuntime.create()` に `providers` 適用を追加する（タスク 1・6 の骨格）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->
