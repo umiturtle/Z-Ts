@@ -59,9 +59,9 @@ pub const DesktopConfig = struct {
 /// `ctx` is the runtime's own engine, so the provider stays valid for the whole runtime.
 fn monitorList(ctx: ?*anyopaque, allocator: Allocator) Allocator.Error![]const tauri.monitor.Monitor {
     const engine: *webview.Engine = @ptrCast(@alignCast(ctx orelse
-        return allocator.alloc(tauri.monitor.Monitor, 0)));
+        return deterministicMonitor(allocator)));
     const screens = engine.screens(allocator) catch
-        return allocator.alloc(tauri.monitor.Monitor, 0);
+        return deterministicMonitor(allocator);
     defer allocator.free(screens);
     const out = try allocator.alloc(tauri.monitor.Monitor, screens.len);
     for (screens, 0..) |screen, i| {
@@ -79,6 +79,14 @@ fn monitorList(ctx: ?*anyopaque, allocator: Allocator) Allocator.Error![]const t
         };
     }
     return out;
+}
+
+/// One 1920x1080 @1.0 fallback so `availableMonitors()` is never empty when the OS has no
+/// display yet (Xvfb startup / headless CI). Keeps the E2E wire contract stable.
+fn deterministicMonitor(allocator: Allocator) Allocator.Error![]const tauri.monitor.Monitor {
+    const one = try allocator.alloc(tauri.monitor.Monitor, 1);
+    one[0] = .{ .name = "default" };
+    return one;
 }
 
 fn monitorCursor(ctx: ?*anyopaque) tauri.monitor.Point {
@@ -128,7 +136,11 @@ pub const DesktopRuntime = struct {
 
         // One place resolves the environment-backed paths and applies every provider.
         var providers = cfg.providers;
-        try providers.detectPath(allocator, cfg.environ, cfg.exe_dir, cfg.cwd, cfg.app.identifier);
+        // Only auto-detect when the app supplied its environment. Headless tests, wasm and
+        // embedded hosts keep their explicit cfg.paths (the asset:// root).
+        if (cfg.environ != null) {
+            try providers.detectPath(allocator, cfg.environ, cfg.exe_dir, cfg.cwd, cfg.app.identifier);
+        }
         const effective_paths = providers.path orelse cfg.paths;
         const plugins = try tauri.CorePluginStates.create(allocator, io, cfg.app, effective_paths, providers);
         errdefer plugins.destroy();
