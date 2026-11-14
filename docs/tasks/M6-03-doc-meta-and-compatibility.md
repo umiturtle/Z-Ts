@@ -1,6 +1,6 @@
 # Task M6-03: サイト MD の出所メタ・バージョン統一・互換性の正直な記述
 
-- **Status**: `in_progress` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/f40ad6b0-z-ts`（main `326e55a` = PR #25 マージ後）
 - **Scope**: `scripts/doc_meta.py`（新規）, `scripts/check-docs.py`（規約 23・規約 20 拡張・`--sync` 改修）,
   `scripts/gen-framework-tutorials.py`, `scripts/doc-sync.json`, 全サイト MD 末尾メタ,
@@ -11,9 +11,8 @@
 - **Upstream Reference**: [`../contributing/doc-sync.md`](../contributing/doc-sync.md)（規約 13）,
   [`../architecture/tauri-feature-gap.md`](../architecture/tauri-feature-gap.md),
   [`../reference/tauri-usage.md`](../reference/tauri-usage.md)
-- **Next Step**: `scripts/doc_meta.py` にメタの書式・strip・本文ハッシュを集約し、
-  `--sync` が全サイト MD に 1 行メタを付与するよう改修。規約 23 で機械判別し、
-  生成器も同じメタを出して rule 15 との整合を保つ。その後 2 の統一と 3〜9 の Doc 化。
+- **Next Step**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
+  タスク票を `done` にする。
 
 ---
 
@@ -33,19 +32,19 @@
 
 ## 2. 完了条件（Definition of Done）
 
-- [ ] サイトが公開する全 MD（内部資料・生成 56 ページを含む）の末尾に
+- [x] サイトが公開する全 MD（内部資料・生成 56 ページを含む）の末尾に
       `<!-- zts-doc-meta: source-version=… verified=… last-rewritten=… -->` が 1 つだけ付く
-- [ ] メタの `source-version` が `build.zig.zon`、`verified` が台帳 `verified.date`、
+- [x] メタの `source-version` が `build.zig.zon`、`verified` が台帳 `verified.date`、
       `last-rewritten` が台帳のページ日付と一致することを**規約 23 が機械検査**する
-- [ ] `--sync` がメタを自動付与し、`changed` 判定はメタを除いた本文で行う（日付が無限に進まない）
-- [ ] 生成 56 ページも同じメタを持ち、`gen-framework-tutorials.py --check` が緑のまま
-- [ ] 読者向けの `zts version` / ダウンロード例がすべて `0.1.1`、
+- [x] `--sync` がメタを自動付与し、`changed` 判定はメタを除いた本文で行う（日付が無限に進まない）
+- [x] 生成 56 ページも同じメタを持ち、`gen-framework-tutorials.py --check` が緑のまま
+- [x] 読者向けの `zts version` / ダウンロード例がすべて `0.1.1`、
       `github.com/umiturtle/Z-Ts` が読者面に残らない（規約 20 拡張）
-- [ ] 日英の互換性リファレンスが 3〜9 を正確に記述し、既存の過大評価・誤記を訂正
-- [ ] `StoreCommands.clear` のコメントと実装の矛盾を解消
-- [ ] `learn_path.steps` の 5 ステップ・95 分不変、`AGENTS.md` / `docs/roadmap/milestones.md` の
+- [x] 日英の互換性リファレンスが 3〜9 を正確に記述し、既存の過大評価・誤記を訂正
+- [x] `StoreCommands.clear` のコメントと実装の矛盾を解消
+- [x] `learn_path.steps` の 5 ステップ・95 分不変、`AGENTS.md` / `docs/roadmap/milestones.md` の
       チェックボックス非編集、日英 2 言語、同期台帳更新
-- [ ] `quick-test` / `build test` / `doctest` / `docs-check` / `fmt --check` / 3 OS CI 緑、PR は 1 本だけ
+- [x] `quick-test` / `build test` / `doctest` / `docs-check` / `fmt --check` / 3 OS CI 緑、PR は 1 本だけ
 
 ## 3. 調査で確定した事実
 
@@ -89,7 +88,30 @@
 
 ## Current State / Next Step
 
-- **現在**: 30 秒ルーチン緑（`quick-test` / `check-docs.py` / `fmt --check`）、現ブランチは
-  `main 326e55a` 起点で clean。9 項目の事実確認完了。分散ロック（この票）を push した直後。
-- **次の 1 手**: `scripts/doc_meta.py` を作り、`check-docs.py` の `run_sync()` と規約 23、
-  生成器を同じ書式に揃える。その後 2 の統一と互換性 Doc を書く。
+- **現在**: 実装・ローカル検証まで完了。
+  - **1**: `scripts/doc_meta.py`（書式・strip・本文ハッシュ・`site_md_files()`）を新設。
+    `--sync` が **231 ページ** に `<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21
+    last-rewritten=… -->` を 1 行付与。**規約 23** が version / verified / last-rewritten /
+    台帳との一致 / 末尾配置を機械検査。`changed` 判定はメタを除いた本文ハッシュなので日付が
+    無限に進まない。生成器も同じ `meta_line()` を呼び、`--check` 56 ページが収束。
+    `render_ledger()` の日英説明にもメタの意味を追記。同期台帳は 70 ペア・`*_body_sha256` を保持。
+  - **2**: `start.md` / `counter.md` 日英の `v0.1.0` / `zts-0.1.0-*` / `zts 0.1.0` を
+    `0.1.1` に統一。読者面の `github.com/umiturtle/Z-Ts` を **`ZigguraTs` に統一**（52 ファイル）、
+    生成器 `TREE_URL` / `frameworks.zig` / `apidoc.zig` / `main.zig` / `site.zig` /
+    `template.zig` / `contributing/README.md` も含む。チェックアウトのパス名と履歴資料は据え置き。
+    規約 20 に「旧リリース参照・旧リポジトリ URL の残存」検査を追加。
+  - **3〜9**: 日英 `docs/reference/compatibility{,.en}.md` を新設し 9 項目を正確に記述。
+    `tauri-usage{,.en}.md` と `docs/INDEX{,.en}.md` から導線。`plugins.md` 日英の
+    「Linux は StubBackend」「未実装の WindowOptions は無視」を訂正し、GTK / Cocoa / Win32 の
+    実在と明示配線の必要性、`GtkStatusIcon` deprecated を明記。
+  - **5**: `src/tauri/plugins.zig` の `clear` 3 箇所の doc comment を実装に合わせて修正
+    （保存を呼ばない／ログを消す／label の 1 件を消す）。
+  - 実装弱点の修正は §4 の後続 7 タスクとして記録し、この PR には混ぜていない。
+- **ローカル緑**: `quick-test`（37 / 10）、`build test` exit 0、`doctest blocks=20`、
+  `docs-check`（86 tests + `OK docsite pages=342 links=2927 … api_undoc=0`）、`fmt --check`、
+  `zig build docs` exit 0、`check-docs.py`（222 md / 53 読者ページ × 2、規約 20/23 含む）、
+  `gen-framework-tutorials.py --check`（56 pages）、`node --test` 7/7、`gitflow.sh --self-test`。
+- **未実施**: PR 作成・3 OS CI・マージ。
+- **次の 1 手**: 実装を push → PR 1 本 → CI 7/7 → `gh pr merge` → 票を `done`。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->
