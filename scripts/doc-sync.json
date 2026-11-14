@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "e7e8cd9",
+    "commit": "c9abf39",
     "zts_version": "0.1.1",
     "zig_version": "0.17.0",
     "checks": [
@@ -66,8 +66,8 @@
       "last_rewritten": "2026-10-21",
       "ja_body_sha256": "1d05ec2edee7e4198504d1deb36e01d3412d0eb482b8cbda70dad8bb155505b8",
       "en_body_sha256": "1f7f012129ca73ad9b9ac5ea89008a15beb300aebf2c149bfba78032ab82dcdb",
-      "ja_sha256": "bea64b5cc914fd343cf16aa1ef4527f0c351e4bb823e5fedb77f700005cfc0b0",
-      "en_sha256": "6882f35a2e8ecc6b7e9ba909b52abe19a6d3921b0985dbd590961637b532b993"
+      "ja_sha256": "55fb10f69900ec6c6231ee2b248f618b07333330b4a7ccf70551286bd2a32a81",
+      "en_sha256": "9afe88ffd198dc7b96e2c85a76378e3e36857a5c33c8de5f7f65fdc0bedca0cf"
     },
     {
       "ja": "docs/contributing/gitflow.md",
