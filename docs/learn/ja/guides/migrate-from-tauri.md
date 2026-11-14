@@ -146,3 +146,5 @@ Tauri は `devUrl` / `frontendDist` で切り替えますが、ziggurats では*
 - プラグインの実装状況: [`plugins.md`](plugins.md)
 - 移行後に動かないとき: [`troubleshooting.md`](troubleshooting.md)
 - 既存の Tauri アプリの設定取り込み: [`../api/zts_tauri/config_import.html`](../../../api/zts_tauri/config_import.html)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

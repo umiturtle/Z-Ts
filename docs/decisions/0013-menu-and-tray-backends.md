@@ -67,3 +67,5 @@ Tauri 本家は `muda` が OS ごとにツリーを差分更新する。ziggurat
   AppKit / Win32 は未実装で、`error.Unavailable` により fail-closed する。
 - トレードオフ: 画像アイコン（`JsImage`）は wire として受理するが描画しない。
   トレイのアイコンは現状プラットフォーム既定のもの。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

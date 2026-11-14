@@ -225,7 +225,7 @@ const gitignore =
 const readme =
     \\# {{NAME}}
     \\
-    \\A [ziggurats](https://github.com/umiturtle/Z-Ts) desktop app.
+    \\A [ziggurats](https://github.com/umiturtle/ZigguraTs) desktop app.
     \\
     \\```bash
     \\zts dev            # serve web/ with rebuild-on-change

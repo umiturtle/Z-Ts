@@ -27,3 +27,5 @@
 3. **Sharded Markdown & 分散タスクロック**:
    - ルート単一 `memory.md` を禁止し（`scripts/check-docs.py` で強制）、タスク単位の `docs/tasks/<ID>-<slug>.md`・モジュール単位の `docs/architecture/<mod>.md`・追記専用の `docs/decisions/<NNNN>-*.md` に分割する。
    - `scripts/status.sh` により、現在ブランチの作業記憶と他エージェントのリモートブランチ・Open PR を 1 コマンドで可視化する。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

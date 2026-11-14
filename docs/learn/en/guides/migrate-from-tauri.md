@@ -145,3 +145,5 @@ directory has to ship next to the binary.
 - Broken after migrating: [Troubleshooting](troubleshooting.md)
 - Importing an existing Tauri config:
   [`config_import`](../../../api/zts_tauri/config_import.html)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

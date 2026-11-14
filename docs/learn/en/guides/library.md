@@ -126,3 +126,5 @@ ships, asks `zig fetch` for its hash, then — with a **cold global cache** — 
 - Define a command → [Commands (RPC)](rpc.md)
 - Look up a public declaration → [API reference](../../../api/index.html)
 - Release binaries and versions → [Install](install.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

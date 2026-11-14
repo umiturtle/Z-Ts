@@ -109,3 +109,5 @@ comptime-known 要求で落ちる → `inline for`。テストで JSON を `test
 2. **CLI 表示**: `Diagnostics` を整形して `zts migrate <dir>` で出す（警告一覧 + 生成される
    `WindowSpec` のドライラン）。
 3. **バンドラ**: `bundle.*`（アイコン・署名・ターゲット別インストーラ）は読み取るだけで未実装。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

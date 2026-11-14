@@ -88,3 +88,5 @@
 
 `zig build` で足りることは確認済みです: `examples/counter` は `build.zig.zon` が
 `.path = "../.."` を指すので、チェックアウト内なら `zig build desktop|preview|dist` がそのまま動きます。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

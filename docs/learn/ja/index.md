@@ -102,3 +102,5 @@ Tauri v2 の経験は **不要** です。移行したい人だけ
 - 設計で迷っている → [実用パターン](patterns/index.md)
 - 用語で迷った → [用語集](../../glossary.md)
 - 全部のページを見たい → [ドキュメント索引](../../INDEX.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

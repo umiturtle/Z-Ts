@@ -25,3 +25,5 @@
   1. `DemoOnlySchema.ts_bindings` バイト単位完全一致スナップショット検証 + `tsc --noEmit` (`strict: true`)
   2. 全 3 OS（Linux / macOS / Windows）Live `BridgeServer` + `BridgeHost` + Node 22 HTTP/Cookie/SSE E2E スイート完走
   3. Linux `Xvfb` + 実物 `WebKit2GTK 4.1` `DesktopRuntime(.native)`（`tauri://`, `ipc://`, `asset://` `206`/`403`, `[data-tauri-drag-region]` マウス委譲）フル E2E スイート完走（Debug / `ReleaseFast` 双方 0 リーク）
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

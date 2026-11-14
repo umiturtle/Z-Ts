@@ -104,3 +104,5 @@ ziggurats declares only the C functions it needs as `extern fn` Pure Zig binding
 - [Concepts: how a command arrives](../learn/en/concepts/commands.md) — the ziggurats side
 - [Package layout](../learn/en/concepts/architecture.md) — where each layer lives
 - [ziggurats API reference](../api/index.html) — generated from `///`
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

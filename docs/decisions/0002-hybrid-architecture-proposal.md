@@ -136,3 +136,5 @@ pub fn main(init: std.process.Init) !void {
 2. **`M1-02` (`src/rpc/`)**: `codec` (`camelCase` + `.alloc_if_needed`), `router` & `merge` (`comptime`), `ErrorSet` 対応 `tsgen`（Pure Zig・GUI 依存ゼロ）
 3. **`M1-03` (`src/bridge/`)**: `std.Io.net` セキュア HTTP + SSE トランスポート（Live Preview & E2E 基盤）
 4. **`M1-04` (`src/webview/`)**: C ABI 定義 (`zts_webview.h` 相当 VTable) + Mock Backend + Linux `GTK3 + WebKit2GTK 4.1` 非同期ストリーム実装
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

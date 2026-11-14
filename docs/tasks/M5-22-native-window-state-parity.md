@@ -71,3 +71,5 @@
   再発防止）、および `createWindow()` の共通オプション適用が GTK 埋め込みウィンドウで
   `error.Unsupported` を返した（`toplevel` ガードを追加、規約 17 で検査）。
 - **次**: 完了。`AGENTS.md` / `docs/roadmap/milestones.md` は触っていない。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

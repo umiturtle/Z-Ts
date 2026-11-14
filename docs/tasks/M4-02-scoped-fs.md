@@ -63,3 +63,5 @@
 - **Windows は `symLink` に Developer Mode か管理者権限が必要**。テストは `error.AccessDenied` / `PermissionDenied` を
   受けたらリンク部分だけスキップする（他の OS では必ず実行される）。
 - **`error.PrivilegeNotHeld` は `symLink` のエラー集合に含まれない**ので catch に書くとコンパイルエラー。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

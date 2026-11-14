@@ -246,3 +246,5 @@ try std.testing.expectEqualStrings(
 - API ページの読み方: [API リファレンスの索引](../../../api/index.html)
 - 送り手側: [`plugins.md`](plugins.md)（Tauri 標準プラグイン） /
   [`static-site.md`](static-site.md)（同じスキーマを WASM で動かす）
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -228,3 +228,5 @@ push to main ──> build ──> ./zigw build docs            (リンク検査
 生成物は静的ファイルだけなので、`python3 -m http.server --directory zig-out/docs` で
 そのまま確認できる（`file://` でも動くが、ブラウザの制約で検索インデックスの読み込みに
 失敗することがある）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

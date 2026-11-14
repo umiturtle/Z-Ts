@@ -83,3 +83,5 @@
 - **未実施**: タグ `v0.1.1` / GitHub Release の公開（マージ後）、3 OS CI、PR 作成。
 - **次の 1 手**: 実装を push → PR 1 本 → CI 7/7 → `gh pr merge` → `git tag v0.1.1` +
   `git push origin v0.1.1` → Release 公開 → 公開 URL を `zig fetch` → 票を `done`。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

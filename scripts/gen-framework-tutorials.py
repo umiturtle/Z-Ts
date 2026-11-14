@@ -22,6 +22,8 @@ import os
 import sys
 from pathlib import Path
 
+import doc_meta
+
 from framework_tutorial_profiles import PROFILES
 from framework_tutorial_templates import (
     TODO_EN, TODO_EN_TAIL, TODO_JA, TODO_JA_TAIL,
@@ -37,9 +39,25 @@ UI_EN_FULL = UI_EN + ZIG_LINKAGE_EN + UI_EN_TAIL
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG = ROOT / "src" / "docsite" / "frameworks.json"
 TUTORIALS = ROOT / "docs" / "learn"
+LEDGER = ROOT / "scripts" / "doc-sync.json"
+
+
+def emit(path: Path, body: str) -> str:
+    """Attach the same provenance meta that `check-docs.py --sync` writes to every page."""
+    ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
+    v = ledger["verified"]
+    rel = path.relative_to(ROOT).as_posix()
+    last = v["date"]
+    for page in ledger["pages"]:
+        if rel in (page.get("ja"), page.get("en")):
+            last = page.get("last_rewritten") or v["date"]
+            break
+    return doc_meta.with_meta(
+        body, source_version=v["zts_version"], verified=v["date"], last_rewritten=last
+    )
 
 PAGES_URL = "https://umiturtle.github.io/ZigguraTs/examples/frameworks/{id}/index.html"
-TREE_URL = "https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/{id}"
+TREE_URL = "https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/{id}"
 
 FENCE = {
     "react": "jsx",
@@ -676,15 +694,22 @@ def main() -> int:
     for fw in fw_list:
         snippet = snippet_for(fw)
         fid = fw["id"]
-        expected[TUTORIALS / "ja" / "tutorials" / f"counter-{fid}.md"] = render(VARIANT_JA, fw, snippet, "ja")
-        expected[TUTORIALS / "en" / "tutorials" / f"counter-{fid}.md"] = render(VARIANT_EN, fw, snippet, "en")
-        expected[TUTORIALS / "ja" / "tutorials" / f"todo-{fid}.md"] = render(TODO_JA_FULL, fw, snippet, "ja")
-        expected[TUTORIALS / "en" / "tutorials" / f"todo-{fid}.md"] = render(TODO_EN_FULL, fw, snippet, "en")
-        expected[TUTORIALS / "ja" / "tutorials" / f"ui-{fid}.md"] = render(UI_JA_FULL, fw, snippet, "ja")
-        expected[TUTORIALS / "en" / "tutorials" / f"ui-{fid}.md"] = render(UI_EN_FULL, fw, snippet, "en")
+        for lang, template in (
+            ("ja", VARIANT_JA), ("en", VARIANT_EN),
+            ("ja", TODO_JA_FULL), ("en", TODO_EN_FULL),
+            ("ja", UI_JA_FULL), ("en", UI_EN_FULL),
+        ):
+            kind = "counter" if template in (VARIANT_JA, VARIANT_EN) else (
+                "todo" if template in (TODO_JA_FULL, TODO_EN_FULL) else "ui"
+            )
+            path = TUTORIALS / lang / "tutorials" / f"{kind}-{fid}.md"
+            expected[path] = emit(path, render(template, fw, snippet, lang))
 
-    expected[TUTORIALS / "ja" / "tutorials" / "frameworks.md"] = CHOOSER_JA.replace("{{ROWS_JA}}", rows(fw_list, "ja"))
-    expected[TUTORIALS / "en" / "tutorials" / "frameworks.md"] = CHOOSER_EN.replace("{{ROWS_EN}}", rows(fw_list, "en"))
+    for lang, template, rows_key in (
+        ("ja", CHOOSER_JA, "{{ROWS_JA}}"), ("en", CHOOSER_EN, "{{ROWS_EN}}"),
+    ):
+        path = TUTORIALS / lang / "tutorials" / "frameworks.md"
+        expected[path] = emit(path, template.replace(rows_key, rows(fw_list, lang)))
 
     stale = []
     for path, content in sorted(expected.items()):

@@ -176,6 +176,8 @@ The `zts dev` browser alone cannot deliver `invoke`; always verify with the `zts
 | Screen states in the same library | [Screen with Astro](ui-astro.md) |
 | Plain-JS original | [Build a Todo list](todo.md) |
 | Pick another library | [Chooser hub](frameworks.md) |
-| Real `Astro` source | [`examples/frameworks/astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) |
+| Real `Astro` source | [`examples/frameworks/astro/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/astro) |
 | Command arguments, errors, TS generation | [Commands guide](../guides/rpc.md) |
 | Why these three are shaped this way | [Patterns](../patterns/index.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -200,3 +200,5 @@ pub fn register(state: *State, args: struct { email: []const u8 }) !RegisterResu
 - 画面側の扱い: [画面とロジックの境界](boundaries.md)
 - エラーの一覧: [エラー索引](../../../reference/errors.html)
 - 生成される型: [API リファレンス](../../../api/index.html) の `zts_rpc.tsgen`
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

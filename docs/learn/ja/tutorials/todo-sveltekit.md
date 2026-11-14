@@ -178,6 +178,8 @@ zig-out/bin/my_app        # ウィンドウが開き、Todo の追加が Zig ま
 | 同じライブラリの画面状態 | [SvelteKit で画面を作る](ui-sveltekit.md) |
 | 素の JS 版（分岐の元） | [Todo リストを作る](todo.md) |
 | ライブラリを選び直す | [選択ハブ](frameworks.md) |
-| `SvelteKit` の実物ソース | [`examples/frameworks/sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) |
+| `SvelteKit` の実物ソース | [`examples/frameworks/sveltekit/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/sveltekit) |
 | コマンドの引数・エラー・型生成 | [ガイド: コマンド](../guides/rpc.md) |
 | 3 本の設計判断 | [実用パターン](../patterns/index.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

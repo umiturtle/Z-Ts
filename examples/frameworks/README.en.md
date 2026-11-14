@@ -115,3 +115,5 @@ fails unless all nine manifest entries report `zig_online: true` and `zig_invoke
 
 See [the screenshot parity design](../../docs/architecture/screenshot-parity.md) (Japanese,
 internal) and [the gallery](../gallery/README.en.md) for the regression images.
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

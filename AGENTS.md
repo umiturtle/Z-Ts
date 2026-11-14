@@ -137,3 +137,5 @@ Arena サンドボックスでは **新しいチャット（ブランチ）ご�
 4. **コミット規約**:
    - 1 コミット = 1 つの明確でテスト通過済みの変更とし、Conventional Commits（`feat`, `fix`, `docs`, `test`, `perf`, `refactor`, `chore`, `ci`）に従う。
    - **セッションの現在ブランチ（`arena/...`）以外に checkout / push しないこと。**
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

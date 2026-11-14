@@ -126,3 +126,5 @@ python3 scripts/check-docs.py        → OK（--sync で台帳再同期）
 - **既知の制約**: `zts dev` の「ok」は型検査の成功を意味する（実行ファイルの検証は `zts build`）。
   常驻サーバは `--verbose` 出力と `--listen=-` プロトコルに依存するが、どちらが変わっても
   フォールバックする。依存グラフの根は `src/main.zig` 固定。詳細は設計メモ §5。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

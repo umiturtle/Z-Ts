@@ -170,3 +170,5 @@
   - テスト: tauri 89 件、bundler 37 件（+2）。正常・異常・境界・永続化・再起動を検証
 - **作業中**: なし。
 - **未着手**: なし。**PR 1 本を作成して CI を確認するのみ**。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -85,3 +85,5 @@ Zig 0.17 の `std.Io.File` は `seek` の syscall ラッパーを公開してい
 | リンク解決に `realPath`（OS 任せ）を使う | 対象が存在しないと失敗する（`create` / `mkdir` で使えない）。ループ検出の可否も OS 依存 |
 | `startsWith` による prefix 比較 | `/srv/app` と `/srv/app-evil` を区別できない |
 | スコープ検査を JavaScript 側で行う | フロントは信頼できない入力元。境界はネイティブ側に置く |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

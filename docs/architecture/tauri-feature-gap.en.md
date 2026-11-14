@@ -116,3 +116,5 @@ scopes". That is a pre-existing hole, not a feature. P0-4 is cheap: the data is 
 
 > Do not hand-write counts here. `zig build docs` (`api_decls` / `api_members`) is the source of
 > truth; this page is a qualitative list on purpose.
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

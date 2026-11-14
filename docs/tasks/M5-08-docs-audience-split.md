@@ -86,3 +86,5 @@
    を追加し、`stopping` フラグ + `shutdown` + 捨て接続で accept を起こしてから `join` する
    （`shutdown` は POSIX の正規のキャンセル手段、Windows では listening socket の shutdown が
    no-op なので捨て接続が必須）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -136,3 +136,5 @@ P0-4 は「生成しているのに使っていない」死にデータの解消
 
 > **数値を手で書かない**: 対応率や「何コマンド実装済み」は `zig build docs` の
 > `api_decls` / `api_members` を正とすること。このページは**定性リスト**に徹します。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

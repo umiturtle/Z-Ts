@@ -57,3 +57,5 @@
 | ドラッグ開始 | `gtk_window_begin_move_drag` | `performWindowDragWithEvent:`（直前の `mouseDown` を保持） |
 | イベントループ | `g_main_context_iteration` | `nextEventMatchingMask:untilDate:inMode:dequeue:`（blocking は 1 秒上限） |
 | Objective-C | 無し（純 C ABI） | **`macos_shim.m` 1 ファイルのみ**。Zig 側は `zts_macos_*` の `extern fn` だけ |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

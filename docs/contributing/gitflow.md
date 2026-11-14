@@ -82,3 +82,5 @@ PR の **base** をオーナーが作った `develop` に合わせることだ�
 - [ドキュメント同期台帳](doc-sync.md)
 - [GitHub Actions の運用](../environment/github-actions.md)
 - アプリ作者向けの依存の張り方 → [`../learn/ja/guides/library.md`](../learn/ja/guides/library.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

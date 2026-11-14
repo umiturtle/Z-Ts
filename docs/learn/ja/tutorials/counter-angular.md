@@ -6,7 +6,7 @@
 
 これは [カウンターを作る](counter.md) の **`Angular 22.2` 版**です。Zig 側のコードは
 元のチュートリアルと **1 文字も変わりません**。違うのは `web/` の中身だけで、そこに
-[`examples/frameworks/angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) の実物をそのまま使います。
+[`examples/frameworks/angular/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/angular) の実物をそのまま使います。
 [ライブラリを選び直す](frameworks.md) といつでも別の分岐へ移れます。
 
 <!-- framework-picker -->
@@ -217,7 +217,9 @@ builder が `<script>` を注入するので `index.html` に手で書きませ�
 | 読み込み中 / 空 / エラーの画面 | [画面を作る](ui.md) |
 | `Angular` 版の Todo | [Todo を Angular で](todo-angular.md) |
 | `Angular` 版の画面 | [画面を Angular で](ui-angular.md) |
-| `Angular` の実物ソース | [`examples/frameworks/angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) |
+| `Angular` の実物ソース | [`examples/frameworks/angular/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/angular) |
 | `Angular` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
 | 9 つの example の比較 | [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) |
 | コマンドの引数・エラー・型生成 | [ガイド: コマンド](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

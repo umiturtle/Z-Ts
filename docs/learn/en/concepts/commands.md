@@ -130,3 +130,5 @@ return value without opening a WebView.
 - How to write them for real → [Guide: commands](../guides/rpc.md)
 - Plugin commands → [Plugins](plugins.md)
 - API → [`Schema`](../../../api/zts_rpc/schema.html#Schema) / [`Ctx`](../../../api/zts_rpc/ctx.html#Ctx)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

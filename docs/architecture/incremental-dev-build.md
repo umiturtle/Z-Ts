@@ -235,3 +235,5 @@ python3 scripts/check-docs.py → OK（--sync で台帳を更新）
 * 次のボトルネックは 50 ms ポーリング＋60 ms まとめ。ネイティブのファイル監視は
   3 OS 同一挙動の制約で避けているので、必要なら「変更検知のみイベント、差分はポーリング」
   のハイブリッドを検討する。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

@@ -33,3 +33,5 @@
 
 - **`Io.Group.concurrent` の重要性**: `std.Io.Group.async` は `await` まで実行開始保証がなく同期インライン実行され得るため、Producer-Consumer 待機や非ブロッキング IPC タスクには必ず `group.concurrent` を使うこと（`ADR-0003` 参照）。
 - **他ブランチとの衝突最小化**: `build.zig`・`docs/INDEX.md`・`M1-02` 領域ファイルは一切変更していないため、並行稼働中の `M1-02` / `M1-03` ブランチとそのままクリーンにマージ可能。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

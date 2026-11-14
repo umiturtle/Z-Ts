@@ -18,7 +18,7 @@ What we distribute is **one `zts` binary**. It carries no compiler, so put a 0.1
 
 ## 1. Install the binary
 
-Download one file for your OS from [GitHub Releases](https://github.com/umiturtle/Z-Ts/releases)
+Download one file for your OS from [GitHub Releases](https://github.com/umiturtle/ZigguraTs/releases)
 (named like `zts-0.1.1-linux-x86_64`). About 300 KB, **a single binary with no libc dependency** —
 nothing to put beside it.
 
@@ -91,7 +91,7 @@ If you are changing ziggurats itself, or would rather not use a published binary
 Bring your own `zig`.
 
 ```bash
-git clone https://github.com/umiturtle/Z-Ts.git
+git clone https://github.com/umiturtle/ZigguraTs.git
 cd Z-Ts
 zig build                # → zig-out/bin/zts (needs Zig 0.17 on PATH)
 ```
@@ -132,3 +132,5 @@ Move the checkout and existing projects lose that path. Pick one fix:
 - Your first app: [Build a counter](../tutorials/counter.md)
 - Every command and flag: [`docs/reference/cli.md`](../../../reference/cli.md)
 - Something is broken: [Troubleshooting](troubleshooting.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

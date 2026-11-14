@@ -56,3 +56,5 @@ bench/
 
 [`../docs/architecture/packaging-and-bench.md`](../docs/architecture/packaging-and-bench.md) §4。
 タスク票は [`../docs/tasks/M5-03-packager-and-bench.md`](../docs/tasks/M5-03-packager-and-bench.md)。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

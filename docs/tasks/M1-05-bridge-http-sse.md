@@ -29,3 +29,5 @@
   - `src/bridge/{auth,sse,js_init,server,mod}.zig`、`src/bridge_host.zig`、`tests/bridge/verify_bridge_e2e.ts` を実装し、公開モジュール `zts_bridge` を `build.zig`・`zigw`・`tests/standalone_modules.zig` に統合。
   - 2-vCPU マシン環境でも長寿命 SSE ストリームや HTTP/1.1 Keep-Alive 接続群が `std.Io.Threaded` ワーカープールを枯渇させない専用 OS スレッド接続アーキテクチャおよび決定論的グレースフルシャットダウン（全ストリーム `shutdown(.both)` + Loopback Wake Connect + OS スレッド `join`）を確立。
   - Debug / `ReleaseFast` 両モードで全 7 独立テストバイナリ `62/62` パスおよび `tsc 7.0.2 --strict` ゼロエラーを確認済み。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

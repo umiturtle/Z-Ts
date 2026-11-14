@@ -6,8 +6,8 @@ one toolchain.
 > The project's full name is **`ziggurats`** (lowercase). The CLI, package and module names stay
 > `zts` / `z_ts` / `zts_*`.
 
-[![CI](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml)
-[![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/ZigguraTs/)
+[![CI](https://github.com/umiturtle/ZigguraTs/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/ZigguraTs/actions/workflows/ci.yml)
+[![Docs](https://github.com/umiturtle/ZigguraTs/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/ZigguraTs/)
 
 📖 **Documentation site: <https://umiturtle.github.io/ZigguraTs/>**
 (search, table of contents and **working demos**; the Markdown in this repository is the source of
@@ -175,3 +175,5 @@ The upstream [`tauri`](https://github.com/tauri-apps/tauri) / [`wry`](https://gi
 [`tao`](https://github.com/tauri-apps/tao) / [`muda`](https://github.com/tauri-apps/muda) projects
 keep their respective licences (MIT / Apache-2.0). Code under `vendor/` is **for reference only**
 and is not part of any build.
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

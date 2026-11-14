@@ -33,3 +33,5 @@
 - **完了したこと**:
   - `include/zts_webview.h`、`src/webview/{mod,types,pending,mock,gtk_bindings,linux,c_api}.zig`、`src/webview_host.zig`、`tests/webview/verify_c_abi.c` を実装。
   - ローカルで `-Dgtk=true`（実 `libwebkit2gtk-4.1.so` + `libgtk-3.so` 動的リンク）・`-Dgtk=false`（Pure Zig）・`ReleaseFast` の全 3 構成 × 全 22 ビルドステップ完全通過を確認済み。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

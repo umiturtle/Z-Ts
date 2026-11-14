@@ -6,7 +6,7 @@
 
 This is the **SvelteKit 3.1** branch of [Build a counter](counter.md). The Zig side is
 **identical, character for character**; only `web/` changes, and it uses the real example from
-[`examples/frameworks/sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit). [Pick another library](frameworks.md) at any time.
+[`examples/frameworks/sveltekit/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/sveltekit). [Pick another library](frameworks.md) at any time.
 
 <!-- framework-picker -->
 
@@ -221,7 +221,9 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | loading / empty / error views | [Build the screen](ui.md) |
 | the Todo branch for SvelteKit | [Todo with SvelteKit](todo-sveltekit.md) |
 | the screen branch for SvelteKit | [Screen with SvelteKit](ui-sveltekit.md) |
-| the real SvelteKit source | [`examples/frameworks/sveltekit/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/sveltekit) |
+| the real SvelteKit source | [`examples/frameworks/sveltekit/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/sveltekit) |
 | the live SvelteKit demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/sveltekit/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
 | arguments, errors, generated types | [Guide: commands](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

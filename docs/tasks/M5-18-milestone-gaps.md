@@ -77,3 +77,5 @@ CI ではツールチェーンを入れず `skipped` を Check Summary に明記
   `cargo` 不在で全指標 `skipped`。`node --check` 4 ファイルすべて OK、`./zigw docs-check` 緑
   （`pages=265 links=1213`）。同期台帳も再同期済み。
 - **残り**: PR 1 本の作成と CI 7/7 の確認。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

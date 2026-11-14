@@ -156,3 +156,4 @@
 - **結果（2025-10-28, run `40634580935`）**: 4 ジョブ（Linux / macOS / Windows / parity）すべて green。
   `OK parity hosts=gtk3,cocoa,win32 patterns=17 comparisons=34 layout=ok pixels=max:9.77% mad:6.07`。
 
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

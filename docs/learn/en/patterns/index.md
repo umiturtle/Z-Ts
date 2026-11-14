@@ -55,3 +55,5 @@ minutes each. Reading takes 20 minutes; doing everything takes about an hour.
 | Where to validate? | **once, at the boundary** (top of the command) | if the type can express it, use the type |
 
 The pages that follow open each row, with the reason.
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

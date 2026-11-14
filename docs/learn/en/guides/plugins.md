@@ -147,8 +147,9 @@ console.log(await getAllWebviews()); // [{ label, windowLabel }, …]
 
 Labels accept `a-zA-Z0-9-/:_` (max 128 chars). `url` allows `http(s)`, `tauri`, `asset`,
 `isolation` and `ipc`; relative paths resolve under `tauri://localhost/`. `javascript:` / `file:`
-are rejected with `InvalidUrl` and duplicate labels with `DuplicateLabel`. `WindowOptions` we do
-not act on (`center`, `skipTaskbar`, `titleBarStyle`, …) are ignored rather than failing the call.
+are rejected with `InvalidUrl` and duplicate labels with `DuplicateLabel`. `WindowOptions` such as
+`center`, `skipTaskbar` and `titleBarStyle` are passed to the backend by `createWindow()`;
+options an OS cannot apply are recorded as state rather than dropped.
 
 ### event — [`EventBus`](../../../api/zts_tauri/event.html#EventBus)
 
@@ -214,9 +215,11 @@ const file = await open({ multiple: false });
 
 ### menu / tray — [`menu`](../../../api/zts_tauri/menu/mod.html) / [`tray`](../../../api/zts_tauri/tray/mod.html)
 
-Native on desktop (macOS `NSApp setMainMenu:`, Windows `CreateMenu` + `WM_COMMAND`), a
-`StubBackend` elsewhere. The backend is swappable, so tests can use
-[`Mock`](../../../api/zts_tauri/menu/mod.html#Mock) to replay "which item was clicked".
+Native implementations exist for **GTK, Cocoa and Win32** (macOS `NSApp setMainMenu:`,
+Windows `CreateMenu` + `WM_COMMAND`, Linux GTK). The default `CorePluginStates`, however, starts
+with a `StubBackend`, so **the application must wire the native one explicitly**; see
+[the compatibility scope](../../../reference/compatibility.en.md). The backend is swappable, so
+tests can use [`Mock`](../../../api/zts_tauri/menu/mod.html#Mock) to replay "which item was clicked".
 
 ```zig
 plugins.menu_state.setBackend(tauri.menu.Mock.backend());
@@ -256,7 +259,7 @@ if (!policy.allows("plugin:fs|read_text_file", "main", "tauri://localhost")) ret
 | Symptom | Cause and fix |
 |---|---|
 | `invoke("plugin:window\|set_title")` says `command not found` | you used `rpc.Schema` alone; go through `withCorePlugins` |
-| no menu appears | Linux uses `StubBackend`; install `native.menuBackend()` (supported OSes only) |
+| no menu appears | the default is `StubBackend`; inject the GTK / Cocoa / Win32 implementation with `native.menuBackend()` (Linux included) |
 | `path` does not resolve `$APPDATA` | `PathState.app_identifier` is still the default; match `app_config.identifier` |
 | `fs` always returns `forbidden path` | the capability `scope` is empty; allow a glob such as `{ "path": "$APPDATA/**" }` |
 | only headless CI fails | dialogs and clipboard need `Mock` (swap the `Backend`) |
@@ -344,3 +347,5 @@ var bound = S.bind(.{ .store = &state, .log = &state, .os = &state });
 - Internals: [`docs/architecture/tauri-menu-tray.md`](../../../architecture/tauri-menu-tray.md) /
   [`docs/architecture/tauri-dialog-clipboard.md`](../../../architecture/tauri-dialog-clipboard.md) /
   [`docs/decisions/0014-config-import-and-acl.md`](../../../decisions/0014-config-import-and-acl.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

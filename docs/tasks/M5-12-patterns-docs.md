@@ -42,3 +42,5 @@
   答えを隠したまま本文の流れを保てる。
 - **動く例はコンパイルする**。`zts_rpc.Schema` の `RpcState` のように、書かないと落ちる規則は
   文章で説明するより、通るコードで示すほうが早い。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

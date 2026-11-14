@@ -85,6 +85,9 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       catalog libraries in both languages. Every branch must name the library's
                       state primitive and cover the Zig linkage (seal, two states, `ipc://`,
                       ONLINE/OFFLINE), and both hubs plus each original must link the whole grid.
+23. Page provenance  — every published Markdown page ends with one `zts-doc-meta` comment naming
+                      the source version, the verification day and its own last rewrite. Match the
+                      zon version and the sync ledger so a stale page can be detected mechanically.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -97,6 +100,8 @@ import os
 import re
 import subprocess
 import sys
+
+import doc_meta
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(REPO_ROOT)
@@ -668,7 +673,9 @@ def render_ledger(verified, pages, date):
         "python3 scripts/check-docs.py                             # 検査のみ（CI はこれ）\n"
         "```\n\n"
         "`--sync` は本文が変わったページの `last_rewritten` だけを更新し、変わっていないページの\n"
-        "日付は保持します。内部資料（ADR・設計メモ・タスク票）は日本語専用なので台帳の対象外です。\n\n"
+        "日付は保持します。内部資料（ADR・設計メモ・タスク票）は日本語専用なので台帳の対象外です。\n"
+        "全ページの末尾には `<!-- zts-doc-meta: ... -->` を 1 行書き、対応バージョン・確認日・\n"
+        "最終書き換え日を記録します（規約 23）。メタ自身は本文に数えません。\n\n"
         "## 関連\n\n"
         "- [ドキュメントの書き方](writing-docs.md) — 規約 13 と 2 言語の規約\n"
         "- [リポジトリの地図](repository-map.md) — ファイル配置\n"
@@ -701,7 +708,9 @@ def render_ledger(verified, pages, date):
         "```\n\n"
         "`--sync` updates `last_rewritten` only for pages whose content changed, and keeps the date of\n"
         "untouched pages. Internal documents (ADRs, design notes, task sheets) are Japanese-only and\n"
-        "are deliberately outside the ledger.\n\n"
+        "are deliberately outside the ledger. Every published page also ends with one\n"
+        "`<!-- zts-doc-meta: ... -->` line recording its source version, verification day and last\n"
+        "rewrite (rule 23). The meta line is not counted as body text.\n\n"
         "## Related\n\n"
         "- [Writing the docs](writing-docs.en.md) — rule 13 and the bilingual conventions\n"
         "- [Repository map](repository-map.en.md) — where files live\n"
@@ -709,6 +718,18 @@ def render_ledger(verified, pages, date):
     )
     open(LEDGER_JA, "w", encoding="utf-8").write(ja)
     open(LEDGER_EN, "w", encoding="utf-8").write(en)
+
+
+def git_last_commit_date(path):
+    """Last commit day for an internal note that has no ledger row."""
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%cs", "--", path],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        return out.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 
 def run_sync(date):
@@ -736,17 +757,41 @@ def run_sync(date):
             print(f"error: {en}: missing English counterpart — cannot verify", file=sys.stderr)
             sys.exit(1)
 
+    # Decide `last_rewritten` from the BODY only. The meta line is regenerated on every sync, so
+    # hashing the whole file here would make every page look "just rewritten" every time.
     new_pages = []
     for ja, en in pairs:
-        jh, eh = sha256_file(ja), sha256_file(en)
+        jb, eb = doc_meta.body_hash(ja), doc_meta.body_hash(en)
         prev = old_pages.get((ja, en), {})
-        changed = prev.get("ja_sha256") != jh or prev.get("en_sha256") != eh
+        # Fall back to the old full-file hash for ledgers written before body hashes existed.
+        prev_jb = prev.get("ja_body_sha256", prev.get("ja_sha256"))
+        prev_eb = prev.get("en_body_sha256", prev.get("en_sha256"))
+        changed = prev_jb != jb or prev_eb != eb
         last = date if changed or not prev.get("last_rewritten") else prev["last_rewritten"]
-        new_pages.append({"ja": ja, "en": en, "last_rewritten": last})
+        new_pages.append({
+            "ja": ja, "en": en, "last_rewritten": last,
+            "ja_body_sha256": jb, "en_body_sha256": eb,
+        })
 
     # The ledger views are themselves pages in the ledger. Render them first; their content does
     # not depend on the hashes, so no fixed-point iteration is needed.
     render_ledger(verified, new_pages, date)
+
+    # Put one provenance comment at the end of every published page. Reader pages take the ledger
+    # date; internal notes (ADRs, task sheets, architecture notes) use their last commit day.
+    page_dates = {}
+    for page in new_pages:
+        page_dates[page["ja"]] = page["last_rewritten"]
+        page_dates[page["en"]] = page["last_rewritten"]
+    site_files = doc_meta.site_md_files()
+    for path in site_files:
+        last = page_dates.get(path) or git_last_commit_date(path) or date
+        text = open(path, encoding="utf-8").read()
+        open(path, "w", encoding="utf-8").write(
+            doc_meta.with_meta(text, source_version=zts, verified=date, last_rewritten=last)
+        )
+
+    # The ledger's *_sha256 covers the FULL file, meta included (rule 13 stays unchanged).
     for page in new_pages:
         page["ja_sha256"] = sha256_file(page["ja"])
         page["en_sha256"] = sha256_file(page["en"])
@@ -759,7 +804,8 @@ def run_sync(date):
         handle.write("\n")
     print(
         f"Sync ledger updated: {len(new_pages)} bilingual pairs, "
-        f"ziggurats {zts} / Zig {zig}, verified {date} at {verified['commit']}."
+        f"ziggurats {zts} / Zig {zig}, verified {date} at {verified['commit']}; "
+        f"{len(site_files)} pages carry zts-doc-meta."
     )
 
 
@@ -1484,6 +1530,20 @@ else:
             f"src/cli/args.zig: CLI version {cli_version} != build.zig.zon {version} (rule 20)"
         )
 
+# Reader-facing pages must not teach an old release or the pre-rename repository URL. Task
+# sheets and ADRs are historical records and are exempt; checkout path examples are rule 14's.
+R20_READER = ["README.md", "README.en.md"] + sorted(
+    p for p in glob.glob("docs/**/*.md", recursive=True)
+    if not p.startswith(("docs/tasks/", "docs/decisions/"))
+)
+for path in R20_READER:
+    text = open(path, encoding="utf-8").read()
+    if "github.com/umiturtle/Z-Ts" in text:
+        errors.append(f"{path}: pre-rename repository URL in reader docs (rule 20)")
+    for stale in ("v0.1.0", "zts-0.1.0-", "zts 0.1.0"):
+        if stale in text:
+            errors.append(f"{path}: stale release reference {stale!r} (rule 20)")
+
 release = open(".github/workflows/release.yml", encoding="utf-8").read() if os.path.isfile(".github/workflows/release.yml") else ""
 if "build.zig.zon" not in release or ".version" not in release:
     errors.append(".github/workflows/release.yml: must read the version from build.zig.zon (rule 20)")
@@ -1593,6 +1653,44 @@ for lang in ("ja", "en"):
             for name, body in (("index.md", hub), ("frameworks.md", chooser), (f"{kind}.md", original)):
                 if link not in body:
                     errors.append(f"docs/learn/{lang}/tutorials/{name}: missing {link} (rule 22)")
+
+# ---------------------------------------------------------------------------
+# 23. Every published page states which source it describes and when it was rewritten
+# ---------------------------------------------------------------------------
+#
+# `scripts/doc_meta.py` owns the one-line comment; `--sync` writes it. This rule is what makes the
+# note mechanically useful: a page that claims the wrong version, an outdated verification day, a
+# duplicated meta or a reader page whose date drifted from the ledger all turn CI red.
+
+R23_SITE = doc_meta.site_md_files()
+R23_DATES = {}
+for (ja, en), entry in entries.items():
+    R23_DATES[ja] = entry.get("last_rewritten")
+    R23_DATES[en] = entry.get("last_rewritten")
+
+for path in R23_SITE:
+    text = open(path, encoding="utf-8").read()
+    # Only the TRAILING comment counts. A doc may legitimately quote the format when explaining
+    # the mechanism (this task sheet does), so do not count occurrences in the body.
+    body, fields = doc_meta.split_meta(text)
+    if fields is None:
+        errors.append(f"{path}: missing trailing zts-doc-meta comment (rule 23)")
+        continue
+    if fields.get("source-version") != zts:
+        errors.append(f"{path}: source-version {fields.get('source-version')!r} != {zts} (rule 23)")
+    if fields.get("verified") != date:
+        errors.append(f"{path}: verified {fields.get('verified')!r} != {date} (rule 23)")
+    last = fields.get("last-rewritten", "")
+    if not ISO_DATE.fullmatch(last):
+        errors.append(f"{path}: last-rewritten '{last}' is not an ISO date (rule 23)")
+    elif last > date and path in R23_DATES:
+        # Internal notes take their real git commit day, which may postdate the last verification;
+        # only ledger-backed pages must not claim a rewrite after the verification day.
+        errors.append(f"{path}: last-rewritten {last} is after verified {date} (rule 23)")
+    if path in R23_DATES and R23_DATES[path] and last != R23_DATES[path]:
+        errors.append(
+            f"{path}: last-rewritten {last} != ledger {R23_DATES[path]} (rule 23)"
+        )
 
 if warnings:
     for w in warnings:

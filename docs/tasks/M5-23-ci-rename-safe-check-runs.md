@@ -70,3 +70,5 @@
   コード・テストの失敗ではない。新しいランで上書きする。
 - **次の 1 手**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
   `main` の新しい CI / Pages run が緑になったらタスク票を `done` にする。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

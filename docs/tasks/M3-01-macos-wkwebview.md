@@ -181,3 +181,5 @@ src/webview/macos.zig:862: try testing.expectEqualStrings("*", parsed.value.cors
 WKWebView は **safelist 外のレスポンスヘッダを `fetch()` から隠す**ため、
 `Access-Control-Allow-Origin` を `Access-Control-Expose-Headers` に列挙して解決した（§4.5）。
 同時に、Linux ジョブへ誤って挿入していた macOS マーカー検証ステップを `ci-macos` へ移動した。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

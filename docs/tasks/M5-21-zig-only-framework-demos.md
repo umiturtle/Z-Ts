@@ -99,3 +99,5 @@ UA パディングが WebKitGTK と WKWebView で 5px 違うことも露呈し�
   `examples/gallery` の `build test` 8/8 と `build install` がすべて緑。
   PR は **#20 の 1 本**のみ。
 - **次**: PR #20 へ修正を push し、3 OS CI と `Cross-OS parity` が揃って緑になるのを確認してマージ。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

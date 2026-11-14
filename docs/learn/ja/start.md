@@ -24,12 +24,12 @@ Zig だけは自分で用意します。
 zig version             # → 0.17.0
 
 # 2) GitHub Releases から自分の OS の zts を落として PATH に置く
-curl -LO https://github.com/umiturtle/Z-Ts/releases/download/v0.1.0/zts-0.1.0-linux-x86_64
-chmod +x zts-0.1.0-linux-x86_64
+curl -LO https://github.com/umiturtle/ZigguraTs/releases/download/v0.1.1/zts-0.1.1-linux-x86_64
+chmod +x zts-0.1.1-linux-x86_64
 mkdir -p ~/.local/bin
-mv zts-0.1.0-linux-x86_64 ~/.local/bin/zts
+mv zts-0.1.1-linux-x86_64 ~/.local/bin/zts
 export PATH="$HOME/.local/bin:$PATH"
-zts version             # → zts 0.1.0
+zts version             # → zts 0.1.1
 ```
 
 **チェックアウトの clone も、リポジトリ専用のツールも要りません。** `zts` は Zig を子プロセスで起動するだけです。
@@ -142,7 +142,7 @@ my_app: 1 embedded assets
 ## ここまでで出来たこと
 
 ```text
-✔ zts version             → zts 0.1.0
+✔ zts version             → zts 0.1.1
 ✔ zts doctor              → all checks passed
 ✔ zts init my-app         → 6 ファイル + 指紋の埋め戻し
 ✔ zts dev                 → ブラウザで my_app が見える
@@ -165,3 +165,5 @@ my_app: 1 embedded assets
 
 用語で迷ったら [用語集](../../glossary.md)、動かないときは
 [トラブルシューティング](guides/troubleshooting.md) と [エラー索引](../../reference/errors.html) へ。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

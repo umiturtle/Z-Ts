@@ -35,3 +35,5 @@
   - `M1-02` 全 7 モジュール実装、`M1-03` 全 6 項目の手直し・スリム化、および全 50 テストスイート（10,000-step HandlePool ファズ + 1,000-step Glob/URL ファズ + MPSC マルチスレッド並行テスト含む）オールグリーンを確認。
 - **作業中・直前の状態**:
   - 最終フルビルド（Debug / `ReleaseFast` / 3-OS クロスビルド）・`zig fmt`・PR 作成・GitHub Actions 3-OS CI 実機完走確認を実行。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

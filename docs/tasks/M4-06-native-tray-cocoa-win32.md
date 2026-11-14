@@ -79,3 +79,5 @@ macOS の `NSStatusItem` と Windows の `Shell_NotifyIconW` を実装し、
 - **Win32 の `NOTIFYICONDATAW`**: 976 バイト（x86_64）。`cbSize` を間違えると
   `NIM_ADD` が無言で失敗するので、`@sizeOf` を comptime で固定する。
 - **タイトル**: macOS は `button.title`、Win32 はツールチップに併記（Win32 にタイトル欄は無い）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

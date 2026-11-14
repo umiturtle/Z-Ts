@@ -197,7 +197,7 @@ pub const packages = [_]PackageSpec{
     },
 };
 
-pub const repo_blob_base = "https://github.com/umiturtle/Z-Ts/blob/main/";
+pub const repo_blob_base = "https://github.com/umiturtle/ZigguraTs/blob/main/";
 
 // ---------------------------------------------------------------------------------------------
 // Scanning

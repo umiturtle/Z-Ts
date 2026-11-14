@@ -174,3 +174,5 @@ SSG が出力する `_zts/manifest.json`。どのファイルがどのハッシ�
 - [CLI リファレンス](reference/cli.md) — `zts` のサブコマンド
 - [はじめての ziggurats](learn/ja/start.md) — 10 分で動かす
 - [ドキュメント索引](INDEX.md) — サイトのサイドバーと同じ並び
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

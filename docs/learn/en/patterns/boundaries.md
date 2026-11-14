@@ -154,3 +154,5 @@ of [Designing commands](commands.md) — is the action "toggle" or "done"?
 | how to cross the boundary? | one call per action, optimistic update, roll back | this page |
 
 Next: [Look things up](../guides/index.md) — read one guide for the thing you want to build.
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

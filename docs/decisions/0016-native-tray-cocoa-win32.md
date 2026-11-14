@@ -92,3 +92,5 @@ CI ランナーでは実際に失敗しうるので、`shell=0` を記録して 
   マーカーが無い場合は「黙ってスキップされた」とみなして fail する。
 - **残課題**: `resource(rid)` アイコン、Win32 のキーボードショートカット実動作
   （`TranslateAcceleratorW`、ADR-0015 §4.4 と同じ制限）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

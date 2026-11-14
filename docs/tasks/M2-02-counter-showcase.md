@@ -90,3 +90,5 @@ cd examples/counter
 - テスト数が 13 なのは、Zig のテストランナーが `live_test.zig` から到達可能な
   `app.zig` の 6 テストも同一コンパイル単位で実行するため（6 + 6 + 1 = 13）。
 - 3 OS のどこでも追加インストールは発生せず、既存の `tests/tauri/node_modules` を共有。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

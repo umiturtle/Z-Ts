@@ -128,3 +128,5 @@ pub fn main() !void {
 - コマンドを定義する → [コマンド（RPC）](rpc.md)
 - 公開宣言を名前から引く → [API リファレンス](../../../api/index.html)
 - 配布バイナリとバージョン → [インストール](install.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -176,3 +176,5 @@ zts build && grep -r "unsafe-inline" zig-out/ || echo "no inline"
 - [プラグイン](plugins.md) — どのコマンドがどんな権限名か
 - [ガイド: 移行](../guides/migrate-from-tauri.md) — 既存の `capabilities/` をそのまま使う
 - API → [`acl`](../../../api/zts_tauri/acl.html) / [`config_import`](../../../api/zts_tauri/config_import.html)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

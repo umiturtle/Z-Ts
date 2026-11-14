@@ -112,3 +112,5 @@ zig build vs zig build check  747.0 ms → 396.0 ms  = 1.89x
   維持したので 3 OS 同一挙動は保たれている。
 * グラフの根を `src/main.zig` に固定した。別エントリのプロジェクトは完全ビルドに落ちる
   （正しいが遅い）。必要なら `--verbose` で得た引数から根を推定する。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

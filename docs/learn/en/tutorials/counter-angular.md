@@ -6,7 +6,7 @@
 
 This is the **Angular 22.2** branch of [Build a counter](counter.md). The Zig side is
 **identical, character for character**; only `web/` changes, and it uses the real example from
-[`examples/frameworks/angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular). [Pick another library](frameworks.md) at any time.
+[`examples/frameworks/angular/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/angular). [Pick another library](frameworks.md) at any time.
 
 <!-- framework-picker -->
 
@@ -215,7 +215,9 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | loading / empty / error views | [Build the screen](ui.md) |
 | the Todo branch for Angular | [Todo with Angular](todo-angular.md) |
 | the screen branch for Angular | [Screen with Angular](ui-angular.md) |
-| the real Angular source | [`examples/frameworks/angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) |
+| the real Angular source | [`examples/frameworks/angular/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/angular) |
 | the live Angular demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
 | arguments, errors, generated types | [Guide: commands](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -43,3 +43,5 @@ published site folds them into a single "internals" entry.
 - Terminology → [Glossary](../../../glossary.md)
 - Working on the repository (builds, CI, tests) →
   [`docs/contributing/README.md`](../../../contributing/README.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

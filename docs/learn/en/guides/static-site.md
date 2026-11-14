@@ -220,3 +220,5 @@ test "ExportOptions field names" {
     try std.testing.expectEqualStrings("/about", options.prerender_routes[0].route);
 }
 ```
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -251,3 +251,5 @@ cd my-app && zig build tsgen     # build.zig に tsgen ステップを足して�
 - `zts` の全オプション: [`../reference/cli.md`](../../../reference/cli.md)
 - エラーに対応する API の引き方: [API リファレンスの索引](../../../api/index.html)
 - ziggurats 本体の開発で詰まったとき: [`../contributing/troubleshooting.md`](../../../contributing/troubleshooting.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

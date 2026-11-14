@@ -193,3 +193,5 @@ FAIL parity fw-react: layout differs by 5px at box #3 (tolerance 1px)
 
 `bash scripts/ci-logs.sh <run_id>` で `OK parity …` と各パターンの
 `layout=…px pixels=…% MAD=…` 行が読める（artifact のダウンロードは外部ストレージ制限で不可）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

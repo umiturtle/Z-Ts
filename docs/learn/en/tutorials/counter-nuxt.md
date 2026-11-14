@@ -6,7 +6,7 @@
 
 This is the **Nuxt 4.6** branch of [Build a counter](counter.md). The Zig side is
 **identical, character for character**; only `web/` changes, and it uses the real example from
-[`examples/frameworks/nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt). [Pick another library](frameworks.md) at any time.
+[`examples/frameworks/nuxt/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/nuxt). [Pick another library](frameworks.md) at any time.
 
 <!-- framework-picker -->
 
@@ -216,7 +216,9 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | loading / empty / error views | [Build the screen](ui.md) |
 | the Todo branch for Nuxt | [Todo with Nuxt](todo-nuxt.md) |
 | the screen branch for Nuxt | [Screen with Nuxt](ui-nuxt.md) |
-| the real Nuxt source | [`examples/frameworks/nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) |
+| the real Nuxt source | [`examples/frameworks/nuxt/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/nuxt) |
 | the live Nuxt demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
 | arguments, errors, generated types | [Guide: commands](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

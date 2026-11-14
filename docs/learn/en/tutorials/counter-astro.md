@@ -6,7 +6,7 @@
 
 This is the **Astro 6.4** branch of [Build a counter](counter.md). The Zig side is
 **identical, character for character**; only `web/` changes, and it uses the real example from
-[`examples/frameworks/astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro). [Pick another library](frameworks.md) at any time.
+[`examples/frameworks/astro/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/astro). [Pick another library](frameworks.md) at any time.
 
 <!-- framework-picker -->
 
@@ -220,7 +220,9 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | loading / empty / error views | [Build the screen](ui.md) |
 | the Todo branch for Astro | [Todo with Astro](todo-astro.md) |
 | the screen branch for Astro | [Screen with Astro](ui-astro.md) |
-| the real Astro source | [`examples/frameworks/astro/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/astro) |
+| the real Astro source | [`examples/frameworks/astro/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/astro) |
 | the live Astro demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/astro/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
 | arguments, errors, generated types | [Guide: commands](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

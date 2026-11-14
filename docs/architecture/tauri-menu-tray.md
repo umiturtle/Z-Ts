@@ -241,3 +241,5 @@ CI はこのマーカーを grep し、無ければ「黙ってスキップさ�
 * Win32 にストックアイコン表が無いため、`NativeIcon` はすべて `IDI_APPLICATION` になる。
 * macOS のホバー（`Enter` / `Leave`）は AppKit の `NSStatusItem` では取得できない。
 * Win32 のショートカットは ADR-0015 §4.4 の制限をそのまま引き継ぐ（`HMENU` 側の話）。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

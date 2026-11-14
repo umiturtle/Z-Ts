@@ -19,9 +19,9 @@ version was verified consistent with the implementation. The source of truth is
 
 - **Verified version**: `ziggurats 0.1.1` / Zig `0.17.0`
 - **Verified on**: `2026-10-21`
-- **Base commit**: `07b6a3e` (HEAD when verification began; the sha256 below identifies the implementation)
+- **Base commit**: `e7e8cd9` (HEAD when verification began; the sha256 below identifies the implementation)
 - **Verified with**: `python3 scripts/check-docs.py` · `python3 scripts/gen-framework-tutorials.py --check` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
-- **Implementation hash**: `2a54bd074275041c8f55a06862676fe0f87cbfd2b793cb0e294e916f681726cb`
+- **Implementation hash**: `c94c6622b6abe95396470495da107e665ea547a190f512c6a9d39c616488cec6`
 
 Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `src/docsite/frameworks.zig`, `src/docsite/frameworks.json`, `src/docsite/assets/site.js`, `src/docsite/assets/site.css`, `scripts/check-docs.py`, `scripts/gen-framework-tutorials.py`
 
@@ -92,6 +92,7 @@ Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`,
 | `docs/learn/ja/tutorials/ui-sveltekit.md` | `docs/learn/en/tutorials/ui-sveltekit.md` | 2026-10-21 | 0.1.1 |
 | `docs/learn/ja/tutorials/ui.md` | `docs/learn/en/tutorials/ui.md` | 2026-10-21 | 0.1.1 |
 | `docs/reference/cli.md` | `docs/reference/cli.en.md` | 2026-10-21 | 0.1.1 |
+| `docs/reference/compatibility.md` | `docs/reference/compatibility.en.md` | 2026-10-21 | 0.1.1 |
 | `docs/reference/tauri-internals.md` | `docs/reference/tauri-internals.en.md` | 2026-10-21 | 0.1.1 |
 | `docs/reference/tauri-usage.md` | `docs/reference/tauri-usage.en.md` | 2026-10-21 | 0.1.1 |
 | `examples/c_embed/README.md` | `examples/c_embed/README.en.md` | 2026-10-21 | 0.1.1 |
@@ -110,10 +111,14 @@ python3 scripts/check-docs.py                             # check only (what CI 
 
 `--sync` updates `last_rewritten` only for pages whose content changed, and keeps the date of
 untouched pages. Internal documents (ADRs, design notes, task sheets) are Japanese-only and
-are deliberately outside the ledger.
+are deliberately outside the ledger. Every published page also ends with one
+`<!-- zts-doc-meta: ... -->` line recording its source version, verification day and last
+rewrite (rule 23). The meta line is not counted as body text.
 
 ## Related
 
 - [Writing the docs](writing-docs.en.md) — rule 13 and the bilingual conventions
 - [Repository map](repository-map.en.md) — where files live
 - [Documentation index](../INDEX.en.md) — the site's order
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

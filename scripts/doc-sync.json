@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "07b6a3e",
+    "commit": "e7e8cd9",
     "zts_version": "0.1.1",
     "zig_version": "0.17.0",
     "checks": [
@@ -30,491 +30,638 @@
       "scripts/check-docs.py",
       "scripts/gen-framework-tutorials.py"
     ],
-    "implementation_sha256": "2a54bd074275041c8f55a06862676fe0f87cbfd2b793cb0e294e916f681726cb"
+    "implementation_sha256": "c94c6622b6abe95396470495da107e665ea547a190f512c6a9d39c616488cec6"
   },
   "pages": [
     {
       "ja": "README.md",
       "en": "README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "4dfe16b5b116f1ba0f84e6fc1b10b4cd05cbb4d2ab324e13034108d2037f747e",
-      "en_sha256": "7f31c48fbe0e7ac0e3edd759693da89ef8a22aa622ffc733081ae8bd39328dc4"
+      "ja_body_sha256": "3ed36449f7090dc939f17b8ff26568c842fbbd1249c80dd39c769b6a51db2a1b",
+      "en_body_sha256": "c18e0f598ad5a467786216b0b8ee4461e82fb288807995017434115ab0c31290",
+      "ja_sha256": "2f1bb980fd847b8f2b8018f156855ac20b57be5b7acd01a2c0e19486087e65c7",
+      "en_sha256": "9689a077f20a416f1f33befb1ad0b51bc033a4571d31c5680d02ea8d263c6515"
     },
     {
       "ja": "docs/INDEX.md",
       "en": "docs/INDEX.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "9f52f268ce4ea4e6b093d3fc7fe95244c1fb456e16f044b8464b4d1fe944d5c6",
-      "en_sha256": "9bc62824d55b6603fa2a88adaad8f44f4d67b9ffdb73bdf2c570c6b3d4b99efb"
+      "ja_body_sha256": "c77cf325237d7e132a0daa7788c92d9d4b4466a31e355b1c5a063c3f54ec3b8d",
+      "en_body_sha256": "e88028b300b33630222b6c7702489894d574688227505e717e031b3ff910d7bd",
+      "ja_sha256": "cce3870ab0d2ab588eb0ea2c74af659d5e72aafefa87342ed20e0bb74714e351",
+      "en_sha256": "a54a381034a553b8b7f1ed728c467ac2bd905b2fdc9a7b35f2c9214d114da557"
     },
     {
       "ja": "docs/contributing/README.md",
       "en": "docs/contributing/README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "ffcc287a96b81c77ff74ae6d9f65639989e8d133297f8c0a3418cc4761dc821a",
-      "en_sha256": "864c17dcbc0e2f2c1d51c4ed449d1fd0e13b182ddb1bf6c9abda0433062fa578"
+      "ja_body_sha256": "4d6fa273c495867765a127fb5403c54e6149377d554b15c3b4a347d9dee9c04a",
+      "en_body_sha256": "864c17dcbc0e2f2c1d51c4ed449d1fd0e13b182ddb1bf6c9abda0433062fa578",
+      "ja_sha256": "6b39cf32b765391d2b5202be57b9e17a63ae403b47f4d2a17b1e467c2b9ab2b0",
+      "en_sha256": "30edb239867d5cb77a52fec67bb8046852fc388008e8b9d4574c8cde0afe320f"
     },
     {
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "9886bdc1177cdf41d6004601c3021c6fbe7c68f268e142df920d49245828675d",
-      "en_sha256": "0b7c55305572482a033bcdcfae76684634591c75570815845a3d1f606c657e92"
+      "ja_body_sha256": "1d05ec2edee7e4198504d1deb36e01d3412d0eb482b8cbda70dad8bb155505b8",
+      "en_body_sha256": "1f7f012129ca73ad9b9ac5ea89008a15beb300aebf2c149bfba78032ab82dcdb",
+      "ja_sha256": "bea64b5cc914fd343cf16aa1ef4527f0c351e4bb823e5fedb77f700005cfc0b0",
+      "en_sha256": "6882f35a2e8ecc6b7e9ba909b52abe19a6d3921b0985dbd590961637b532b993"
     },
     {
       "ja": "docs/contributing/gitflow.md",
       "en": "docs/contributing/gitflow.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "0e497f69fa82792e6bff2fea83a421e810d37993e595a3b6d72b0996a60e7bf9",
-      "en_sha256": "d21c00cbc0df02013cc74e1cae8b7e2b20e305fafa479fe72b637eea2f5886d8"
+      "ja_body_sha256": "0e497f69fa82792e6bff2fea83a421e810d37993e595a3b6d72b0996a60e7bf9",
+      "en_body_sha256": "d21c00cbc0df02013cc74e1cae8b7e2b20e305fafa479fe72b637eea2f5886d8",
+      "ja_sha256": "4141fca0f64b638d7a9c0ceaa7897ee9021ae047dc3bdf73b3328804f609d54e",
+      "en_sha256": "3f51407cc4aa25e54e95f46b26f94c1c1a590fd449006b95008080db551c4a73"
     },
     {
       "ja": "docs/contributing/repository-map.md",
       "en": "docs/contributing/repository-map.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "7b1fc90705c62538b28821fc8ce7eb31be7d2e53bac475428f73c86733295fea",
-      "en_sha256": "7ac8b57343e9d804d72b2dae17cb4e79dd0a3f46aea5ed0565212b1f6afbd7bd"
+      "ja_body_sha256": "7b1fc90705c62538b28821fc8ce7eb31be7d2e53bac475428f73c86733295fea",
+      "en_body_sha256": "7ac8b57343e9d804d72b2dae17cb4e79dd0a3f46aea5ed0565212b1f6afbd7bd",
+      "ja_sha256": "27e27279da6c37b7f599419ad4dacaa2896fc39b5b604e8f0d67259c6efb1ff1",
+      "en_sha256": "5c30d6a921726443ef0aabf6a98644e99a0ae79fac8e63762661895398283416"
     },
     {
       "ja": "docs/contributing/troubleshooting.md",
       "en": "docs/contributing/troubleshooting.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "c96b5a45ca31705cdd8c939384fdee15925ef6db2caa7669331acaa1ed8b0cad",
-      "en_sha256": "2e7c57a35bbf2de72c63ac70c0d5cc9fbfd8ee9b907d8fbc808397e6cfb28fee"
+      "ja_body_sha256": "c96b5a45ca31705cdd8c939384fdee15925ef6db2caa7669331acaa1ed8b0cad",
+      "en_body_sha256": "2e7c57a35bbf2de72c63ac70c0d5cc9fbfd8ee9b907d8fbc808397e6cfb28fee",
+      "ja_sha256": "b36ca64cbeea9dd79dba687bbf7af5c3708da97d03354f0e908cb5bf1cc11152",
+      "en_sha256": "39bc24f4864f06677b085c26a869a71a492949ae92a11c0eba3ab63bddaea2e2"
     },
     {
       "ja": "docs/contributing/writing-docs.md",
       "en": "docs/contributing/writing-docs.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a0adae2d8323a60dedf750cbe15dcd727d729d12d6a3a7073aa21303e0fef851",
-      "en_sha256": "af65352bbb2402c34c487f8e9e0c51532ec71bc0c79fb0571a4737037bdaa4a8"
+      "ja_body_sha256": "a0adae2d8323a60dedf750cbe15dcd727d729d12d6a3a7073aa21303e0fef851",
+      "en_body_sha256": "af65352bbb2402c34c487f8e9e0c51532ec71bc0c79fb0571a4737037bdaa4a8",
+      "ja_sha256": "51b50aaaadd3a9ba05d155301368c0496c99ad4b4c33edd15337c7f7ed900edf",
+      "en_sha256": "dd050e24ef0563095791d507ca9db18fe6eeef9ccb77afae63e949092b79615f"
     },
     {
       "ja": "docs/glossary.md",
       "en": "docs/glossary.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a89fd06c504fe10344aa886cc34ac9c53e17f9367fb017345bb2e14ef14af54c",
-      "en_sha256": "c92e1f512ba21ed4af8e60655c42b46cae0909d1eb67479a45728d214dc31e46"
+      "ja_body_sha256": "a89fd06c504fe10344aa886cc34ac9c53e17f9367fb017345bb2e14ef14af54c",
+      "en_body_sha256": "c92e1f512ba21ed4af8e60655c42b46cae0909d1eb67479a45728d214dc31e46",
+      "ja_sha256": "7fbb2fbdf3b78bf872cc563fb7bb9228ad9fe06aad3189abaa114e6317cea33b",
+      "en_sha256": "2f97db40a9f7c2e3274031d640a93489391501b54853fd49bdc7de6ce0d72d6f"
     },
     {
       "ja": "docs/learn/ja/concepts/architecture.md",
       "en": "docs/learn/en/concepts/architecture.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "845e6b15f389ec51c4641016ee440719323c75cd8cfd31c51482044443539cb8",
-      "en_sha256": "b63d31bcc34e22ae7893d6a4c2842e62d5426ceff7dcab283b129f83abfe5c71"
+      "ja_body_sha256": "845e6b15f389ec51c4641016ee440719323c75cd8cfd31c51482044443539cb8",
+      "en_body_sha256": "b63d31bcc34e22ae7893d6a4c2842e62d5426ceff7dcab283b129f83abfe5c71",
+      "ja_sha256": "75e88e121e0885387dfc8fc43c8af3aefff13f21e994fd4919cf0c2d168b81ec",
+      "en_sha256": "39be28863eb2075d29207c47c27c35ab46f37ad46e720e67312155f8e7a81702"
     },
     {
       "ja": "docs/learn/ja/concepts/commands.md",
       "en": "docs/learn/en/concepts/commands.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "88bd1acc81b6df81fa025813b959366811215611cb23a70dde34c501f2970844",
-      "en_sha256": "6ec6ad1e1bed68caeac25daea46ddddb43fbf7d2bb0dd2da3ded3e743e80e498"
+      "ja_body_sha256": "88bd1acc81b6df81fa025813b959366811215611cb23a70dde34c501f2970844",
+      "en_body_sha256": "6ec6ad1e1bed68caeac25daea46ddddb43fbf7d2bb0dd2da3ded3e743e80e498",
+      "ja_sha256": "19028311600f7d18a9a3b1726f165eb35188c66a544ebe5d71465cc6d957f915",
+      "en_sha256": "6545bea66a673588ca7df70c872c370ee34f4ea5136047b4e88f42f1c2057140"
     },
     {
       "ja": "docs/learn/ja/concepts/index.md",
       "en": "docs/learn/en/concepts/index.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d8f15df66fdbf966df6e0b10a78b7d00e29765f2465c33f0fad6c5dcf647ac4a",
-      "en_sha256": "24bd8efba323818bd6c7e001f18177cba6eaf8f554e9b341b42b5e8f9aa1b307"
+      "ja_body_sha256": "d8f15df66fdbf966df6e0b10a78b7d00e29765f2465c33f0fad6c5dcf647ac4a",
+      "en_body_sha256": "24bd8efba323818bd6c7e001f18177cba6eaf8f554e9b341b42b5e8f9aa1b307",
+      "ja_sha256": "7610622e14b8349ea4c68b4e7a5ffbcba301462072aad68e48ca3167acd65b8e",
+      "en_sha256": "98924e5299f1d58816b530e906383de569d8d1889a274f0fa3266c16bf3e0ec3"
     },
     {
       "ja": "docs/learn/ja/concepts/plugins.md",
       "en": "docs/learn/en/concepts/plugins.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d82adabe6594bf0debe5a98b6f50a99e8e66922576eeb09bc5f9bd704aa0bcb2",
-      "en_sha256": "85de4e08ece8ba0630d1a80b2e5bdb338e69b8b0661b956c593b69eed31c7e1a"
+      "ja_body_sha256": "d82adabe6594bf0debe5a98b6f50a99e8e66922576eeb09bc5f9bd704aa0bcb2",
+      "en_body_sha256": "85de4e08ece8ba0630d1a80b2e5bdb338e69b8b0661b956c593b69eed31c7e1a",
+      "ja_sha256": "b14dfc8279f48fd7c51ecd1629b62e4bf8bbb38b4f7abbd84fb5f80ff8bdcd4c",
+      "en_sha256": "e60bcd346cd1bdf9331df89c01a3e4717a6a3ba399729f98e20ec0677d4156bd"
     },
     {
       "ja": "docs/learn/ja/concepts/security.md",
       "en": "docs/learn/en/concepts/security.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "28da81208bbd65a9a50a5a98be5232c835d551e86e3b997351ddd37e0812ee80",
-      "en_sha256": "ff5597ad5168d0603694eba73722a68b94aa3324c864e6508dd0ba0497a5db00"
+      "ja_body_sha256": "28da81208bbd65a9a50a5a98be5232c835d551e86e3b997351ddd37e0812ee80",
+      "en_body_sha256": "ff5597ad5168d0603694eba73722a68b94aa3324c864e6508dd0ba0497a5db00",
+      "ja_sha256": "e8d2e931a9839e81295124b40dcf53a97cdac3034a0e837a3ec42d2a7f402df2",
+      "en_sha256": "348a1330470e35ee9d0d08826c85237c06d75418cd709a7ce251b5af5e4a4a00"
     },
     {
       "ja": "docs/learn/ja/guides/index.md",
       "en": "docs/learn/en/guides/index.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d15c52916f404071a46df5b468c2c755a5d68cfad27c2c6c9c057c720d33f2d0",
-      "en_sha256": "2c113909a6d4f1c7850729be0d23a5e6232ef20434ee8cf790378e68ce08bbc9"
+      "ja_body_sha256": "d15c52916f404071a46df5b468c2c755a5d68cfad27c2c6c9c057c720d33f2d0",
+      "en_body_sha256": "2c113909a6d4f1c7850729be0d23a5e6232ef20434ee8cf790378e68ce08bbc9",
+      "ja_sha256": "0af9998f8b3476355566adbc0acbb69958dcb23837a95a4b840e7500b181118e",
+      "en_sha256": "12b256102975d5dfe95a2c6a0f4090714a2f8b4ab2a0e57b478b09c997f8a7cd"
     },
     {
       "ja": "docs/learn/ja/guides/install.md",
       "en": "docs/learn/en/guides/install.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "49a6224ce6570472582de69ac35e0504a69ee75421ed6c7d9c929747e1dbf1d4",
-      "en_sha256": "700e16be77bccef0bcfe56c619598c0388dcb38d72019484d400c05d64a18906"
+      "ja_body_sha256": "8ba2df435aee9eee499229b14866770647ae7278530de49cd8dd4e662326f344",
+      "en_body_sha256": "8764e629e640c2bfb237fdcd2ee301247f6e8c9d2d4bb361af729ef3727938bb",
+      "ja_sha256": "2572743976657c1579705059a8ebe655742f6f242c166da59cb1021963be35fc",
+      "en_sha256": "18e598b74db65baf9dc1d59d2fda675842108b5cf83dc873738c352b52397eae"
     },
     {
       "ja": "docs/learn/ja/guides/library.md",
       "en": "docs/learn/en/guides/library.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "94062b3a34bd1412552502cfd5ea354f664f02882a101f2772fefcf636fdfffa",
-      "en_sha256": "f02fe95c43dd82408694dd1897760cc6762ddceeaef2b19c5e9ac3aff45cb1e4"
+      "ja_body_sha256": "94062b3a34bd1412552502cfd5ea354f664f02882a101f2772fefcf636fdfffa",
+      "en_body_sha256": "f02fe95c43dd82408694dd1897760cc6762ddceeaef2b19c5e9ac3aff45cb1e4",
+      "ja_sha256": "9cf7e4fa09464c72fb83900db0040d800dfa60de04ccfd768d745943602e2fc3",
+      "en_sha256": "a3acff31901b486476088b117499fc9c9f5cb273a32131289356bd9a7d647417"
     },
     {
       "ja": "docs/learn/ja/guides/migrate-from-tauri.md",
       "en": "docs/learn/en/guides/migrate-from-tauri.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "758f5ec5e0e3e9f0a5800a2ba2d4a261141b5b2c750a897bf73f1df7e9475723",
-      "en_sha256": "83ef886e9ee378960823a37812f0315a60d3e41a59fe904c97f5744471e0f1e6"
+      "ja_body_sha256": "758f5ec5e0e3e9f0a5800a2ba2d4a261141b5b2c750a897bf73f1df7e9475723",
+      "en_body_sha256": "83ef886e9ee378960823a37812f0315a60d3e41a59fe904c97f5744471e0f1e6",
+      "ja_sha256": "38cdc6c5d126e14f744eeb933442726d4e4faa484d1024df752855527e5fbd45",
+      "en_sha256": "cc767223800027db6b3d266fe2c0ec4111e44c7ad1a4e36f5db2b6a43a504d29"
     },
     {
       "ja": "docs/learn/ja/guides/package.md",
       "en": "docs/learn/en/guides/package.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "33a8b420865b48b0992295b5481d831ff755b2099b49f693590534833535b93d",
-      "en_sha256": "8cdb0b32e1d1a356ffb86f03b4925539b45f89aea4bcd04b46f67887489f97f7"
+      "ja_body_sha256": "33a8b420865b48b0992295b5481d831ff755b2099b49f693590534833535b93d",
+      "en_body_sha256": "8cdb0b32e1d1a356ffb86f03b4925539b45f89aea4bcd04b46f67887489f97f7",
+      "ja_sha256": "886cb4067ee6e52f73de980d67baa5bf0d6a31317c763fb48cdb51a68fa7bc60",
+      "en_sha256": "ad2755763760d304aaad1a416cdc97f3329cd48458f1682cba0b8ee167b94e5c"
     },
     {
       "ja": "docs/learn/ja/guides/plugins.md",
       "en": "docs/learn/en/guides/plugins.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "602b8e2060fe8671a3b9627e224afac5401ab657d9a4a81e20e34d12356ee1bf",
-      "en_sha256": "7b747d0df43049ba6d5f8365c89bb9da930af842416c561a374e22248f2e30f2"
+      "ja_body_sha256": "b70bcac823f6af7d5e3db02a060df3c2e6df04a829e4ab435c6ed628c1d37160",
+      "en_body_sha256": "d83bcc77dccd18416b43b9c2c88096327311fcaaade7b0bfdd49b956adaeabe7",
+      "ja_sha256": "1c5df7b6555ad061109d92341e51780b030edc53827497d370e2431cdefb2a82",
+      "en_sha256": "561aa1fb99cbf83bb3805d806835def0370a8bf253b3d66b6e43bbfbd03be550"
     },
     {
       "ja": "docs/learn/ja/guides/rpc.md",
       "en": "docs/learn/en/guides/rpc.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "171a9f0337e271879d5f58045df6f887da67b4f95a8db22003339edb2113b169",
-      "en_sha256": "9a94f18ec09cd3562e470b905f1afe0f6875f4fbc04936263f353a8690e4b086"
+      "ja_body_sha256": "171a9f0337e271879d5f58045df6f887da67b4f95a8db22003339edb2113b169",
+      "en_body_sha256": "9a94f18ec09cd3562e470b905f1afe0f6875f4fbc04936263f353a8690e4b086",
+      "ja_sha256": "c7dc602d215b9f6edacf34cca59024351f5034a11ca2396675afa100cfa56dac",
+      "en_sha256": "5798aa2eb78fb6424fba0e9f8145ec4294070659d51e2cc5f17f15cd0ce8caf0"
     },
     {
       "ja": "docs/learn/ja/guides/static-site.md",
       "en": "docs/learn/en/guides/static-site.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "67b69197a2bf04feb84bfa4692f5b11f3e35f97c4406ef6f5b3db6af2ab653ae",
-      "en_sha256": "72b4b5b9d86227033143c84109f7f85421b5bbe29092b8c56ee04290bacc10d0"
+      "ja_body_sha256": "67b69197a2bf04feb84bfa4692f5b11f3e35f97c4406ef6f5b3db6af2ab653ae",
+      "en_body_sha256": "72b4b5b9d86227033143c84109f7f85421b5bbe29092b8c56ee04290bacc10d0",
+      "ja_sha256": "bfa5fc3f33ff91fab2ea7eae08037ec807485e2264f8327a01a6cc76912c118c",
+      "en_sha256": "3cbbfe7cce815fa8af936edc4dc72777888841306dadbef2cf1c262ad827beef"
     },
     {
       "ja": "docs/learn/ja/guides/troubleshooting.md",
       "en": "docs/learn/en/guides/troubleshooting.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "4d54503573fdb94e5304026c07ad0a4886dae80d8786e593838a46f14c6ce828",
-      "en_sha256": "05e211c26d2472233e9f480cfdf8194805e07f434d09bf9d5ddbb664f0da92c3"
+      "ja_body_sha256": "4d54503573fdb94e5304026c07ad0a4886dae80d8786e593838a46f14c6ce828",
+      "en_body_sha256": "05e211c26d2472233e9f480cfdf8194805e07f434d09bf9d5ddbb664f0da92c3",
+      "ja_sha256": "5750918751f785cb5cbfabf9326506297670b21420ea81f8776ec15c14a146a8",
+      "en_sha256": "7c18ffef2c29ec668d9427278f515fcd860dcd7afbee5d70564e81b2a31d9627"
     },
     {
       "ja": "docs/learn/ja/index.md",
       "en": "docs/learn/en/index.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "0772ea1d5fff2c71dc7f2f9923e2a6d851678c2f81813aaaf52d69842b8ccb30",
-      "en_sha256": "289bc576a0d2a2756032fbf1cc43bd1413bb22e3c06705585bb96c7bcaaade2c"
+      "ja_body_sha256": "0772ea1d5fff2c71dc7f2f9923e2a6d851678c2f81813aaaf52d69842b8ccb30",
+      "en_body_sha256": "289bc576a0d2a2756032fbf1cc43bd1413bb22e3c06705585bb96c7bcaaade2c",
+      "ja_sha256": "c458f7b83e1e5e329bf7784b41390930e0b1416d73a211eeacf7df805ce6d2cc",
+      "en_sha256": "1559bc3d113d28846baefcb95765321bd1c11e2e1e8d62673ac90d64a5979d72"
     },
     {
       "ja": "docs/learn/ja/patterns/boundaries.md",
       "en": "docs/learn/en/patterns/boundaries.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d506b9a765703ba8706c2c3251693578e6ad32727401e7d0cb66dcf13a916709",
-      "en_sha256": "de7bf668d92089c828cde79f478e363326c3c2131e7565549901cf1898b4c33a"
+      "ja_body_sha256": "d506b9a765703ba8706c2c3251693578e6ad32727401e7d0cb66dcf13a916709",
+      "en_body_sha256": "de7bf668d92089c828cde79f478e363326c3c2131e7565549901cf1898b4c33a",
+      "ja_sha256": "5931f20dbd9da7f0a7c9146fdfa7dfa5dd6358e73bef30d8bdbe3e1653457d0b",
+      "en_sha256": "afeb7babb37cdade25e0a3389e2fab9d00f85b00e0f8feb221b13daa502a1c3e"
     },
     {
       "ja": "docs/learn/ja/patterns/commands.md",
       "en": "docs/learn/en/patterns/commands.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a0c9fdf6c77948a7333e1251a78cf45c99f875461a0f2a40bb4f512f1ee8680d",
-      "en_sha256": "aee255507677e248940e526e96d7a2ac2f3bb9a228f838d2aa000d74abc1476a"
+      "ja_body_sha256": "a0c9fdf6c77948a7333e1251a78cf45c99f875461a0f2a40bb4f512f1ee8680d",
+      "en_body_sha256": "aee255507677e248940e526e96d7a2ac2f3bb9a228f838d2aa000d74abc1476a",
+      "ja_sha256": "e49b8faa6bb03286661023a8ff00f8dc86f61be568097e9e75857e9cf6f3250f",
+      "en_sha256": "f88eb40734afda9e057c63e065ed9c1468cf7c26216d256a3d4ea7ae244ec75d"
     },
     {
       "ja": "docs/learn/ja/patterns/errors.md",
       "en": "docs/learn/en/patterns/errors.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "e855ee74dce4337756b8d48a50882fb5585a20689242e4fa85c5538206e143fd",
-      "en_sha256": "5c51bcfff8d7c55cdb26f4d42202169d52018462862fa1540b2dccfb5f3d11aa"
+      "ja_body_sha256": "e855ee74dce4337756b8d48a50882fb5585a20689242e4fa85c5538206e143fd",
+      "en_body_sha256": "5c51bcfff8d7c55cdb26f4d42202169d52018462862fa1540b2dccfb5f3d11aa",
+      "ja_sha256": "b364c64db1c24265c5408cfc4069e8176fa6c0fe4a1a0701353b272961d81bf0",
+      "en_sha256": "db50b67c1973e23c2edb32f162982f305790816e5dfc6ccd0f5d03001d7d23fb"
     },
     {
       "ja": "docs/learn/ja/patterns/index.md",
       "en": "docs/learn/en/patterns/index.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "5b542057ab55ba2a5c2c6ac7f00a42752dcb529c7f00cc488eb2fd7e80c484a1",
-      "en_sha256": "455c1ae0014f69eadeb5723b97926e8a41ca040085e47b3819af8ce5e37ca91d"
+      "ja_body_sha256": "5b542057ab55ba2a5c2c6ac7f00a42752dcb529c7f00cc488eb2fd7e80c484a1",
+      "en_body_sha256": "455c1ae0014f69eadeb5723b97926e8a41ca040085e47b3819af8ce5e37ca91d",
+      "ja_sha256": "6a88f004ff2f9b06a2c042984b5699ce9a1e089462de9c09a28f9ad2bb3442ca",
+      "en_sha256": "9b9563cc4adab3549b1b573aba1a00fd06af6aae7f8f300426e9d87c41cb6e3a"
     },
     {
       "ja": "docs/learn/ja/patterns/state.md",
       "en": "docs/learn/en/patterns/state.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "68c2ab6cf4e5edbfa46397f972c5bac5a7554b6fa65f2ccda980382e5a0430d6",
-      "en_sha256": "23a64cded150f97afd5130bdd04c1cb4905829dd4c9684292424b2dc0bc94dc1"
+      "ja_body_sha256": "68c2ab6cf4e5edbfa46397f972c5bac5a7554b6fa65f2ccda980382e5a0430d6",
+      "en_body_sha256": "23a64cded150f97afd5130bdd04c1cb4905829dd4c9684292424b2dc0bc94dc1",
+      "ja_sha256": "1b897a5e6c718786c6870f62731af69be887681f21b11e9f278e7410033c228e",
+      "en_sha256": "e3251ffe26926fa8a0ff62cca4585f4be7f8eb89bbcee5e6e1edd0ab684a8683"
     },
     {
       "ja": "docs/learn/ja/start.md",
       "en": "docs/learn/en/start.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "9aeb65c1d21ff96b2a83d07b508469d87acc5960b3e05e54b206274a424b5758",
-      "en_sha256": "72262f7f2f8b2b13f31571be8b1596a30334d6cd42e5a765ff1bbc46a0b8462c"
+      "ja_body_sha256": "5c22e27c49a40d3839b4f69f0aee872cf0ce2b1868827d62d2f2b9155c33782c",
+      "en_body_sha256": "56a353579a5d307c619dc7b0df24cb486c3ad1f1bbffd6c84249105f76868efe",
+      "ja_sha256": "62cd4e70265a93a048012f0cfe10b639c0814ffec5ed3afba8461802b687af5a",
+      "en_sha256": "90f1e7f2672998d0e9bea73878fcc74acc9b31051213406699c1f41c0216a6a6"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-angular.md",
       "en": "docs/learn/en/tutorials/counter-angular.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "4cb8f56bdf174f2daf0d78a8597eee3bac4b47c16b5a465e52fa031a4db9296b",
-      "en_sha256": "4a38dfe5de932b73b4faae2efbe8bc0d3935b533445c13cf1f09d36f70824190"
+      "ja_body_sha256": "b1f89f6110ed2af83bec7864f18830bbade41921755aca8dee26f3290a09ad1e",
+      "en_body_sha256": "e3abd14575b0fd33ea8543c3aff5787fc9c8c4d718edfe00103650e8c31cd51b",
+      "ja_sha256": "715796cd78c2b58a16825e3912b021a5aec2600958058f08c53d479a799e8be8",
+      "en_sha256": "27fe050c1b1c02527bb8be9099eb4b5fac7575e14223195a05b50f4ba718325d"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-astro.md",
       "en": "docs/learn/en/tutorials/counter-astro.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "07f4258f28344b5c14a789a5bf9f2ac26ca12a7a625854d02d7c94c43d2c3649",
-      "en_sha256": "dc7e38c19209d1454f39cab25ced72aeecf2cc01e738ed99339b8a33945e1494"
+      "ja_body_sha256": "f2542ad165dc9b16c3af47b7222818e0df17509badee13ec55b63af91211cea6",
+      "en_body_sha256": "bc45aab0ee61cc24080c23b93fa2ac40609b1ff94fb56ab60f3fc2f97217d625",
+      "ja_sha256": "56dd0e52f644d711e5c278ca0b18ebf11daa22586fe4d9664c8dccd4d9a08c99",
+      "en_sha256": "9b656244898a402ec5d2341c17bf6e0e6cdf840690480fb7fb538bfb35f7f6a1"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-next.md",
       "en": "docs/learn/en/tutorials/counter-next.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "993f92fde42c5a0283bdd7f74a9c56933172d3964a12ae73ebad7b180d14ba8a",
-      "en_sha256": "e0b58e965d405cb341207086e32e8dde8f14b5f72e3086eb8c7dea6c15b49aa7"
+      "ja_body_sha256": "3b65d27da841a4ca47546de76bceb65dfc0c5861cec5c50071a65c66f070e158",
+      "en_body_sha256": "b2d8b1635a226d6ec47378cf95e4896a6e702728eebd48ebd272e670639b7a9f",
+      "ja_sha256": "432d6ab1ce12e81240c593d93c96b3b9698b3bf73b2e55c4bb0cb0fca3ae31b3",
+      "en_sha256": "3769e37fcfe32f03720c8504fa40e075fc672d35f2d638130ccfb1c018fdcfba"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-nuxt.md",
       "en": "docs/learn/en/tutorials/counter-nuxt.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "bfeb631f3ccada09bdeb8175cbe7e1baca4f74ed693c69cfaf22d0d49a7f58b6",
-      "en_sha256": "414c5b766ac757fabd315af7bf6d4ebbdfd1d18a11ebfb470dda2aa73c9b95dd"
+      "ja_body_sha256": "6d4e78b84f190b8758dcac39434866bde75569ae9865c97c0d125f42b601fe03",
+      "en_body_sha256": "bf26c59f9c88d9f76420ded0b8ef0bdf41cc81bb15cd9f746ec4f3adf9dc094f",
+      "ja_sha256": "161bb45ab0b4d00903c10f5d3a449ce03ca2f8ac023265c0f04037c9b572defd",
+      "en_sha256": "94c29b3f670e914812b6edf6d12714264b776de912142b8186dd16f240f6f771"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-react.md",
       "en": "docs/learn/en/tutorials/counter-react.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "6f7c6c8b0aeac99bb6182155bcd8e25afae3ab17054a7e8473ab1ad5aa1b291c",
-      "en_sha256": "579d999e782efe37fb17396dc4058e07bb7b41589fde1c3a48b956db986596f7"
+      "ja_body_sha256": "e2bfb3f3b8cb09120711821c41186fdd93bea981d1e7660617768158eee73379",
+      "en_body_sha256": "3088a224698a9f45982f397006a82cff8755793a82a0b64c243dd6c049935335",
+      "ja_sha256": "9a7fc09bf1ce379d1e030623b48737a9b5a2c4fdcf529611b73b7968cd6e0e5e",
+      "en_sha256": "1bc9e30647d1c2aa287a1c9496050fe5e0e036a065adf86cce488671fe7cb1c9"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-solid.md",
       "en": "docs/learn/en/tutorials/counter-solid.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "e45509f88928eb754c2848c9e774933bb61cd049856713200ef6a34ae2bf0e72",
-      "en_sha256": "24652f9f701d99a81a7a94e71ff39a0c9a57f786977a90968eea4782c7ff670d"
+      "ja_body_sha256": "1832fe979b0cb8b3d4995d0712cc45c969da5e577a64a399d0db6ec86590ab32",
+      "en_body_sha256": "f4fcf0894c4523e85fe2710f24e2f174f734541303d592ba312a068c296191a4",
+      "ja_sha256": "12159675e12d5b09b850a2c10ca1aac653c575361d8285abd6b33830e54170f7",
+      "en_sha256": "0d894ac4c7adca0278c96a938567e18455be75bc24f328095bc1867cf743e2af"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-solidstart.md",
       "en": "docs/learn/en/tutorials/counter-solidstart.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "fda84fa65c4b4765a007c7e9c43061735e667c2c19ee65c775067ccd517700da",
-      "en_sha256": "8684634899e9c2b8f13ff5ef651cfb12e9bde4068abb2fb3dbb20693ac4926fe"
+      "ja_body_sha256": "573389c1921b28a6a008143ed85cfe569192dc4949ef606d3d2c56ea4dcce749",
+      "en_body_sha256": "7d3133dc5620a1a71658ed977a374e6283899b92b8ae41bad826dcc94192c896",
+      "ja_sha256": "6e7ba3806aa8137cf01c2347183e7997def933c44254d5132b9f98378f3aa234",
+      "en_sha256": "ce586a691355655dad1ea52f7a09e5e86b690245b247fd829a4ceca08adc8ff5"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-svelte.md",
       "en": "docs/learn/en/tutorials/counter-svelte.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "15d108a79778dd9eedd0c72aec973007ea383dc69caf5af40665d951ab531fa0",
-      "en_sha256": "72094ccc90d3fcb8e0192bf3ce9ca005e19a0464224b72c1616087920d4d8788"
+      "ja_body_sha256": "ab6d7fdce6b8f54e48710ad3bece8e2e684ccd5c6e141cff11ca033827a8698c",
+      "en_body_sha256": "ea5946fef060b71587cdfae3ebc9b8f60d8e027f5503c821f803800877117f68",
+      "ja_sha256": "fd2e48513fbb81f54610b4ab83377adff7ce0945ad4153c16da11cbc2c1c7280",
+      "en_sha256": "dcd5de0ed20e5fe7e48665ee44853d44548c8ba8f07dc77e9797746d5c4bee46"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-sveltekit.md",
       "en": "docs/learn/en/tutorials/counter-sveltekit.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "b9ff20c4d9c3516566ddddb5614af252c5d3350e4d35982354004ec2db75fca7",
-      "en_sha256": "511de4cf65924cebb8f2d785fe3504cf36a109c969d10151e654d14715079f4b"
+      "ja_body_sha256": "a0c6e7a799638ce7ca4e4f0a1d86279141209220222601e3758febaa9f3ff4af",
+      "en_body_sha256": "ca9fe262b7be91a0e8000a0f406b0098f76536a885022fe4700d65d44584e1cf",
+      "ja_sha256": "b33d9beacfefa4ce8960840ce04c55dfc170aae5a1fa6b022dd5e68e40189a87",
+      "en_sha256": "af1f85614cd00199e29e9325ed1008b12f5d0e93c0b3e77a78b806a8ffd3fc30"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter.md",
       "en": "docs/learn/en/tutorials/counter.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "ef46638a8fb81cb38f9174f28e4046f5ee0b1aa75bda64135d9d421602178060",
-      "en_sha256": "3d88500f10c1e70e77d5e14a53d8aa1c5c08ea35bcc706767dc5012f3cccc9ea"
+      "ja_body_sha256": "5b36834797fd992e2451caaf30927850e24c765a2b2560f6730ab2cd6793c028",
+      "en_body_sha256": "b0da241b345daff3ffdc211fd4153ec04b2af93fce2ffb239e1fb9c21cff3c8b",
+      "ja_sha256": "6b90208b1631d41330d7a3d842bc6f2c0be770401925f2c2e14b8fbac0fa152f",
+      "en_sha256": "a4595d58dec6b53c32e101af2a21c54dcdf4307deb5391a4fbfd4f727cf4549a"
     },
     {
       "ja": "docs/learn/ja/tutorials/frameworks.md",
       "en": "docs/learn/en/tutorials/frameworks.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d3ece6295dbb6cbe42fef7763ec6580d9be078fb3a3d9dfb2e458bc6dd056691",
-      "en_sha256": "84a8129de1d1c538c12bbc2372b6045315da409388a0c9e6d0347e77d03b793b"
+      "ja_body_sha256": "586f9694a46fd39df67933a31a29106a85e0fa8a1f6ef2ca927309b9fe1db9c8",
+      "en_body_sha256": "40ce742e3ff685a801fe48f6bc28405acf8c6580b6e29ea648675d59ed555714",
+      "ja_sha256": "239cfa24dca39ecc88c2c0e5d4ebd192ba4aa6c79ca76f4687ac1acfb859c5d3",
+      "en_sha256": "7249947e7226b15596a8c60081d70dcb0636a5d042b34b14aa6e7e17da9ba381"
     },
     {
       "ja": "docs/learn/ja/tutorials/index.md",
       "en": "docs/learn/en/tutorials/index.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "56ae9db0b44d6a300a3ed14e4ff76847cf99fdee4511bb8b93a902b674b9b539",
-      "en_sha256": "2db6bb546f1653f0e670e4158e19375278b84f73a5aef1871a45aa44034487e2"
+      "ja_body_sha256": "56ae9db0b44d6a300a3ed14e4ff76847cf99fdee4511bb8b93a902b674b9b539",
+      "en_body_sha256": "2db6bb546f1653f0e670e4158e19375278b84f73a5aef1871a45aa44034487e2",
+      "ja_sha256": "a1d0397789a2d0295d6886797735cb4ba0102bcec0138db996ae748919a209e9",
+      "en_sha256": "9e914fb44f4621db94f81b20e3cdaa4d76cc2f383168ba4b0892d61b28356e0d"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-angular.md",
       "en": "docs/learn/en/tutorials/todo-angular.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "77ca0b2afaa056882527730c5a1f52e664ba36543b7b78df1c7799aa1f244977",
-      "en_sha256": "3f87820c27dd53a4a34dd0a29d0a0c8e8bcc63f7e4ef9f36fa3d7f55f91c6ddd"
+      "ja_body_sha256": "6ee91c87e2c92de3ff945c0d848c1b2b7514b65fbda962c5122d184f7c532192",
+      "en_body_sha256": "7c559dd85819eda4ca898f2114c4cd4266226ef535cc1649e881ffadca909a20",
+      "ja_sha256": "ea9d99f88af1c446805fe36a4e3ea7ed3cca0fade9562e53d5979bd278603cb9",
+      "en_sha256": "89b2738b9c889e4ee548afee10b9df5491fb71462bfa320ed34cdc924f38f86a"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-astro.md",
       "en": "docs/learn/en/tutorials/todo-astro.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "509eb20412181475be82632c16472a5d5ed62f8ee6841e1cfa0a0593c9a5d4b1",
-      "en_sha256": "d7be775ae8434d5973414f78dba40245a9a552a9e68d465bd7595cdb08ef4708"
+      "ja_body_sha256": "027a37fd10744f36ba591f25fbfb85fc50d4263061feca51eda4e47971dba2c9",
+      "en_body_sha256": "96ac83b231202ced6f5842130cc1d8498ed93eed076f10ee027d47cba1888ea9",
+      "ja_sha256": "bd7c61c6a467c119219b0088bcc80f28d3af4f7faa3166f673326f3fde28c590",
+      "en_sha256": "440b4262d8491b309670ffc88e4bf58295836172f334d35af04edbbb5a71e3ee"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-next.md",
       "en": "docs/learn/en/tutorials/todo-next.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "5eab57bee3dd6533991f74e50ae5725c2a591eb3a145abb74e492e6ad2c65cda",
-      "en_sha256": "13103495788e0df836597a6bb7844819715c114437b0cce068072a1897244740"
+      "ja_body_sha256": "9590a006d1f35f4141118ad399e80e8806ee0feedf53281b1ab750aa1520e7c0",
+      "en_body_sha256": "39434ed83e9fb3405821c5dd005a1628313fe173e2ca3242ccf10a9db64f7034",
+      "ja_sha256": "45a90e7d5d25320deeb369950577bd576f23600e90356b5067448c7218f7a804",
+      "en_sha256": "550e4d7aa08d1c5f5e7eb0001c244dc2d5bf3475dd1abd7690cd4a6794af11ee"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-nuxt.md",
       "en": "docs/learn/en/tutorials/todo-nuxt.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "cc12d2ecb64d4d7121dfd554b772f0a3895c2bcdc2cf4ebadcd0428cf7b4c318",
-      "en_sha256": "374f1389f744f9c6006c9161dc6e0c1c427f69d35c2292e4279c68b45065bb27"
+      "ja_body_sha256": "0437bde35fe0d846267a57a1ccb84f14cd0bca48362970cfec9f0220e9809b62",
+      "en_body_sha256": "a290a3f4945d5b95d49218a168a5d61a30836fc84fe9054e933a95f0ea441d3d",
+      "ja_sha256": "e17718ed9ddb6f94019042dc7a35fa1b90cfff57ec871b8ef76e3bd8b6facd85",
+      "en_sha256": "664ce5ddbeb98c0d78679eba0299886a9ce21ed2a3d5036f028dd8f91ce2d367"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-react.md",
       "en": "docs/learn/en/tutorials/todo-react.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d039f5dd30116dc53d184237bdaa8ad559b661176cb11064ea09cb74c24a131e",
-      "en_sha256": "601004c2c935b2c2b6cd63fb38ebb8a2b43c6bf5da00affda08922a975898648"
+      "ja_body_sha256": "1a0a8781a9906534d67a98c91f8a7b5bcc64dc91ae7ee7a7a2beec3e4032d52d",
+      "en_body_sha256": "cd6646d9245943fe40f0943c2c4d505780427db0f26b049f0789300f9faf3658",
+      "ja_sha256": "a1f40b340157131c9dc246897441b5361200a18b96187668bd2557d38f14d403",
+      "en_sha256": "bc0083e571dac1e965cf07f60d9bae8641575a0a30f4a2dd9796dd912502439c"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-solid.md",
       "en": "docs/learn/en/tutorials/todo-solid.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "13fbbf261cd0e67277aa02428d41de5aabe20aea9ead71ac35f8f8a83ae71be6",
-      "en_sha256": "2c349fc586581c2495a98d7236ce898d94e58dba539ad1fee260b80eabab4145"
+      "ja_body_sha256": "8bf348fe458f6ee1150b21a5c2e5d4e2ad8e7092001c4d04d6b1a418ebeeb13f",
+      "en_body_sha256": "6ce43792827c5e8e4d2d9e2b228ec1e8d3ba7ad81de9882ead8a38412668d834",
+      "ja_sha256": "af9a684c29e59c55b29879837ecfc304653971498e5984e1a9d870094ee669ec",
+      "en_sha256": "22fa15eb315c29915ad2eb73d980bf3d88b7c3a3c9c4265be9b8572afcb8ab61"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-solidstart.md",
       "en": "docs/learn/en/tutorials/todo-solidstart.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "950994af10d76cade20c030e95d0331bb61aab0a648e9f38ffb35e43376115a0",
-      "en_sha256": "12a8fb18508a35e5d24fad13ffa2b1e7818133c00362e8bb6c38d1d4e21a9191"
+      "ja_body_sha256": "eb884d2f87976010bf95c1355b3faf42ad220ea06ed34462175baa4bcda06e9e",
+      "en_body_sha256": "2996bf7a1a388eab178f28b07b228c0021e7a5d71b7ae402304e92d7753f2446",
+      "ja_sha256": "87fcb5f7c204436547b32c232b35aa193f30d369e35d124f2429fae38134b5b8",
+      "en_sha256": "f3131ea9d8aac671edf6567ccd7a2188a23e35cd1988ee5aaa9cbecefe610876"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-svelte.md",
       "en": "docs/learn/en/tutorials/todo-svelte.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "d9772bdf6a06bc3ae1ffe00ee0618bc5cff8cba5075b80c9e73169ce478058a5",
-      "en_sha256": "f104263ce69753c7931c6452f3607dc427a78a956c2d70200869595bef434038"
+      "ja_body_sha256": "6a309f08cc81176271c56ccc3ae8273ea6261e211f61503d5f9888c0b5191146",
+      "en_body_sha256": "6c0a1b1607a6b663c9b43ba420fb9e9ec0b4395e9515894c0ab8907b92dbcefb",
+      "ja_sha256": "a898b0ee48004ec1345bfe2bd6b8b1a1552bc738a03f1d6a89d843464dd8add9",
+      "en_sha256": "420ceb3e3e6de34503a3a96680255c52687d73fe8d92f09e539cbd06dc256096"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo-sveltekit.md",
       "en": "docs/learn/en/tutorials/todo-sveltekit.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "54fde86fb039a923c8196c7fcdd3c965e8416360e6c56513e254e81383dea9be",
-      "en_sha256": "c51505c0dec2c803ea8c498f0cdc30b14267982655c263d28436b5bfacbf975d"
+      "ja_body_sha256": "32b66a14727f61fd4b44502868b2375a48926a898b2d16f54c8c8d7f6b30fbfa",
+      "en_body_sha256": "eebb9db3d4d90ed13a2684e079144956b76bb44f22db6c00b836ca9049dce335",
+      "ja_sha256": "d2164b9e0c83070b485909ae3f6bfcd14ed0e1f41d18b9f9390dec05b93f1c6d",
+      "en_sha256": "47fc483199e183574be71cd8bb582faab1b5ecc8f728eb26274e58f421f9616d"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo.md",
       "en": "docs/learn/en/tutorials/todo.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "88caf1ef270af7b8145db2b000b93a1c1cdcf3dd32a91259069fb2dbaeea0e89",
-      "en_sha256": "a133f79f1f95631f8cc75303b8afd35d662865c92d954ab7e07681ef7b3edb76"
+      "ja_body_sha256": "88caf1ef270af7b8145db2b000b93a1c1cdcf3dd32a91259069fb2dbaeea0e89",
+      "en_body_sha256": "a133f79f1f95631f8cc75303b8afd35d662865c92d954ab7e07681ef7b3edb76",
+      "ja_sha256": "a801a2cbc606d57a311403c64acedb23feea74728d725fde301a67f979442479",
+      "en_sha256": "9b9bbe7f8aa4f07916ad548da1a9e4284751afb25402ff60fa836f8c668de092"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-angular.md",
       "en": "docs/learn/en/tutorials/ui-angular.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "cd85d4fd81d1943dbbe9d5fd52943dd5b96f24be6f59bf508c1ea689095f0b90",
-      "en_sha256": "02b8614ae1bfadcffee02787cb3cf1e639796d26043552ee33efba7f558abdc8"
+      "ja_body_sha256": "cd85d4fd81d1943dbbe9d5fd52943dd5b96f24be6f59bf508c1ea689095f0b90",
+      "en_body_sha256": "02b8614ae1bfadcffee02787cb3cf1e639796d26043552ee33efba7f558abdc8",
+      "ja_sha256": "9ac220d51d85125b392af86ffa4ad0f151e2edc32b9f2d07b8426dc1b07306e9",
+      "en_sha256": "2ac9efdaf8cf5aa753f7ea86419193da6aa0b237f8aec1da59b52b31d0e8e038"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-astro.md",
       "en": "docs/learn/en/tutorials/ui-astro.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "7b3b1fdc54cacab9cb305ff2a5046de37cb7f555d22bb47e4070c7964cc17b29",
-      "en_sha256": "d5c0b28a398c30db28f5225e2fc9ab621021be06f545caf599a8345523e2ccf0"
+      "ja_body_sha256": "7b3b1fdc54cacab9cb305ff2a5046de37cb7f555d22bb47e4070c7964cc17b29",
+      "en_body_sha256": "d5c0b28a398c30db28f5225e2fc9ab621021be06f545caf599a8345523e2ccf0",
+      "ja_sha256": "3dd89a739d99aa558f54f9baa22e4b7bd4c0b77f2bf97166ba4d145b978dac32",
+      "en_sha256": "785ec02308ff8d3b9458462761d84f7d1634c4027c6522a36f419a982658c2c1"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-next.md",
       "en": "docs/learn/en/tutorials/ui-next.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "6e6ea11c967e7e5777a8f51666aafc87db1c91d868948229fe7a5bffd1fca5f6",
-      "en_sha256": "7ed325093760a2e7f39c2d8b3410847dd4dda9cd32066900efbd5237ccd664d5"
+      "ja_body_sha256": "6e6ea11c967e7e5777a8f51666aafc87db1c91d868948229fe7a5bffd1fca5f6",
+      "en_body_sha256": "7ed325093760a2e7f39c2d8b3410847dd4dda9cd32066900efbd5237ccd664d5",
+      "ja_sha256": "6d6720c492ec1f530aed72cdd913c28afc729a8311e155db74621c7ca654824b",
+      "en_sha256": "edeeb7da9a415db9963ea4c9d185e3dd43caaf1bc343e519f77149ca555bda73"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-nuxt.md",
       "en": "docs/learn/en/tutorials/ui-nuxt.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "8bf850b02ba52c64caa46b010d11fea0a036bc6e2a99c2c5e45fc75e003224a7",
-      "en_sha256": "7e5dfb01571d0e94183b225d98f232be63a024da2cdca4064fff7e152150e475"
+      "ja_body_sha256": "8bf850b02ba52c64caa46b010d11fea0a036bc6e2a99c2c5e45fc75e003224a7",
+      "en_body_sha256": "7e5dfb01571d0e94183b225d98f232be63a024da2cdca4064fff7e152150e475",
+      "ja_sha256": "ccde557836fb55750ac4fb1e98d1749dc6622b2177aacdeab5889fef2c287d82",
+      "en_sha256": "92a9ac1d9ca1c464278ad7a2a85ca3843d4cccd8ff27cab01ca7f1442dbf940e"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-react.md",
       "en": "docs/learn/en/tutorials/ui-react.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "1632967e96cc3a2b1d994a4bb8ae32df65a3108fa4f31034212ddd91245f9c0c",
-      "en_sha256": "9c35c14cb443c253d4fe64357ac032b89f2b5608423c2f067b7b599e6fb67a37"
+      "ja_body_sha256": "1632967e96cc3a2b1d994a4bb8ae32df65a3108fa4f31034212ddd91245f9c0c",
+      "en_body_sha256": "9c35c14cb443c253d4fe64357ac032b89f2b5608423c2f067b7b599e6fb67a37",
+      "ja_sha256": "821393b8a51b7101d0e227e97978420e0d2047140e1865a0cdd6d844a86b9fdd",
+      "en_sha256": "d4ec2b80782c3ef7ed85d45493769104c09133156ed6c45f721594eb541c5553"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-solid.md",
       "en": "docs/learn/en/tutorials/ui-solid.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "f61f5b0ffb77448ad78ffff87d7d3ea334b2d9025c612e803508fea6241a82f6",
-      "en_sha256": "be04d509b7f5a2af0338dfbbedc977a887d8388396a63c8662235492e31b71de"
+      "ja_body_sha256": "f61f5b0ffb77448ad78ffff87d7d3ea334b2d9025c612e803508fea6241a82f6",
+      "en_body_sha256": "be04d509b7f5a2af0338dfbbedc977a887d8388396a63c8662235492e31b71de",
+      "ja_sha256": "b72b62a7f64f10801efaaf786105da2918e0ba08e6d4ebd2453bf1ffc6e4901c",
+      "en_sha256": "3e728f3f7e9b4178bba3f61561cc684a6b216ac9e5232484cbd3e8ec6486eff9"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-solidstart.md",
       "en": "docs/learn/en/tutorials/ui-solidstart.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "657f089e876e310378cda3b9a58104d9652e877a0dccfb2828cc37e3216bed42",
-      "en_sha256": "97baa06290333ab362e306681c8a4e5db65bce210c92f672e387dde38a963a6c"
+      "ja_body_sha256": "657f089e876e310378cda3b9a58104d9652e877a0dccfb2828cc37e3216bed42",
+      "en_body_sha256": "97baa06290333ab362e306681c8a4e5db65bce210c92f672e387dde38a963a6c",
+      "ja_sha256": "59c76842cf92c6202ecf03c8e94c0e71682e6365d5e05953671aa3adc333992a",
+      "en_sha256": "2c5a1a66a50937dc532228adbbdb91f075d32c50ac2a3f484066ebea8fe04f13"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-svelte.md",
       "en": "docs/learn/en/tutorials/ui-svelte.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "157f27741f000cc359cc9f12f4793bd76983a8e4be469b35a77bdeefd38906b7",
-      "en_sha256": "71b6f08471c353af35c78fcd4232a90b65421664fd7906e78fb86aa073ce0604"
+      "ja_body_sha256": "157f27741f000cc359cc9f12f4793bd76983a8e4be469b35a77bdeefd38906b7",
+      "en_body_sha256": "71b6f08471c353af35c78fcd4232a90b65421664fd7906e78fb86aa073ce0604",
+      "ja_sha256": "53588a03691e23ac066a8de96dd4cc45b941df49f6ea2319d0eed04bf1871091",
+      "en_sha256": "516213b080d8d9d5d229a766427b4b27146bcede40406cc41644cbb39e947786"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui-sveltekit.md",
       "en": "docs/learn/en/tutorials/ui-sveltekit.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "21bc3493440587db02a3a81dfe1b302527b21b86b7351e41b479adec9f25ee87",
-      "en_sha256": "03fde8dd8f599da42218eeb6f0304a579bd75d97f7cd04e1c782d3479e49e86c"
+      "ja_body_sha256": "21bc3493440587db02a3a81dfe1b302527b21b86b7351e41b479adec9f25ee87",
+      "en_body_sha256": "03fde8dd8f599da42218eeb6f0304a579bd75d97f7cd04e1c782d3479e49e86c",
+      "ja_sha256": "3267d0ad7aad0f5d75c6bb6f7345dbe13abafda04f92316a2397b5410bed5051",
+      "en_sha256": "72c5655ce462552c65957c696247ef950cac498178a303f5c8af1479528ee8f2"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui.md",
       "en": "docs/learn/en/tutorials/ui.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "16202082cddfd0217cb799a3dfbfbd54bafad09981bb70d22ce7e0a59016ffb1",
-      "en_sha256": "0d2bace3f3462072011711c199881f64127c6d4b5f8fd974b72a9f5739227d06"
+      "ja_body_sha256": "16202082cddfd0217cb799a3dfbfbd54bafad09981bb70d22ce7e0a59016ffb1",
+      "en_body_sha256": "0d2bace3f3462072011711c199881f64127c6d4b5f8fd974b72a9f5739227d06",
+      "ja_sha256": "77564f74ad7836ff10da2f6f0c5e5f0cf1bea5f7a5522ad3c451ea5462510811",
+      "en_sha256": "0425ebdd2deb9208f003c7bb8536ac8aacb0459cdd90ae784d8a43be723e2455"
     },
     {
       "ja": "docs/reference/cli.md",
       "en": "docs/reference/cli.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "7fafedc036d60d6f71ee56c6677454d8236b5292fe130cf4d609490114f893fa",
-      "en_sha256": "c693cecde603bff500b8724cc5d7759030398d44b466091536e0a01570d76ad1"
+      "ja_body_sha256": "7fafedc036d60d6f71ee56c6677454d8236b5292fe130cf4d609490114f893fa",
+      "en_body_sha256": "c693cecde603bff500b8724cc5d7759030398d44b466091536e0a01570d76ad1",
+      "ja_sha256": "6183a213497b391e1187a4c0e79d27e8bca6aba2379f17e510ce5f22db1d19b5",
+      "en_sha256": "bdee92c5ed2c8b473104db713766ec3e11b9a83b723c22210b114ff7f022b7dc"
+    },
+    {
+      "ja": "docs/reference/compatibility.md",
+      "en": "docs/reference/compatibility.en.md",
+      "last_rewritten": "2026-10-21",
+      "ja_body_sha256": "9c98b0cac12936c7391cb6b173d97d6e4ae64c065f97c02870d05d6c42b4c452",
+      "en_body_sha256": "be9df5762a173dd558af264b9a9542cbf399f59814340e0a065db8a1ff144922",
+      "ja_sha256": "7341baf06dfbd7182ee51f9e62cfb0f5de678f57d11325156b17df6c904984b5",
+      "en_sha256": "dbf9b17d8771908a30c0fbfc275dc34794455b15f2c853ebe9b0df0f9fba9e02"
     },
     {
       "ja": "docs/reference/tauri-internals.md",
       "en": "docs/reference/tauri-internals.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "f7bda1943a2bfc45b7368881b593686e37f0ad95ff33707060a3609d4edbe79a",
-      "en_sha256": "dfd072efd0886e208756f656e3bb4fbb568de086886c8174676ce10ddb959ca9"
+      "ja_body_sha256": "f7bda1943a2bfc45b7368881b593686e37f0ad95ff33707060a3609d4edbe79a",
+      "en_body_sha256": "dfd072efd0886e208756f656e3bb4fbb568de086886c8174676ce10ddb959ca9",
+      "ja_sha256": "22cb21ce5a0c2049db19d829404a36157f6ec50561c383f0abb3b092b77a3a76",
+      "en_sha256": "4b2a6cca0f3d5676470c11e18520d50230a8a7cdd781d9d210f44f217a5b73d7"
     },
     {
       "ja": "docs/reference/tauri-usage.md",
       "en": "docs/reference/tauri-usage.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a05d918b4665e4bd2ab8e5c1b006bd137b96a708cf8cc85284f12d6ed71cab10",
-      "en_sha256": "d79f99cf987949ae760da63da14331e563a34f33809153375889f14477301cd4"
+      "ja_body_sha256": "5d62b97cf70aac65e300894eaf48df17377c0233db820da03617f3a168a4ded5",
+      "en_body_sha256": "260af168ddab54065f9ef3dc1f50a81c932c731f2ec21f557b15487ba0fa0d1e",
+      "ja_sha256": "14a61c78b208a81933c5a342950746ef2e7acbbfb03930eb5b455a7d581d13e7",
+      "en_sha256": "71467f4ff014bd5d25ee8446b256c323c5aaa2ed3836431cead9357bb47ba86e"
     },
     {
       "ja": "examples/c_embed/README.md",
       "en": "examples/c_embed/README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a3b568f2bc7221ca9888829028f1c74e509de6c93e1afd2367f3bc3b1673785c",
-      "en_sha256": "e84ebfc1cc95a10ccb25f779e21a3ac34ecfa90d01cbb39096e263da1e18f563"
+      "ja_body_sha256": "a3b568f2bc7221ca9888829028f1c74e509de6c93e1afd2367f3bc3b1673785c",
+      "en_body_sha256": "e84ebfc1cc95a10ccb25f779e21a3ac34ecfa90d01cbb39096e263da1e18f563",
+      "ja_sha256": "381528a0b9b01f0fb88fb5353fa19443c12090766d1214dd7e54d3a349e40744",
+      "en_sha256": "fd2eaf42d05b57013ff828f27f040cd424957804c476e4ce6bd6b2a0aa44539f"
     },
     {
       "ja": "examples/counter/README.md",
       "en": "examples/counter/README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "f01bb295b9f6fc29453499d09d6a3346ed36cf47a338dbc9ca4d25b60945f52c",
-      "en_sha256": "ded5e7ae930fef919df27de54f206661bad5c2de0384a4205623b285ae668117"
+      "ja_body_sha256": "f01bb295b9f6fc29453499d09d6a3346ed36cf47a338dbc9ca4d25b60945f52c",
+      "en_body_sha256": "ded5e7ae930fef919df27de54f206661bad5c2de0384a4205623b285ae668117",
+      "ja_sha256": "ea7130ba567b1a8d5e48a5856957286e7f53a6dac1700a5ab676311df637541e",
+      "en_sha256": "a914b67fc0e61b03274a12a2eff7afd07bdbdbd9673367c6602b6253ffc1e556"
     },
     {
       "ja": "examples/frameworks/README.md",
       "en": "examples/frameworks/README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "bb88d1ad21fca21349cc687b733f128ee78352d14c8781cf648d965462ab3af6",
-      "en_sha256": "bfc2f87f5578b5c75e05f69167181373f2cf82bb9817892a791aa21796d6847f"
+      "ja_body_sha256": "bb88d1ad21fca21349cc687b733f128ee78352d14c8781cf648d965462ab3af6",
+      "en_body_sha256": "bfc2f87f5578b5c75e05f69167181373f2cf82bb9817892a791aa21796d6847f",
+      "ja_sha256": "2c84385623e9e27a9be9ff40a5f1dd34de91aa600dfc1cc4374d919669071ff1",
+      "en_sha256": "601c3c9844cce22b26cb9e3d730eed5999bba6f52244bfd78824dc5134d7bee5"
     },
     {
       "ja": "examples/gallery/README.md",
       "en": "examples/gallery/README.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "120a0d53a7bac13091fabd2e8275eff2e10114960fea75ba4da63f40e0ef4b95",
-      "en_sha256": "f9e0d141f929f0c2ed036108833d99a49d71b98b364871b23fbe69fe1b25ffc2"
+      "ja_body_sha256": "120a0d53a7bac13091fabd2e8275eff2e10114960fea75ba4da63f40e0ef4b95",
+      "en_body_sha256": "f9e0d141f929f0c2ed036108833d99a49d71b98b364871b23fbe69fe1b25ffc2",
+      "ja_sha256": "3d434e115acb9e71eeaa916d117186c4d6f72c29725dc71485262de46b8d1182",
+      "en_sha256": "17e7d8c892f7f50a95e6f748d77a5a16aafe4cf469cc09bf8e27653251957ff2"
     }
   ]
 }

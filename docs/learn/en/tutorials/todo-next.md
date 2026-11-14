@@ -171,6 +171,8 @@ The `zts dev` browser alone cannot deliver `invoke`; always verify with the `zts
 | Screen states in the same library | [Screen with Next.js](ui-next.md) |
 | Plain-JS original | [Build a Todo list](todo.md) |
 | Pick another library | [Chooser hub](frameworks.md) |
-| Real `Next.js` source | [`examples/frameworks/next/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/next) |
+| Real `Next.js` source | [`examples/frameworks/next/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/next) |
 | Command arguments, errors, TS generation | [Commands guide](../guides/rpc.md) |
 | Why these three are shaped this way | [Patterns](../patterns/index.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

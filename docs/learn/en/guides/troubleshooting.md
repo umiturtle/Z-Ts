@@ -241,3 +241,5 @@ Most packaging errors come from per-format preconditions (`dmg` is macOS-only, `
 - Every `zts` flag: [`docs/reference/cli.md`](../../../reference/cli.md)
 - Finding the API behind an error: [API index](../../../api/index.html)
 - Stuck building ziggurats itself: [`docs/contributing/troubleshooting.md`](../../../contributing/troubleshooting.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

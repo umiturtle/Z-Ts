@@ -247,3 +247,5 @@ The same input produces **the same bytes** (timestamps are fixed). Rebuilding do
 - Back to the tutorial: [Build a counter](../tutorials/counter.md)
 - How it works inside (why PE rewriting, and so on):
   [`docs/architecture/packaging-and-bench.md`](../../../architecture/packaging-and-bench.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

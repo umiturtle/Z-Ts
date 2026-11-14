@@ -58,3 +58,5 @@ Tauri はマイナーごとにキーを増やす。**未知キーで失敗する
   ローカル/リモート・glob を 1 か所で検証できる（3 OS の CI で同一結果）。
 - トレードオフ: 権限の `allow` / `deny` スコープ（`{ "path": "$HOME/**" }`）は現状 JSON として
   保持するだけで、`plugin:fs` のスコープへはまだ流し込んでいない。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

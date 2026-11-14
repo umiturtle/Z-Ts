@@ -59,3 +59,5 @@ zig build && .\zig-out\bin\zts_c_embed.exe
 スキームハンドラ（`on_scheme`）は `tauri://localhost/index.html` に HTML を返し、
 ページは同一オリジンの `fetch('/ping')`（WebView2 では `http://tauri.localhost/ping`）で
 往復してから `window.__ztsPostMessage()` で C 側へ報告します。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

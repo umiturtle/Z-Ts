@@ -198,3 +198,5 @@ choose. The dividing line is **"does the user have a next step?"**
 - The page side: [The page/logic boundary](boundaries.md)
 - Every error code: [Error index](../../../reference/errors.html)
 - The generated types: [API reference](../../../api/index.html), `zts_rpc.tsgen`
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

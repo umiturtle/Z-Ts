@@ -131,3 +131,5 @@ test "set_step rejects out-of-range values" {
 - 書き方の実践 → [ガイド: コマンド](../guides/rpc.md)
 - プラグインのコマンド → [プラグイン](plugins.md)
 - API → [`Schema`](../../../api/zts_rpc/schema.html#Schema) / [`Ctx`](../../../api/zts_rpc/ctx.html#Ctx)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -197,3 +197,5 @@ pub fn search(state: *State, args: struct { query: []const u8, limit: u32 = 20 }
 - 状態をどこに置くか: [状態の置き場所](state.md)
 - 失敗の返し方: [エラーの設計](errors.md)
 - 生成される型: [API リファレンス](../../../api/index.html) の `zts_rpc` 節
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

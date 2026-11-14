@@ -124,3 +124,5 @@
   - `Host` VTable 経由で動作する独立 `comptime` コマンドモジュール群：`window`, `event`, `path`, `app`。
 - **完了条件 (DoD)**:
   - `HeadlessMock` 上で本家 `@tauri-apps/api` 互換リクエスト形式（ヘッダ・Channel 文字列・`plugin:window|*` コマンド）の全ハンドラテスト通過。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

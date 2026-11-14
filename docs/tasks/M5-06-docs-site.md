@@ -98,3 +98,5 @@
   HTML が `/assets/…` を持つ。Pages は `/Z-Ts/` のサブパスなので相対化が必要。フォントだけは
   9 デモで共有するため 1 つ上（`../fonts/`）へ向ける。
 - **`.nojekyll`**: `_zts/`（wasm とアセット）が Jekyll に消されないようにする。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

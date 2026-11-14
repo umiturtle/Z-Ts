@@ -62,3 +62,5 @@
 - 3 本終えたら設計の話 → [実用パターン](../patterns/index.md)（コマンド・状態・エラーをどう形にするか）
 - 概念から知りたい → [概念の索引](../concepts/index.md)
 - 特定のことをしたい → [ガイド](../guides/index.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

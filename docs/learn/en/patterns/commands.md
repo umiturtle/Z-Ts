@@ -197,3 +197,5 @@ caller nothing.
 - Where state lives: [Where state lives](state.md)
 - How to report failure: [Designing errors](errors.md)
 - The generated types: [API reference](../../../api/index.html), `zts_rpc` section
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

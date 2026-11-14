@@ -341,3 +341,5 @@ zts help          # same
 - Getting `zts`: [`../learn/en/guides/install.md`](../learn/en/guides/install.md)
 - Building installers: [`../learn/en/guides/package.md`](../learn/en/guides/package.md)
 - Repository commands: [`../contributing/README.en.md`](../contributing/README.en.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

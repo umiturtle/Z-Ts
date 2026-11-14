@@ -248,3 +248,5 @@ zts package --binary path/to/other-exe --format tar.gz
 - コマンドの全オプション: [`../reference/cli.md`](../../../reference/cli.md#zts-package)
 - チュートリアルに戻る: [カウンターを作る](../tutorials/counter.md)
 - 内部の作り（なぜ PE を書き換えるのか等）: [`../architecture/packaging-and-bench.md`](../../../architecture/packaging-and-bench.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -82,3 +82,5 @@ matrix. Pages and Release are restricted to `main` and tags.
 - [Documentation sync ledger](doc-sync.en.md)
 - [GitHub Actions operations](../environment/github-actions.md)
 - For app authors adding the dependency → [`../learn/en/guides/library.md`](../learn/en/guides/library.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

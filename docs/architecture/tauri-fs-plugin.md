@@ -100,3 +100,5 @@ var router = App.bind(.{ .my_command = &my_state, .fs = &fs_state });
 - **書き込み先は「解決後のパス」**。`open` 時のリンク解決と実際の書き込みの間にリンクを差し替える
   TOCTOU は理論上残る（本家も同じ）。信頼できないディレクトリを root にしないこと。
 - ハンドルは `ResourceTable` の型 ID で守られるため、`plugin:window` の `rid` を渡しても通らない。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

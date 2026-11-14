@@ -92,3 +92,5 @@
   赤くなる。`macos-latest`（`ci-macos` が既に使っている）に変えて解消。以後は `*-latest` に追従。
 - **CI の `ci-cli` は 3 OS で実際にビルドする**。Windows では `zts` が `zig` を解決できる必要が
   あり、`PATH` の `zig` をチェックアウト内の `zigw`（シェルスクリプト）より優先している。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

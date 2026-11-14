@@ -353,3 +353,5 @@ zts help          # 同上
 - `zts` の入手: [`../learn/ja/guides/install.md`](../learn/ja/guides/install.md)
 - 配布物の作り方: [`../learn/ja/guides/package.md`](../learn/ja/guides/package.md)
 - リポジトリ開発のコマンド: [`../contributing/README.md`](../contributing/README.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

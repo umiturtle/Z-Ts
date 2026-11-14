@@ -100,3 +100,5 @@ gh run list --branch arena/16ce0c2f-z-ts --limit 3
 ```
 
 - ここが green なら `docs/tasks/M4-01-dialog-clipboard.md` の Status を `done` にして CI run ID を追記する。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

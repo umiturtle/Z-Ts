@@ -85,3 +85,5 @@ test "コマンド表には increment が 1 本だけ入る" {
 - 書きはじめて迷った → [実用パターン](../patterns/index.md)
 - すぐ書きたい → [ガイド: コマンド](../guides/rpc.md)
 - 言葉で迷った → [用語集](../../../glossary.md)
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

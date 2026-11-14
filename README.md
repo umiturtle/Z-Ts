@@ -6,8 +6,8 @@
 > プロジェクトのフルネームは **`ziggurats`**（小文字）。CLI・パッケージ・モジュール名は
 > これまでどおり `zts` / `z_ts` / `zts_*` です。
 
-[![CI](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/Z-Ts/actions/workflows/ci.yml)
-[![Docs](https://github.com/umiturtle/Z-Ts/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/ZigguraTs/)
+[![CI](https://github.com/umiturtle/ZigguraTs/actions/workflows/ci.yml/badge.svg)](https://github.com/umiturtle/ZigguraTs/actions/workflows/ci.yml)
+[![Docs](https://github.com/umiturtle/ZigguraTs/actions/workflows/pages.yml/badge.svg)](https://umiturtle.github.io/ZigguraTs/)
 
 📖 **ドキュメントサイト: <https://umiturtle.github.io/ZigguraTs/>**
 （全ドキュメントの検索・目次・**動くサンプル**つき。Markdown はこのリポジトリが正本です）
@@ -168,3 +168,5 @@ zts_ssg         ← 外向き SSG（dist/ 書き出し）と埋め込み（dist/
 [`tao`](https://github.com/tauri-apps/tao) / [`muda`](https://github.com/tauri-apps/muda) は
 それぞれのライセンス（MIT / Apache-2.0）に従います。`vendor/` 以下のコードは**参照用**であり、
 ビルドには含まれません。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

@@ -6,7 +6,7 @@
 
 これは [カウンターを作る](counter.md) の **`Solid 1.9` 版**です。Zig 側のコードは
 元のチュートリアルと **1 文字も変わりません**。違うのは `web/` の中身だけで、そこに
-[`examples/frameworks/solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) の実物をそのまま使います。
+[`examples/frameworks/solid/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/solid) の実物をそのまま使います。
 [ライブラリを選び直す](frameworks.md) といつでも別の分岐へ移れます。
 
 <!-- framework-picker -->
@@ -217,7 +217,9 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 | 読み込み中 / 空 / エラーの画面 | [画面を作る](ui.md) |
 | `Solid` 版の Todo | [Todo を Solid で](todo-solid.md) |
 | `Solid` 版の画面 | [画面を Solid で](ui-solid.md) |
-| `Solid` の実物ソース | [`examples/frameworks/solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) |
+| `Solid` の実物ソース | [`examples/frameworks/solid/`](https://github.com/umiturtle/ZigguraTs/tree/main/examples/frameworks/solid) |
 | `Solid` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
 | 9 つの example の比較 | [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) |
 | コマンドの引数・エラー・型生成 | [ガイド: コマンド](../guides/rpc.md) |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

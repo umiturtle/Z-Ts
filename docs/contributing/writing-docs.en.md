@@ -196,3 +196,5 @@ be regenerated together with the generator when the repository is renamed.
 - [`doc-sync.en.md`](doc-sync.en.md) — the verification ledger and how to refresh it
 - [`../tasks/M5-09-docs-ux.md`](../tasks/M5-09-docs-ux.md) — the improvement plan and success criteria
 - [`../../src/docsite/learn_path.zig`](../../src/docsite/learn_path.zig) — the single source of path order
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

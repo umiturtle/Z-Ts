@@ -216,3 +216,5 @@ zig build test       # 単体 + 実 TCP E2E + 実 WebAssembly E2E
 | `dist/` 合計 | 約 233 KB |
 | `zig build test` | 7 テスト / Live プローブ 43 チェック / SSG プローブ 28 チェック |
 | Live Preview 起動 | `counter-live --port 8788 --host 0.0.0.0` → `http://localhost:8788/` |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

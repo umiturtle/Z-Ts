@@ -82,3 +82,5 @@
   （56 pages）、`node --test` 7/7、`gitflow.sh --self-test`。
 - **未実施**: PR 作成・3 OS CI・マージ。
 - **次の 1 手**: 実装を push → PR 1 本 → CI 7/7 → `gh pr merge` → 票を `done`。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->

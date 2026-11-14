@@ -5,6 +5,11 @@
 
 このドキュメントは、上流リファレンス（`vendor/tauri`）に基づき、**Tauri アプリケーションがどのように構成され、バックエンド（Rust）とフロントエンド（JS/TS）からどの API が使われるか**を整理したリファレンスです。`ziggurats`（Zig 版）の公開 API 設計および互換性設計の基準となります。
 
+> [!NOTE]
+> **「Tauri と同じ書き方」と「Tauri と同じ実機能・挙動」は別です。** ネイティブ実装の差し込みが
+> 必要な箇所、固定値を返す API、既定のパス／モニター値は
+> [Tauri v2 互換の範囲](compatibility.md) にまとめています。
+
 ---
 
 ## 1. 標準的な Tauri v2 プロジェクト構成
@@ -206,3 +211,5 @@ const imgUrl = convertFileSrc('/path/to/photo.png');
 2. **Capabilities（`src-tauri/capabilities/*.json` — Tauri v2 の特徴）**:
    - **デフォルト拒否（Deny by default）**: 明示的に許可されていない組み込みプラグインコマンドやリモート URL からの IPC 呼び出しは `RuntimeAuthority` によってブロックされる。
    - ウィンドウごとに「どの権限（例: `"core:window:allow-set-title"`, `"fs:allow-read-text-file"`）とどの引数スコープ（例: `"$APPDATA/**"`）を許可するか」を宣言的に記述する。
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-10-21 -->

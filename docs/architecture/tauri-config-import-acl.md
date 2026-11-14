@@ -105,3 +105,5 @@ allows(command, window, origin) =
 | `tauri.conf.json` の `bundle.*`（署名・アイコン・WiX 等） | ⏳ 読み取るだけ（バンドラは未実装） |
 | `security.pattern` / `dangerousDisableAssetCspModification` | ⏳ 警告のみ |
 | 権限の `allow` / `deny` スコープ（`{path: …}`） | ⏳ JSON として保持（`plugin:fs` 側で解釈予定） |
+
+<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->
