@@ -1,6 +1,6 @@
 # Task M6-02: 3 チュートリアル × 9 ライブラリの分岐を充実させる
 
-- **Status**: `in_progress` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/70a7eede-z-ts`（main `b488746` = PR #24 マージ後 / v0.1.1 リリース後）
 - **Scope**: `scripts/gen-framework-tutorials.py`, `src/docsite/frameworks.json`,
   `docs/learn/{ja,en}/tutorials/{counter,todo,ui}.md`,
@@ -11,9 +11,8 @@
   [`../learn/ja/tutorials/todo.md`](../learn/ja/tutorials/todo.md),
   [`../learn/ja/tutorials/ui.md`](../learn/ja/tutorials/ui.md),
   [`../../examples/gallery/src/main.zig`](../../examples/gallery/src/main.zig)
-- **Next Step**: 調査完了後、生成器にライブラリ別プロファイル（状態プリミティブ・Zig 同期・SSR ガード・
-  Todo/UI の読み替え・落とし穴・コード断片）を追加し、counter / todo / ui の 3 テンプレートから
-  9×3×2 = 54 分岐ページを生成する。規約 22 で完全性を機械検査し、PR 1 本にまとめる。
+- **Next Step**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
+  タスク票を `done` にする。
 
 ---
 
@@ -22,20 +21,20 @@
 > 「チュートリアルをもっと各ライブラリごとにしっかりし、3つのチュートリアル全対応にして
 > （signalとzig側の連携などの大事な要素をちゃんとさらって）」
 
-- [ ] `counter` / `todo` / `ui` の **3 本すべて**に 9 ライブラリ分の分岐ページを用意する
+- [x] `counter` / `todo` / `ui` の **3 本すべて**に 9 ライブラリ分の分岐ページを用意する
       （日英 54 ページ＋選択ハブ 2 ページ）
-- [ ] 各ページがライブラリ固有の**状態プリミティブ**（`createSignal` / `signal()` / Svelte 5 rune /
+- [x] 各ページがライブラリ固有の**状態プリミティブ**（`createSignal` / `signal()` / Svelte 5 rune /
       `ref()` / `useState` / DOM 直接など）を説明する
-- [ ] **Zig 側との連携**を全ページでさらう: `zig_probe` / `zig_inc` / `zig_dec`、`ipc://` と
+- [x] **Zig 側との連携**を全ページでさらう: `zig_probe` / `zig_inc` / `zig_dec`、`ipc://` と
       `window.__ZTS_ZIG__`、SHA-256 seal、ローカル状態と Zig 所有カウンタの**二重構造**、
       「楽観更新せず Zig の戻り値だけを正にする」、`ZIG OFFLINE` / `ZIG ONLINE`、
       `invoke` 失敗時の UI 状態、SSR / ハイドレーションのガード
-- [ ] 各ライブラリ固有のコード断片（counter 同期 / Todo リスト / UI 3 状態）を載せる
-- [ ] 3 本の本体チュートリアルと選択ハブ・日英索引から全分岐へリンクする
-- [ ] 規約 22 で「カタログ ↔ プロファイル ↔ 生成ページ ↔ ハブ」の一致を機械検査する
+- [x] 各ライブラリ固有のコード断片（counter 同期 / Todo リスト / UI 3 状態）を載せる
+- [x] 3 本の本体チュートリアルと選択ハブ・日英索引から全分岐へリンクする
+- [x] 規約 22 で「カタログ ↔ プロファイル ↔ 生成ページ ↔ ハブ」の一致を機械検査する
       （規約 15 の verbatim excerpt は counter の実物 example に対して維持）
-- [ ] `learn_path.steps` の 5 ステップ・95 分は不変（分岐は追加の章ではなく代替の道）
-- [ ] 日英 Doc と同期台帳を更新、`AGENTS.md` / `docs/roadmap/milestones.md` の
+- [x] `learn_path.steps` の 5 ステップ・95 分は不変（分岐は追加の章ではなく代替の道）
+- [x] 日英 Doc と同期台帳を更新、`AGENTS.md` / `docs/roadmap/milestones.md` の
       チェックボックスは非編集
 - [ ] `quick-test` / `build test` / `doctest` / `docs-check` / `fmt --check` / 3 OS CI が緑、PR は 1 本だけ
 
@@ -64,8 +63,22 @@
 
 ## Current State / Next Step
 
-- **現在**: 30 秒ルーチン（`quick-test` / `check-docs.py` / `fmt --check`）は緑。現ブランチは
-  `main b488746` 起点で clean。分散ロック（この票）を push した直後。
-- **次の 1 手**: `examples/gallery/src/web/zig-bridge.js` と `counter-<fw>.md` の付録、
-  `todo.md` / `ui.md` の「別のライブラリで読む」章、規約 11/15 の実装を読み切ってから
-  生成器のプロファイル辞書と 3 テンプレートを書く。
+- **現在**: 実装・ローカル検証まで完了。
+  - `scripts/framework_tutorial_profiles.py`（9 ライブラリ × 状態プリミティブ・Zig 同期・
+    SSR ガード・Todo/UI の状態・落とし穴・3 種のコード断片、日英ペア）と
+    `scripts/framework_tutorial_templates.py`（Todo / UI テンプレート＋共通の
+    「状態は 2 つある」章）を新設。
+  - 生成器が **56 ページ**（counter / todo / ui × 9 × 2 ＋選択ハブ 2）を出力。
+    counter 分岐にも `{{REACTIVITY}}` / `{{CODE_ZIG}}` / `{{SYNC}}` / `{{GUARD}}` /
+    `{{PITFALL}}` と Todo/UI 分岐リンクを追加。
+  - 3 本の本体・`tutorials/index.md`・選択ハブに 3×9 の分岐表を追加。
+  - 規約 11 は分岐を専用ハブに委譲、規約 22 が 54 ページの存在・Zig 連携トークン・
+    状態プリミティブ・カタログ↔プロファイル・3 ハブのリンクを機械検査。
+  - 同期台帳 69 ペア（`--sync --date 2026-10-21`）。
+  - `zig build docs` の DanglingAnchors を slugify 規則で全件解消（同一ページ内 0 / 他ページ 0）。
+- **ローカル緑**: `quick-test`（37 / 10）、`build test` exit 0、`doctest blocks=20`、
+  `docs-check`（86 tests + `OK docsite pages=339 links=2892 … api_undoc=0`）、`fmt --check`、
+  `check-docs.py`（219 md / 53 読者ページ × 2 言語）、`gen-framework-tutorials.py --check`
+  （56 pages）、`node --test` 7/7、`gitflow.sh --self-test`。
+- **未実施**: PR 作成・3 OS CI・マージ。
+- **次の 1 手**: 実装を push → PR 1 本 → CI 7/7 → `gh pr merge` → 票を `done`。
