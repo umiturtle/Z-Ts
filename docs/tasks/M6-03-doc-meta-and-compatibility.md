@@ -1,6 +1,6 @@
 # Task M6-03: サイト MD の出所メタ・バージョン統一・互換性の正直な記述
 
-- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `done` <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/f40ad6b0-z-ts`（main `326e55a` = PR #25 マージ後）
 - **Scope**: `scripts/doc_meta.py`（新規）, `scripts/check-docs.py`（規約 23・規約 20 拡張・`--sync` 改修）,
   `scripts/gen-framework-tutorials.py`, `scripts/doc-sync.json`, 全サイト MD 末尾メタ,
@@ -11,8 +11,8 @@
 - **Upstream Reference**: [`../contributing/doc-sync.md`](../contributing/doc-sync.md)（規約 13）,
   [`../architecture/tauri-feature-gap.md`](../architecture/tauri-feature-gap.md),
   [`../reference/tauri-usage.md`](../reference/tauri-usage.md)
-- **Next Step**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
-  タスク票を `done` にする。
+- **Next Step**: 完了。PR [#26](https://github.com/umiturtle/ZigguraTs/pull/26) は
+  `main 9530b03` にマージ済みで、3 OS CI / Pages ともに緑。後続 7 タスクは §4 のとおり別途宣言。
 
 ---
 
@@ -88,30 +88,25 @@
 
 ## Current State / Next Step
 
-- **現在**: 実装・ローカル検証まで完了。
-  - **1**: `scripts/doc_meta.py`（書式・strip・本文ハッシュ・`site_md_files()`）を新設。
-    `--sync` が **231 ページ** に `<!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21
-    last-rewritten=… -->` を 1 行付与。**規約 23** が version / verified / last-rewritten /
-    台帳との一致 / 末尾配置を機械検査。`changed` 判定はメタを除いた本文ハッシュなので日付が
-    無限に進まない。生成器も同じ `meta_line()` を呼び、`--check` 56 ページが収束。
-    `render_ledger()` の日英説明にもメタの意味を追記。同期台帳は 70 ペア・`*_body_sha256` を保持。
-  - **2**: `start.md` / `counter.md` 日英の `v0.1.0` / `zts-0.1.0-*` / `zts 0.1.0` を
-    `0.1.1` に統一。読者面の `github.com/umiturtle/Z-Ts` を **`ZigguraTs` に統一**（52 ファイル）、
-    生成器 `TREE_URL` / `frameworks.zig` / `apidoc.zig` / `main.zig` / `site.zig` /
-    `template.zig` / `contributing/README.md` も含む。チェックアウトのパス名と履歴資料は据え置き。
-    規約 20 に「旧リリース参照・旧リポジトリ URL の残存」検査を追加。
-  - **3〜9**: 日英 `docs/reference/compatibility{,.en}.md` を新設し 9 項目を正確に記述。
-    `tauri-usage{,.en}.md` と `docs/INDEX{,.en}.md` から導線。`plugins.md` 日英の
-    「Linux は StubBackend」「未実装の WindowOptions は無視」を訂正し、GTK / Cocoa / Win32 の
-    実在と明示配線の必要性、`GtkStatusIcon` deprecated を明記。
-  - **5**: `src/tauri/plugins.zig` の `clear` 3 箇所の doc comment を実装に合わせて修正
-    （保存を呼ばない／ログを消す／label の 1 件を消す）。
-  - 実装弱点の修正は §4 の後続 7 タスクとして記録し、この PR には混ぜていない。
+- **完了**: 実装・マージ・公開まで全て完了。
+- **PR [#26](https://github.com/umiturtle/ZigguraTs/pull/26)**: 1 本のみ。
+  CI [`43543678472`](https://github.com/umiturtle/ZigguraTs/actions/runs/43543678472) が 7/7 緑、
+  Linux の Check Run Summary に
+  `Documentation check OK (222 markdown files verified, 53 reader pages in each of 2 languages)` と
+  `OK docsite pages=342 links=2927 … api_undoc=0` が出た（規約 20・23 も CI で通過）。
+  `gh pr merge 26 --merge` → `main 9530b03`。
+- **マージ後 `main`**: CI
+  [`43544722426`](https://github.com/umiturtle/ZigguraTs/actions/runs/43544722426) 7/7 緑、
+  Pages [`43544722497`](https://github.com/umiturtle/ZigguraTs/actions/runs/43544722497) build + deploy 成功。
+- **成果**: 231 ページに出所メタ＋規約 23（機械判別）、`0.1.1` と `ZigguraTs` への統一＋規約 20 拡張、
+  日英 `docs/reference/compatibility{,.en}.md`、`plugins.md` の誤記訂正、
+  `clear` 3 箇所のコメント矛盾解消、同期台帳 70 ペア。
 - **ローカル緑**: `quick-test`（37 / 10）、`build test` exit 0、`doctest blocks=20`、
-  `docs-check`（86 tests + `OK docsite pages=342 links=2927 … api_undoc=0`）、`fmt --check`、
-  `zig build docs` exit 0、`check-docs.py`（222 md / 53 読者ページ × 2、規約 20/23 含む）、
+  `docs-check`（86 tests + `pages=342 links=2927 … api_undoc=0`）、`zig build docs` exit 0、
+  `fmt --check`、`check-docs.py`（222 md / 53 読者ページ × 2）、
   `gen-framework-tutorials.py --check`（56 pages）、`node --test` 7/7、`gitflow.sh --self-test`。
-- **未実施**: PR 作成・3 OS CI・マージ。
-- **次の 1 手**: 実装を push → PR 1 本 → CI 7/7 → `gh pr merge` → 票を `done`。
+- **不変**: `learn_path.steps` の 5 ステップ・95 分、`AGENTS.md` / `docs/roadmap/milestones.md` の
+  チェックボックス、規約 15 の verbatim excerpt、チェックアウトのパス名、履歴資料の旧 URL。
+- **次の 1 手**: なし。実装側の弱点は §4 の後続 7 タスクとして記録済み（着手は別依頼）。
 
 <!-- zts-doc-meta: source-version=0.1.1 verified=2026-10-21 last-rewritten=2026-11-14 -->
