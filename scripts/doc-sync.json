@@ -2,7 +2,7 @@
   "schema": 1,
   "verified": {
     "date": "2026-10-21",
-    "commit": "f9bcd8a",
+    "commit": "07b6a3e",
     "zts_version": "0.1.1",
     "zig_version": "0.17.0",
     "checks": [
@@ -30,7 +30,7 @@
       "scripts/check-docs.py",
       "scripts/gen-framework-tutorials.py"
     ],
-    "implementation_sha256": "70c700bbfaed71a17f1e656b2c50c3b6a5aa7bcb2b7e1dacd3a3ffdf72a3b9e0"
+    "implementation_sha256": "2a54bd074275041c8f55a06862676fe0f87cbfd2b793cb0e294e916f681726cb"
   },
   "pages": [
     {
@@ -58,8 +58,8 @@
       "ja": "docs/contributing/doc-sync.md",
       "en": "docs/contributing/doc-sync.en.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "5b4d026b1fcf91edff7bf60274b97a1a21ab29a10e2628ecfe2574bfb4c19331",
-      "en_sha256": "ebaa1b8ba653bcf66197b642bfecb8de2efa0a97aa550ee68f48ab77f9d11c7b"
+      "ja_sha256": "9886bdc1177cdf41d6004601c3021c6fbe7c68f268e142df920d49245828675d",
+      "en_sha256": "0b7c55305572482a033bcdcfae76684634591c75570815845a3d1f606c657e92"
     },
     {
       "ja": "docs/contributing/gitflow.md",
@@ -247,99 +247,225 @@
       "ja": "docs/learn/ja/tutorials/counter-angular.md",
       "en": "docs/learn/en/tutorials/counter-angular.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "aafb8932f5d41d1a819aa4d314898fe585a53ba2c9db333a2e01d6f7e46a8dfd",
-      "en_sha256": "d2126f279e7e6019c681f666c1ae967e73dfaf152009cde3c0160ad901a1ad62"
+      "ja_sha256": "4cb8f56bdf174f2daf0d78a8597eee3bac4b47c16b5a465e52fa031a4db9296b",
+      "en_sha256": "4a38dfe5de932b73b4faae2efbe8bc0d3935b533445c13cf1f09d36f70824190"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-astro.md",
       "en": "docs/learn/en/tutorials/counter-astro.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "2f68f4fed11fbf523109095db6f2810f49d8cc77b075b8c7350ee10b3fe9d250",
-      "en_sha256": "5144ccef44c48522a34ce42b53a11725a8e4f2431e816f2cefb50897a22dae29"
+      "ja_sha256": "07f4258f28344b5c14a789a5bf9f2ac26ca12a7a625854d02d7c94c43d2c3649",
+      "en_sha256": "dc7e38c19209d1454f39cab25ced72aeecf2cc01e738ed99339b8a33945e1494"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-next.md",
       "en": "docs/learn/en/tutorials/counter-next.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "bf5b3d3ba2a79b48ddecf356ec765479e3fd422579efe3190c31ae7c0b59fc31",
-      "en_sha256": "9bf75129a4443625d226bdaaf5dfa37488d724ff6646430a46ce3f5a5c9ec567"
+      "ja_sha256": "993f92fde42c5a0283bdd7f74a9c56933172d3964a12ae73ebad7b180d14ba8a",
+      "en_sha256": "e0b58e965d405cb341207086e32e8dde8f14b5f72e3086eb8c7dea6c15b49aa7"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-nuxt.md",
       "en": "docs/learn/en/tutorials/counter-nuxt.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "aed03b96e2641a8140dd98b9be87dc44726ab4a96fb46552daa8b34341a739f2",
-      "en_sha256": "4480646f4e5b682b22efdd2afc843adcd927ed128ffdab0e5b441967f0c55105"
+      "ja_sha256": "bfeb631f3ccada09bdeb8175cbe7e1baca4f74ed693c69cfaf22d0d49a7f58b6",
+      "en_sha256": "414c5b766ac757fabd315af7bf6d4ebbdfd1d18a11ebfb470dda2aa73c9b95dd"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-react.md",
       "en": "docs/learn/en/tutorials/counter-react.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "7e79d9a302168e2762f4296c74da78c0571369341943b662a3c048296a23e03f",
-      "en_sha256": "845fd9f5634d1edd602ee4cae006c00664769abc603182bbb09695d496b700c0"
+      "ja_sha256": "6f7c6c8b0aeac99bb6182155bcd8e25afae3ab17054a7e8473ab1ad5aa1b291c",
+      "en_sha256": "579d999e782efe37fb17396dc4058e07bb7b41589fde1c3a48b956db986596f7"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-solid.md",
       "en": "docs/learn/en/tutorials/counter-solid.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "197a4a20568efa6c811745f31a9d77aaee6460c8912d77ab226bcbef83d1ed06",
-      "en_sha256": "3245f7b0cfa2a6aabef26047404db839795575715dff2edb7f877d931902dcf5"
+      "ja_sha256": "e45509f88928eb754c2848c9e774933bb61cd049856713200ef6a34ae2bf0e72",
+      "en_sha256": "24652f9f701d99a81a7a94e71ff39a0c9a57f786977a90968eea4782c7ff670d"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-solidstart.md",
       "en": "docs/learn/en/tutorials/counter-solidstart.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "4e2e142853b2cefc6fd3b96d40051c1593dd759ebe9d724b37be6ffd11675a38",
-      "en_sha256": "b7ad9c887e4f8df61544ed81550fd8eca5966b59fa0737f6ba07d2d2d1628b34"
+      "ja_sha256": "fda84fa65c4b4765a007c7e9c43061735e667c2c19ee65c775067ccd517700da",
+      "en_sha256": "8684634899e9c2b8f13ff5ef651cfb12e9bde4068abb2fb3dbb20693ac4926fe"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-svelte.md",
       "en": "docs/learn/en/tutorials/counter-svelte.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "e926085da5c0e45e0dc7408d29f3c2b7a943c9798d568227aa01980d1e9a0a15",
-      "en_sha256": "d71f913b24a227f8847c343ed8bcaecad09bccd04a3f35c84d96fddadbd27856"
+      "ja_sha256": "15d108a79778dd9eedd0c72aec973007ea383dc69caf5af40665d951ab531fa0",
+      "en_sha256": "72094ccc90d3fcb8e0192bf3ce9ca005e19a0464224b72c1616087920d4d8788"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter-sveltekit.md",
       "en": "docs/learn/en/tutorials/counter-sveltekit.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "00fcf557a9c4da5ad51a3e683679201fd5192b016ef44b69f766c352c9f6142a",
-      "en_sha256": "2524c2f4437ee2d929e57f990f6fa20a741eda2600a219e514330397a4d10177"
+      "ja_sha256": "b9ff20c4d9c3516566ddddb5614af252c5d3350e4d35982354004ec2db75fca7",
+      "en_sha256": "511de4cf65924cebb8f2d785fe3504cf36a109c969d10151e654d14715079f4b"
     },
     {
       "ja": "docs/learn/ja/tutorials/counter.md",
       "en": "docs/learn/en/tutorials/counter.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "3e01ab10cbc23482c0a482eaf2146dffc132f0cbc6a268512a6ebf99bb23cf06",
-      "en_sha256": "274bc5d47de0b654d231ea0125b8b76b3a5458cc4c092c9addbda71d9f0f0183"
+      "ja_sha256": "ef46638a8fb81cb38f9174f28e4046f5ee0b1aa75bda64135d9d421602178060",
+      "en_sha256": "3d88500f10c1e70e77d5e14a53d8aa1c5c08ea35bcc706767dc5012f3cccc9ea"
     },
     {
       "ja": "docs/learn/ja/tutorials/frameworks.md",
       "en": "docs/learn/en/tutorials/frameworks.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a8bc08ae3dbd2ee71bdcaf2cc5e678195b209103bdfb9c495af9dfb61cd8b7ed",
-      "en_sha256": "af7e674351fe042d3802a94122214b6c05f88df72bc6f7b0d935399ab6663a42"
+      "ja_sha256": "d3ece6295dbb6cbe42fef7763ec6580d9be078fb3a3d9dfb2e458bc6dd056691",
+      "en_sha256": "84a8129de1d1c538c12bbc2372b6045315da409388a0c9e6d0347e77d03b793b"
     },
     {
       "ja": "docs/learn/ja/tutorials/index.md",
       "en": "docs/learn/en/tutorials/index.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "ecc036359a6aee6f801e0ecc13bb7e92caf81e739af42b37ff84138963713eb4",
-      "en_sha256": "f97aaee99e1e54e3e5d8b08893091d487f08dffdd44c9acf53dd61d90eea521b"
+      "ja_sha256": "56ae9db0b44d6a300a3ed14e4ff76847cf99fdee4511bb8b93a902b674b9b539",
+      "en_sha256": "2db6bb546f1653f0e670e4158e19375278b84f73a5aef1871a45aa44034487e2"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-angular.md",
+      "en": "docs/learn/en/tutorials/todo-angular.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "77ca0b2afaa056882527730c5a1f52e664ba36543b7b78df1c7799aa1f244977",
+      "en_sha256": "3f87820c27dd53a4a34dd0a29d0a0c8e8bcc63f7e4ef9f36fa3d7f55f91c6ddd"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-astro.md",
+      "en": "docs/learn/en/tutorials/todo-astro.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "509eb20412181475be82632c16472a5d5ed62f8ee6841e1cfa0a0593c9a5d4b1",
+      "en_sha256": "d7be775ae8434d5973414f78dba40245a9a552a9e68d465bd7595cdb08ef4708"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-next.md",
+      "en": "docs/learn/en/tutorials/todo-next.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "5eab57bee3dd6533991f74e50ae5725c2a591eb3a145abb74e492e6ad2c65cda",
+      "en_sha256": "13103495788e0df836597a6bb7844819715c114437b0cce068072a1897244740"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-nuxt.md",
+      "en": "docs/learn/en/tutorials/todo-nuxt.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "cc12d2ecb64d4d7121dfd554b772f0a3895c2bcdc2cf4ebadcd0428cf7b4c318",
+      "en_sha256": "374f1389f744f9c6006c9161dc6e0c1c427f69d35c2292e4279c68b45065bb27"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-react.md",
+      "en": "docs/learn/en/tutorials/todo-react.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "d039f5dd30116dc53d184237bdaa8ad559b661176cb11064ea09cb74c24a131e",
+      "en_sha256": "601004c2c935b2c2b6cd63fb38ebb8a2b43c6bf5da00affda08922a975898648"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-solid.md",
+      "en": "docs/learn/en/tutorials/todo-solid.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "13fbbf261cd0e67277aa02428d41de5aabe20aea9ead71ac35f8f8a83ae71be6",
+      "en_sha256": "2c349fc586581c2495a98d7236ce898d94e58dba539ad1fee260b80eabab4145"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-solidstart.md",
+      "en": "docs/learn/en/tutorials/todo-solidstart.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "950994af10d76cade20c030e95d0331bb61aab0a648e9f38ffb35e43376115a0",
+      "en_sha256": "12a8fb18508a35e5d24fad13ffa2b1e7818133c00362e8bb6c38d1d4e21a9191"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-svelte.md",
+      "en": "docs/learn/en/tutorials/todo-svelte.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "d9772bdf6a06bc3ae1ffe00ee0618bc5cff8cba5075b80c9e73169ce478058a5",
+      "en_sha256": "f104263ce69753c7931c6452f3607dc427a78a956c2d70200869595bef434038"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/todo-sveltekit.md",
+      "en": "docs/learn/en/tutorials/todo-sveltekit.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "54fde86fb039a923c8196c7fcdd3c965e8416360e6c56513e254e81383dea9be",
+      "en_sha256": "c51505c0dec2c803ea8c498f0cdc30b14267982655c263d28436b5bfacbf975d"
     },
     {
       "ja": "docs/learn/ja/tutorials/todo.md",
       "en": "docs/learn/en/tutorials/todo.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "a88d93f25ffe521a962f289e83b6281ecf295d56db519414a4c88ef956d6eec3",
-      "en_sha256": "a3f03e94b92b23cc7286dcb69f6586db6bbdc8e01a723ab8fd9897ec870b8993"
+      "ja_sha256": "88caf1ef270af7b8145db2b000b93a1c1cdcf3dd32a91259069fb2dbaeea0e89",
+      "en_sha256": "a133f79f1f95631f8cc75303b8afd35d662865c92d954ab7e07681ef7b3edb76"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-angular.md",
+      "en": "docs/learn/en/tutorials/ui-angular.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "cd85d4fd81d1943dbbe9d5fd52943dd5b96f24be6f59bf508c1ea689095f0b90",
+      "en_sha256": "02b8614ae1bfadcffee02787cb3cf1e639796d26043552ee33efba7f558abdc8"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-astro.md",
+      "en": "docs/learn/en/tutorials/ui-astro.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "7b3b1fdc54cacab9cb305ff2a5046de37cb7f555d22bb47e4070c7964cc17b29",
+      "en_sha256": "d5c0b28a398c30db28f5225e2fc9ab621021be06f545caf599a8345523e2ccf0"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-next.md",
+      "en": "docs/learn/en/tutorials/ui-next.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "6e6ea11c967e7e5777a8f51666aafc87db1c91d868948229fe7a5bffd1fca5f6",
+      "en_sha256": "7ed325093760a2e7f39c2d8b3410847dd4dda9cd32066900efbd5237ccd664d5"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-nuxt.md",
+      "en": "docs/learn/en/tutorials/ui-nuxt.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "8bf850b02ba52c64caa46b010d11fea0a036bc6e2a99c2c5e45fc75e003224a7",
+      "en_sha256": "7e5dfb01571d0e94183b225d98f232be63a024da2cdca4064fff7e152150e475"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-react.md",
+      "en": "docs/learn/en/tutorials/ui-react.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "1632967e96cc3a2b1d994a4bb8ae32df65a3108fa4f31034212ddd91245f9c0c",
+      "en_sha256": "9c35c14cb443c253d4fe64357ac032b89f2b5608423c2f067b7b599e6fb67a37"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-solid.md",
+      "en": "docs/learn/en/tutorials/ui-solid.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "f61f5b0ffb77448ad78ffff87d7d3ea334b2d9025c612e803508fea6241a82f6",
+      "en_sha256": "be04d509b7f5a2af0338dfbbedc977a887d8388396a63c8662235492e31b71de"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-solidstart.md",
+      "en": "docs/learn/en/tutorials/ui-solidstart.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "657f089e876e310378cda3b9a58104d9652e877a0dccfb2828cc37e3216bed42",
+      "en_sha256": "97baa06290333ab362e306681c8a4e5db65bce210c92f672e387dde38a963a6c"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-svelte.md",
+      "en": "docs/learn/en/tutorials/ui-svelte.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "157f27741f000cc359cc9f12f4793bd76983a8e4be469b35a77bdeefd38906b7",
+      "en_sha256": "71b6f08471c353af35c78fcd4232a90b65421664fd7906e78fb86aa073ce0604"
+    },
+    {
+      "ja": "docs/learn/ja/tutorials/ui-sveltekit.md",
+      "en": "docs/learn/en/tutorials/ui-sveltekit.md",
+      "last_rewritten": "2026-10-21",
+      "ja_sha256": "21bc3493440587db02a3a81dfe1b302527b21b86b7351e41b479adec9f25ee87",
+      "en_sha256": "03fde8dd8f599da42218eeb6f0304a579bd75d97f7cd04e1c782d3479e49e86c"
     },
     {
       "ja": "docs/learn/ja/tutorials/ui.md",
       "en": "docs/learn/en/tutorials/ui.md",
       "last_rewritten": "2026-10-21",
-      "ja_sha256": "78435f68a8f21342249d9846e41f2e59e9a832c6dac618ecad25e9dbf212a13d",
-      "en_sha256": "7bfd6d8c887a3ec99c817a2fdd69eeb762cb6ad8fb19008dba4ebdc6a11aa75f"
+      "ja_sha256": "16202082cddfd0217cb799a3dfbfbd54bafad09981bb70d22ce7e0a59016ffb1",
+      "en_sha256": "0d2bace3f3462072011711c199881f64127c6d4b5f8fd974b72a9f5739227d06"
     },
     {
       "ja": "docs/reference/cli.md",

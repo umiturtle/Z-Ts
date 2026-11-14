@@ -20,6 +20,22 @@ alternative routes, not extra chapters, so the time budget does not grow.
 
 <!-- framework-picker -->
 
+### Three tutorials x nine libraries
+
+Every branch carries the **state primitive and Zig linkage** chapter (seal, two states, SSR guard).
+
+| Library | Counter | Todo | UI | State primitive |
+|---|---|---|---|---|
+| React | [counter](counter-react.md) | [todo](todo-react.md) | [ui](ui-react.md) | `useState(0)` |
+| Solid | [counter](counter-solid.md) | [todo](todo-solid.md) | [ui](ui-solid.md) | `createSignal(0)` |
+| Svelte | [counter](counter-svelte.md) | [todo](todo-svelte.md) | [ui](ui-svelte.md) | `let count = 0` |
+| Angular | [counter](counter-angular.md) | [todo](todo-angular.md) | [ui](ui-angular.md) | `signal(0)` |
+| Next.js | [counter](counter-next.md) | [todo](todo-next.md) | [ui](ui-next.md) | `useState(0)` (with `'use client'`) |
+| Nuxt | [counter](counter-nuxt.md) | [todo](todo-nuxt.md) | [ui](ui-nuxt.md) | `ref(0)` |
+| Astro | [counter](counter-astro.md) | [todo](todo-astro.md) | [ui](ui-astro.md) | Direct DOM updates (`data-zts`) |
+| SvelteKit | [counter](counter-sveltekit.md) | [todo](todo-sveltekit.md) | [ui](ui-sveltekit.md) | `let count = 0` |
+| SolidStart | [counter](counter-solidstart.md) | [todo](todo-solidstart.md) | [ui](ui-solidstart.md) | `createSignal(0)` |
+
 The [chooser hub](frameworks.md) also links each example's source, build command and live demo.
 
 ## How to work through one

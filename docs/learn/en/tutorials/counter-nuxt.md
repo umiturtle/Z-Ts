@@ -97,7 +97,11 @@ example). `<script setup>` with pre-rendered HTML; `import.meta.client` guards b
     <ul class="features">
 ```
 
-State lives in `ref(0)`. The counter deliberately uses **local state only** so the pixel
+State lives in `ref(0)`.
+
+`ref(0)` in `<script setup>` is read and written through `.value`. Templates unwrap it automatically (`count`), but script code needs `count.value`.
+
+The counter deliberately uses **local state only** so the pixel
 comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
 opposite: it **cannot be filled in unless Zig is running**
 ([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
@@ -137,6 +141,25 @@ import { invoke } from "@tauri-apps/api/core";
 async function inc() { count.value = await invoke<number>("increment"); }
 ```
 
+The Nuxt state and the counter owned by Zig are **two different states**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). Assign `count.value = r.count` once after `await`. The pre-rendered HTML already contains `0`, so the display disagrees until the client injects Zig's value — keep the panel at `ZIG OFFLINE` while loading.
+
+To feed the gallery's `zig_inc` into that same state, write:
+
+```vue
+import { invoke } from "@tauri-apps/api/core";
+
+const zigCount = ref(0);
+const seal = ref("—");
+
+async function zigInc() {
+  if (!import.meta.client) return;
+  const r = await invoke<{ ok: boolean; count: number; seal: string }>("zig_inc");
+  zigCount.value = r.count;   // Zig の戻り値だけを正にする
+  seal.value = r.seal;
+}
+```
+
 That closes the loop: button → `invoke("increment")` → Zig function → return value → screen.
 `invoke` does not reach anything in the browser served by `zts dev`, so always confirm with the
 executable produced by `zts build`.
@@ -170,6 +193,11 @@ JavaScript alone cannot manufacture the string. `+` / `-` change **the counter o
 the framework's local state, and every press produces a new seal. That single line is the answer to
 "is Zig actually alive back there?".
 
+Guard browser-only code with `import.meta.client`. Calling `window.__ZTS_ZIG__` or `invoke` during `nuxt generate` breaks the prerender.
+
+> [!WARNING]
+> `Writing `count = r.count` instead of `count.value` replaces the ref object and breaks template tracking.`
+
 The real wiring lives in
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
@@ -186,6 +214,8 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | the plain-JS original | [Build a counter](counter.md) |
 | more state, returning failures | [Build a todo list](todo.md) |
 | loading / empty / error views | [Build the screen](ui.md) |
+| the Todo branch for Nuxt | [Todo with Nuxt](todo-nuxt.md) |
+| the screen branch for Nuxt | [Screen with Nuxt](ui-nuxt.md) |
 | the real Nuxt source | [`examples/frameworks/nuxt/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/nuxt) |
 | the live Nuxt demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/nuxt/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |

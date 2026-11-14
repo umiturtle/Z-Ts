@@ -97,7 +97,11 @@ example). Holds the count in `useState` and reports mount completion from `useEf
         <ul className="features">
 ```
 
-State lives in `useState(0)`. The counter deliberately uses **local state only** so the pixel
+State lives in `useState(0)`.
+
+`useState(0)` returns a value and a setter. Calling the setter **re-runs the component function** and re-evaluates all of its JSX. State is a per-render closure, so a value captured before `await` is stale afterwards.
+
+The counter deliberately uses **local state only** so the pixel
 comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
 opposite: it **cannot be filled in unless Zig is running**
 ([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
@@ -137,6 +141,24 @@ import { invoke } from "@tauri-apps/api/core";
 async function inc() { setCount(await invoke("increment")); }
 ```
 
+The React state and the counter owned by Zig are **two different states**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). Feed **only the Zig result** into `setCount(await invoke("zig_inc"))`. An optimistic `setCount(c => c + 1)` on click makes the UI run ahead when Zig rejects the command. If `invoke` rejects, do not call the setter — switch to an error state instead.
+
+To feed the gallery's `zig_inc` into that same state, write:
+
+```jsx
+import { invoke } from "@tauri-apps/api/core";
+
+const [zigCount, setZigCount] = useState(0);
+const [seal, setSeal] = useState("—");
+
+async function zigInc() {
+  const r = await invoke<{ ok: boolean; count: number; seal: string }>("zig_inc");
+  setZigCount(r.count);   // 楽観更新せず、Zig の戻り値だけを正にする
+  setSeal(r.seal);        // Zig 側だけが作れる SHA-256 seal
+}
+```
+
 That closes the loop: button → `invoke("increment")` → Zig function → return value → screen.
 `invoke` does not reach anything in the browser served by `zts dev`, so always confirm with the
 executable produced by `zts build`.
@@ -170,6 +192,11 @@ JavaScript alone cannot manufacture the string. `+` / `-` change **the counter o
 the framework's local state, and every press produces a new seal. That single line is the answer to
 "is Zig actually alive back there?".
 
+`useEffect` only runs in the browser, so check `window.__ZTS_ZIG__` there. With no host behind `zts dev`, the panel correctly stays at `ZIG OFFLINE`.
+
+> [!WARNING]
+> `An empty dependency array makes `invoke` run twice under StrictMode in development, which advances the Zig counter twice. If dev and production disagree, check this first.`
+
 The real wiring lives in
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
@@ -186,6 +213,8 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | the plain-JS original | [Build a counter](counter.md) |
 | more state, returning failures | [Build a todo list](todo.md) |
 | loading / empty / error views | [Build the screen](ui.md) |
+| the Todo branch for React | [Todo with React](todo-react.md) |
+| the screen branch for React | [Screen with React](ui-react.md) |
 | the real React source | [`examples/frameworks/react/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/react) |
 | the live React demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/react/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |

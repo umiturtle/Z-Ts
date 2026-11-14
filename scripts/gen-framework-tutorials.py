@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Generate the branched tutorials from the committed framework examples.
 
-One catalog (`src/docsite/frameworks.json`) drives all three consumers: the docsite picker, this
-generator, and `scripts/check-docs.py` rule 15. Run after changing a framework example:
+One catalog (`src/docsite/frameworks.json`) drives the docsite picker and rule 15; the per-library
+teaching text lives in `framework_tutorial_profiles.py` and the two extra tutorial templates in
+`framework_tutorial_templates.py`. Run after changing an example or a profile:
 
-    python3 scripts/gen-framework-tutorials.py           # rewrite the 20 generated pages
+    python3 scripts/gen-framework-tutorials.py           # rewrite the 56 generated pages
     python3 scripts/gen-framework-tutorials.py --check  # fail if any generated page is stale
 
-The generator reads each example's real source file and embeds a contiguous slice around the
-counter markup, so a tutorial can never show code that no longer exists. It is deterministic and
-writes only inside `docs/learn/{ja,en}/tutorials/`.
+The counter branches embed a contiguous, verbatim slice of each example's real source. The Todo and
+UI branches are reading guides: `todo.md` / `ui.md` remain the single source of the Zig commands.
+All three carry the same chapter on local state vs the Zig-owned counter and the SHA-256 seal.
+Deterministic; writes only inside `docs/learn/{ja,en}/tutorials/`.
 """
 
 from __future__ import annotations
@@ -19,6 +21,18 @@ import json
 import os
 import sys
 from pathlib import Path
+
+from framework_tutorial_profiles import PROFILES
+from framework_tutorial_templates import (
+    TODO_EN, TODO_EN_TAIL, TODO_JA, TODO_JA_TAIL,
+    UI_EN, UI_EN_TAIL, UI_JA, UI_JA_TAIL,
+    ZIG_LINKAGE_EN, ZIG_LINKAGE_JA,
+)
+
+TODO_JA_FULL = TODO_JA + ZIG_LINKAGE_JA + TODO_JA_TAIL
+TODO_EN_FULL = TODO_EN + ZIG_LINKAGE_EN + TODO_EN_TAIL
+UI_JA_FULL = UI_JA + ZIG_LINKAGE_JA + UI_JA_TAIL
+UI_EN_FULL = UI_EN + ZIG_LINKAGE_EN + UI_EN_TAIL
 
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG = ROOT / "src" / "docsite" / "frameworks.json"
@@ -170,7 +184,11 @@ zts dev                 # http://127.0.0.1:5173
 {{SNIPPET}}
 ```
 
-状態は {{STATE}} です。カウンター本体は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
+状態は {{STATE}} です。
+
+{{REACTIVITY}}
+
+カウンター本体は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
 で動かしています。その下の `.zigbar` パネルは逆で、**Zig が動いていないと絶対に埋まりません**
 （[付録](#付録-zig-が動いているかを画面で確かめる)）。次の章でここに ziggurats のコマンドを
 つなぎます。
@@ -208,6 +226,15 @@ const handler = router.handler();
 {{INVOKE}}
 ```
 
+`{{LABEL}}` のローカル状態と、Zig が持つカウンタは **別の状態** です
+（[付録](#付録-zig-が動いているかを画面で確かめる)）。{{SYNC}}
+
+ギャラリーの `zig_inc` を同じ状態に流し込むなら、こう書きます。
+
+```{{FENCE}}
+{{CODE_ZIG}}
+```
+
 これで「ボタン → `invoke("increment")` → Zig の関数 → 戻り値 → 画面」が 1 周します。
 `zts dev` のブラウザだけを見ていると `invoke` は届かないので、必ず `zts build` 後の
 実行ファイルで確かめてください。
@@ -241,6 +268,11 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 できません。`＋` `−` はフレームワークのローカル状態ではなく **Zig が保持するカウンタ**を増減し、
 押すたびに seal が変わります。つまりこの 1 行が「裏で Zig が生きているか」の答えです。
 
+{{GUARD}}
+
+> [!WARNING]
+> `{{PITFALL}}`
+
 配線の実物は
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) と
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig) にあります。ギャラリーは
@@ -257,6 +289,8 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 | 素の JS 版（分岐の元） | [カウンターを作る](counter.md) |
 | 状態を増やす・失敗を返す | [Todo リストを作る](todo.md) |
 | 読み込み中 / 空 / エラーの画面 | [画面を作る](ui.md) |
+| `{{LABEL}}` 版の Todo | [Todo を {{LABEL}} で](todo-{{ID}}.md) |
+| `{{LABEL}}` 版の画面 | [画面を {{LABEL}} で](ui-{{ID}}.md) |
 | `{{LABEL}}` の実物ソース | [`examples/frameworks/{{ID}}/`]({{TREE}}) |
 | `{{LABEL}}` の公開デモ | [ブラウザで開く]({{DEMO}}) |
 | 9 つの example の比較 | [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) |
@@ -356,7 +390,11 @@ example). {{NOTE}}
 {{SNIPPET}}
 ```
 
-State lives in {{STATE}}. The counter deliberately uses **local state only** so the pixel
+State lives in {{STATE}}.
+
+{{REACTIVITY}}
+
+The counter deliberately uses **local state only** so the pixel
 comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
 opposite: it **cannot be filled in unless Zig is running**
 ([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
@@ -394,6 +432,15 @@ In {{LABEL}} you write it like this. `@tauri-apps/api` is used **unmodified**.
 {{INVOKE}}
 ```
 
+The {{LABEL}} state and the counter owned by Zig are **two different states**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). {{SYNC}}
+
+To feed the gallery's `zig_inc` into that same state, write:
+
+```{{FENCE}}
+{{CODE_ZIG}}
+```
+
 That closes the loop: button → `invoke("increment")` → Zig function → return value → screen.
 `invoke` does not reach anything in the browser served by `zts dev`, so always confirm with the
 executable produced by `zts build`.
@@ -427,6 +474,11 @@ JavaScript alone cannot manufacture the string. `+` / `-` change **the counter o
 the framework's local state, and every press produces a new seal. That single line is the answer to
 "is Zig actually alive back there?".
 
+{{GUARD}}
+
+> [!WARNING]
+> `{{PITFALL}}`
+
 The real wiring lives in
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
@@ -443,6 +495,8 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | the plain-JS original | [Build a counter](counter.md) |
 | more state, returning failures | [Build a todo list](todo.md) |
 | loading / empty / error views | [Build the screen](ui.md) |
+| the Todo branch for {{LABEL}} | [Todo with {{LABEL}}](todo-{{ID}}.md) |
+| the screen branch for {{LABEL}} | [Screen with {{LABEL}}](ui-{{ID}}.md) |
 | the real {{LABEL}} source | [`examples/frameworks/{{ID}}/`]({{TREE}}) |
 | the live {{LABEL}} demo | [Open in a browser]({{DEMO}}) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
@@ -452,7 +506,7 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 CHOOSER_JA = '''# 好きなライブラリでチュートリアルを選ぶ
 
 > **対象読者**: いつものフロントエンドのまま ziggurats を試したい人。
-> **所要時間**: 選ぶだけなら 1 分。選んだチュートリアルは 15 分。
+> **所要時間**: 選ぶだけなら 1 分。counter は 15 分、Todo / 画面は各 20 分。
 
 チュートリアル 3 本は **Zig 側が共通**です。フロントエンドは実物の example が
 コミットされている 9 ライブラリ＋素の JS から、**好きなものを 1 つ選んで**進められます。
@@ -464,18 +518,18 @@ CHOOSER_JA = '''# 好きなライブラリでチュートリアルを選ぶ
 
 | 元のチュートリアル | 共通なもの | ライブラリごとに変わるもの |
 |---|---|---|
-| [カウンターを作る](counter.md) | `increment` コマンド・`zts dev`・`zts build` | 状態の持ち方とボタンの書き方（9 本の分岐ページあり） |
-| [Todo リストを作る](todo.md) | 3 つの Zig コマンド・`error{}`・テスト | 一覧の描画（各分岐の「状態の持ち方」を読み替える） |
-| [画面を作る](ui.md) | 状態の境界・CSP | 条件分岐のテンプレート構文 |
+| [カウンターを作る](counter.md) | `increment` コマンド・`zts dev`・`zts build` | 状態プリミティブとボタンの書き方（9 本） |
+| [Todo リストを作る](todo.md) | 3 つの Zig コマンド・`error{}`・テスト | 一覧の状態・キー付き繰り返し・再読込（9 本） |
+| [画面を作る](ui.md) | 状態の境界・CSP | 3 状態の条件分岐・エラー表示（9 本） |
 
 > [!NOTE]
 > `learn_path.zig` の 5 ステップ・所要時間は変えていません。分岐は**追加の章ではなく代替の道**で、
-> 選んだ 1 本だけ読めば 15 分で終わります。
+> 選んだ 1 本だけ読めば、その 1 本の所要時間で終わります。
 
 ## 実物の example 一覧
 
-| 実物 | バージョン | ビルド | 出力先 | チュートリアル | 公開デモ |
-|---|---|---|---|---|---|
+| 実物 | バージョン | ビルド | 出力先 | カウンター | Todo | 画面 | 公開デモ |
+|---|---|---|---|---|---|---|---|
 {{ROWS_JA}}
 
 リポジトリの [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) に
@@ -501,7 +555,7 @@ Zig だけが作れる 16 桁の seal と、Zig が保持するカウンタが�
 CHOOSER_EN = '''# Choose a library for the tutorials
 
 > **Audience**: readers who want to try ziggurats without leaving their usual frontend stack.
-> **Time**: one minute to choose; 15 minutes for the tutorial you pick.
+> **Time**: one minute to choose; 15 minutes for the counter, 20 each for Todo / UI.
 
 The three tutorials share **the same Zig side**. For the frontend you can pick **any** of the nine
 libraries with a committed example, or plain JavaScript. `increment`, `zts dev` and `zts build`
@@ -513,18 +567,18 @@ are identical on every branch.
 
 | Original tutorial | Shared | What changes per library |
 |---|---|---|
-| [Build a counter](counter.md) | the `increment` command, `zts dev`, `zts build` | state and button syntax (nine full branch pages) |
-| [Build a todo list](todo.md) | three Zig commands, `error{}`, command tests | list rendering (read the "State" column above) |
-| [Build the screen](ui.md) | state boundaries, CSP | conditional template syntax |
+| [Build a counter](counter.md) | the `increment` command, `zts dev`, `zts build` | state primitive and button syntax (nine branches) |
+| [Build a todo list](todo.md) | three Zig commands, `error{}`, command tests | list state, keyed repetition, re-reading (nine branches) |
+| [Build the screen](ui.md) | state boundaries, CSP | three-state conditionals and error views (nine branches) |
 
 > [!NOTE]
 > The five learning-path steps and their minute budget are unchanged: a branch is an **alternative
-> route, not an extra chapter**. Read one and you are done in 15 minutes.
+> route, not an extra chapter**. Read one and you are done in that one's time budget.
 
 ## The real examples
 
-| Example | Version | Build | Output | Tutorial | Live demo |
-|---|---|---|---|---|---|
+| Example | Version | Build | Output | Counter | Todo | UI | Live demo |
+|---|---|---|---|---|---|---|---|
 {{ROWS_EN}}
 
 See [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) for the
@@ -564,6 +618,8 @@ def snippet_for(fw: dict) -> str:
 
 def render(template: str, fw: dict, snippet: str, lang: str) -> str:
     body = template
+    profile = PROFILES[fw["id"]]
+    i = 0 if lang == "ja" else 1
     replacements = {
         "{{LABEL}}": fw["label"],
         "{{ID}}": fw["id"],
@@ -578,6 +634,15 @@ def render(template: str, fw: dict, snippet: str, lang: str) -> str:
         "{{INVOKE}}": INVOKE[fw["id"]],
         "{{TREE}}": TREE_URL.format(id=fw["id"]),
         "{{DEMO}}": PAGES_URL.format(id=fw["id"]),
+        "{{REACTIVITY}}": profile["reactivity"][i],
+        "{{SYNC}}": profile["sync"][i],
+        "{{GUARD}}": profile["guard"][i],
+        "{{PITFALL}}": profile["pitfall"][i],
+        "{{TODO_STATE}}": profile["todo_state"][i],
+        "{{UI_STATE}}": profile["ui_state"][i],
+        "{{CODE_ZIG}}": profile["code_zig"],
+        "{{CODE_TODO}}": profile["code_todo"],
+        "{{CODE_UI}}": profile["code_ui"],
     }
     for key, value in replacements.items():
         body = body.replace(key, value)
@@ -591,11 +656,12 @@ def rows(fw_list: list[dict], lang: str) -> str:
     for fw in fw_list:
         tree = TREE_URL.format(id=fw["id"])
         demo = PAGES_URL.format(id=fw["id"])
-        label = "チュートリアル" if lang == "ja" else "Tutorial"
         demo_label = "開く" if lang == "ja" else "Open"
+        fid = fw["id"]
         out.append(
-            f"| [`{fw['id']}/`]({tree}) | {fw['version']} | `{fw['build']}` | `{fw['dist']}` | "
-            f"[{label}](counter-{fw['id']}.md) | [{demo_label}]({demo}) |"
+            f"| [`{fid}/`]({tree}) | {fw['version']} | `{fw['build']}` | `{fw['dist']}` | "
+            f"[counter](counter-{fid}.md) | [todo](todo-{fid}.md) | [ui](ui-{fid}.md) | "
+            f"[{demo_label}]({demo}) |"
         )
     return "\n".join(out)
 
@@ -609,8 +675,13 @@ def main() -> int:
     expected: dict[Path, str] = {}
     for fw in fw_list:
         snippet = snippet_for(fw)
-        expected[TUTORIALS / "ja" / "tutorials" / f"counter-{fw['id']}.md"] = render(VARIANT_JA, fw, snippet, "ja")
-        expected[TUTORIALS / "en" / "tutorials" / f"counter-{fw['id']}.md"] = render(VARIANT_EN, fw, snippet, "en")
+        fid = fw["id"]
+        expected[TUTORIALS / "ja" / "tutorials" / f"counter-{fid}.md"] = render(VARIANT_JA, fw, snippet, "ja")
+        expected[TUTORIALS / "en" / "tutorials" / f"counter-{fid}.md"] = render(VARIANT_EN, fw, snippet, "en")
+        expected[TUTORIALS / "ja" / "tutorials" / f"todo-{fid}.md"] = render(TODO_JA_FULL, fw, snippet, "ja")
+        expected[TUTORIALS / "en" / "tutorials" / f"todo-{fid}.md"] = render(TODO_EN_FULL, fw, snippet, "en")
+        expected[TUTORIALS / "ja" / "tutorials" / f"ui-{fid}.md"] = render(UI_JA_FULL, fw, snippet, "ja")
+        expected[TUTORIALS / "en" / "tutorials" / f"ui-{fid}.md"] = render(UI_EN_FULL, fw, snippet, "en")
 
     expected[TUTORIALS / "ja" / "tutorials" / "frameworks.md"] = CHOOSER_JA.replace("{{ROWS_JA}}", rows(fw_list, "ja"))
     expected[TUTORIALS / "en" / "tutorials" / "frameworks.md"] = CHOOSER_EN.replace("{{ROWS_EN}}", rows(fw_list, "en"))

@@ -97,7 +97,11 @@ example). Fine-grained `createSignal` reactivity; components do not re-render wh
         <ul class="features">
 ```
 
-State lives in `createSignal(0)`. The counter deliberately uses **local state only** so the pixel
+State lives in `createSignal(0)`.
+
+`createSignal(0)` returns a `[getter, setter]` pair. **Only the DOM nodes that read it** update, and the component function runs exactly once. `count` is a function, so JSX calls `count()`.
+
+The counter deliberately uses **local state only** so the pixel
 comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
 opposite: it **cannot be filled in unless Zig is running**
 ([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
@@ -137,6 +141,24 @@ import { invoke } from "@tauri-apps/api/core";
 async function inc() { setCount(await invoke("increment")); }
 ```
 
+The Solid state and the counter owned by Zig are **two different states**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). Call `setCount(r.count)` exactly once, after Zig replies. Fine-grained updates hide a run-ahead UI, so keep two signals (local counter and Zig counter) to make the source of truth obvious.
+
+To feed the gallery's `zig_inc` into that same state, write:
+
+```jsx
+import { invoke } from "@tauri-apps/api/core";
+
+const [zigCount, setZigCount] = createSignal(0);
+const [seal, setSeal] = createSignal("—");
+
+async function zigInc() {
+  const r = await invoke<{ ok: boolean; count: number; seal: string }>("zig_inc");
+  setZigCount(r.count);   // Zig の戻り値だけを正にする
+  setSeal(r.seal);
+}
+```
+
 That closes the loop: button → `invoke("increment")` → Zig function → return value → screen.
 `invoke` does not reach anything in the browser served by `zts dev`, so always confirm with the
 executable produced by `zts build`.
@@ -170,6 +192,11 @@ JavaScript alone cannot manufacture the string. `+` / `-` change **the counter o
 the framework's local state, and every press produces a new seal. That single line is the answer to
 "is Zig actually alive back there?".
 
+`onMount` is client-only, so call `window.__ZTS_ZIG__.mount()` from there; a static export simply leaves the panel at `ZIG OFFLINE`.
+
+> [!WARNING]
+> `Forgetting the `count()` call passes the function object to the DOM; assigning to a plain `let` outside a signal never repaints.`
+
 The real wiring lives in
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
@@ -186,6 +213,8 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | the plain-JS original | [Build a counter](counter.md) |
 | more state, returning failures | [Build a todo list](todo.md) |
 | loading / empty / error views | [Build the screen](ui.md) |
+| the Todo branch for Solid | [Todo with Solid](todo-solid.md) |
+| the screen branch for Solid | [Screen with Solid](ui-solid.md) |
 | the real Solid source | [`examples/frameworks/solid/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solid) |
 | the live Solid demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solid/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |

@@ -25,6 +25,20 @@ done in 15 minutes.
 
 <!-- framework-picker -->
 
+The nine branches of this tutorial. The Zig side is identical in all of them.
+
+| Library | This tutorial's branch |
+|---|---|
+| React | [Counter with React](counter-react.md) |
+| Solid | [Counter with Solid](counter-solid.md) |
+| Svelte | [Counter with Svelte](counter-svelte.md) |
+| Angular | [Counter with Angular](counter-angular.md) |
+| Next.js | [Counter with Next.js](counter-next.md) |
+| Nuxt | [Counter with Nuxt](counter-nuxt.md) |
+| Astro | [Counter with Astro](counter-astro.md) |
+| SvelteKit | [Counter with SvelteKit](counter-sveltekit.md) |
+| SolidStart | [Counter with SolidStart](counter-solidstart.md) |
+
 The [chooser hub](frameworks.md) lists every real example and live demo.
 
 ---

@@ -97,7 +97,11 @@ example). SPA mode (`ssr:false`); the route's `index.tsx` holds the counter
         <ul class="features">
 ```
 
-State lives in `createSignal(0)`. The counter deliberately uses **local state only** so the pixel
+State lives in `createSignal(0)`.
+
+SPA mode (`ssr:false`) skips server rendering, but `createSignal` behaves exactly like Solid: read `count()`, write `setCount`. The route's `index.tsx` is the whole app.
+
+The counter deliberately uses **local state only** so the pixel
 comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
 opposite: it **cannot be filled in unless Zig is running**
 ([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
@@ -137,6 +141,24 @@ import { invoke } from "@tauri-apps/api/core";
 async function inc() { setCount(await invoke("increment")); }
 ```
 
+The SolidStart state and the counter owned by Zig are **two different states**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). Call `setCount(r.count)` once after `await`. If you ever enable prerendering, keep `ZIG OFFLINE` visible until Zig's value arrives.
+
+To feed the gallery's `zig_inc` into that same state, write:
+
+```tsx
+import { invoke } from "@tauri-apps/api/core";
+
+const [zigCount, setZigCount] = createSignal(0);
+const [seal, setSeal] = createSignal("—");
+
+async function zigInc() {
+  const r = await invoke<{ ok: boolean; count: number; seal: string }>("zig_inc");
+  setZigCount(r.count);   // Zig の戻り値だけを正にする
+  setSeal(r.seal);
+}
+```
+
 That closes the loop: button → `invoke("increment")` → Zig function → return value → screen.
 `invoke` does not reach anything in the browser served by `zts dev`, so always confirm with the
 executable produced by `zts build`.
@@ -170,6 +192,11 @@ JavaScript alone cannot manufacture the string. `+` / `-` change **the counter o
 the framework's local state, and every press produces a new seal. That single line is the answer to
 "is Zig actually alive back there?".
 
+Call `window.__ZTS_ZIG__.mount()` in `onMount`. Even with `ssr:false`, module scope may be evaluated at build time, so avoid a top-level `window`.
+
+> [!WARNING]
+> `Removing `ssr:false` makes a bare `window` reference fail at build time. Revisit the `onMount` guard whenever the SPA setting changes.`
+
 The real wiring lives in
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
@@ -186,6 +213,8 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | the plain-JS original | [Build a counter](counter.md) |
 | more state, returning failures | [Build a todo list](todo.md) |
 | loading / empty / error views | [Build the screen](ui.md) |
+| the Todo branch for SolidStart | [Todo with SolidStart](todo-solidstart.md) |
+| the screen branch for SolidStart | [Screen with SolidStart](ui-solidstart.md) |
 | the real SolidStart source | [`examples/frameworks/solidstart/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/solidstart) |
 | the live SolidStart demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/solidstart/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |
