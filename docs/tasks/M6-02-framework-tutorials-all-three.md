@@ -1,6 +1,6 @@
 # Task M6-02: 3 チュートリアル × 9 ライブラリの分岐を充実させる
 
-- **Status**: `review` <!-- todo | in_progress | review | done | blocked -->
+- **Status**: `done` <!-- todo | in_progress | review | done | blocked -->
 - **Branch**: `arena/70a7eede-z-ts`（main `b488746` = PR #24 マージ後 / v0.1.1 リリース後）
 - **Scope**: `scripts/gen-framework-tutorials.py`, `src/docsite/frameworks.json`,
   `docs/learn/{ja,en}/tutorials/{counter,todo,ui}.md`,
@@ -11,8 +11,8 @@
   [`../learn/ja/tutorials/todo.md`](../learn/ja/tutorials/todo.md),
   [`../learn/ja/tutorials/ui.md`](../learn/ja/tutorials/ui.md),
   [`../../examples/gallery/src/main.zig`](../../examples/gallery/src/main.zig)
-- **Next Step**: 実装を push → PR を 1 本作成 → 3 OS CI 7/7 を確認 → `gh pr merge` →
-  タスク票を `done` にする。
+- **Next Step**: 完了。PR [#25](https://github.com/umiturtle/ZigguraTs/pull/25) は
+  `main 326e55a` にマージ済みで、3 OS CI / Pages ともに緑。次の作業は別タスク票で宣言する。
 
 ---
 
@@ -36,7 +36,7 @@
 - [x] `learn_path.steps` の 5 ステップ・95 分は不変（分岐は追加の章ではなく代替の道）
 - [x] 日英 Doc と同期台帳を更新、`AGENTS.md` / `docs/roadmap/milestones.md` の
       チェックボックスは非編集
-- [ ] `quick-test` / `build test` / `doctest` / `docs-check` / `fmt --check` / 3 OS CI が緑、PR は 1 本だけ
+- [x] `quick-test` / `build test` / `doctest` / `docs-check` / `fmt --check` / 3 OS CI が緑、PR は 1 本だけ
 
 ## 2. 現状調査
 
@@ -63,22 +63,26 @@
 
 ## Current State / Next Step
 
-- **現在**: 実装・ローカル検証まで完了。
-  - `scripts/framework_tutorial_profiles.py`（9 ライブラリ × 状態プリミティブ・Zig 同期・
-    SSR ガード・Todo/UI の状態・落とし穴・3 種のコード断片、日英ペア）と
-    `scripts/framework_tutorial_templates.py`（Todo / UI テンプレート＋共通の
-    「状態は 2 つある」章）を新設。
-  - 生成器が **56 ページ**（counter / todo / ui × 9 × 2 ＋選択ハブ 2）を出力。
-    counter 分岐にも `{{REACTIVITY}}` / `{{CODE_ZIG}}` / `{{SYNC}}` / `{{GUARD}}` /
-    `{{PITFALL}}` と Todo/UI 分岐リンクを追加。
-  - 3 本の本体・`tutorials/index.md`・選択ハブに 3×9 の分岐表を追加。
-  - 規約 11 は分岐を専用ハブに委譲、規約 22 が 54 ページの存在・Zig 連携トークン・
-    状態プリミティブ・カタログ↔プロファイル・3 ハブのリンクを機械検査。
-  - 同期台帳 69 ペア（`--sync --date 2026-10-21`）。
-  - `zig build docs` の DanglingAnchors を slugify 規則で全件解消（同一ページ内 0 / 他ページ 0）。
+- **完了**: 実装・マージ・公開まで全て完了。
+- **PR [#25](https://github.com/umiturtle/ZigguraTs/pull/25)**: 1 本のみ。
+  CI [`43534441574`](https://github.com/umiturtle/ZigguraTs/actions/runs/43534441574) が 7/7 緑、
+  Linux の Check Run Summary に
+  `Documentation check OK (219 markdown files verified, 53 reader pages in each of 2 languages)` と
+  `OK docsite pages=339 links=2892 … api_undoc=0` が出た（規約 22 も CI で通過）。
+  `gh pr merge 25 --merge` → `main 326e55a`。
+- **マージ後 `main`**: CI
+  [`43535536293`](https://github.com/umiturtle/ZigguraTs/actions/runs/43535536293) 7/7 緑、
+  Pages [`43535536305`](https://github.com/umiturtle/ZigguraTs/actions/runs/43535536305) build + deploy 成功。
+- **成果**: 生成器 20 → **56 ページ**（counter / todo / ui × 9 × 2 ＋選択ハブ 2）。
+  9 ライブラリ別プロファイル（状態プリミティブ・Zig 同期・SSR ガード・Todo/UI の状態・
+  落とし穴・3 種のコード断片、日英ペア）と共通の「状態は 2 つある」章を全ページに配置。
+  counter 分岐 9 本も拡張。3 本の本体・`tutorials/index.md`・選択ハブに 3×9 表。
+  規約 11 の分岐委譲＋規約 22、同期台帳 69 ペア。
 - **ローカル緑**: `quick-test`（37 / 10）、`build test` exit 0、`doctest blocks=20`、
-  `docs-check`（86 tests + `OK docsite pages=339 links=2892 … api_undoc=0`）、`fmt --check`、
-  `check-docs.py`（219 md / 53 読者ページ × 2 言語）、`gen-framework-tutorials.py --check`
-  （56 pages）、`node --test` 7/7、`gitflow.sh --self-test`。
-- **未実施**: PR 作成・3 OS CI・マージ。
-- **次の 1 手**: 実装を push → PR 1 本 → CI 7/7 → `gh pr merge` → 票を `done`。
+  `docs-check`（86 tests + `pages=339 links=2892 … api_undoc=0`）、`fmt --check`、
+  `check-docs.py`（219 md / 53 読者ページ × 2）、`gen-framework-tutorials.py --check`（56 pages）、
+  `node --test` 7/7、`gitflow.sh --self-test`。
+  `zig build docs` の DanglingAnchors は slugify 規則で全件解消（同一ページ内 0 / 他ページ 0）。
+- **不変**: `learn_path.steps` の 5 ステップ・95 分、`AGENTS.md` / `docs/roadmap/milestones.md` の
+  チェックボックス、規約 15 の verbatim excerpt（counter の実物 example）。
+- **次の 1 手**: なし。
