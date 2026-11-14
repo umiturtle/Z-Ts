@@ -21,3 +21,7 @@ bench-out/
 .DS_Store
 *.swp
 *~
+
+# Generated Python bytecode from the tutorial generator imports.
+# scripts/__pycache__/bench-dev-loop.cpython-311.pyc is tracked legacy and stays.
+scripts/__pycache__/*.cpython-*.pyc

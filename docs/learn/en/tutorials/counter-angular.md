@@ -97,7 +97,11 @@ example). `signal()` with an inline template; the builder injects `<script>` int
         <ul class="features">
 ```
 
-State lives in `signal(0)`. The counter deliberately uses **local state only** so the pixel
+State lives in `signal(0)`.
+
+`signal(0)` is read as `count()` and written with `count.set(v)` / `count.update(fn)`. The template tracks `{{ count() }}` and updates only that binding — no Zone.js-wide change detection.
+
+The counter deliberately uses **local state only** so the pixel
 comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
 opposite: it **cannot be filled in unless Zig is running**
 ([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
@@ -137,6 +141,24 @@ import { invoke } from "@tauri-apps/api/core";
 async inc() { this.count.set(await invoke<number>("increment")); }
 ```
 
+The Angular state and the counter owned by Zig are **two different states**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). Call `this.count.set(r.count)` after `await`. A leading `count.update(c => c + 1)` leaves the signal ahead when Zig returns an error. `computed()` is read-only, so the Zig value belongs in the writable `signal`.
+
+To feed the gallery's `zig_inc` into that same state, write:
+
+```ts
+import { invoke } from "@tauri-apps/api/core";
+
+zigCount = signal(0);
+seal = signal("—");
+
+async zigInc() {
+  const r = await invoke<{ ok: boolean; count: number; seal: string }>("zig_inc");
+  this.zigCount.set(r.count);   // Zig の戻り値だけを正にする
+  this.seal.set(r.seal);
+}
+```
+
 That closes the loop: button → `invoke("increment")` → Zig function → return value → screen.
 `invoke` does not reach anything in the browser served by `zts dev`, so always confirm with the
 executable produced by `zts build`.
@@ -170,6 +192,11 @@ JavaScript alone cannot manufacture the string. `+` / `-` change **the counter o
 the framework's local state, and every press produces a new seal. That single line is the answer to
 "is Zig actually alive back there?".
 
+The builder injects `<script>` into `index.html`, so do not add one by hand. Check `window.__ZTS_ZIG__` from `ngAfterViewInit` onwards, never during prerendering.
+
+> [!WARNING]
+> `Writing `count` instead of `count()` renders the signal function itself. Without `invoke<number>` the result is `unknown` and cannot be passed to `set`.`
+
 The real wiring lives in
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
@@ -186,6 +213,8 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | the plain-JS original | [Build a counter](counter.md) |
 | more state, returning failures | [Build a todo list](todo.md) |
 | loading / empty / error views | [Build the screen](ui.md) |
+| the Todo branch for Angular | [Todo with Angular](todo-angular.md) |
+| the screen branch for Angular | [Screen with Angular](ui-angular.md) |
 | the real Angular source | [`examples/frameworks/angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) |
 | the live Angular demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |

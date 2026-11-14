@@ -81,6 +81,10 @@ cheap (regexes over checked-in text), so they run in CI on every push and locall
                       `hotfix/**` / `arena/**`, the naming validator must run in CI, and both
                       language guides plus the PR template must name the same bases. Agents never
                       create branches, so the validator must not either.
+22. Tutorial grid    — all three tutorials (counter / todo / ui) need a branch for all nine
+                      catalog libraries in both languages. Every branch must name the library's
+                      state primitive and cover the Zig linkage (seal, two states, `ipc://`,
+                      ONLINE/OFFLINE), and both hubs plus each original must link the whole grid.
 
 Run: `python3 scripts/check-docs.py` (or `./zigw docs-check`).
 """
@@ -455,7 +459,12 @@ def index_targets(en):
     """Paths that the given language's index must mention, relative to `docs/`."""
     out = []
     for p in sorted(glob.glob("docs/learn/en/**/*.md" if en else "docs/learn/ja/**/*.md", recursive=True)):
-        out.append(os.path.relpath(p, "docs"))
+        rel = os.path.relpath(p, "docs").replace(os.sep, "/")
+        # The 3 x 9 framework branches are covered by tutorials/index.md + frameworks.md
+        # (rule 22 verifies the whole grid). Repeating 27 rows here would bury the index.
+        if re.match(r"^learn/(ja|en)/tutorials/(counter|todo|ui)-[a-z0-9]+\.md$", rel):
+            continue
+        out.append(rel)
     for p in ["docs/glossary.md"] + sorted(glob.glob("docs/reference/*.md")) + sorted(
         glob.glob("docs/contributing/*.md")
     ) + sorted(glob.glob("examples/*/README.md")):
@@ -1531,6 +1540,59 @@ if not pr_template:
     errors.append(".github/PULL_REQUEST_TEMPLATE.md: missing (rule 21)")
 elif "develop" not in pr_template or "gitflow.sh --check" not in pr_template:
     errors.append(".github/PULL_REQUEST_TEMPLATE.md: must name develop and the validator (rule 21)")
+
+# ---------------------------------------------------------------------------
+# 22. Three tutorials x nine libraries: full grid, real Zig linkage, hub coverage
+# ---------------------------------------------------------------------------
+#
+# `scripts/gen-framework-tutorials.py` writes 54 branch pages from one profile table. Rule 15
+# still checks the verbatim example excerpt on the counter branches; this rule checks the rest:
+# no library is left behind, every branch teaches the state primitive AND the Zig connection, and
+# a reader can reach all 27 branches from the chapter hub, the chooser hub and each original.
+
+R22_KINDS = ("counter", "todo", "ui")
+R22_TOKENS = ("zig_inc", "seal", "ZIG OFFLINE", "ipc://", "invoke", "window.__ZTS_ZIG__")
+R22_CATALOG = json.loads(open("src/docsite/frameworks.json", encoding="utf-8").read())
+
+# The profile table must cover exactly the catalog: a new library without teaching text would
+# otherwise produce a KeyError only when someone regenerates, not when the doc check runs.
+profiles_src = open("scripts/framework_tutorial_profiles.py", encoding="utf-8").read()
+for fw in R22_CATALOG:
+    if f'"{fw["id"]}": {{' not in profiles_src:
+        errors.append(f"scripts/framework_tutorial_profiles.py: no profile for {fw['id']!r} (rule 22)")
+
+for lang in ("ja", "en"):
+    hub_path = f"docs/learn/{lang}/tutorials/index.md"
+    chooser_path = f"docs/learn/{lang}/tutorials/frameworks.md"
+    hub = open(hub_path, encoding="utf-8").read() if os.path.isfile(hub_path) else ""
+    chooser = open(chooser_path, encoding="utf-8").read() if os.path.isfile(chooser_path) else ""
+    if not hub:
+        errors.append(f"{hub_path}: missing (rule 22)")
+    if not chooser:
+        errors.append(f"{chooser_path}: missing (rule 22)")
+
+    for kind in R22_KINDS:
+        original_path = f"docs/learn/{lang}/tutorials/{kind}.md"
+        original = open(original_path, encoding="utf-8").read() if os.path.isfile(original_path) else ""
+        if not original:
+            errors.append(f"{original_path}: missing (rule 22)")
+        for fw in R22_CATALOG:
+            fid = fw["id"]
+            link = f"{kind}-{fid}.md"
+            page = f"docs/learn/{lang}/tutorials/{link}"
+            if not os.path.isfile(page):
+                errors.append(f"{page}: missing branch page (rule 22)")
+                continue
+            text = open(page, encoding="utf-8").read()
+            for token in R22_TOKENS:
+                if token not in text:
+                    errors.append(f"{page}: missing Zig-linkage token {token!r} (rule 22)")
+            state = fw[f"state_{lang}"]
+            if state not in text:
+                errors.append(f"{page}: missing state primitive {state!r} (rule 22)")
+            for name, body in (("index.md", hub), ("frameworks.md", chooser), (f"{kind}.md", original)):
+                if link not in body:
+                    errors.append(f"docs/learn/{lang}/tutorials/{name}: missing {link} (rule 22)")
 
 if warnings:
     for w in warnings:

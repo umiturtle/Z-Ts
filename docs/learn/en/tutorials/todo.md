@@ -280,6 +280,20 @@ tests). Only list rendering changes: read the "State" column above in your libra
 
 <!-- framework-picker -->
 
+The nine branches of this tutorial. The Zig side is identical in all of them.
+
+| Library | This tutorial's branch |
+|---|---|
+| React | [Todo with React](todo-react.md) |
+| Solid | [Todo with Solid](todo-solid.md) |
+| Svelte | [Todo with Svelte](todo-svelte.md) |
+| Angular | [Todo with Angular](todo-angular.md) |
+| Next.js | [Todo with Next.js](todo-next.md) |
+| Nuxt | [Todo with Nuxt](todo-nuxt.md) |
+| Astro | [Todo with Astro](todo-astro.md) |
+| SvelteKit | [Todo with SvelteKit](todo-sveltekit.md) |
+| SolidStart | [Todo with SolidStart](todo-solidstart.md) |
+
 The [chooser hub](frameworks.md) lists every real example.
 
 ## Where to go next

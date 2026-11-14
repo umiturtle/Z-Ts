@@ -97,7 +97,11 @@ example). One `.svelte` file with `<script>` and markup, compiled to direct DOM 
     <ul class="features">
 ```
 
-State lives in `let count = 0`. The counter deliberately uses **local state only** so the pixel
+State lives in `let count = 0`.
+
+The Svelte 5 example uses `let count = 0`, where assignment is reactive (`$state(0)` is the explicit form). The compiler turns each assignment into a direct DOM update — no virtual DOM, no re-render.
+
+The counter deliberately uses **local state only** so the pixel
 comparison across three OSes has no backend dependency. The `.zigbar` panel below it is the
 opposite: it **cannot be filled in unless Zig is running**
 ([appendix](#appendix-prove-zig-is-running-from-the-screen)). The next chapter connects ziggurats.
@@ -137,6 +141,24 @@ import { invoke } from "@tauri-apps/api/core";
 async function inc() { count = await invoke("increment"); }
 ```
 
+The Svelte state and the counter owned by Zig are **two different states**
+([appendix](#appendix-prove-zig-is-running-from-the-screen)). Assign `count = r.count` exactly once after `await`. Because assignment repaints instantly, a `count += 1` before `invoke` shows a value that disagrees with Zig for one frame.
+
+To feed the gallery's `zig_inc` into that same state, write:
+
+```svelte
+import { invoke } from "@tauri-apps/api/core";
+
+let zigCount = $state(0);
+let seal = $state("—");
+
+async function zigInc() {
+  const r = await invoke<{ ok: boolean; count: number; seal: string }>("zig_inc");
+  zigCount = r.count;     // await の後に 1 回だけ代入
+  seal = r.seal;
+}
+```
+
 That closes the loop: button → `invoke("increment")` → Zig function → return value → screen.
 `invoke` does not reach anything in the browser served by `zts dev`, so always confirm with the
 executable produced by `zts build`.
@@ -170,6 +192,11 @@ JavaScript alone cannot manufacture the string. `+` / `-` change **the counter o
 the framework's local state, and every press produces a new seal. That single line is the answer to
 "is Zig actually alive back there?".
 
+Touch `window` only inside `onMount`. The top-level `<script>` can be evaluated at build time, so never reference the bridge there.
+
+> [!WARNING]
+> `A bare `todos.push(x)` may not be tracked even by `$state`. Replace the array (`todos = [...todos, x]`) or re-read it from Zig.`
+
 The real wiring lives in
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) and
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig). The gallery injects
@@ -186,6 +213,8 @@ own app, add those three commands to `rpc.Schema` and inject the same bridge. Ch
 | the plain-JS original | [Build a counter](counter.md) |
 | more state, returning failures | [Build a todo list](todo.md) |
 | loading / empty / error views | [Build the screen](ui.md) |
+| the Todo branch for Svelte | [Todo with Svelte](todo-svelte.md) |
+| the screen branch for Svelte | [Screen with Svelte](ui-svelte.md) |
 | the real Svelte source | [`examples/frameworks/svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) |
 | the live Svelte demo | [Open in a browser](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
 | all nine examples compared | [`examples/frameworks/README.en.md`](../../../../examples/frameworks/README.en.md) |

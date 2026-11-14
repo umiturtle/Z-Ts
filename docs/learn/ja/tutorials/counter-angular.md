@@ -99,7 +99,11 @@ zts dev                 # http://127.0.0.1:5173
         <ul class="features">
 ```
 
-状態は `signal(0)` です。カウンター本体は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
+状態は `signal(0)` です。
+
+`signal(0)` は `count()` で読み、`count.set(v)` / `count.update(fn)` で書きます。テンプレートの `{{ count() }}` を追跡して**その部分だけ**更新するので、Zone.js による全体変更検知は要りません。
+
+カウンター本体は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
 で動かしています。その下の `.zigbar` パネルは逆で、**Zig が動いていないと絶対に埋まりません**
 （[付録](#付録-zig-が動いているかを画面で確かめる)）。次の章でここに ziggurats のコマンドを
 つなぎます。
@@ -139,6 +143,24 @@ import { invoke } from "@tauri-apps/api/core";
 async inc() { this.count.set(await invoke<number>("increment")); }
 ```
 
+`Angular` のローカル状態と、Zig が持つカウンタは **別の状態** です
+（[付録](#付録-zig-が動いているかを画面で確かめる)）。`this.count.set(r.count)` を `await` の後に呼びます。`count.update(c => c + 1)` を先に走らせると、Zig がエラーを返した瞬間にシグナルだけが進みます。`computed()` は読み取り専用なので、Zig の値は `signal` 側に置いてください。
+
+ギャラリーの `zig_inc` を同じ状態に流し込むなら、こう書きます。
+
+```ts
+import { invoke } from "@tauri-apps/api/core";
+
+zigCount = signal(0);
+seal = signal("—");
+
+async zigInc() {
+  const r = await invoke<{ ok: boolean; count: number; seal: string }>("zig_inc");
+  this.zigCount.set(r.count);   // Zig の戻り値だけを正にする
+  this.seal.set(r.seal);
+}
+```
+
 これで「ボタン → `invoke("increment")` → Zig の関数 → 戻り値 → 画面」が 1 周します。
 `zts dev` のブラウザだけを見ていると `invoke` は届かないので、必ず `zts build` 後の
 実行ファイルで確かめてください。
@@ -172,6 +194,11 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 できません。`＋` `−` はフレームワークのローカル状態ではなく **Zig が保持するカウンタ**を増減し、
 押すたびに seal が変わります。つまりこの 1 行が「裏で Zig が生きているか」の答えです。
 
+builder が `<script>` を注入するので `index.html` に手で書きません。`ngAfterViewInit` 以降で `window.__ZTS_ZIG__` を確認し、SSR 系のプリレンダーでは触らないでください。
+
+> [!WARNING]
+> ``count` を `count()` ではなく `count` と書くとシグナル関数そのものが表示されます。また `invoke<number>` の型指定を省くと `unknown` になり `set` に渡せません。`
+
 配線の実物は
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) と
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig) にあります。ギャラリーは
@@ -188,6 +215,8 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 | 素の JS 版（分岐の元） | [カウンターを作る](counter.md) |
 | 状態を増やす・失敗を返す | [Todo リストを作る](todo.md) |
 | 読み込み中 / 空 / エラーの画面 | [画面を作る](ui.md) |
+| `Angular` 版の Todo | [Todo を Angular で](todo-angular.md) |
+| `Angular` 版の画面 | [画面を Angular で](ui-angular.md) |
 | `Angular` の実物ソース | [`examples/frameworks/angular/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/angular) |
 | `Angular` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/angular/index.html) |
 | 9 つの example の比較 | [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) |

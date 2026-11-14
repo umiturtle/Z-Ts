@@ -26,6 +26,20 @@ ziggurats リポジトリの操作（ビルド手順や CI）は
 
 <!-- framework-picker -->
 
+このチュートリアルの 9 分岐です。Zig 側はどれも共通です。
+
+| ライブラリ | このチュートリアルの分岐 |
+|---|---|
+| React | [React でカウンター](counter-react.md) |
+| Solid | [Solid でカウンター](counter-solid.md) |
+| Svelte | [Svelte でカウンター](counter-svelte.md) |
+| Angular | [Angular でカウンター](counter-angular.md) |
+| Next.js | [Next.js でカウンター](counter-next.md) |
+| Nuxt | [Nuxt でカウンター](counter-nuxt.md) |
+| Astro | [Astro でカウンター](counter-astro.md) |
+| SvelteKit | [SvelteKit でカウンター](counter-sveltekit.md) |
+| SolidStart | [SolidStart でカウンター](counter-solidstart.md) |
+
 [選択ハブ](frameworks.md) に実物の example と公開デモの一覧があります。
 
 ---

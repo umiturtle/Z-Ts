@@ -166,6 +166,20 @@ translate those three branches into its idiom.
 
 <!-- framework-picker -->
 
+The nine branches of this tutorial. The Zig side is identical in all of them.
+
+| Library | This tutorial's branch |
+|---|---|
+| React | [UI with React](ui-react.md) |
+| Solid | [UI with Solid](ui-solid.md) |
+| Svelte | [UI with Svelte](ui-svelte.md) |
+| Angular | [UI with Angular](ui-angular.md) |
+| Next.js | [UI with Next.js](ui-next.md) |
+| Nuxt | [UI with Nuxt](ui-nuxt.md) |
+| Astro | [UI with Astro](ui-astro.md) |
+| SvelteKit | [UI with SvelteKit](ui-sveltekit.md) |
+| SolidStart | [UI with SolidStart](ui-solidstart.md) |
+
 The [chooser hub](frameworks.md) lists every real example.
 
 ## Where to go next

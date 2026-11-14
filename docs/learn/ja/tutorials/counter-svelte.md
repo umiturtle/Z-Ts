@@ -99,7 +99,11 @@ zts dev                 # http://127.0.0.1:5173
     <ul class="features">
 ```
 
-状態は `let count = 0` です。カウンター本体は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
+状態は `let count = 0` です。
+
+Svelte 5 の例は `let count = 0` で、代入がそのままリアクティブです（必要なら `$state(0)`）。コンパイラが代入箇所を直接 DOM 更新に変換するので、仮想 DOM も再レンダリングもありません。
+
+カウンター本体は 3 OS で画素を一致させるため、あえて **ローカル状態だけ**
 で動かしています。その下の `.zigbar` パネルは逆で、**Zig が動いていないと絶対に埋まりません**
 （[付録](#付録-zig-が動いているかを画面で確かめる)）。次の章でここに ziggurats のコマンドを
 つなぎます。
@@ -139,6 +143,24 @@ import { invoke } from "@tauri-apps/api/core";
 async function inc() { count = await invoke("increment"); }
 ```
 
+`Svelte` のローカル状態と、Zig が持つカウンタは **別の状態** です
+（[付録](#付録-zig-が動いているかを画面で確かめる)）。`count = r.count` は `await` の後に 1 回だけ代入します。代入が即座に画面へ効くため、`invoke` 前に `count += 1` と書くと一瞬だけ Zig と食い違った値が見えます。
+
+ギャラリーの `zig_inc` を同じ状態に流し込むなら、こう書きます。
+
+```svelte
+import { invoke } from "@tauri-apps/api/core";
+
+let zigCount = $state(0);
+let seal = $state("—");
+
+async function zigInc() {
+  const r = await invoke<{ ok: boolean; count: number; seal: string }>("zig_inc");
+  zigCount = r.count;     // await の後に 1 回だけ代入
+  seal = r.seal;
+}
+```
+
 これで「ボタン → `invoke("increment")` → Zig の関数 → 戻り値 → 画面」が 1 周します。
 `zts dev` のブラウザだけを見ていると `invoke` は届かないので、必ず `zts build` 後の
 実行ファイルで確かめてください。
@@ -172,6 +194,11 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 できません。`＋` `−` はフレームワークのローカル状態ではなく **Zig が保持するカウンタ**を増減し、
 押すたびに seal が変わります。つまりこの 1 行が「裏で Zig が生きているか」の答えです。
 
+`onMount` 内でだけ `window` を触ります。`.svelte` の `<script>` はビルド時に評価されることがあるので、トップレベルで bridge を参照しないでください。
+
+> [!WARNING]
+> `配列を `todos.push(x)` で増やしても代入が無いと Svelte 5 の `$state` でも追跡されないことがあります。必ず `todos = [...todos, x]` か再読込で差し替えてください。`
+
 配線の実物は
 [`examples/gallery/src/web/zig-bridge.js`](../../../../examples/gallery/src/web/zig-bridge.js) と
 [`examples/gallery/src/main.zig`](../../../../examples/gallery/src/main.zig) にあります。ギャラリーは
@@ -188,6 +215,8 @@ seal は **Zig 側だけが持つ秘密**と Zig のカウンタから作る SHA
 | 素の JS 版（分岐の元） | [カウンターを作る](counter.md) |
 | 状態を増やす・失敗を返す | [Todo リストを作る](todo.md) |
 | 読み込み中 / 空 / エラーの画面 | [画面を作る](ui.md) |
+| `Svelte` 版の Todo | [Todo を Svelte で](todo-svelte.md) |
+| `Svelte` 版の画面 | [画面を Svelte で](ui-svelte.md) |
 | `Svelte` の実物ソース | [`examples/frameworks/svelte/`](https://github.com/umiturtle/Z-Ts/tree/main/examples/frameworks/svelte) |
 | `Svelte` の公開デモ | [ブラウザで開く](https://umiturtle.github.io/ZigguraTs/examples/frameworks/svelte/index.html) |
 | 9 つの example の比較 | [`examples/frameworks/README.md`](../../../../examples/frameworks/README.md) |

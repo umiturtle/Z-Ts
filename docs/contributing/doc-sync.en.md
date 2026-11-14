@@ -19,9 +19,9 @@ version was verified consistent with the implementation. The source of truth is
 
 - **Verified version**: `ziggurats 0.1.1` / Zig `0.17.0`
 - **Verified on**: `2026-10-21`
-- **Base commit**: `f9bcd8a` (HEAD when verification began; the sha256 below identifies the implementation)
+- **Base commit**: `07b6a3e` (HEAD when verification began; the sha256 below identifies the implementation)
 - **Verified with**: `python3 scripts/check-docs.py` · `python3 scripts/gen-framework-tutorials.py --check` · `./zigw docs-check` · `./zigw quick-test` · `./zigw test -Mroot=src/cli/mod.zig` · `./zigw fmt --check src/ build.zig build.zig.zon`
-- **Implementation hash**: `70c700bbfaed71a17f1e656b2c50c3b6a5aa7bcb2b7e1dacd3a3ffdf72a3b9e0`
+- **Implementation hash**: `2a54bd074275041c8f55a06862676fe0f87cbfd2b793cb0e294e916f681726cb`
 
 Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`, `src/cli/main.zig`, `src/cli/template.zig`, `src/docsite/main.zig`, `src/docsite/learn_path.zig`, `src/docsite/i18n.zig`, `src/docsite/site.zig`, `src/docsite/frameworks.zig`, `src/docsite/frameworks.json`, `src/docsite/assets/site.js`, `src/docsite/assets/site.css`, `scripts/check-docs.py`, `scripts/gen-framework-tutorials.py`
 
@@ -71,7 +71,25 @@ Implementation files compared: `build.zig`, `build.zig.zon`, `src/cli/args.zig`,
 | `docs/learn/ja/tutorials/counter.md` | `docs/learn/en/tutorials/counter.md` | 2026-10-21 | 0.1.1 |
 | `docs/learn/ja/tutorials/frameworks.md` | `docs/learn/en/tutorials/frameworks.md` | 2026-10-21 | 0.1.1 |
 | `docs/learn/ja/tutorials/index.md` | `docs/learn/en/tutorials/index.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-angular.md` | `docs/learn/en/tutorials/todo-angular.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-astro.md` | `docs/learn/en/tutorials/todo-astro.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-next.md` | `docs/learn/en/tutorials/todo-next.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-nuxt.md` | `docs/learn/en/tutorials/todo-nuxt.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-react.md` | `docs/learn/en/tutorials/todo-react.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-solid.md` | `docs/learn/en/tutorials/todo-solid.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-solidstart.md` | `docs/learn/en/tutorials/todo-solidstart.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-svelte.md` | `docs/learn/en/tutorials/todo-svelte.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/todo-sveltekit.md` | `docs/learn/en/tutorials/todo-sveltekit.md` | 2026-10-21 | 0.1.1 |
 | `docs/learn/ja/tutorials/todo.md` | `docs/learn/en/tutorials/todo.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-angular.md` | `docs/learn/en/tutorials/ui-angular.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-astro.md` | `docs/learn/en/tutorials/ui-astro.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-next.md` | `docs/learn/en/tutorials/ui-next.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-nuxt.md` | `docs/learn/en/tutorials/ui-nuxt.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-react.md` | `docs/learn/en/tutorials/ui-react.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-solid.md` | `docs/learn/en/tutorials/ui-solid.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-solidstart.md` | `docs/learn/en/tutorials/ui-solidstart.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-svelte.md` | `docs/learn/en/tutorials/ui-svelte.md` | 2026-10-21 | 0.1.1 |
+| `docs/learn/ja/tutorials/ui-sveltekit.md` | `docs/learn/en/tutorials/ui-sveltekit.md` | 2026-10-21 | 0.1.1 |
 | `docs/learn/ja/tutorials/ui.md` | `docs/learn/en/tutorials/ui.md` | 2026-10-21 | 0.1.1 |
 | `docs/reference/cli.md` | `docs/reference/cli.en.md` | 2026-10-21 | 0.1.1 |
 | `docs/reference/tauri-internals.md` | `docs/reference/tauri-internals.en.md` | 2026-10-21 | 0.1.1 |
